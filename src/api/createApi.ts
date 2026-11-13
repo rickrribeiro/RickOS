@@ -3,6 +3,7 @@ import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBa
 import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ConvChanges, TerminalSession } from '../../shared/aiConversations'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -582,6 +583,30 @@ export function createApi() {
         }),
       onDone: (cb: (payload: { runId: string; ok: boolean; output: string; error: string | null }) => void) =>
         subscribe('ai:done', (p) => cb(p as { runId: string; ok: boolean; output: string; error: string | null }))
+    },
+    // Prompt Runner: conversas com o Claude CLI (server/aiconv)
+    conv: {
+      list: (archived?: boolean) => invoke<AiConversation[]>('conv:list', archived),
+      get: (id: string) => invoke<{ conversation: AiConversation; turns: AiTurn[] } | null>('conv:get', id),
+      create: (params: AiConversationPatch) => invoke<AiConversation>('conv:create', params),
+      update: (id: string, patch: AiConversationPatch) => invoke<AiConversation | null>('conv:update', id, patch),
+      delete: (id: string, removeWorktree?: boolean) => invoke<boolean>('conv:delete', id, !!removeWorktree),
+      send: (id: string, text: string, images?: AiImageInput[]) => invoke<boolean>('conv:send', id, text, images ?? []),
+      fork: (id: string) => invoke<AiConversation>('conv:fork', id),
+      changes: (id: string) => invoke<ConvChanges>('conv:changes', id),
+      commit: (id: string, message: string, paths?: string[] | null) => invoke<string>('conv:commit', id, message, paths ?? null),
+      discard: (id: string, path: string) => invoke<boolean>('conv:discard', id, path),
+      pr: (id: string) => invoke<string>('conv:pr', id),
+      suggestCommit: (id: string) => invoke<string>('conv:suggestCommit', id),
+      removeWorktree: (id: string) => invoke<boolean>('conv:removeWorktree', id),
+      cancel: (id: string) => invoke<boolean>('conv:cancel', id),
+      respond: (id: string, requestId: string, response: AiPromptResponse) => invoke<boolean>('conv:respond', id, requestId, response),
+      removeQueued: (id: string, index: number) => invoke<void>('conv:removeQueued', id, index),
+      terminalSessions: () => invoke<TerminalSession[]>('conv:terminalSessions'),
+      importTerminal: (sessionId: string, configDir?: string | null) => invoke<AiConversation>('conv:importTerminal', sessionId, configDir ?? null),
+      resync: (id: string) => invoke<{ updated: boolean }>('conv:resync', id),
+      terminalCommand: (id: string) => invoke<string | null>('conv:terminalCommand', id),
+      onUpdate: (cb: (u: AiConvUpdate) => void) => subscribe('conv:update', (p) => cb(p as AiConvUpdate))
     },
     // Events (main → renderer)
     on: {

@@ -725,4 +725,55 @@ export const SCHEMA = `
     body TEXT NOT NULL,
     createdAt TEXT NOT NULL
   );
+
+  -- Prompt Runner: conversas (sessões do Claude CLI, continuadas com --resume)
+  CREATE TABLE IF NOT EXISTS ai_conversations (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    projectId INTEGER,
+    agentId TEXT,
+    skillIds TEXT NOT NULL DEFAULT '[]',
+    model TEXT NOT NULL DEFAULT '',
+    effort TEXT NOT NULL DEFAULT '',
+    permissionMode TEXT NOT NULL DEFAULT 'default',
+    sessionId TEXT,
+    cwd TEXT,
+    configDir TEXT,
+    claudeCommand TEXT NOT NULL DEFAULT '',
+    contextTokens INTEGER NOT NULL DEFAULT 0,
+    contextWindow INTEGER NOT NULL DEFAULT 0,
+    totalCostUsd REAL NOT NULL DEFAULT 0,
+    totalInputTokens INTEGER NOT NULL DEFAULT 0,
+    totalOutputTokens INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    origin TEXT NOT NULL DEFAULT 'rickos',
+    useWorktree INTEGER NOT NULL DEFAULT 0,
+    worktreeBranch TEXT,
+    repoPath TEXT,
+    baseRef TEXT,
+    forkFrom TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_conversations_updated ON ai_conversations(updatedAt);
+  CREATE INDEX IF NOT EXISTS idx_ai_conversations_session ON ai_conversations(sessionId);
+
+  -- Um turno = mensagem do usuário + resposta (blocos de texto/ferramentas em JSON)
+  CREATE TABLE IF NOT EXISTS ai_conv_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversationId TEXT NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+    createdAt TEXT NOT NULL,
+    prompt TEXT NOT NULL DEFAULT '',
+    blocks TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'done',
+    error TEXT,
+    costUsd REAL NOT NULL DEFAULT 0,
+    inputTokens INTEGER NOT NULL DEFAULT 0,
+    outputTokens INTEGER NOT NULL DEFAULT 0,
+    contextTokens INTEGER NOT NULL DEFAULT 0,
+    durationMs INTEGER,
+    attachments TEXT NOT NULL DEFAULT '[]'
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_conv_turns_conv ON ai_conv_turns(conversationId, id);
 `;

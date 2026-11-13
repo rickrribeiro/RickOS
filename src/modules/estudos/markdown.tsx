@@ -34,9 +34,16 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
   return out
 }
 
+const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
+const isTableStart = (lines: string[], i: number): boolean =>
+  /^\s*\|.*\|/.test(lines[i] ?? '') && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])
+function tableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim())
+}
+
 /**
  * Minimal in-house Markdown renderer (no external lib, no dangerouslySetInnerHTML).
- * Supports: #..###### headings, ``` code fences, > quotes, - / 1. lists, and
+ * Supports: #..###### headings, ``` code fences, > quotes, - / 1. lists, | tables |, and
  * paragraphs with inline formatting. Good enough for study notes.
  */
 export function renderMarkdown(md: string): React.ReactNode {
@@ -100,6 +107,29 @@ export function renderMarkdown(md: string): React.ReactNode {
       continue
     }
 
+    // table (| a | b | + separator line)
+    if (isTableStart(lines, i)) {
+      const head = tableCells(lines[i])
+      i += 2
+      const rows: string[][] = []
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(tableCells(lines[i++]))
+      blocks.push(
+        <div key={key++} className="md-table-wrap">
+          <table className="md-table">
+            <thead>
+              <tr>{head.map((c, k) => <th key={k}>{renderInline(c, `th${key}-${k}`)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>{head.map((_, k) => <td key={k}>{renderInline(r[k] ?? '', `td${key}-${ri}-${k}`)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+      continue
+    }
+
     // blank line
     if (line.trim() === '') {
       i++
@@ -115,7 +145,8 @@ export function renderMarkdown(md: string): React.ReactNode {
       !/^(#{1,6})\s+/.test(lines[i]) &&
       !/^>\s?/.test(lines[i]) &&
       !/^\s*[-*]\s+/.test(lines[i]) &&
-      !/^\s*\d+\.\s+/.test(lines[i])
+      !/^\s*\d+\.\s+/.test(lines[i]) &&
+      !isTableStart(lines, i)
     ) {
       buf.push(lines[i++])
     }

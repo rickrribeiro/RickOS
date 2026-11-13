@@ -289,6 +289,23 @@ const MIGRATIONS: Migration[] = [
         try { db.run(`ALTER TABLE contacts ADD COLUMN ${c} ${def};`) } catch { /* exists */ }
       }
     }
+  },
+  {
+    version: 19,
+    label: 'Prompt Runner: worktree por conversa, ramificação e anexos',
+    run: (db) => {
+      const cols: [string, string, string][] = [
+        ['ai_conversations', 'useWorktree', 'INTEGER NOT NULL DEFAULT 0'],
+        ['ai_conversations', 'worktreeBranch', 'TEXT'],
+        ['ai_conversations', 'repoPath', 'TEXT'],
+        ['ai_conversations', 'baseRef', 'TEXT'],
+        ['ai_conversations', 'forkFrom', 'TEXT'],
+        ['ai_conv_turns', 'attachments', "TEXT NOT NULL DEFAULT '[]'"]
+      ]
+      for (const [t, c, def] of cols) {
+        try { db.run(`ALTER TABLE ${t} ADD COLUMN ${c} ${def};`) } catch { /* exists */ }
+      }
+    }
   }
 ]
 

@@ -1,6 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ConvChanges, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
 export interface Tag {
@@ -1022,6 +1023,29 @@ declare global {
         cancel: (runId: string) => Promise<boolean>
         onChunk: (cb: (runId: string | undefined, text: string) => void) => () => void
         onDone: (cb: (payload: { runId: string; ok: boolean; output: string; error: string | null }) => void) => () => void
+      }
+      conv: {
+        list: (archived?: boolean) => Promise<AiConversation[]>
+        get: (id: string) => Promise<{ conversation: AiConversation; turns: AiTurn[] } | null>
+        create: (params: AiConversationPatch) => Promise<AiConversation>
+        update: (id: string, patch: AiConversationPatch) => Promise<AiConversation | null>
+        delete: (id: string, removeWorktree?: boolean) => Promise<boolean>
+        send: (id: string, text: string, images?: AiImageInput[]) => Promise<boolean>
+        fork: (id: string) => Promise<AiConversation>
+        changes: (id: string) => Promise<ConvChanges>
+        commit: (id: string, message: string, paths?: string[] | null) => Promise<string>
+        discard: (id: string, path: string) => Promise<boolean>
+        pr: (id: string) => Promise<string>
+        suggestCommit: (id: string) => Promise<string>
+        removeWorktree: (id: string) => Promise<boolean>
+        cancel: (id: string) => Promise<boolean>
+        respond: (id: string, requestId: string, response: AiPromptResponse) => Promise<boolean>
+        removeQueued: (id: string, index: number) => Promise<void>
+        terminalSessions: () => Promise<TerminalSession[]>
+        importTerminal: (sessionId: string, configDir?: string | null) => Promise<AiConversation>
+        resync: (id: string) => Promise<{ updated: boolean }>
+        terminalCommand: (id: string) => Promise<string | null>
+        onUpdate: (cb: (u: AiConvUpdate) => void) => () => void
       }
       skills: {
         getAll: () => Promise<Skill[]>

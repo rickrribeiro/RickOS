@@ -7,7 +7,7 @@ import { recordAiUsage } from '../database/queries'
 const TIMEOUT_MS = 120_000
 
 /** Common locations the `claude` binary may live in, beyond the GUI process PATH. */
-function buildPath(): string {
+export function buildPath(): string {
   const home = os.homedir()
   const extra = [
     '/usr/local/bin',
@@ -67,7 +67,7 @@ export interface CliUsage {
   isError: boolean
 }
 
-interface ResultEvent {
+export interface ResultEvent {
   type?: string
   result?: unknown
   is_error?: boolean
@@ -86,7 +86,7 @@ interface ResultEvent {
   >
 }
 
-function usageFromResult(evt: ResultEvent): CliUsage | null {
+export function usageFromResult(evt: ResultEvent): CliUsage | null {
   if (!evt.usage && evt.total_cost_usd == null) return null
   const entries = Object.entries(evt.modelUsage ?? {}).sort((a, b) => (b[1]?.outputTokens ?? 0) - (a[1]?.outputTokens ?? 0))
   // modelUsage is the session-wide total per model (all turns + helper models); prefer it.

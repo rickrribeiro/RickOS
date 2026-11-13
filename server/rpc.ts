@@ -193,6 +193,7 @@ import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAcco
 import { syncPluggy, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
+import { registerAiConvRpc } from './aiconv/rpc'
 import { startChatsEngine } from './chats/sync'
 import { schedulerTick as flightsTick, bootFlights } from './flights/runner'
 import { encodeSecret, decodeSecret, legacySecrets, SERVER_ONLY_KEYS } from './services/secrets'
@@ -1286,6 +1287,33 @@ ipcMain.handle('ai:runStream', async (_, prompt: string, projectId?: number, mod
       broadcast('ai:chunk', { runId, text })
     }
   })
+})
+
+// Prompt Runner: conversas com o Claude CLI (canais `conv:*`, server/aiconv/rpc.ts).
+registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
+  resolveCommand: async (c) => (c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? undefined)),
+  resolveModel: (c) => resolveModel(c.model),
+  resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
+  allowedToolsArgs: () => resolveAllowedToolsArgs(),
+  systemPrompt: async (c) => {
+    const parts: string[] = []
+    const ctx = (await buildProjectContext(c.projectId)).trim()
+    if (ctx) parts.push(ctx)
+    if (c.agentId) {
+      const ag = (await getAgents()).find((a) => a.id === c.agentId)
+      if (ag?.systemPrompt.trim()) parts.push(`### AGENTE: ${ag.name}\n${ag.systemPrompt.trim()}`)
+    }
+    if (c.skillIds.length) {
+      const all = await getSkills()
+      for (const id of c.skillIds) {
+        const sk = all.find((x) => x.id === id)
+        if (sk?.content.trim()) parts.push(`### SKILL: ${sk.name}\n${sk.content.trim()}`)
+      }
+    }
+    return parts.join('\n\n')
+  },
+  projectPaths: async () =>
+    (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath!.trim() }))
 })
 
 ipcMain.handle('ai:cancel', (_, runId: string) => {

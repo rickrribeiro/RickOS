@@ -1923,6 +1923,10 @@ button.todo-divider:hover {
   border-radius: 4px;
 }
 .md-link { color: var(--accent-hover); text-decoration: underline; }
+.md-table-wrap { overflow-x: auto; margin: 8px 0; }
+.md-table { border-collapse: collapse; font-size: 13px; min-width: 50%; }
+.md-table th, .md-table td { border: 1px solid var(--border); padding: 5px 9px; text-align: left; vertical-align: top; }
+.md-table th { background: var(--bg-tertiary); font-weight: 600; }
 
 .flashcard {
   background: var(--bg-secondary);
