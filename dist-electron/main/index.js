@@ -814,7 +814,8 @@ const SCHEMA = `
     worktreeBranch TEXT,
     repoPath TEXT,
     baseRef TEXT,
-    forkFrom TEXT
+    forkFrom TEXT,
+    seenAt TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_ai_conversations_updated ON ai_conversations(updatedAt);
   CREATE INDEX IF NOT EXISTS idx_ai_conversations_session ON ai_conversations(sessionId);
@@ -1273,6 +1274,20 @@ const MIGRATIONS = [
           db2.run(`ALTER TABLE ${t} ADD COLUMN ${c} ${def};`);
         } catch {
         }
+      }
+    }
+  },
+  {
+    version: 20,
+    label: 'Prompt Runner: "visto" por conversa (resposta não lida, sincronizado entre aparelhos)',
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE ai_conversations ADD COLUMN seenAt TEXT;");
+      } catch {
+      }
+      try {
+        db2.run("UPDATE ai_conversations SET seenAt = updatedAt WHERE seenAt IS NULL;");
+      } catch {
       }
     }
   }
@@ -76979,754 +76994,9 @@ async function commitContext(dir) {
     (diff ?? "").slice(0, 14e3)
   ].join("\n");
 }
-function all(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  if (params.length) st.bind(params);
-  const out = [];
-  while (st.step()) out.push(st.getAsObject());
-  st.free();
-  return out;
-}
-function one(db2, sql, params = []) {
-  return all(db2, sql, params)[0] ?? null;
-}
-function exec(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  st.run(params);
-  st.free();
-}
-const nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
-function parseJson(raw, fallback) {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-function toConv(r) {
-  return {
-    id: r.id,
-    title: r.title,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    projectId: r.projectId ?? null,
-    agentId: r.agentId ?? null,
-    skillIds: parseJson(r.skillIds, []),
-    model: r.model ?? "",
-    effort: r.effort ?? "",
-    permissionMode: r.permissionMode || "default",
-    sessionId: r.sessionId ?? null,
-    cwd: r.cwd ?? null,
-    configDir: r.configDir ?? null,
-    claudeCommand: r.claudeCommand ?? "",
-    contextTokens: r.contextTokens ?? 0,
-    contextWindow: r.contextWindow ?? 0,
-    totalCostUsd: r.totalCostUsd ?? 0,
-    totalInputTokens: r.totalInputTokens ?? 0,
-    totalOutputTokens: r.totalOutputTokens ?? 0,
-    pinned: !!r.pinned,
-    archived: !!r.archived,
-    origin: r.origin === "terminal" ? "terminal" : "rickos",
-    useWorktree: !!r.useWorktree,
-    worktreeBranch: r.worktreeBranch ?? null,
-    repoPath: r.repoPath ?? null,
-    baseRef: r.baseRef ?? null,
-    forkFrom: r.forkFrom ?? null,
-    turnCount: r.turnCount
-  };
-}
-function toTurn(r) {
-  return {
-    id: r.id,
-    conversationId: r.conversationId,
-    createdAt: r.createdAt,
-    prompt: r.prompt,
-    blocks: parseJson(r.blocks, []),
-    status: r.status,
-    error: r.error ?? null,
-    costUsd: r.costUsd ?? 0,
-    inputTokens: r.inputTokens ?? 0,
-    outputTokens: r.outputTokens ?? 0,
-    contextTokens: r.contextTokens ?? 0,
-    durationMs: r.durationMs ?? null,
-    attachments: parseJson(r.attachments, [])
-  };
-}
-const CONV_SELECT = `SELECT c.*, (SELECT COUNT(*) FROM ai_conv_turns t WHERE t.conversationId = c.id) AS turnCount FROM ai_conversations c`;
-async function listConversations(opts = {}) {
-  const db2 = await getDb();
-  return all(db2, `${CONV_SELECT} WHERE c.archived = ? ORDER BY c.pinned DESC, c.updatedAt DESC LIMIT 300`, [opts.archived ? 1 : 0]).map(toConv);
-}
-async function getConversation(id) {
-  const db2 = await getDb();
-  const r = one(db2, `${CONV_SELECT} WHERE c.id = ?`, [id]);
-  return r ? toConv(r) : null;
-}
-async function findConversationBySession(sessionId) {
-  const db2 = await getDb();
-  const r = one(db2, `${CONV_SELECT} WHERE c.sessionId = ? ORDER BY c.updatedAt DESC`, [sessionId]);
-  return r ? toConv(r) : null;
-}
-async function sessionIdsInUse() {
-  const db2 = await getDb();
-  const rows = all(db2, "SELECT id, sessionId FROM ai_conversations WHERE sessionId IS NOT NULL");
-  return new Map(rows.map((r) => [r.sessionId, r.id]));
-}
-async function createConversation(c) {
-  const db2 = await getDb();
-  const id = crypto.randomUUID();
-  const now = nowIso();
-  exec(
-    db2,
-    `INSERT INTO ai_conversations (id, title, createdAt, updatedAt, projectId, agentId, skillIds, model, effort, permissionMode, sessionId, cwd, configDir, claudeCommand, origin, contextTokens,
-       useWorktree, forkFrom, repoPath, worktreeBranch, baseRef, contextWindow)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      c.title ?? "",
-      c.createdAt ?? now,
-      c.updatedAt ?? now,
-      c.projectId ?? null,
-      c.agentId ?? null,
-      JSON.stringify(c.skillIds ?? []),
-      c.model ?? "",
-      c.effort ?? "",
-      c.permissionMode ?? "default",
-      c.sessionId ?? null,
-      c.cwd ?? null,
-      c.configDir ?? null,
-      c.claudeCommand ?? "",
-      c.origin ?? "rickos",
-      c.contextTokens ?? 0,
-      c.useWorktree ? 1 : 0,
-      c.forkFrom ?? null,
-      c.repoPath ?? null,
-      c.worktreeBranch ?? null,
-      c.baseRef ?? null,
-      c.contextWindow ?? 0
-    ]
-  );
-  saveDb();
-  return await getConversation(id);
-}
-async function updateConversation(id, patch) {
-  const db2 = await getDb();
-  const sets = [];
-  const params = [];
-  const put = (col, v) => {
-    sets.push(`${col} = ?`);
-    params.push(v);
-  };
-  if (patch.title !== void 0) put("title", patch.title.trim());
-  if (patch.projectId !== void 0) put("projectId", patch.projectId);
-  if (patch.agentId !== void 0) put("agentId", patch.agentId);
-  if (patch.skillIds !== void 0) put("skillIds", JSON.stringify(patch.skillIds));
-  if (patch.model !== void 0) put("model", patch.model);
-  if (patch.effort !== void 0) put("effort", patch.effort);
-  if (patch.permissionMode !== void 0) put("permissionMode", patch.permissionMode);
-  if (patch.pinned !== void 0) put("pinned", patch.pinned ? 1 : 0);
-  if (patch.archived !== void 0) put("archived", patch.archived ? 1 : 0);
-  if (patch.claudeCommand !== void 0) put("claudeCommand", patch.claudeCommand.trim());
-  if (patch.useWorktree !== void 0) put("useWorktree", patch.useWorktree ? 1 : 0);
-  if (sets.length) {
-    params.push(id);
-    exec(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
-    saveDb();
-  }
-  return getConversation(id);
-}
-async function setConversationRuntime(id, r) {
-  const db2 = await getDb();
-  const sets = ["updatedAt = ?"];
-  const params = [nowIso()];
-  for (const k of ["worktreeBranch", "repoPath", "baseRef", "forkFrom"]) {
-    if (r[k] !== void 0) {
-      sets.push(`${k} = ?`);
-      params.push(r[k] ?? null);
-    }
-  }
-  if (r.sessionId !== void 0) {
-    sets.push("sessionId = ?");
-    params.push(r.sessionId);
-  }
-  if (r.cwd !== void 0) {
-    sets.push("cwd = ?");
-    params.push(r.cwd);
-  }
-  if (r.title !== void 0) {
-    sets.push("title = ?");
-    params.push(r.title);
-  }
-  if (r.contextTokens !== void 0) {
-    sets.push("contextTokens = ?");
-    params.push(r.contextTokens);
-  }
-  if (r.contextWindow !== void 0) {
-    sets.push("contextWindow = ?");
-    params.push(r.contextWindow);
-  }
-  if (r.addCost) {
-    sets.push("totalCostUsd = totalCostUsd + ?");
-    params.push(r.addCost);
-  }
-  if (r.addInput) {
-    sets.push("totalInputTokens = totalInputTokens + ?");
-    params.push(r.addInput);
-  }
-  if (r.addOutput) {
-    sets.push("totalOutputTokens = totalOutputTokens + ?");
-    params.push(r.addOutput);
-  }
-  params.push(id);
-  exec(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
-  saveDb();
-}
-async function deleteConversation(id) {
-  const db2 = await getDb();
-  exec(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [id]);
-  exec(db2, "DELETE FROM ai_conversations WHERE id = ?", [id]);
-  saveDb();
-}
-async function listTurns(conversationId) {
-  const db2 = await getDb();
-  return all(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id", [conversationId]).map(toTurn);
-}
-async function createTurn(conversationId, prompt, attachments = []) {
-  const db2 = await getDb();
-  exec(db2, "INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, attachments) VALUES (?, ?, ?, ?, ?, ?)", [
-    conversationId,
-    nowIso(),
-    prompt,
-    "[]",
-    "running",
-    JSON.stringify(attachments)
-  ]);
-  const id = Number(one(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
-  saveDb();
-  return toTurn(one(db2, "SELECT * FROM ai_conv_turns WHERE id = ?", [id]));
-}
-async function saveTurn(t) {
-  const db2 = await getDb();
-  exec(
-    db2,
-    `UPDATE ai_conv_turns SET prompt = ?, blocks = ?, status = ?, error = ?, costUsd = ?, inputTokens = ?, outputTokens = ?, contextTokens = ?, durationMs = ? WHERE id = ?`,
-    [t.prompt, JSON.stringify(t.blocks), t.status, t.error, t.costUsd, t.inputTokens, t.outputTokens, t.contextTokens, t.durationMs, t.id]
-  );
-  saveDb();
-}
-async function replaceTurns(conversationId, turns) {
-  const db2 = await getDb();
-  db2.run("BEGIN");
-  try {
-    exec(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [conversationId]);
-    for (const t of turns) {
-      exec(
-        db2,
-        `INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, error, costUsd, inputTokens, outputTokens, contextTokens, durationMs, attachments)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          conversationId,
-          t.createdAt,
-          t.prompt,
-          JSON.stringify(t.blocks),
-          t.status,
-          t.error,
-          t.costUsd,
-          t.inputTokens,
-          t.outputTokens,
-          t.contextTokens,
-          t.durationMs,
-          JSON.stringify(t.attachments ?? [])
-        ]
-      );
-    }
-    db2.run("COMMIT");
-  } catch (e) {
-    try {
-      db2.run("ROLLBACK");
-    } catch {
-    }
-    throw e;
-  }
-  saveDb();
-}
-async function markStaleTurnsInterrupted() {
-  const db2 = await getDb();
-  exec(db2, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'Servidor reiniciado durante a execução.') WHERE status = 'running'`);
-  saveDb();
-}
-const live = /* @__PURE__ */ new Map();
-const queues = /* @__PURE__ */ new Map();
-let deps = null;
-const TOOL_RESULT_MAX$1 = 8e3;
-function initRunner(d) {
-  deps = d;
-}
-function isRunning(conversationId) {
-  return live.has(conversationId);
-}
-function liveTurn(conversationId) {
-  return live.get(conversationId)?.turn ?? null;
-}
-function pendingCount(conversationId) {
-  return live.get(conversationId)?.pending.size ?? 0;
-}
-function queuedMessages(conversationId) {
-  return (queues.get(conversationId) ?? []).map((m) => (m.images.length ? `🖼️×${m.images.length} ` : "") + (m.text || "(só imagens)"));
-}
-function withLive(c) {
-  return { ...c, running: isRunning(c.id), pendingPrompts: pendingCount(c.id), queued: queuedMessages(c.id) };
-}
-async function emitConversation(conversationId) {
-  const c = await getConversation(conversationId);
-  if (c) broadcast("conv:update", { conversationId, conversation: withLive(c) });
-}
-function emitTurn(run2, immediate = false) {
-  const send = () => {
-    run2.emitTimer = null;
-    broadcast("conv:update", { conversationId: run2.conversationId, turn: run2.turn });
-  };
-  if (immediate) {
-    if (run2.emitTimer) clearTimeout(run2.emitTimer);
-    send();
-    return;
-  }
-  if (!run2.emitTimer) run2.emitTimer = setTimeout(send, 120);
-}
-async function sendMessage(conversationId, text, images = []) {
-  const msg = { text: text.trim(), images };
-  if (!msg.text && !msg.images.length) return;
-  if (live.has(conversationId)) {
-    queues.set(conversationId, [...queues.get(conversationId) ?? [], msg]);
-    await emitConversation(conversationId);
-    return;
-  }
-  await startTurn(conversationId, msg);
-}
-async function removeQueued(conversationId, index) {
-  const q = [...queues.get(conversationId) ?? []];
-  q.splice(index, 1);
-  if (q.length) queues.set(conversationId, q);
-  else queues.delete(conversationId);
-  await emitConversation(conversationId);
-}
-async function cancel(conversationId) {
-  queues.delete(conversationId);
-  const run2 = live.get(conversationId);
-  if (!run2) {
-    await emitConversation(conversationId);
-    return false;
-  }
-  run2.cancelled = true;
-  writeLine(run2, { type: "control_request", request_id: crypto.randomUUID(), request: { subtype: "interrupt" } });
-  for (const [requestId] of run2.pending) {
-    writeLine(run2, controlResponse(requestId, { behavior: "deny", message: "O usuário interrompeu a execução.", interrupt: true }));
-  }
-  run2.pending.clear();
-  run2.killTimer = setTimeout(() => {
-    try {
-      run2.child?.kill("SIGKILL");
-    } catch {
-    }
-  }, 4e3);
-  return true;
-}
-function controlResponse(requestId, response) {
-  return { type: "control_response", response: { subtype: "success", request_id: requestId, response } };
-}
-function writeLine(run2, obj) {
-  try {
-    run2.child?.stdin?.write(JSON.stringify(obj) + "\n");
-  } catch {
-  }
-}
-function findTool(turn, id) {
-  return turn.blocks.find((b2) => b2.type === "tool" && b2.id === id);
-}
-async function respond(conversationId, requestId, r) {
-  const run2 = live.get(conversationId);
-  const p = run2?.pending.get(requestId);
-  if (!run2 || !p) return false;
-  run2.pending.delete(requestId);
-  const block = findTool(run2.turn, p.toolUseId);
-  let response;
-  let note = "";
-  let status2 = "allowed";
-  if (r.kind === "allow") {
-    response = { behavior: "allow", updatedInput: p.input };
-    if (r.always && p.suggestions?.length) {
-      response.updatedPermissions = p.suggestions;
-      note = "Permitido sempre";
-    } else note = "Permitido";
-  } else if (r.kind === "answer") {
-    response = { behavior: "allow", updatedInput: { ...p.input, answers: r.answers } };
-    if (block) block.answers = r.answers;
-    note = "Respondido";
-  } else if (r.kind === "approvePlan") {
-    response = { behavior: "allow", updatedInput: p.input, updatedPermissions: [{ type: "setMode", mode: r.mode, destination: "session" }] };
-    note = r.mode === "acceptEdits" ? "Plano aprovado · aceitando edições" : "Plano aprovado";
-    await updateConversation(conversationId, { permissionMode: r.mode });
-    void emitConversation(conversationId);
-  } else {
-    const msg = r.message?.trim();
-    response = { behavior: "deny", message: msg ? `O usuário negou e disse: ${msg}` : "O usuário negou esta ação." };
-    status2 = "denied";
-    note = msg ? `Negado: ${msg}` : "Negado";
-  }
-  writeLine(run2, controlResponse(requestId, response));
-  if (block?.permission) block.permission = { ...block.permission, status: status2, note };
-  emitTurn(run2, true);
-  void emitConversation(conversationId);
-  return true;
-}
-function contextFromUsage(u) {
-  if (!u) return 0;
-  return (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.output_tokens ?? 0);
-}
-function toolResultText$1(content) {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content.map((x) => x?.type === "text" ? x.text ?? "" : x?.type === "image" ? "[imagem]" : "").join("\n");
-  }
-  return "";
-}
-function clip$1(s2, max = TOOL_RESULT_MAX$1) {
-  return s2.length > max ? s2.slice(0, max) + `
-… (${s2.length - max} caracteres omitidos)` : s2;
-}
-function defaultCwd() {
-  return os.homedir();
-}
-function isDefaultConfigDir(dir) {
-  if (!dir) return true;
-  return path.resolve(dir) === path.join(os.homedir(), ".claude");
-}
-async function startTurn(conversationId, message) {
-  if (!deps) throw new Error("Executor de conversas não inicializado.");
-  let conv = await getConversation(conversationId);
-  if (!conv) throw new Error("Conversa não encontrada.");
-  const prompt = message.text;
-  if (!conv.title) {
-    const title = (prompt || "Imagem").replace(/\s+/g, " ").trim().slice(0, 60);
-    await setConversationRuntime(conversationId, { title });
-    conv = await getConversation(conversationId);
-  }
-  const turn = await createTurn(
-    conversationId,
-    prompt,
-    message.images.map((i) => i.thumb)
-  );
-  const run2 = {
-    conversationId,
-    turn,
-    child: null,
-    pending: /* @__PURE__ */ new Map(),
-    startedAt: Date.now(),
-    cancelled: false,
-    gotResult: false,
-    stderr: "",
-    mainModel: "",
-    contextWindow: 0,
-    compacted: false,
-    emitTimer: null,
-    killTimer: null
-  };
-  live.set(conversationId, run2);
-  emitTurn(run2, true);
-  void emitConversation(conversationId);
-  let cwd;
-  try {
-    if (conv.cwd) {
-      cwd = conv.cwd;
-      if (!fs.existsSync(cwd)) throw new Error(`O diretório desta conversa não existe mais: ${cwd}`);
-    } else {
-      const projectDir = await deps.resolveProjectCwd(conv.projectId);
-      if (conv.useWorktree) {
-        if (!projectDir || !fs.existsSync(projectDir)) throw new Error("O worktree isolado precisa de um projeto com pasta local.");
-        turn.blocks.push({ type: "notice", text: "🌿 Criando worktree isolado…" });
-        emitTurn(run2, true);
-        const wt = await createWorktree(projectDir, conv.title || prompt);
-        turn.blocks = turn.blocks.filter((b2) => b2.type !== "notice");
-        turn.blocks.push({ type: "notice", text: `🌿 Worktree isolado na branch ${wt.branch}` });
-        cwd = wt.cwd;
-        await setConversationRuntime(conversationId, { cwd, repoPath: wt.repoPath, worktreeBranch: wt.branch, baseRef: wt.baseRef });
-      } else {
-        cwd = projectDir && fs.existsSync(projectDir) ? projectDir : defaultCwd();
-        await setConversationRuntime(conversationId, { cwd });
-      }
-      conv = await getConversation(conversationId);
-      void emitConversation(conversationId);
-    }
-    const command = await deps.resolveCommand(conv);
-    const model2 = await deps.resolveModel(conv);
-    const system = await deps.systemPrompt(conv);
-    const args = [
-      ...await deps.allowedToolsArgs(),
-      "--input-format",
-      "stream-json",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      "--include-partial-messages",
-      "--permission-prompt-tool",
-      "stdio",
-      "--permission-mode",
-      conv.permissionMode,
-      ...model2 ? ["--model", model2] : [],
-      ...conv.effort ? ["--effort", conv.effort] : [],
-      // ramificação: retoma a sessão de origem numa sessão nova
-      ...conv.forkFrom && !conv.sessionId ? ["--resume", conv.forkFrom, "--fork-session"] : conv.sessionId ? ["--resume", conv.sessionId] : [],
-      ...system.trim() ? ["--append-system-prompt", system] : []
-    ];
-    const env = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: "1" };
-    if (!isDefaultConfigDir(conv.configDir)) env.CLAUDE_CONFIG_DIR = conv.configDir;
-    run2.child = await spawnCli(command, args, cwd, env);
-  } catch (e) {
-    await finishTurn(run2, e instanceof Error ? e.message : String(e));
-    return;
-  }
-  wireChild(run2, conv);
-  const content = message.images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } }));
-  content.push({ type: "text", text: prompt || "Veja a(s) imagem(ns) anexada(s)." });
-  writeLine(run2, { type: "user", message: { role: "user", content } });
-}
-function spawnCli(command, args, cwd, env) {
-  const bin = (command || "").trim() || "claude";
-  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(`Comando inválido: "${bin}".`));
-  const trySpawn = (viaShell) => new Promise((resolve, reject) => {
-    const shell = process.env.SHELL || "/bin/zsh";
-    const child = viaShell ? child_process.spawn(shell, ["-ilc", `${bin} "$@"`, shell, ...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] }) : child_process.spawn(bin, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
-    const onError = (err) => reject(err);
-    child.once("error", onError);
-    child.once("spawn", () => {
-      child.off("error", onError);
-      resolve(child);
-    });
-  });
-  return trySpawn(false).catch((err) => {
-    if (err?.code !== "ENOENT") throw err;
-    return trySpawn(true);
-  });
-}
-function wireChild(run2, conv) {
-  const child = run2.child;
-  let buf = "";
-  child.stdout?.on("data", (d) => {
-    buf += d.toString();
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      if (!line) continue;
-      let evt;
-      try {
-        evt = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      handleEvent(run2, conv, evt);
-    }
-  });
-  child.stderr?.on("data", (d) => {
-    run2.stderr = (run2.stderr + d.toString()).slice(-4e3);
-  });
-  child.on("close", (code) => {
-    if (run2.killTimer) clearTimeout(run2.killTimer);
-    let error = null;
-    if (run2.cancelled) error = null;
-    else if (!run2.gotResult) error = run2.stderr.trim().split("\n").slice(-6).join("\n") || `Claude CLI saiu com código ${code}.`;
-    void finishTurn(run2, error);
-  });
-  child.stdin?.on("error", () => {
-  });
-}
-function lastLive(turn, type) {
-  for (let i = turn.blocks.length - 1; i >= 0; i--) {
-    const b2 = turn.blocks[i];
-    if (b2.type === type && b2.live) return b2;
-  }
-  return void 0;
-}
-function handleEvent(run2, conv, evt) {
-  const turn = run2.turn;
-  if (evt.parent_tool_use_id) return;
-  if (evt.type === "system" && evt.subtype === "init") {
-    if (evt.model) run2.mainModel = evt.model;
-    if (evt.session_id && evt.session_id !== conv.sessionId) {
-      conv.sessionId = evt.session_id;
-      conv.forkFrom = null;
-      void setConversationRuntime(conv.id, { sessionId: evt.session_id, forkFrom: null }).then(() => emitConversation(conv.id));
-    }
-    return;
-  }
-  if (evt.type === "system" && evt.subtype === "compact_boundary") {
-    turn.blocks.push({ type: "notice", text: "🗜️ Contexto compactado" });
-    turn.contextTokens = 0;
-    run2.compacted = true;
-    emitTurn(run2);
-    return;
-  }
-  if (evt.type === "stream_event" && evt.event) {
-    const ev = evt.event;
-    if (ev.type === "content_block_start") {
-      const t = ev.content_block?.type;
-      if (t === "text" || t === "thinking") turn.blocks.push({ type: t, text: "", live: true });
-    } else if (ev.type === "content_block_delta" && ev.delta) {
-      if (ev.delta.type === "text_delta" && ev.delta.text) {
-        const b2 = lastLive(turn, "text");
-        if (b2) b2.text += ev.delta.text;
-      } else if (ev.delta.type === "thinking_delta" && ev.delta.thinking) {
-        const b2 = lastLive(turn, "thinking");
-        if (b2) b2.text += ev.delta.thinking;
-      }
-    }
-    emitTurn(run2);
-    return;
-  }
-  if (evt.type === "assistant" && evt.message?.content) {
-    for (const c of evt.message.content) {
-      if (c.type === "text" || c.type === "thinking") {
-        const full = (c.type === "text" ? c.text : c.thinking) ?? "";
-        const b2 = turn.blocks.find((x) => x.type === c.type && "live" in x && x.live);
-        if (b2) {
-          if (full) b2.text = full;
-          b2.live = false;
-        } else if (full) turn.blocks.push({ type: c.type, text: full });
-      } else if (c.type === "tool_use" && c.id) {
-        if (!findTool(turn, c.id)) turn.blocks.push({ type: "tool", id: c.id, name: c.name || "tool", input: c.input ?? {} });
-      }
-    }
-    turn.blocks = turn.blocks.filter((b2) => !(b2.type === "thinking" && !b2.live && !b2.text.trim()));
-    const ctx = contextFromUsage(evt.message.usage);
-    if (ctx) turn.contextTokens = ctx;
-    emitTurn(run2);
-    return;
-  }
-  if (evt.type === "user" && evt.message?.content && Array.isArray(evt.message.content)) {
-    for (const c of evt.message.content) {
-      if (c.type === "tool_result" && c.tool_use_id) {
-        const b2 = findTool(turn, c.tool_use_id);
-        if (b2) {
-          b2.result = clip$1(toolResultText$1(c.content));
-          b2.isError = !!c.is_error;
-        }
-      }
-    }
-    emitTurn(run2);
-    return;
-  }
-  if (evt.type === "control_request" && evt.request_id) {
-    const req = evt.request ?? {};
-    if (req.subtype !== "can_use_tool") {
-      writeLine(run2, { type: "control_response", response: { subtype: "error", request_id: evt.request_id, error: `Não suportado: ${req.subtype}` } });
-      return;
-    }
-    const toolUseId = req.tool_use_id || evt.request_id;
-    let block = findTool(turn, toolUseId);
-    if (!block) {
-      block = { type: "tool", id: toolUseId, name: req.tool_name || "tool", input: req.input ?? {} };
-      turn.blocks.push(block);
-    }
-    block.permission = {
-      requestId: evt.request_id,
-      status: "pending",
-      suggestions: req.permission_suggestions,
-      blockedPath: req.blocked_path,
-      description: req.description
-    };
-    run2.pending.set(evt.request_id, { toolUseId, toolName: req.tool_name || "tool", input: req.input ?? {}, suggestions: req.permission_suggestions });
-    emitTurn(run2, true);
-    void emitConversation(run2.conversationId);
-    scheduleAttentionNotice(run2, evt.request_id, req.tool_name || "tool", conv);
-    return;
-  }
-  if (evt.type === "result") {
-    run2.gotResult = true;
-    const r = evt;
-    const u = usageFromResult(r);
-    if (u) {
-      turn.costUsd = u.costUsd;
-      turn.inputTokens = u.inputTokens + u.cacheReadTokens + u.cacheCreationTokens;
-      turn.outputTokens = u.outputTokens;
-      turn.durationMs = u.durationMs;
-      recordAiUsage({ ...u, source: "prompt-runner", projectId: conv.projectId, model: u.model || run2.mainModel || null }).catch(() => {
-      });
-    }
-    const mu = Object.entries(r.modelUsage ?? {});
-    const base = run2.mainModel.replace(/\[.*\]$/, "");
-    const main = base && mu.find(([m]) => m === base || m.startsWith(base) || base.startsWith(m)) || mu.sort((a, b2) => (b2[1]?.outputTokens ?? 0) - (a[1]?.outputTokens ?? 0))[0];
-    if (main?.[1]?.contextWindow) run2.contextWindow = main[1].contextWindow;
-    const hasText = turn.blocks.some((b2) => b2.type === "text" && b2.text.trim());
-    if (!hasText && typeof r.result === "string" && r.result.trim()) turn.blocks.push({ type: "text", text: r.result });
-    if (r.is_error && !run2.cancelled) turn.error = typeof r.result === "string" && r.result.trim() ? r.result : `Erro (${r.subtype ?? "desconhecido"})`;
-    try {
-      run2.child?.stdin?.end();
-    } catch {
-    }
-    emitTurn(run2);
-  }
-}
-function scheduleAttentionNotice(run2, requestId, toolName, conv) {
-  setTimeout(() => {
-    if (!run2.pending.has(requestId) || live.get(run2.conversationId) !== run2) return;
-    const what = toolName === "AskUserQuestion" ? "tem uma pergunta" : toolName === "ExitPlanMode" ? "quer aprovar um plano" : `pede permissão para ${toolName}`;
-    void notify({ title: `🤚 Claude ${what}`, body: conv.title || "Prompt Runner", source: "ia", page: "ai-runner" });
-  }, 15e3);
-}
-async function finishTurn(run2, error) {
-  if (live.get(run2.conversationId) !== run2) return;
-  if (run2.emitTimer) clearTimeout(run2.emitTimer);
-  const turn = run2.turn;
-  for (const b2 of turn.blocks) {
-    if ((b2.type === "text" || b2.type === "thinking") && b2.live) b2.live = false;
-    if (b2.type === "tool" && b2.permission?.status === "pending") b2.permission = { ...b2.permission, status: "denied", note: "Sem resposta" };
-  }
-  turn.blocks = turn.blocks.filter((b2) => !(b2.type === "thinking" && !b2.text.trim()));
-  if (run2.cancelled) {
-    turn.status = "cancelled";
-    turn.error = null;
-  } else if (error || turn.error) {
-    turn.status = "error";
-    turn.error = turn.error || error;
-  } else turn.status = "done";
-  if (!turn.durationMs) turn.durationMs = Date.now() - run2.startedAt;
-  live.delete(run2.conversationId);
-  try {
-    await saveTurn(turn);
-    const cw = run2.contextWindow;
-    await setConversationRuntime(run2.conversationId, {
-      ...turn.contextTokens || run2.compacted ? { contextTokens: turn.contextTokens } : {},
-      ...cw ? { contextWindow: cw } : {},
-      addCost: turn.costUsd,
-      addInput: turn.inputTokens,
-      addOutput: turn.outputTokens
-    });
-  } catch {
-  }
-  broadcast("conv:update", { conversationId: run2.conversationId, turn });
-  await emitConversation(run2.conversationId);
-  if (Date.now() - run2.startedAt >= 6e4 && !run2.cancelled) {
-    const conv = await getConversation(run2.conversationId);
-    void notify({
-      title: turn.status === "done" ? "✅ Claude terminou" : "⚠️ Claude parou com erro",
-      body: conv?.title || turn.prompt.slice(0, 120),
-      source: "ia",
-      page: "ai-runner"
-    });
-  }
-  const q = queues.get(run2.conversationId) ?? [];
-  if (q.length && turn.status === "done") {
-    const [next, ...rest] = q;
-    if (rest.length) queues.set(run2.conversationId, rest);
-    else queues.delete(run2.conversationId);
-    startTurn(run2.conversationId, next).catch(() => {
-    });
-  }
-}
 const HEAD_BYTES = 96 * 1024;
 const TAIL_BYTES = 64 * 1024;
-const TOOL_RESULT_MAX = 8e3;
+const TOOL_RESULT_MAX$1 = 8e3;
 function configDirs() {
   const home = os.homedir();
   const out = [];
@@ -77886,7 +77156,7 @@ function findTranscript(sessionId, configDir) {
   }
   return null;
 }
-function toolResultText(content) {
+function toolResultText$1(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content.map((x) => x?.type === "text" ? x.text ?? "" : x?.type === "image" ? "[imagem]" : "").join("\n");
@@ -77946,8 +77216,8 @@ function parseTranscript(file) {
           if (x.type !== "tool_result" || !x.tool_use_id) continue;
           const b2 = tools.get(x.tool_use_id);
           if (b2) {
-            const r = toolResultText(x.content);
-            b2.result = r.length > TOOL_RESULT_MAX ? r.slice(0, TOOL_RESULT_MAX) + "\n…" : r;
+            const r = toolResultText$1(x.content);
+            b2.result = r.length > TOOL_RESULT_MAX$1 ? r.slice(0, TOOL_RESULT_MAX$1) + "\n…" : r;
             b2.isError = !!x.is_error;
           }
         }
@@ -77994,6 +77264,939 @@ function parseTranscript(file) {
     createdAt: turns[0]?.createdAt ?? new Date(st.birthtimeMs || st.mtimeMs).toISOString(),
     updatedAt: new Date(st.mtimeMs).toISOString()
   };
+}
+const MAX_FILE = 512 * 1024;
+function idFor(file) {
+  return crypto.createHash("sha1").update(file).digest("hex").slice(0, 16);
+}
+function parseFrontmatter(text) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  if (!m) return { data: {}, body: text };
+  const data2 = {};
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(lines[i]);
+    if (!kv) continue;
+    let v = kv[2].trim();
+    if (v === ">" || v === "|" || v === ">-" || v === "|-") {
+      const block = [];
+      while (i + 1 < lines.length && /^\s+/.test(lines[i + 1])) block.push(lines[++i].trim());
+      v = block.join(v.startsWith(">") ? " " : "\n");
+    }
+    data2[kv[1]] = v.replace(/^(['"])([\s\S]*)\1$/, "$2");
+  }
+  return { data: data2, body: text.slice(m[0].length) };
+}
+function configLabel(dir) {
+  const base = path.basename(dir);
+  if (base === ".claude") return "Pessoal";
+  const rest = base.replace(/^\.claude-?/, "");
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : base;
+}
+function readInfo(file, kind, name, base) {
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile() || st.size > MAX_FILE) return null;
+    const { data: data2, body } = parseFrontmatter(fs.readFileSync(file, "utf8"));
+    const firstLine = body.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";
+    return {
+      ...base,
+      id: idFor(file),
+      name: kind === "skill" ? data2.name?.trim() || name : name,
+      description: (data2.description || firstLine).slice(0, 400),
+      argumentHint: data2["argument-hint"] || null,
+      kind,
+      path: file,
+      updatedAt: st.mtime.toISOString()
+    };
+  } catch {
+    return null;
+  }
+}
+function scanRoot(root, base) {
+  const out = [];
+  const skillsDir = path.join(root, "skills");
+  let names = [];
+  try {
+    names = fs.readdirSync(skillsDir);
+  } catch {
+    names = [];
+  }
+  for (const n of names) {
+    if (n.startsWith("_") || n.startsWith(".") || n === "synced") continue;
+    const info = readInfo(path.join(skillsDir, n, "SKILL.md"), "skill", n, base);
+    if (info) out.push(info);
+  }
+  const cmdDir = path.join(root, "commands");
+  const walk = (dir, depth) => {
+    if (depth > 3) return;
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith(".") || e.name.startsWith("_")) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, depth + 1);
+      else if (e.isFile() && e.name.endsWith(".md")) {
+        const info = readInfo(p, "command", e.name.slice(0, -3), base);
+        if (info) out.push(info);
+      }
+    }
+  };
+  walk(cmdDir, 0);
+  return out;
+}
+let cache = null;
+function listClaudeSkills(projects, fresh = false) {
+  if (!fresh && cache && Date.now() - cache.at < 15e3) return cache.items;
+  const items = [];
+  for (const dir of configDirs()) {
+    items.push(...scanRoot(dir, { scope: "user", source: configLabel(dir), configDir: dir, projectId: null }));
+  }
+  const seen2 = /* @__PURE__ */ new Set();
+  for (const p of projects) {
+    const root = path.join(p.localPath.replace(/^~(?=$|\/)/, os.homedir()), ".claude");
+    if (seen2.has(root) || !fs.existsSync(root)) continue;
+    seen2.add(root);
+    items.push(...scanRoot(root, { scope: "project", source: p.name, configDir: null, projectId: p.id }));
+  }
+  items.sort((a, b2) => a.source.localeCompare(b2.source) || a.name.localeCompare(b2.name));
+  cache = { at: Date.now(), items };
+  return items;
+}
+function skillFile(id, projects) {
+  return listClaudeSkills(projects, true).find((s2) => s2.id === id) ?? null;
+}
+function readSkill(id, projects) {
+  const info = skillFile(id, projects);
+  if (!info) throw new Error("Skill não encontrada.");
+  return { info, content: fs.readFileSync(info.path, "utf8") };
+}
+function saveSkill(id, content, projects) {
+  const info = skillFile(id, projects);
+  if (!info) throw new Error("Skill não encontrada.");
+  if (typeof content !== "string" || content.length > MAX_FILE) throw new Error("Conteúdo inválido.");
+  fs.writeFileSync(info.path, content, "utf8");
+  cache = null;
+  return skillFile(id, projects) ?? info;
+}
+const BUILTIN = {
+  compact: "Resume a conversa para liberar contexto",
+  clear: "Limpa o contexto da sessão",
+  context: "Mostra o uso de contexto",
+  init: "Cria/atualiza o CLAUDE.md do projeto",
+  review: "Revisa um PR",
+  "security-review": "Revisão de segurança das mudanças",
+  "code-review": "Revisão de código do diff atual",
+  simplify: "Simplifica o código alterado",
+  cost: "Custo da sessão"
+};
+function slashCommands(initNames, projects, opts) {
+  const all2 = listClaudeSkills(projects);
+  const relevant = all2.filter((s2) => s2.scope === "project" ? s2.projectId === opts.projectId : !opts.configDir || s2.configDir === opts.configDir);
+  const byName = /* @__PURE__ */ new Map();
+  for (const s2 of relevant) if (!byName.has(s2.name)) byName.set(s2.name, s2);
+  const out = [];
+  const add = (name) => {
+    if (out.some((x) => x.name === name)) return;
+    const s2 = byName.get(name);
+    out.push({
+      name,
+      description: s2?.description ?? BUILTIN[name] ?? "",
+      source: s2 ? s2.scope === "project" ? `projeto ${s2.source}` : s2.source : BUILTIN[name] ? "CLI" : "plugin",
+      argumentHint: s2?.argumentHint ?? null
+    });
+  };
+  if (initNames?.length) {
+    for (const n of initNames) if (!n.startsWith("__")) add(n);
+  } else {
+    for (const s2 of relevant) add(s2.name);
+    for (const n of Object.keys(BUILTIN)) add(n);
+  }
+  const rank = (x) => x.source.startsWith("projeto") ? 0 : x.source === "CLI" || x.source === "plugin" ? 2 : 1;
+  return out.sort((a, b2) => rank(a) - rank(b2) || a.name.localeCompare(b2.name));
+}
+function all(db2, sql, params = []) {
+  const st = db2.prepare(sql);
+  if (params.length) st.bind(params);
+  const out = [];
+  while (st.step()) out.push(st.getAsObject());
+  st.free();
+  return out;
+}
+function one(db2, sql, params = []) {
+  return all(db2, sql, params)[0] ?? null;
+}
+function exec(db2, sql, params = []) {
+  const st = db2.prepare(sql);
+  st.run(params);
+  st.free();
+}
+const nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+function parseJson(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+function toConv(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    projectId: r.projectId ?? null,
+    agentId: r.agentId ?? null,
+    skillIds: parseJson(r.skillIds, []),
+    model: r.model ?? "",
+    effort: r.effort ?? "",
+    permissionMode: r.permissionMode || "default",
+    sessionId: r.sessionId ?? null,
+    cwd: r.cwd ?? null,
+    configDir: r.configDir ?? null,
+    claudeCommand: r.claudeCommand ?? "",
+    contextTokens: r.contextTokens ?? 0,
+    contextWindow: r.contextWindow ?? 0,
+    totalCostUsd: r.totalCostUsd ?? 0,
+    totalInputTokens: r.totalInputTokens ?? 0,
+    totalOutputTokens: r.totalOutputTokens ?? 0,
+    pinned: !!r.pinned,
+    archived: !!r.archived,
+    origin: r.origin === "terminal" ? "terminal" : "rickos",
+    useWorktree: !!r.useWorktree,
+    worktreeBranch: r.worktreeBranch ?? null,
+    repoPath: r.repoPath ?? null,
+    baseRef: r.baseRef ?? null,
+    forkFrom: r.forkFrom ?? null,
+    seenAt: r.seenAt ?? null,
+    turnCount: r.turnCount
+  };
+}
+function toTurn(r) {
+  return {
+    id: r.id,
+    conversationId: r.conversationId,
+    createdAt: r.createdAt,
+    prompt: r.prompt,
+    blocks: parseJson(r.blocks, []),
+    status: r.status,
+    error: r.error ?? null,
+    costUsd: r.costUsd ?? 0,
+    inputTokens: r.inputTokens ?? 0,
+    outputTokens: r.outputTokens ?? 0,
+    contextTokens: r.contextTokens ?? 0,
+    durationMs: r.durationMs ?? null,
+    attachments: parseJson(r.attachments, [])
+  };
+}
+const CONV_SELECT = `SELECT c.*, (SELECT COUNT(*) FROM ai_conv_turns t WHERE t.conversationId = c.id) AS turnCount FROM ai_conversations c`;
+async function listConversations(opts = {}) {
+  const db2 = await getDb();
+  return all(db2, `${CONV_SELECT} WHERE c.archived = ? ORDER BY c.pinned DESC, c.updatedAt DESC LIMIT 300`, [opts.archived ? 1 : 0]).map(toConv);
+}
+async function getConversation(id) {
+  const db2 = await getDb();
+  const r = one(db2, `${CONV_SELECT} WHERE c.id = ?`, [id]);
+  return r ? toConv(r) : null;
+}
+async function findConversationBySession(sessionId) {
+  const db2 = await getDb();
+  const r = one(db2, `${CONV_SELECT} WHERE c.sessionId = ? ORDER BY c.updatedAt DESC`, [sessionId]);
+  return r ? toConv(r) : null;
+}
+async function sessionIdsInUse() {
+  const db2 = await getDb();
+  const rows = all(db2, "SELECT id, sessionId FROM ai_conversations WHERE sessionId IS NOT NULL");
+  return new Map(rows.map((r) => [r.sessionId, r.id]));
+}
+async function createConversation(c) {
+  const db2 = await getDb();
+  const id = crypto.randomUUID();
+  const now = nowIso();
+  exec(
+    db2,
+    `INSERT INTO ai_conversations (id, title, createdAt, updatedAt, projectId, agentId, skillIds, model, effort, permissionMode, sessionId, cwd, configDir, claudeCommand, origin, contextTokens,
+       useWorktree, forkFrom, repoPath, worktreeBranch, baseRef, contextWindow, seenAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      c.title ?? "",
+      c.createdAt ?? now,
+      c.updatedAt ?? now,
+      c.projectId ?? null,
+      c.agentId ?? null,
+      JSON.stringify(c.skillIds ?? []),
+      c.model ?? "",
+      c.effort ?? "",
+      c.permissionMode ?? "default",
+      c.sessionId ?? null,
+      c.cwd ?? null,
+      c.configDir ?? null,
+      c.claudeCommand ?? "",
+      c.origin ?? "rickos",
+      c.contextTokens ?? 0,
+      c.useWorktree ? 1 : 0,
+      c.forkFrom ?? null,
+      c.repoPath ?? null,
+      c.worktreeBranch ?? null,
+      c.baseRef ?? null,
+      c.contextWindow ?? 0,
+      // quem cria (ou importa) a conversa já viu o estado atual
+      c.updatedAt ?? now
+    ]
+  );
+  saveDb();
+  return await getConversation(id);
+}
+async function updateConversation(id, patch) {
+  const db2 = await getDb();
+  const sets = [];
+  const params = [];
+  const put = (col, v) => {
+    sets.push(`${col} = ?`);
+    params.push(v);
+  };
+  if (patch.title !== void 0) put("title", patch.title.trim());
+  if (patch.projectId !== void 0) put("projectId", patch.projectId);
+  if (patch.agentId !== void 0) put("agentId", patch.agentId);
+  if (patch.skillIds !== void 0) put("skillIds", JSON.stringify(patch.skillIds));
+  if (patch.model !== void 0) put("model", patch.model);
+  if (patch.effort !== void 0) put("effort", patch.effort);
+  if (patch.permissionMode !== void 0) put("permissionMode", patch.permissionMode);
+  if (patch.pinned !== void 0) put("pinned", patch.pinned ? 1 : 0);
+  if (patch.archived !== void 0) put("archived", patch.archived ? 1 : 0);
+  if (patch.claudeCommand !== void 0) put("claudeCommand", patch.claudeCommand.trim());
+  if (patch.useWorktree !== void 0) put("useWorktree", patch.useWorktree ? 1 : 0);
+  if (sets.length) {
+    params.push(id);
+    exec(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+    saveDb();
+  }
+  return getConversation(id);
+}
+async function setConversationRuntime(id, r) {
+  const db2 = await getDb();
+  const sets = ["updatedAt = ?"];
+  const params = [nowIso()];
+  for (const k of ["worktreeBranch", "repoPath", "baseRef", "forkFrom"]) {
+    if (r[k] !== void 0) {
+      sets.push(`${k} = ?`);
+      params.push(r[k] ?? null);
+    }
+  }
+  if (r.sessionId !== void 0) {
+    sets.push("sessionId = ?");
+    params.push(r.sessionId);
+  }
+  if (r.cwd !== void 0) {
+    sets.push("cwd = ?");
+    params.push(r.cwd);
+  }
+  if (r.title !== void 0) {
+    sets.push("title = ?");
+    params.push(r.title);
+  }
+  if (r.contextTokens !== void 0) {
+    sets.push("contextTokens = ?");
+    params.push(r.contextTokens);
+  }
+  if (r.contextWindow !== void 0) {
+    sets.push("contextWindow = ?");
+    params.push(r.contextWindow);
+  }
+  if (r.addCost) {
+    sets.push("totalCostUsd = totalCostUsd + ?");
+    params.push(r.addCost);
+  }
+  if (r.addInput) {
+    sets.push("totalInputTokens = totalInputTokens + ?");
+    params.push(r.addInput);
+  }
+  if (r.addOutput) {
+    sets.push("totalOutputTokens = totalOutputTokens + ?");
+    params.push(r.addOutput);
+  }
+  params.push(id);
+  exec(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+  saveDb();
+}
+async function markSeen(id) {
+  const db2 = await getDb();
+  const r = one(db2, "SELECT updatedAt, seenAt FROM ai_conversations WHERE id = ?", [id]);
+  if (!r || r.seenAt && r.seenAt >= r.updatedAt) return false;
+  exec(db2, "UPDATE ai_conversations SET seenAt = updatedAt WHERE id = ?", [id]);
+  saveDb();
+  return true;
+}
+async function deleteConversation(id) {
+  const db2 = await getDb();
+  exec(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [id]);
+  exec(db2, "DELETE FROM ai_conversations WHERE id = ?", [id]);
+  saveDb();
+}
+async function listTurns(conversationId) {
+  const db2 = await getDb();
+  return all(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id", [conversationId]).map(toTurn);
+}
+async function createTurn(conversationId, prompt, attachments = []) {
+  const db2 = await getDb();
+  exec(db2, "INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, attachments) VALUES (?, ?, ?, ?, ?, ?)", [
+    conversationId,
+    nowIso(),
+    prompt,
+    "[]",
+    "running",
+    JSON.stringify(attachments)
+  ]);
+  const id = Number(one(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  saveDb();
+  return toTurn(one(db2, "SELECT * FROM ai_conv_turns WHERE id = ?", [id]));
+}
+async function saveTurn(t) {
+  const db2 = await getDb();
+  exec(
+    db2,
+    `UPDATE ai_conv_turns SET prompt = ?, blocks = ?, status = ?, error = ?, costUsd = ?, inputTokens = ?, outputTokens = ?, contextTokens = ?, durationMs = ? WHERE id = ?`,
+    [t.prompt, JSON.stringify(t.blocks), t.status, t.error, t.costUsd, t.inputTokens, t.outputTokens, t.contextTokens, t.durationMs, t.id]
+  );
+  saveDb();
+}
+async function replaceTurns(conversationId, turns) {
+  const db2 = await getDb();
+  db2.run("BEGIN");
+  try {
+    exec(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [conversationId]);
+    for (const t of turns) {
+      exec(
+        db2,
+        `INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, error, costUsd, inputTokens, outputTokens, contextTokens, durationMs, attachments)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          conversationId,
+          t.createdAt,
+          t.prompt,
+          JSON.stringify(t.blocks),
+          t.status,
+          t.error,
+          t.costUsd,
+          t.inputTokens,
+          t.outputTokens,
+          t.contextTokens,
+          t.durationMs,
+          JSON.stringify(t.attachments ?? [])
+        ]
+      );
+    }
+    db2.run("COMMIT");
+  } catch (e) {
+    try {
+      db2.run("ROLLBACK");
+    } catch {
+    }
+    throw e;
+  }
+  saveDb();
+}
+async function markStaleTurnsInterrupted() {
+  const db2 = await getDb();
+  exec(db2, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'Servidor reiniciado durante a execução.') WHERE status = 'running'`);
+  saveDb();
+}
+const live = /* @__PURE__ */ new Map();
+const slashByConv = /* @__PURE__ */ new Map();
+const slashByDir = /* @__PURE__ */ new Map();
+const dirKey = (cwd, configDir) => `${cwd ?? ""}|${configDir ?? ""}`;
+function knownSlashNames(c) {
+  return slashByConv.get(c.id) ?? (c.cwd ? slashByDir.get(dirKey(c.cwd, c.configDir)) ?? null : null);
+}
+const queues = /* @__PURE__ */ new Map();
+let deps = null;
+const TOOL_RESULT_MAX = 8e3;
+function initRunner(d) {
+  deps = d;
+}
+function isRunning(conversationId) {
+  return live.has(conversationId);
+}
+function liveTurn(conversationId) {
+  return live.get(conversationId)?.turn ?? null;
+}
+function pendingCount(conversationId) {
+  return live.get(conversationId)?.pending.size ?? 0;
+}
+function queuedMessages(conversationId) {
+  return (queues.get(conversationId) ?? []).map((m) => (m.images.length ? `🖼️×${m.images.length} ` : "") + (m.text || "(só imagens)"));
+}
+function withLive(c) {
+  return { ...c, running: isRunning(c.id), pendingPrompts: pendingCount(c.id), queued: queuedMessages(c.id) };
+}
+async function emitConversation(conversationId) {
+  const c = await getConversation(conversationId);
+  if (c) broadcast("conv:update", { conversationId, conversation: withLive(c) });
+}
+function emitTurn(run2, immediate = false) {
+  const send = () => {
+    run2.emitTimer = null;
+    broadcast("conv:update", { conversationId: run2.conversationId, turn: run2.turn });
+  };
+  if (immediate) {
+    if (run2.emitTimer) clearTimeout(run2.emitTimer);
+    send();
+    return;
+  }
+  if (!run2.emitTimer) run2.emitTimer = setTimeout(send, 120);
+}
+async function sendMessage(conversationId, text, images = []) {
+  const msg = { text: text.trim(), images };
+  if (!msg.text && !msg.images.length) return;
+  if (live.has(conversationId)) {
+    queues.set(conversationId, [...queues.get(conversationId) ?? [], msg]);
+    await emitConversation(conversationId);
+    return;
+  }
+  await startTurn(conversationId, msg);
+}
+async function removeQueued(conversationId, index) {
+  const q = [...queues.get(conversationId) ?? []];
+  q.splice(index, 1);
+  if (q.length) queues.set(conversationId, q);
+  else queues.delete(conversationId);
+  await emitConversation(conversationId);
+}
+async function cancel(conversationId) {
+  queues.delete(conversationId);
+  const run2 = live.get(conversationId);
+  if (!run2) {
+    await emitConversation(conversationId);
+    return false;
+  }
+  run2.cancelled = true;
+  writeLine(run2, { type: "control_request", request_id: crypto.randomUUID(), request: { subtype: "interrupt" } });
+  for (const [requestId] of run2.pending) {
+    writeLine(run2, controlResponse(requestId, { behavior: "deny", message: "O usuário interrompeu a execução.", interrupt: true }));
+  }
+  run2.pending.clear();
+  run2.killTimer = setTimeout(() => {
+    try {
+      run2.child?.kill("SIGKILL");
+    } catch {
+    }
+  }, 4e3);
+  return true;
+}
+function controlResponse(requestId, response) {
+  return { type: "control_response", response: { subtype: "success", request_id: requestId, response } };
+}
+function writeLine(run2, obj) {
+  try {
+    run2.child?.stdin?.write(JSON.stringify(obj) + "\n");
+  } catch {
+  }
+}
+function findTool(turn, id) {
+  return turn.blocks.find((b2) => b2.type === "tool" && b2.id === id);
+}
+async function respond(conversationId, requestId, r) {
+  const run2 = live.get(conversationId);
+  const p = run2?.pending.get(requestId);
+  if (!run2 || !p) return false;
+  run2.pending.delete(requestId);
+  const block = findTool(run2.turn, p.toolUseId);
+  let response;
+  let note = "";
+  let status2 = "allowed";
+  if (r.kind === "allow") {
+    response = { behavior: "allow", updatedInput: p.input };
+    if (r.always && p.suggestions?.length) {
+      response.updatedPermissions = p.suggestions;
+      note = "Permitido sempre";
+    } else note = "Permitido";
+  } else if (r.kind === "answer") {
+    response = { behavior: "allow", updatedInput: { ...p.input, answers: r.answers } };
+    if (block) block.answers = r.answers;
+    note = "Respondido";
+  } else if (r.kind === "chat") {
+    response = {
+      behavior: "deny",
+      message: "O usuário quer conversar sobre isso antes de escolher. Pare aqui e aguarde a próxima mensagem dele.",
+      interrupt: true
+    };
+    run2.chatAbout = true;
+    status2 = "denied";
+    note = "💬 Conversar sobre isso";
+  } else if (r.kind === "approvePlan") {
+    response = { behavior: "allow", updatedInput: p.input, updatedPermissions: [{ type: "setMode", mode: r.mode, destination: "session" }] };
+    note = r.mode === "acceptEdits" ? "Plano aprovado · aceitando edições" : "Plano aprovado";
+    await updateConversation(conversationId, { permissionMode: r.mode });
+    void emitConversation(conversationId);
+  } else {
+    const msg = r.message?.trim();
+    response = { behavior: "deny", message: msg ? `O usuário negou e disse: ${msg}` : "O usuário negou esta ação." };
+    status2 = "denied";
+    note = msg ? `Negado: ${msg}` : "Negado";
+  }
+  writeLine(run2, controlResponse(requestId, response));
+  if (block?.permission) block.permission = { ...block.permission, status: status2, note };
+  emitTurn(run2, true);
+  void emitConversation(conversationId);
+  return true;
+}
+function contextFromUsage(u) {
+  if (!u) return 0;
+  return (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.output_tokens ?? 0);
+}
+function toolResultText(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((x) => x?.type === "text" ? x.text ?? "" : x?.type === "image" ? "[imagem]" : "").join("\n");
+  }
+  return "";
+}
+function clip$1(s2, max = TOOL_RESULT_MAX) {
+  return s2.length > max ? s2.slice(0, max) + `
+… (${s2.length - max} caracteres omitidos)` : s2;
+}
+function defaultCwd() {
+  return os.homedir();
+}
+function isDefaultConfigDir(dir) {
+  if (!dir) return true;
+  return path.resolve(dir) === path.join(os.homedir(), ".claude");
+}
+async function startTurn(conversationId, message) {
+  if (!deps) throw new Error("Executor de conversas não inicializado.");
+  let conv = await getConversation(conversationId);
+  if (!conv) throw new Error("Conversa não encontrada.");
+  const prompt = message.text;
+  if (!conv.title) {
+    const title = (prompt || "Imagem").replace(/\s+/g, " ").trim().slice(0, 60);
+    await setConversationRuntime(conversationId, { title });
+    conv = await getConversation(conversationId);
+  }
+  const turn = await createTurn(
+    conversationId,
+    prompt,
+    message.images.map((i) => i.thumb)
+  );
+  const run2 = {
+    conversationId,
+    turn,
+    child: null,
+    pending: /* @__PURE__ */ new Map(),
+    startedAt: Date.now(),
+    cancelled: false,
+    chatAbout: false,
+    gotResult: false,
+    stderr: "",
+    mainModel: "",
+    contextWindow: 0,
+    compacted: false,
+    emitTimer: null,
+    killTimer: null
+  };
+  live.set(conversationId, run2);
+  emitTurn(run2, true);
+  void emitConversation(conversationId);
+  let cwd;
+  try {
+    if (conv.cwd) {
+      cwd = conv.cwd;
+      if (!fs.existsSync(cwd)) throw new Error(`O diretório desta conversa não existe mais: ${cwd}`);
+    } else {
+      const projectDir = await deps.resolveProjectCwd(conv.projectId);
+      if (conv.useWorktree) {
+        if (!projectDir || !fs.existsSync(projectDir)) throw new Error("O worktree isolado precisa de um projeto com pasta local.");
+        turn.blocks.push({ type: "notice", text: "🌿 Criando worktree isolado…" });
+        emitTurn(run2, true);
+        const wt = await createWorktree(projectDir, conv.title || prompt);
+        turn.blocks = turn.blocks.filter((b2) => b2.type !== "notice");
+        turn.blocks.push({ type: "notice", text: `🌿 Worktree isolado na branch ${wt.branch}` });
+        cwd = wt.cwd;
+        await setConversationRuntime(conversationId, { cwd, repoPath: wt.repoPath, worktreeBranch: wt.branch, baseRef: wt.baseRef });
+      } else {
+        cwd = projectDir && fs.existsSync(projectDir) ? projectDir : defaultCwd();
+        await setConversationRuntime(conversationId, { cwd });
+      }
+      conv = await getConversation(conversationId);
+      void emitConversation(conversationId);
+    }
+    const command = await deps.resolveCommand(conv);
+    const model2 = await deps.resolveModel(conv);
+    const system = await deps.systemPrompt(conv);
+    const args = [
+      ...await deps.allowedToolsArgs(),
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages",
+      "--permission-prompt-tool",
+      "stdio",
+      "--permission-mode",
+      conv.permissionMode,
+      ...model2 ? ["--model", model2] : [],
+      ...conv.effort ? ["--effort", conv.effort] : [],
+      // ramificação: retoma a sessão de origem numa sessão nova
+      ...conv.forkFrom && !conv.sessionId ? ["--resume", conv.forkFrom, "--fork-session"] : conv.sessionId ? ["--resume", conv.sessionId] : [],
+      ...system.trim() ? ["--append-system-prompt", system] : []
+    ];
+    const env = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: "1" };
+    if (!isDefaultConfigDir(conv.configDir)) env.CLAUDE_CONFIG_DIR = conv.configDir;
+    run2.child = await spawnCli(command, args, cwd, env);
+  } catch (e) {
+    await finishTurn(run2, e instanceof Error ? e.message : String(e));
+    return;
+  }
+  wireChild(run2, conv);
+  const content = message.images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } }));
+  content.push({ type: "text", text: prompt || "Veja a(s) imagem(ns) anexada(s)." });
+  writeLine(run2, { type: "user", message: { role: "user", content } });
+}
+function spawnCli(command, args, cwd, env) {
+  const bin = (command || "").trim() || "claude";
+  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(`Comando inválido: "${bin}".`));
+  const trySpawn = (viaShell) => new Promise((resolve, reject) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    const child = viaShell ? child_process.spawn(shell, ["-ilc", `${bin} "$@"`, shell, ...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] }) : child_process.spawn(bin, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    const onError = (err) => reject(err);
+    child.once("error", onError);
+    child.once("spawn", () => {
+      child.off("error", onError);
+      resolve(child);
+    });
+  });
+  return trySpawn(false).catch((err) => {
+    if (err?.code !== "ENOENT") throw err;
+    return trySpawn(true);
+  });
+}
+function wireChild(run2, conv) {
+  const child = run2.child;
+  let buf = "";
+  child.stdout?.on("data", (d) => {
+    buf += d.toString();
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      let evt;
+      try {
+        evt = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      handleEvent(run2, conv, evt);
+    }
+  });
+  child.stderr?.on("data", (d) => {
+    run2.stderr = (run2.stderr + d.toString()).slice(-4e3);
+  });
+  child.on("close", (code) => {
+    if (run2.killTimer) clearTimeout(run2.killTimer);
+    let error = null;
+    if (run2.cancelled) error = null;
+    else if (!run2.gotResult) error = run2.stderr.trim().split("\n").slice(-6).join("\n") || `Claude CLI saiu com código ${code}.`;
+    void finishTurn(run2, error);
+  });
+  child.stdin?.on("error", () => {
+  });
+}
+function lastLive(turn, type) {
+  for (let i = turn.blocks.length - 1; i >= 0; i--) {
+    const b2 = turn.blocks[i];
+    if (b2.type === type && b2.live) return b2;
+  }
+  return void 0;
+}
+function handleEvent(run2, conv, evt) {
+  const turn = run2.turn;
+  if (evt.parent_tool_use_id) return;
+  if (evt.type === "system" && evt.subtype === "init") {
+    if (evt.model) run2.mainModel = evt.model;
+    if (Array.isArray(evt.slash_commands)) {
+      slashByConv.set(conv.id, evt.slash_commands);
+      slashByDir.set(dirKey(conv.cwd, conv.configDir), evt.slash_commands);
+    }
+    if (evt.session_id && evt.session_id !== conv.sessionId) {
+      conv.sessionId = evt.session_id;
+      conv.forkFrom = null;
+      void setConversationRuntime(conv.id, { sessionId: evt.session_id, forkFrom: null }).then(() => emitConversation(conv.id));
+    }
+    return;
+  }
+  if (evt.type === "system" && evt.subtype === "compact_boundary") {
+    turn.blocks.push({ type: "notice", text: "🗜️ Contexto compactado" });
+    turn.contextTokens = 0;
+    run2.compacted = true;
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "stream_event" && evt.event) {
+    const ev = evt.event;
+    if (ev.type === "content_block_start") {
+      const t = ev.content_block?.type;
+      if (t === "text" || t === "thinking") turn.blocks.push({ type: t, text: "", live: true });
+    } else if (ev.type === "content_block_delta" && ev.delta) {
+      if (ev.delta.type === "text_delta" && ev.delta.text) {
+        const b2 = lastLive(turn, "text");
+        if (b2) b2.text += ev.delta.text;
+      } else if (ev.delta.type === "thinking_delta" && ev.delta.thinking) {
+        const b2 = lastLive(turn, "thinking");
+        if (b2) b2.text += ev.delta.thinking;
+      }
+    }
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "assistant" && evt.message?.content) {
+    for (const c of evt.message.content) {
+      if (c.type === "text" || c.type === "thinking") {
+        const full = (c.type === "text" ? c.text : c.thinking) ?? "";
+        const b2 = turn.blocks.find((x) => x.type === c.type && "live" in x && x.live);
+        if (b2) {
+          if (full) b2.text = full;
+          b2.live = false;
+        } else if (full) turn.blocks.push({ type: c.type, text: full });
+      } else if (c.type === "tool_use" && c.id) {
+        if (!findTool(turn, c.id)) turn.blocks.push({ type: "tool", id: c.id, name: c.name || "tool", input: c.input ?? {} });
+      }
+    }
+    turn.blocks = turn.blocks.filter((b2) => !(b2.type === "thinking" && !b2.live && !b2.text.trim()));
+    const ctx = contextFromUsage(evt.message.usage);
+    if (ctx) turn.contextTokens = ctx;
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "user" && evt.message?.content && Array.isArray(evt.message.content)) {
+    for (const c of evt.message.content) {
+      if (c.type === "tool_result" && c.tool_use_id) {
+        const b2 = findTool(turn, c.tool_use_id);
+        if (b2) {
+          b2.result = clip$1(toolResultText(c.content));
+          b2.isError = !!c.is_error;
+        }
+      }
+    }
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "control_request" && evt.request_id) {
+    const req = evt.request ?? {};
+    if (req.subtype !== "can_use_tool") {
+      writeLine(run2, { type: "control_response", response: { subtype: "error", request_id: evt.request_id, error: `Não suportado: ${req.subtype}` } });
+      return;
+    }
+    const toolUseId = req.tool_use_id || evt.request_id;
+    let block = findTool(turn, toolUseId);
+    if (!block) {
+      block = { type: "tool", id: toolUseId, name: req.tool_name || "tool", input: req.input ?? {} };
+      turn.blocks.push(block);
+    }
+    block.permission = {
+      requestId: evt.request_id,
+      status: "pending",
+      suggestions: req.permission_suggestions,
+      blockedPath: req.blocked_path,
+      description: req.description
+    };
+    run2.pending.set(evt.request_id, { toolUseId, toolName: req.tool_name || "tool", input: req.input ?? {}, suggestions: req.permission_suggestions });
+    emitTurn(run2, true);
+    void emitConversation(run2.conversationId);
+    scheduleAttentionNotice(run2, evt.request_id, req.tool_name || "tool", conv);
+    return;
+  }
+  if (evt.type === "result") {
+    run2.gotResult = true;
+    const r = evt;
+    const u = usageFromResult(r);
+    if (u) {
+      turn.costUsd = u.costUsd;
+      turn.inputTokens = u.inputTokens + u.cacheReadTokens + u.cacheCreationTokens;
+      turn.outputTokens = u.outputTokens;
+      turn.durationMs = u.durationMs;
+      recordAiUsage({ ...u, source: "prompt-runner", projectId: conv.projectId, model: u.model || run2.mainModel || null }).catch(() => {
+      });
+    }
+    const mu = Object.entries(r.modelUsage ?? {});
+    const base = run2.mainModel.replace(/\[.*\]$/, "");
+    const main = base && mu.find(([m]) => m === base || m.startsWith(base) || base.startsWith(m)) || mu.sort((a, b2) => (b2[1]?.outputTokens ?? 0) - (a[1]?.outputTokens ?? 0))[0];
+    if (main?.[1]?.contextWindow) run2.contextWindow = main[1].contextWindow;
+    const hasText = turn.blocks.some((b2) => b2.type === "text" && b2.text.trim());
+    if (!hasText && typeof r.result === "string" && r.result.trim()) turn.blocks.push({ type: "text", text: r.result });
+    if (r.is_error && !run2.cancelled && !run2.chatAbout) turn.error = typeof r.result === "string" && r.result.trim() ? r.result : `Erro (${r.subtype ?? "desconhecido"})`;
+    try {
+      run2.child?.stdin?.end();
+    } catch {
+    }
+    emitTurn(run2);
+  }
+}
+function scheduleAttentionNotice(run2, requestId, toolName, conv) {
+  setTimeout(() => {
+    if (!run2.pending.has(requestId) || live.get(run2.conversationId) !== run2) return;
+    const what = toolName === "AskUserQuestion" ? "tem uma pergunta" : toolName === "ExitPlanMode" ? "quer aprovar um plano" : `pede permissão para ${toolName}`;
+    void notify({ title: `🤚 Claude ${what}`, body: conv.title || "Prompt Runner", source: "ia", page: "ai-runner" });
+  }, 15e3);
+}
+async function finishTurn(run2, error) {
+  if (live.get(run2.conversationId) !== run2) return;
+  if (run2.emitTimer) clearTimeout(run2.emitTimer);
+  const turn = run2.turn;
+  for (const b2 of turn.blocks) {
+    if ((b2.type === "text" || b2.type === "thinking") && b2.live) b2.live = false;
+    if (b2.type === "tool" && b2.permission?.status === "pending") b2.permission = { ...b2.permission, status: "denied", note: "Sem resposta" };
+  }
+  turn.blocks = turn.blocks.filter((b2) => !(b2.type === "thinking" && !b2.text.trim()));
+  if (run2.cancelled) {
+    turn.status = "cancelled";
+    turn.error = null;
+  } else if (run2.chatAbout && !turn.error) {
+    turn.status = "done";
+    turn.blocks.push({ type: "notice", text: "💬 Você quis conversar sobre a pergunta: escreva abaixo." });
+  } else if (error || turn.error) {
+    turn.status = "error";
+    turn.error = turn.error || error;
+  } else turn.status = "done";
+  if (!turn.durationMs) turn.durationMs = Date.now() - run2.startedAt;
+  live.delete(run2.conversationId);
+  try {
+    await saveTurn(turn);
+    const cw = run2.contextWindow;
+    await setConversationRuntime(run2.conversationId, {
+      ...turn.contextTokens || run2.compacted ? { contextTokens: turn.contextTokens } : {},
+      ...cw ? { contextWindow: cw } : {},
+      addCost: turn.costUsd,
+      addInput: turn.inputTokens,
+      addOutput: turn.outputTokens
+    });
+  } catch {
+  }
+  broadcast("conv:update", { conversationId: run2.conversationId, turn });
+  await emitConversation(run2.conversationId);
+  if (Date.now() - run2.startedAt >= 6e4 && !run2.cancelled) {
+    const conv = await getConversation(run2.conversationId);
+    void notify({
+      title: turn.status === "done" ? "✅ Claude terminou" : "⚠️ Claude parou com erro",
+      body: conv?.title || turn.prompt.slice(0, 120),
+      source: "ia",
+      page: "ai-runner"
+    });
+  }
+  const q = queues.get(run2.conversationId) ?? [];
+  if (q.length && turn.status === "done") {
+    const [next, ...rest] = q;
+    if (rest.length) queues.set(run2.conversationId, rest);
+    else queues.delete(run2.conversationId);
+    startTurn(run2.conversationId, next).catch(() => {
+    });
+  }
 }
 const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"];
 const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"];
@@ -78182,6 +78385,21 @@ ${ctx}`,
     return true;
   });
   handle("conv:cancel", (_e, id) => cancel(id));
+  handle("conv:slashCommands", async (_e, id, projectId) => {
+    const projects = await deps2.projectPaths();
+    const c = id ? await getConversation(id) : null;
+    return slashCommands(c ? knownSlashNames(c) : null, projects, {
+      projectId: c ? c.projectId : projectId ?? null,
+      configDir: c?.configDir ?? null
+    });
+  });
+  handle("claudeSkills:list", async (_e, fresh) => listClaudeSkills(await deps2.projectPaths(), !!fresh));
+  handle("claudeSkills:read", async (_e, id) => readSkill(String(id), await deps2.projectPaths()));
+  handle("claudeSkills:save", async (_e, id, content) => saveSkill(String(id), content, await deps2.projectPaths()));
+  handle("conv:markSeen", async (_e, id) => {
+    if (await markSeen(id)) await emitConv(id);
+    return true;
+  });
   handle("conv:respond", (_e, id, requestId, response) => respond(id, requestId, response));
   handle("conv:removeQueued", (_e, id, index) => removeQueued(id, Number(index) || 0));
   handle("conv:terminalSessions", async () => {
@@ -80400,7 +80618,7 @@ ${sk.content.trim()}`);
     }
     return parts.join("\n\n");
   },
-  projectPaths: async () => (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath.trim() }))
+  projectPaths: async () => (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath.trim(), name: p.name }))
 });
 ipcMain.handle("ai:cancel", (_, runId) => {
   const r = aiRuns.get(runId);
