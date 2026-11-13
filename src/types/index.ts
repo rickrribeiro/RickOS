@@ -896,6 +896,8 @@ declare global {
       delegations: {
         getAll: (projectId?: number | null) => Promise<ProjectDelegation[]>
         start: (projectId: number, action: string | null, instructions: string | null) => Promise<ProjectDelegation>
+        /** O Claude analisa a tarefa e devolve um prompt (nada é executado). */
+        draftPrompt: (projectId: number, action: string | null, instructions: string | null) => Promise<string>
         cancel: (id: number) => Promise<void>
         review: (id: number) => Promise<DelegationReview>
         discard: (id: number) => Promise<void>

@@ -4,6 +4,8 @@ import { useProjectStore } from '../store/projectStore'
 import { renderMarkdown } from '../../estudos/markdown'
 import { timeAgo } from '../../../utils/dates'
 import { copyText, shortPath } from '../git'
+import { useUIStore } from '../../../store/uiStore'
+import { DRAFT_KEY } from '../../ai/pages/PromptRunnerPage'
 
 export const DELEGATION_STATUS: Record<ProjectDelegation['status'], { label: string; cls: string }> = {
   rodando: { label: '⏳ rodando', cls: 'run' },
@@ -14,16 +16,67 @@ export const DELEGATION_STATUS: Record<ProjectDelegation['status'], { label: str
   descartada: { label: '🗑 descartada', cls: 'off' }
 }
 
-/** Confirma a delegação da próxima ação (com instruções opcionais). */
+/**
+ * Delegar a próxima ação ao Claude. Padrão: o Claude analisa a tarefa e o repositório e
+ * monta um prompt, que abre no Prompt Runner (projeto + worktree isolado) para você
+ * revisar, editar e enviar. "Executar direto" mantém o fluxo antigo (roda sozinho).
+ */
 export function DelegateModal({ project, onClose }: { project: Project; onClose: () => void }): React.ReactElement {
   const { refreshDelegations } = useProjectStore()
+  const { setPage } = useUIStore()
   const [action, setAction] = useState(project.nextAction ?? '')
   const [instructions, setInstructions] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'draft' | 'run' | null>(null)
   const [error, setError] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+  const alive = React.useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
+  useEffect(() => {
+    if (busy !== 'draft') return
+    setElapsed(0)
+    const t = setInterval(() => setElapsed((x) => x + 1), 1000)
+    return () => clearInterval(t)
+  }, [busy])
+
+  async function draft(): Promise<void> {
+    setBusy('draft')
+    setError('')
+    try {
+      const prompt = await window.api.delegations.draftPrompt(project.id, action.trim() || null, instructions.trim() || null)
+      if (!alive.current) return
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({
+            agentId: null,
+            skillIds: [],
+            userPrompt: prompt,
+            projectId: project.id,
+            title: action.trim(),
+            useWorktree: !!project.localPath,
+            note: '📝 Prompt montado pelo Claude a partir da tarefa. Revise, ajuste o que quiser e envie.'
+          })
+        )
+      } catch {
+        // armazenamento indisponível
+      }
+      onClose()
+      setPage('ai-runner')
+    } catch (e) {
+      if (alive.current) setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (alive.current) setBusy(null)
+    }
+  }
 
   async function go(): Promise<void> {
-    setBusy(true)
+    if (!window.confirm('Executar direto, sem revisar o prompt? O Claude trabalha sozinho num worktree isolado.')) return
+    setBusy('run')
     setError('')
     try {
       await window.api.delegations.start(project.id, action.trim() || null, instructions.trim() || null)
@@ -32,7 +85,7 @@ export function DelegateModal({ project, onClose }: { project: Project; onClose:
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
@@ -41,18 +94,34 @@ export function DelegateModal({ project, onClose }: { project: Project; onClose:
       <div className="modal ph-modal" onClick={(e) => e.stopPropagation()}>
         <h2>🤖 Delegar ao Claude — {project.name}</h2>
         <p className="ph-muted">
-          O Claude executa a tarefa num <strong>worktree isolado</strong> (branch <code>claude/rickos-…</code>, ao lado de {shortPath(project.localPath)}), com
-          commits locais e sem push. Quando terminar, você revisa: diff, PR ou descartar.
+          O Claude analisa a tarefa{project.localPath ? <> e o repositório ({shortPath(project.localPath)}), só lendo,</> : ''} e monta um prompt detalhado. Ele abre
+          no <strong>Prompt Runner</strong>{project.localPath ? <>, já com <strong>worktree isolado</strong>,</> : ''} para você revisar, editar e enviar. Nada é
+          executado antes disso.
         </p>
         <label className="ph-label">Tarefa</label>
         <textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
         <label className="ph-label">Instruções extras (opcional)</label>
         <textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex: use o componente X, não mude a API pública, escreva testes…" />
         {error && <div className="ph-error">{error}</div>}
+        {busy === 'draft' && (
+          <div className="ph-muted" style={{ marginTop: 8 }}>
+            🔎 Claude analisando a tarefa{project.localPath ? ' e o repositório' : ''}… {elapsed}s
+          </div>
+        )}
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={go} disabled={busy || !action.trim()}>
-            {busy ? 'Criando worktree…' : '🤖 Delegar'}
+          {project.localPath && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={go}
+              disabled={!!busy || !action.trim()}
+              title="Fluxo antigo: o Claude executa sozinho num worktree isolado e você revisa no fim"
+            >
+              {busy === 'run' ? 'Criando worktree…' : '🤖 Executar direto'}
+            </button>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={draft} disabled={!!busy || !action.trim()}>
+            {busy === 'draft' ? 'Montando prompt…' : '📝 Montar prompt'}
           </button>
         </div>
       </div>

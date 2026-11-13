@@ -334,8 +334,12 @@ ${ctx}`
                 )}
                 {project.nextActionAt && <span className="ph-muted">definida há {timeAgo(project.nextActionAt)}</span>}
                 <span style={{ flex: 1 }} />
-                {project.nextAction && project.localPath && !isClosed(project) && (
-                  <button className="btn btn-secondary btn-sm" onClick={() => setDelegating(true)} title="O Claude executa a próxima ação num worktree isolado; você revisa depois">
+                {project.nextAction && !isClosed(project) && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setDelegating(true)}
+                    title="O Claude analisa a próxima ação e monta um prompt no Prompt Runner para você revisar e enviar"
+                  >
                     🤖 Delegar
                   </button>
                 )}

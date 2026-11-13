@@ -287,6 +287,7 @@ export function createApi() {
     delegations: {
       getAll: (projectId?: number | null) => invoke('delegations:getAll', projectId ?? null),
       start: (projectId: number, action: string | null, instructions: string | null) => invoke('delegations:start', projectId, action, instructions),
+      draftPrompt: (projectId: number, action: string | null, instructions: string | null) => invoke<string>('delegations:draftPrompt', projectId, action, instructions),
       cancel: (id: number) => invoke('delegations:cancel', id),
       review: (id: number) => invoke('delegations:review', id),
       discard: (id: number) => invoke('delegations:discard', id),

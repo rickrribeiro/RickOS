@@ -203,7 +203,7 @@ import { suggestProjects, ignoreProjectSuggestion, restoreProjectSuggestions } f
 import { projectsOverview, projectCommits, readRoadmap, setRoadmapItem, createRoadmapTemplate, checkProjectRadar, generateCycleChangelog, cycleCommits, setProjectSchedule } from './services/projectHub'
 import { claudeHookStatus, installClaudeHook, uninstallClaudeHook, handleClaudeSession, AUTO_WHERE_KEY, HOOK_MODEL_KEY } from './services/claudeHook'
 import type { SessionPayload } from './services/claudeHook'
-import { delegateNextAction, cancelDelegation, reviewDelegation, discardDelegation, acceptDelegation, prDelegation, recoverDelegations } from './services/delegation'
+import { delegateNextAction, draftDelegationPrompt, cancelDelegation, reviewDelegation, discardDelegation, acceptDelegation, prDelegation, recoverDelegations } from './services/delegation'
 import type { ProjectStatusPayload } from './database/queries'
 import {
   scanGit,
@@ -762,6 +762,9 @@ ipcMain.handle('projects:hookConfig', async (_, enabled: boolean, model: string 
 // Delegar a próxima ação ao Claude (worktree isolado)
 ipcMain.handle('delegations:getAll', (_, projectId?: number | null) => getDelegations(projectId ?? null))
 ipcMain.handle('delegations:start', (_, projectId: number, action: string | null, instructions: string | null) => delegateNextAction(projectId, action, instructions))
+ipcMain.handle('delegations:draftPrompt', (_, projectId: number, action: string | null, instructions: string | null) =>
+  draftDelegationPrompt(projectId, action, instructions)
+)
 ipcMain.handle('delegations:cancel', (_, id: number) => cancelDelegation(id))
 ipcMain.handle('delegations:review', (_, id: number) => reviewDelegation(id))
 ipcMain.handle('delegations:discard', (_, id: number) => discardDelegation(id))

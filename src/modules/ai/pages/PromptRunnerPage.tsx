@@ -51,9 +51,10 @@ interface DraftSettings {
   effort: ConvEffort
   permissionMode: ConvPermissionMode
   useWorktree: boolean
+  title: string
 }
 
-const EMPTY_DRAFT: DraftSettings = { projectId: null, agentId: null, skillIds: [], model: '', effort: '', permissionMode: 'default', useWorktree: false }
+const EMPTY_DRAFT: DraftSettings = { projectId: null, agentId: null, skillIds: [], model: '', effort: '', permissionMode: 'default', useWorktree: false, title: '' }
 
 function readStorage(key: string): string {
   try {
@@ -91,6 +92,8 @@ export function PromptRunnerPage(): React.ReactElement {
   const [editingTitle, setEditingTitle] = useState<string | null>(null)
   const [toast, setToast] = useState('')
   const [sending, setSending] = useState(false)
+  /** Aviso de rascunho vindo de outra tela (ex.: prompt montado na delegação). */
+  const [handoffNote, setHandoffNote] = useState('')
   const [images, setImages] = useState<AiImageInput[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [showChanges, setShowChanges] = useState(false)
@@ -120,7 +123,8 @@ export function PromptRunnerPage(): React.ReactElement {
         model: conv.model,
         effort: conv.effort,
         permissionMode: conv.permissionMode,
-        useWorktree: conv.useWorktree
+        useWorktree: conv.useWorktree,
+        title: conv.title
       }
     : draft
 
@@ -142,7 +146,15 @@ export function PromptRunnerPage(): React.ReactElement {
     })
 
     // hand-off de outras telas → conversa nova com o prompt preenchido
-    let handoff: { agentId?: string | null; skillIds?: string[]; userPrompt?: string; projectId?: number | null } | null = null
+    let handoff: {
+      agentId?: string | null
+      skillIds?: string[]
+      userPrompt?: string
+      projectId?: number | null
+      title?: string
+      useWorktree?: boolean
+      note?: string
+    } | null = null
     try {
       handoff = JSON.parse(readStorage(DRAFT_KEY) || 'null')
       if (!handoff) {
@@ -161,8 +173,11 @@ export function PromptRunnerPage(): React.ReactElement {
         ...EMPTY_DRAFT,
         projectId: typeof handoff.projectId === 'number' ? handoff.projectId : null,
         agentId: handoff.agentId ?? null,
-        skillIds: Array.isArray(handoff.skillIds) ? handoff.skillIds : []
+        skillIds: Array.isArray(handoff.skillIds) ? handoff.skillIds : [],
+        title: typeof handoff.title === 'string' ? handoff.title.slice(0, 120) : '',
+        useWorktree: !!handoff.useWorktree && typeof handoff.projectId === 'number'
       })
+      setHandoffNote(typeof handoff.note === 'string' ? handoff.note : '')
       useConvStore.getState().select(null)
       setText(handoff.userPrompt ?? '')
       setPane('chat')
@@ -227,6 +242,7 @@ export function PromptRunnerPage(): React.ReactElement {
   }
 
   function newConversation(): void {
+    setHandoffNote('')
     store.select(null)
     setDraft(conv ? { ...EMPTY_DRAFT, projectId: conv.projectId, model: conv.model, effort: conv.effort } : EMPTY_DRAFT)
     setText(readStorage(COMPOSER_KEY(null)))
@@ -251,6 +267,7 @@ export function PromptRunnerPage(): React.ReactElement {
         id = c.id
         await store.select(id)
         writeStorage(COMPOSER_KEY(null), '')
+        setHandoffNote('')
       }
       if (raw === undefined) {
         setText('')
@@ -560,7 +577,7 @@ export function PromptRunnerPage(): React.ReactElement {
                 />
               ) : (
                 <h3 onDoubleClick={() => conv && setEditingTitle(conv.title)} title={conv ? 'Duplo clique para renomear' : undefined}>
-                  {conv ? conv.title || 'Nova conversa' : 'Nova conversa'}
+                  {conv ? conv.title || 'Nova conversa' : draft.title || 'Nova conversa'}
                 </h3>
               )}
             </div>
@@ -735,6 +752,15 @@ export function PromptRunnerPage(): React.ReactElement {
               <TurnView key={t.id} turn={t} onRespond={respond} onRetry={i === convTurns.length - 1 && !conv?.running ? (p) => send(p) : undefined} />
             ))}
           </div>
+
+          {!conv && handoffNote && (
+            <div className="cv-handoff">
+              <span>{handoffNote}</span>
+              <button className="cv-link" onClick={() => setHandoffNote('')} title="Fechar">
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* fila + atenção */}
           {conv && !!conv.pendingPrompts && (
