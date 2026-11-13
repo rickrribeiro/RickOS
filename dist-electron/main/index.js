@@ -79734,6 +79734,50 @@ No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O
   });
   return d;
 }
+async function draftDelegationPrompt(projectId, action, instructions) {
+  const p = await getProject(projectId);
+  if (!p) throw new Error("Projeto não encontrado");
+  const task = (action ?? p.nextAction ?? "").trim();
+  if (!task) throw new Error("Defina a tarefa antes de montar o prompt.");
+  const dir = p.localPath ? path.resolve(expandHome(p.localPath)) : null;
+  const cwd = dir && fs.existsSync(dir) ? dir : void 0;
+  const prompt = `[rickos:delegacao-prompt] Você vai PREPARAR um prompt para outro agente (Claude Code) executar uma tarefa no projeto "${p.name}". NÃO execute a tarefa e NÃO altere nenhum arquivo: só leia o que precisar.
+
+TAREFA:
+${task}
+${instructions?.trim() ? `
+Instruções do usuário:
+${instructions.trim()}
+` : ""}
+Contexto do projeto:
+${p.description ? `- Descrição: ${p.description}
+` : ""}${p.finishLine ? `- Linha de chegada: ${p.finishLine}
+` : ""}${p.scope ? `- Escopo atual: ${p.scope}
+` : ""}${p.whereLeftOff ? `- Onde parei: ${p.whereLeftOff}
+` : ""}${cwd ? `- Você está na pasta do repositório: ${cwd}
+` : "- Não há pasta local do projeto: baseie-se só no contexto acima.\n"}
+Como trabalhar:
+1. ${cwd ? "Dê uma olhada rápida no repositório (CLAUDE.md/README, estrutura, arquivos ligados à tarefa) para entender onde a mudança entra." : "Pense no que a tarefa exige."} Seja objetivo: não precisa ler tudo.
+2. Escreva o prompt final para o agente executor, em pt-BR, contendo:
+   - **Objetivo**: o que deve ficar pronto (critério de pronto verificável).
+   - **Contexto**: arquivos/módulos relevantes que você encontrou (com caminhos), convenções do repo a seguir.
+   - **Passos sugeridos**: um plano curto.
+   - **Restrições**: o que não mexer; fazer a menor mudança que resolva; rodar typecheck/testes se existirem; commits pequenos; não fazer push.
+   - **Dúvidas em aberto**: o que ficou ambíguo (o executor deve perguntar antes de decidir).
+   IMPORTANTE: o executor vai rodar numa cópia do repositório (git worktree) em OUTRA pasta. Use SEMPRE caminhos relativos à raiz do repositório (ex.: \`src/app.ts\`), nunca o caminho absoluto desta pasta, e não mande ele trocar de diretório.
+3. Responda APENAS com o prompt final em Markdown, sem introdução nem comentários seus.`;
+  const command = p.claudeCommand?.trim() || await getSetting("claude_command") || "claude";
+  const model2 = (await getSetting("claude_model") || "").trim();
+  const readOnly = ["Read", "Glob", "Grep", "Bash(git log:*)", "Bash(git status:*)", "Bash(git diff:*)", "Bash(ls:*)"];
+  const out = await runClaude(prompt, command, {
+    model: model2,
+    cwd,
+    extraArgs: ["--allowedTools", readOnly.join(",")],
+    timeoutMs: 5 * 60 * 1e3,
+    usage: { source: "delegacao", projectId }
+  });
+  return out.replace(/^```(?:markdown|md)?\n([\s\S]*?)\n```\s*$/, "$1").trim();
+}
 async function cancelDelegation(id) {
   const d = await getDelegation(id);
   if (!d) return;
@@ -80201,6 +80245,10 @@ ipcMain.handle("projects:hookConfig", async (_, enabled, model2) => {
 });
 ipcMain.handle("delegations:getAll", (_, projectId) => getDelegations(projectId ?? null));
 ipcMain.handle("delegations:start", (_, projectId, action, instructions) => delegateNextAction(projectId, action, instructions));
+ipcMain.handle(
+  "delegations:draftPrompt",
+  (_, projectId, action, instructions) => draftDelegationPrompt(projectId, action, instructions)
+);
 ipcMain.handle("delegations:cancel", (_, id) => cancelDelegation(id));
 ipcMain.handle("delegations:review", (_, id) => reviewDelegation(id));
 ipcMain.handle("delegations:discard", (_, id) => discardDelegation(id));
