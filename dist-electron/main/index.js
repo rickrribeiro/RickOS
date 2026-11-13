@@ -785,6 +785,57 @@ const SCHEMA = `
     body TEXT NOT NULL,
     createdAt TEXT NOT NULL
   );
+
+  -- Prompt Runner: conversas (sessões do Claude CLI, continuadas com --resume)
+  CREATE TABLE IF NOT EXISTS ai_conversations (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    projectId INTEGER,
+    agentId TEXT,
+    skillIds TEXT NOT NULL DEFAULT '[]',
+    model TEXT NOT NULL DEFAULT '',
+    effort TEXT NOT NULL DEFAULT '',
+    permissionMode TEXT NOT NULL DEFAULT 'default',
+    sessionId TEXT,
+    cwd TEXT,
+    configDir TEXT,
+    claudeCommand TEXT NOT NULL DEFAULT '',
+    contextTokens INTEGER NOT NULL DEFAULT 0,
+    contextWindow INTEGER NOT NULL DEFAULT 0,
+    totalCostUsd REAL NOT NULL DEFAULT 0,
+    totalInputTokens INTEGER NOT NULL DEFAULT 0,
+    totalOutputTokens INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    origin TEXT NOT NULL DEFAULT 'rickos',
+    useWorktree INTEGER NOT NULL DEFAULT 0,
+    worktreeBranch TEXT,
+    repoPath TEXT,
+    baseRef TEXT,
+    forkFrom TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_conversations_updated ON ai_conversations(updatedAt);
+  CREATE INDEX IF NOT EXISTS idx_ai_conversations_session ON ai_conversations(sessionId);
+
+  -- Um turno = mensagem do usuário + resposta (blocos de texto/ferramentas em JSON)
+  CREATE TABLE IF NOT EXISTS ai_conv_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversationId TEXT NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+    createdAt TEXT NOT NULL,
+    prompt TEXT NOT NULL DEFAULT '',
+    blocks TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'done',
+    error TEXT,
+    costUsd REAL NOT NULL DEFAULT 0,
+    inputTokens INTEGER NOT NULL DEFAULT 0,
+    outputTokens INTEGER NOT NULL DEFAULT 0,
+    contextTokens INTEGER NOT NULL DEFAULT 0,
+    durationMs INTEGER,
+    attachments TEXT NOT NULL DEFAULT '[]'
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_conv_turns_conv ON ai_conv_turns(conversationId, id);
 `;
 const SKILLS = [
   {
@@ -1204,6 +1255,26 @@ const MIGRATIONS = [
         }
       }
     }
+  },
+  {
+    version: 19,
+    label: "Prompt Runner: worktree por conversa, ramificação e anexos",
+    run: (db2) => {
+      const cols = [
+        ["ai_conversations", "useWorktree", "INTEGER NOT NULL DEFAULT 0"],
+        ["ai_conversations", "worktreeBranch", "TEXT"],
+        ["ai_conversations", "repoPath", "TEXT"],
+        ["ai_conversations", "baseRef", "TEXT"],
+        ["ai_conversations", "forkFrom", "TEXT"],
+        ["ai_conv_turns", "attachments", "TEXT NOT NULL DEFAULT '[]'"]
+      ];
+      for (const [t, c, def] of cols) {
+        try {
+          db2.run(`ALTER TABLE ${t} ADD COLUMN ${c} ${def};`);
+        } catch {
+        }
+      }
+    }
   }
 ];
 function getUserVersion(database) {
@@ -1433,7 +1504,7 @@ function readLastRowId(db2) {
   stmt.free();
   return id;
 }
-function run$1(db2, sql, params = []) {
+function run$2(db2, sql, params = []) {
   const stmt = db2.prepare(sql);
   stmt.run(params);
   stmt.free();
@@ -1449,7 +1520,7 @@ async function getAllTags() {
 }
 async function createTag(name, color, isProductive) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO tags (name, color, isProductive) VALUES (?, ?, ?)", [
+  run$2(db2, "INSERT INTO tags (name, color, isProductive) VALUES (?, ?, ?)", [
     name,
     color,
     isProductive
@@ -1459,7 +1530,7 @@ async function createTag(name, color, isProductive) {
 }
 async function updateTag(id, name, color, isProductive) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE tags SET name = ?, color = ?, isProductive = ? WHERE id = ?", [
+  run$2(db2, "UPDATE tags SET name = ?, color = ?, isProductive = ? WHERE id = ?", [
     name,
     color,
     isProductive,
@@ -1469,8 +1540,8 @@ async function updateTag(id, name, color, isProductive) {
 }
 async function deleteTag(id) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE tasks SET tagId = 1 WHERE tagId = ?", [id]);
-  run$1(db2, "DELETE FROM tags WHERE id = ?", [id]);
+  run$2(db2, "UPDATE tasks SET tagId = 1 WHERE tagId = ?", [id]);
+  run$2(db2, "DELETE FROM tags WHERE id = ?", [id]);
 }
 const TASK_WITH_TAG_SQL = `
   SELECT t.id, t.title, t.tagId, t.secondaryTagId, t.startTime, t.endTime, t.studyNodeId,
@@ -1514,7 +1585,7 @@ async function getActiveTask() {
 }
 async function createTask(title, tagId, secondaryTagId, startTime, endTime = null, studyNodeId = null, projectId = null) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO tasks (title, tagId, secondaryTagId, startTime, endTime, studyNodeId, projectId) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO tasks (title, tagId, secondaryTagId, startTime, endTime, studyNodeId, projectId) VALUES (?, ?, ?, ?, ?, ?, ?)", [
     title,
     tagId,
     secondaryTagId,
@@ -1542,7 +1613,7 @@ async function getStudyHoursByTopic() {
 }
 async function updateTask(id, title, tagId, secondaryTagId, startTime, endTime) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE tasks SET title = ?, tagId = ?, secondaryTagId = ?, startTime = ?, endTime = ? WHERE id = ?",
     [title, tagId, secondaryTagId, startTime, endTime, id]
@@ -1551,15 +1622,15 @@ async function updateTask(id, title, tagId, secondaryTagId, startTime, endTime) 
 }
 async function stopTask(id, endTime) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE tasks SET endTime = ? WHERE id = ?", [endTime, id]);
+  run$2(db2, "UPDATE tasks SET endTime = ? WHERE id = ?", [endTime, id]);
 }
 async function deleteTask(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM tasks WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM tasks WHERE id = ?", [id]);
 }
 async function stopAllActiveTasks(endTime) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE tasks SET endTime = ? WHERE endTime IS NULL", [endTime]);
+  run$2(db2, "UPDATE tasks SET endTime = ? WHERE endTime IS NULL", [endTime]);
 }
 function localDateKey(date) {
   const y = date.getFullYear();
@@ -1645,7 +1716,7 @@ async function getTagStats(startDate, endDate) {
 }
 async function updateDayConfig(date, isWorkDay) {
   const db2 = await getDb();
-  run$1(db2, "INSERT OR REPLACE INTO day_configs (date, isWorkDay) VALUES (?, ?)", [date, isWorkDay]);
+  run$2(db2, "INSERT OR REPLACE INTO day_configs (date, isWorkDay) VALUES (?, ?)", [date, isWorkDay]);
 }
 async function getTodos(status2) {
   const db2 = await getDb();
@@ -1668,7 +1739,7 @@ async function createTodo(title, notes, status2, source, priority = 0, dueDate =
       title = hit.title;
     }
   }
-  run$1(
+  run$2(
     db2,
     "INSERT INTO todos (title, notes, status, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [title, notes, status2, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt]
@@ -1696,7 +1767,7 @@ async function updateTodo(id, title, notes, status2, priority, dueDate, projectI
     cols.push("doneAt = NULL");
   }
   params.push(id);
-  run$1(db2, `UPDATE todos SET ${cols.join(", ")} WHERE id = ?`, params);
+  run$2(db2, `UPDATE todos SET ${cols.join(", ")} WHERE id = ?`, params);
   if (status2 === "done" && prev?.status !== "done") spawnRecurrenceIfNeeded(db2, id);
   return getOne(db2, "SELECT * FROM todos WHERE id = ?", [id]);
 }
@@ -1728,7 +1799,7 @@ function spawnRecurrenceIfNeeded(db2, id) {
   }
   if (!rec || !rec.type) return;
   const nextDue = nextDueDate(rec, t.dueDate);
-  run$1(
+  run$2(
     db2,
     "INSERT INTO todos (title, notes, status, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [t.title, t.notes, "todo", t.priority, nextDue, t.projectId, "recurring", 0, t.recurrence, t.type, (/* @__PURE__ */ new Date()).toISOString()]
@@ -1736,7 +1807,7 @@ function spawnRecurrenceIfNeeded(db2, id) {
 }
 async function deleteTodo(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM todos WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM todos WHERE id = ?", [id]);
 }
 async function getProjects() {
   const db2 = await getDb();
@@ -1744,7 +1815,7 @@ async function getProjects() {
 }
 async function createProject(name, description, githubRepoUrl, color, claudeCommand = null, localPath = null, stage = "ideia", businessModel = null, pricing = null, audience = null) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO projects (name, description, githubRepoUrl, color, claudeCommand, localPath, stage, businessModel, pricing, audience, status, createdAt, statusChangedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [name, description, githubRepoUrl, color, claudeCommand, localPath, stage, businessModel, pricing, audience, "incubadora", (/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString()]
@@ -1754,7 +1825,7 @@ async function createProject(name, description, githubRepoUrl, color, claudeComm
 }
 async function updateProject(id, name, description, githubRepoUrl, color, archived, claudeCommand = null, localPath = null, stage = "ideia", businessModel = null, pricing = null, audience = null) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE projects SET name = ?, description = ?, githubRepoUrl = ?, color = ?, archived = ?, claudeCommand = ?, localPath = ?, stage = ?, businessModel = ?, pricing = ?, audience = ? WHERE id = ?",
     [name, description, githubRepoUrl, color, archived, claudeCommand, localPath, stage, businessModel, pricing, audience, id]
@@ -1763,7 +1834,7 @@ async function updateProject(id, name, description, githubRepoUrl, color, archiv
 }
 async function setProjectStage(id, stage) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE projects SET stage = ? WHERE id = ?", [stage, id]);
+  run$2(db2, "UPDATE projects SET stage = ? WHERE id = ?", [stage, id]);
 }
 async function getProjectMilestones() {
   const db2 = await getDb();
@@ -1771,20 +1842,20 @@ async function getProjectMilestones() {
 }
 async function createProjectMilestone(projectId, title, targetDate) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO project_milestones (projectId, title, targetDate, createdAt) VALUES (?, ?, ?, ?)", [projectId, title, targetDate, (/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, "INSERT INTO project_milestones (projectId, title, targetDate, createdAt) VALUES (?, ?, ?, ?)", [projectId, title, targetDate, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM project_milestones WHERE id = ?", [lastInsertId(db2)]);
 }
 async function toggleProjectMilestone(id, done) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE project_milestones SET doneAt = ? WHERE id = ?", [done ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
+  run$2(db2, "UPDATE project_milestones SET doneAt = ? WHERE id = ?", [done ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
 }
 async function deleteProjectMilestone(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM project_milestones WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM project_milestones WHERE id = ?", [id]);
 }
 async function deleteProject(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM projects WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM projects WHERE id = ?", [id]);
 }
 async function getHabits() {
   const db2 = await getDb();
@@ -1792,7 +1863,7 @@ async function getHabits() {
 }
 async function createHabit(name, frequency, target) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO habits (name, frequency, target) VALUES (?, ?, ?)", [
+  run$2(db2, "INSERT INTO habits (name, frequency, target) VALUES (?, ?, ?)", [
     name,
     frequency,
     target
@@ -1802,7 +1873,7 @@ async function createHabit(name, frequency, target) {
 }
 async function updateHabit(id, name, frequency, target, active) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE habits SET name = ?, frequency = ?, target = ?, active = ? WHERE id = ?", [
+  run$2(db2, "UPDATE habits SET name = ?, frequency = ?, target = ?, active = ? WHERE id = ?", [
     name,
     frequency,
     target,
@@ -1813,7 +1884,7 @@ async function updateHabit(id, name, frequency, target, active) {
 }
 async function deleteHabit(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM habits WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM habits WHERE id = ?", [id]);
 }
 async function getHabitEntries(date) {
   const db2 = await getDb();
@@ -1830,7 +1901,7 @@ async function getHabitEntriesForRange(startDate, endDate) {
 async function toggleHabitEntry(habitId, date, completed) {
   const db2 = await getDb();
   const completedAt = completed ? (/* @__PURE__ */ new Date()).toISOString() : null;
-  run$1(
+  run$2(
     db2,
     `INSERT INTO habit_entries (habitId, date, completed, completedAt) VALUES (?, ?, ?, ?)
      ON CONFLICT(habitId, date) DO UPDATE SET completed = excluded.completed, completedAt = excluded.completedAt`,
@@ -1855,7 +1926,7 @@ async function getSetting(key) {
 }
 async function setSetting(key, value) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     `INSERT INTO settings (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -1877,7 +1948,7 @@ async function createLocalIssue(repo, title, body) {
   const db2 = await getDb();
   const minRow = getOne(db2, "SELECT MIN(id) as m FROM github_issues WHERE id < 0");
   const id = (minRow?.m ?? 0) - 1;
-  run$1(
+  run$2(
     db2,
     `INSERT INTO github_issues (id, number, title, state, repo, url, labels, milestone, updatedAt, local, body)
      VALUES (?, 0, ?, 'open', ?, NULL, '[]', NULL, ?, 1, ?)`,
@@ -1887,17 +1958,17 @@ async function createLocalIssue(repo, title, body) {
 }
 async function markIssueOnGithub(id, url, number) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE github_issues SET url = ?, number = ? WHERE id = ?", [url, number, id]);
+  run$2(db2, "UPDATE github_issues SET url = ?, number = ? WHERE id = ?", [url, number, id]);
 }
 async function deleteGithubIssue(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM github_issues WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM github_issues WHERE id = ?", [id]);
 }
 async function replaceGithubIssues(issues) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM github_issues WHERE local = 0");
+  run$2(db2, "DELETE FROM github_issues WHERE local = 0");
   for (const i of issues) {
-    run$1(
+    run$2(
       db2,
       `INSERT INTO github_issues (id, number, title, state, repo, url, labels, milestone, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1908,7 +1979,7 @@ async function replaceGithubIssues(issues) {
 async function upsertGithubIssues(issues) {
   const db2 = await getDb();
   for (const i of issues) {
-    run$1(
+    run$2(
       db2,
       `INSERT OR REPLACE INTO github_issues (id, number, title, state, repo, url, labels, milestone, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1934,7 +2005,7 @@ async function getEventsForRange(startISO, endISO) {
 }
 async function createCalendarEvent(title, startTime, endTime, location) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO calendar_events (title, startTime, endTime, location, source) VALUES (?, ?, ?, ?, 'manual')",
     [title, startTime, endTime, location]
@@ -1944,13 +2015,13 @@ async function createCalendarEvent(title, startTime, endTime, location) {
 }
 async function deleteCalendarEvent(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM calendar_events WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM calendar_events WHERE id = ?", [id]);
 }
 async function replaceGoogleEvents(events) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM calendar_events WHERE source = 'google'");
+  run$2(db2, "DELETE FROM calendar_events WHERE source = 'google'");
   for (const e of events) {
-    run$1(
+    run$2(
       db2,
       "INSERT INTO calendar_events (title, startTime, endTime, location, source) VALUES (?, ?, ?, ?, 'google')",
       [e.title, e.startTime, e.endTime, e.location]
@@ -1963,16 +2034,16 @@ async function getAccounts$1() {
 }
 async function createAccount(name, currency2, balance) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO accounts (name, currency, balance) VALUES (?, ?, ?)", [name, currency2, balance]);
+  run$2(db2, "INSERT INTO accounts (name, currency, balance) VALUES (?, ?, ?)", [name, currency2, balance]);
   return getOne(db2, "SELECT * FROM accounts WHERE id = ?", [lastInsertId(db2)]);
 }
 async function updateAccount(id, name, currency2, balance) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE accounts SET name = ?, currency = ?, balance = ? WHERE id = ?", [name, currency2, balance, id]);
+  run$2(db2, "UPDATE accounts SET name = ?, currency = ?, balance = ? WHERE id = ?", [name, currency2, balance, id]);
 }
 async function deleteAccount(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM accounts WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM accounts WHERE id = ?", [id]);
 }
 async function getCategories() {
   const db2 = await getDb();
@@ -1980,12 +2051,12 @@ async function getCategories() {
 }
 async function createCategory(name, type, color) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO categories (name, type, color) VALUES (?, ?, ?)", [name, type, color]);
+  run$2(db2, "INSERT INTO categories (name, type, color) VALUES (?, ?, ?)", [name, type, color]);
   return getOne(db2, "SELECT * FROM categories WHERE id = ?", [lastInsertId(db2)]);
 }
 async function deleteCategory(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM categories WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM categories WHERE id = ?", [id]);
 }
 async function getTransactions(month) {
   const db2 = await getDb();
@@ -2000,7 +2071,7 @@ async function getTransactions(month) {
 }
 async function createTransaction(accountId, categoryId, amount, currency2, type, description, date) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [accountId, categoryId, amount, currency2, type, description, date]
@@ -2009,7 +2080,7 @@ async function createTransaction(accountId, categoryId, amount, currency2, type,
 }
 async function updateTransaction(id, accountId, categoryId, amount, currency2, type, description, date) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE transactions SET accountId = ?, categoryId = ?, amount = ?, currency = ?, type = ?, description = ?, date = ? WHERE id = ?",
     [accountId, categoryId, amount, currency2, type, description, date, id]
@@ -2017,12 +2088,12 @@ async function updateTransaction(id, accountId, categoryId, amount, currency2, t
 }
 async function deleteTransaction(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM transactions WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM transactions WHERE id = ?", [id]);
 }
 async function bulkInsertTransactions(rows) {
   const db2 = await getDb();
   for (const r of rows) {
-    run$1(
+    run$2(
       db2,
       "INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date]
@@ -2038,9 +2109,9 @@ async function setBudget(categoryId, month, amount) {
   const db2 = await getDb();
   const existing = getOne(db2, "SELECT * FROM budgets WHERE categoryId = ? AND month = ?", [categoryId, month]);
   if (existing) {
-    run$1(db2, "UPDATE budgets SET amount = ? WHERE id = ?", [amount, existing.id]);
+    run$2(db2, "UPDATE budgets SET amount = ? WHERE id = ?", [amount, existing.id]);
   } else {
-    run$1(db2, "INSERT INTO budgets (categoryId, month, amount) VALUES (?, ?, ?)", [categoryId, month, amount]);
+    run$2(db2, "INSERT INTO budgets (categoryId, month, amount) VALUES (?, ?, ?)", [categoryId, month, amount]);
   }
 }
 function currentMonthKey() {
@@ -2053,7 +2124,7 @@ function syncInvestmentLatest(db2, investmentId) {
     "SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1",
     [investmentId]
   );
-  if (latest) run$1(db2, "UPDATE investments SET amount = ? WHERE id = ?", [latest.amount, investmentId]);
+  if (latest) run$2(db2, "UPDATE investments SET amount = ? WHERE id = ?", [latest.amount, investmentId]);
 }
 async function getInvestments() {
   const db2 = await getDb();
@@ -2065,9 +2136,9 @@ async function getInvestmentHistory() {
 }
 async function createInvestment(name, type, amount, currency2) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO investments (name, type, amount, currency) VALUES (?, ?, ?, ?)", [name, type, amount, currency2]);
+  run$2(db2, "INSERT INTO investments (name, type, amount, currency) VALUES (?, ?, ?, ?)", [name, type, amount, currency2]);
   const id = lastInsertId(db2);
-  run$1(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id, currentMonthKey(), amount]);
+  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id, currentMonthKey(), amount]);
   return getOne(db2, "SELECT * FROM investments WHERE id = ?", [id]);
 }
 async function setInvestmentValue(investmentId, month, amount) {
@@ -2078,16 +2149,16 @@ async function setInvestmentValue(investmentId, month, amount) {
     [investmentId, month]
   );
   if (existing) {
-    run$1(db2, "UPDATE investment_history SET amount = ? WHERE id = ?", [amount, existing.id]);
+    run$2(db2, "UPDATE investment_history SET amount = ? WHERE id = ?", [amount, existing.id]);
   } else {
-    run$1(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [investmentId, month, amount]);
+    run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [investmentId, month, amount]);
   }
   syncInvestmentLatest(db2, investmentId);
 }
 async function deleteInvestment(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM investment_history WHERE investmentId = ?", [id]);
-  run$1(db2, "DELETE FROM investments WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM investment_history WHERE investmentId = ?", [id]);
+  run$2(db2, "DELETE FROM investments WHERE id = ?", [id]);
 }
 async function getTrips() {
   const db2 = await getDb();
@@ -2095,7 +2166,7 @@ async function getTrips() {
 }
 async function createTrip(origin, destination, startDate, endDate, budget, currency2, status2) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO trips (origin, destination, startDate, endDate, budget, currency, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [origin, destination, startDate, endDate, budget, currency2, status2]
@@ -2104,7 +2175,7 @@ async function createTrip(origin, destination, startDate, endDate, budget, curre
 }
 async function updateTrip(id, origin, destination, startDate, endDate, budget, currency2, status2) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE trips SET origin = ?, destination = ?, startDate = ?, endDate = ?, budget = ?, currency = ?, status = ? WHERE id = ?",
     [origin, destination, startDate, endDate, budget, currency2, status2, id]
@@ -2112,7 +2183,7 @@ async function updateTrip(id, origin, destination, startDate, endDate, budget, c
 }
 async function deleteTrip(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM trips WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM trips WHERE id = ?", [id]);
 }
 async function getTripDocuments(tripId) {
   const db2 = await getDb();
@@ -2120,7 +2191,7 @@ async function getTripDocuments(tripId) {
 }
 async function setTripDocument(tripId, item, checked) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     `INSERT INTO trip_documents (tripId, item, checked) VALUES (?, ?, ?)
      ON CONFLICT(tripId, item) DO UPDATE SET checked = excluded.checked`,
@@ -2135,7 +2206,7 @@ async function createSkill(name, description, category, tags, content) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const id = crypto.randomUUID();
-  run$1(
+  run$2(
     db2,
     `INSERT INTO skills (id, name, description, category, tags, content, isFavorite, usageCount, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
@@ -2145,7 +2216,7 @@ async function createSkill(name, description, category, tags, content) {
 }
 async function updateSkill(id, name, description, category, tags, content) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE skills SET name = ?, description = ?, category = ?, tags = ?, content = ?, updatedAt = ? WHERE id = ?",
     [name, description, category, tags, content, (/* @__PURE__ */ new Date()).toISOString(), id]
@@ -2154,18 +2225,18 @@ async function updateSkill(id, name, description, category, tags, content) {
 }
 async function deleteSkill(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM skills WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM skills WHERE id = ?", [id]);
 }
 async function toggleSkillFavorite(id) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE skills SET isFavorite = 1 - isFavorite WHERE id = ?", [id]);
+  run$2(db2, "UPDATE skills SET isFavorite = 1 - isFavorite WHERE id = ?", [id]);
 }
 async function importSkill(s2) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const exists = s2.id ? getOne(db2, "SELECT id FROM skills WHERE id = ?", [s2.id]) : null;
   const id = exists || !s2.id ? crypto.randomUUID() : s2.id;
-  run$1(
+  run$2(
     db2,
     `INSERT INTO skills (id, name, description, category, tags, content, isFavorite, usageCount, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
@@ -2191,7 +2262,7 @@ async function createAgent(name, description, role, systemPrompt, defaultSkillId
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const id = crypto.randomUUID();
-  run$1(
+  run$2(
     db2,
     `INSERT INTO agents (id, name, description, role, systemPrompt, defaultSkillIds, tags, isFavorite, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
@@ -2201,7 +2272,7 @@ async function createAgent(name, description, role, systemPrompt, defaultSkillId
 }
 async function updateAgent(id, name, description, role, systemPrompt, defaultSkillIds, tags) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE agents SET name = ?, description = ?, role = ?, systemPrompt = ?, defaultSkillIds = ?, tags = ?, updatedAt = ? WHERE id = ?",
     [name, description, role, systemPrompt, defaultSkillIds, tags, (/* @__PURE__ */ new Date()).toISOString(), id]
@@ -2210,18 +2281,18 @@ async function updateAgent(id, name, description, role, systemPrompt, defaultSki
 }
 async function deleteAgent(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM agents WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM agents WHERE id = ?", [id]);
 }
 async function toggleAgentFavorite(id) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE agents SET isFavorite = 1 - isFavorite WHERE id = ?", [id]);
+  run$2(db2, "UPDATE agents SET isFavorite = 1 - isFavorite WHERE id = ?", [id]);
 }
 async function importAgent(a) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const exists = a.id ? getOne(db2, "SELECT id FROM agents WHERE id = ?", [a.id]) : null;
   const id = exists || !a.id ? crypto.randomUUID() : a.id;
-  run$1(
+  run$2(
     db2,
     `INSERT INTO agents (id, name, description, role, systemPrompt, defaultSkillIds, tags, isFavorite, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -2247,7 +2318,7 @@ async function getExecutions() {
 async function createExecution(agentId, skillIds, userPrompt, finalPrompt, response) {
   const db2 = await getDb();
   const id = crypto.randomUUID();
-  run$1(
+  run$2(
     db2,
     `INSERT INTO prompt_executions (id, createdAt, agentId, skillIds, userPrompt, finalPrompt, response)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -2255,14 +2326,14 @@ async function createExecution(agentId, skillIds, userPrompt, finalPrompt, respo
   );
   try {
     const ids2 = JSON.parse(skillIds);
-    for (const sid of ids2) run$1(db2, "UPDATE skills SET usageCount = usageCount + 1 WHERE id = ?", [sid]);
+    for (const sid of ids2) run$2(db2, "UPDATE skills SET usageCount = usageCount + 1 WHERE id = ?", [sid]);
   } catch {
   }
   return getOne(db2, "SELECT * FROM prompt_executions WHERE id = ?", [id]);
 }
 async function deleteExecution(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM prompt_executions WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM prompt_executions WHERE id = ?", [id]);
 }
 async function getLinks() {
   const db2 = await getDb();
@@ -2270,7 +2341,7 @@ async function getLinks() {
 }
 async function createLink(title, url, tags = "[]") {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO links (title, url, checked, tags, createdAt) VALUES (?, ?, 0, ?, ?)", [
+  run$2(db2, "INSERT INTO links (title, url, checked, tags, createdAt) VALUES (?, ?, 0, ?, ?)", [
     title,
     url,
     tags,
@@ -2280,19 +2351,19 @@ async function createLink(title, url, tags = "[]") {
 }
 async function updateLink(id, title, url, tags = "[]") {
   const db2 = await getDb();
-  run$1(db2, "UPDATE links SET title = ?, url = ?, tags = ? WHERE id = ?", [title, url, tags, id]);
+  run$2(db2, "UPDATE links SET title = ?, url = ?, tags = ? WHERE id = ?", [title, url, tags, id]);
 }
 async function setLinkChecked(id, checked) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE links SET checked = ? WHERE id = ?", [checked, id]);
+  run$2(db2, "UPDATE links SET checked = ? WHERE id = ?", [checked, id]);
 }
 async function setLinkOpened(id) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE links SET lastOpenedAt = ? WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id]);
+  run$2(db2, "UPDATE links SET lastOpenedAt = ? WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id]);
 }
 async function deleteLink(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM links WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM links WHERE id = ?", [id]);
 }
 async function getStayFavorites() {
   const db2 = await getDb();
@@ -2300,7 +2371,7 @@ async function getStayFavorites() {
 }
 async function addStayFavorite(f) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT OR REPLACE INTO travel_stay_favorites (id, tripId, provider, listingUrl, title, pricePerNight, currency, data, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [f.id, f.tripId, f.provider, f.listingUrl, f.title, f.pricePerNight, f.currency, f.data, f.createdAt || (/* @__PURE__ */ new Date()).toISOString()]
@@ -2308,7 +2379,7 @@ async function addStayFavorite(f) {
 }
 async function removeStayFavorite(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM travel_stay_favorites WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM travel_stay_favorites WHERE id = ?", [id]);
 }
 async function getStayWatches() {
   const db2 = await getDb();
@@ -2316,7 +2387,7 @@ async function getStayWatches() {
 }
 async function addStayWatch(w) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT OR REPLACE INTO travel_stay_watches (id, city, filters, currentPrice, bestPrice, currency, lastCheckedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [w.id, w.city, w.filters, w.currentPrice, w.bestPrice, w.currency, w.lastCheckedAt, w.createdAt || (/* @__PURE__ */ new Date()).toISOString()]
@@ -2324,12 +2395,12 @@ async function addStayWatch(w) {
 }
 async function updateStayWatchPrice(id, currentPrice, bestPrice, checkedAt) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE travel_stay_watches SET currentPrice = ?, bestPrice = ?, lastCheckedAt = ? WHERE id = ?", [currentPrice, bestPrice, checkedAt, id]);
+  run$2(db2, "UPDATE travel_stay_watches SET currentPrice = ?, bestPrice = ?, lastCheckedAt = ? WHERE id = ?", [currentPrice, bestPrice, checkedAt, id]);
 }
 async function removeStayWatch(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM travel_stay_watches WHERE id = ?", [id]);
-  run$1(db2, "DELETE FROM travel_stay_price_history WHERE watchId = ?", [id]);
+  run$2(db2, "DELETE FROM travel_stay_watches WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM travel_stay_price_history WHERE watchId = ?", [id]);
 }
 async function getStayPriceHistory(watchId) {
   const db2 = await getDb();
@@ -2337,7 +2408,7 @@ async function getStayPriceHistory(watchId) {
 }
 async function addStayPricePoint(p) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO travel_stay_price_history (id, watchId, checkedAt, price, currency) VALUES (?, ?, ?, ?, ?)", [p.id, p.watchId, p.checkedAt, p.price, p.currency]);
+  run$2(db2, "INSERT INTO travel_stay_price_history (id, watchId, checkedAt, price, currency) VALUES (?, ?, ?, ?, ?)", [p.id, p.watchId, p.checkedAt, p.price, p.currency]);
 }
 async function getStaySearchHistory() {
   const db2 = await getDb();
@@ -2345,8 +2416,8 @@ async function getStaySearchHistory() {
 }
 async function addStaySearchHistory(filters) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO travel_stay_search_history (filters, createdAt) VALUES (?, ?)", [filters, (/* @__PURE__ */ new Date()).toISOString()]);
-  run$1(db2, "DELETE FROM travel_stay_search_history WHERE id NOT IN (SELECT id FROM travel_stay_search_history ORDER BY id DESC LIMIT 20)");
+  run$2(db2, "INSERT INTO travel_stay_search_history (filters, createdAt) VALUES (?, ?)", [filters, (/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, "DELETE FROM travel_stay_search_history WHERE id NOT IN (SELECT id FROM travel_stay_search_history ORDER BY id DESC LIMIT 20)");
 }
 async function getContacts() {
   const db2 = await getDb();
@@ -2354,7 +2425,7 @@ async function getContacts() {
 }
 async function createContact(name, location, country, state, birthday, interests, context, nextFollowUp) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO contacts (name, location, country, state, birthday, interests, context, nextFollowUp, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [name, location, country, state, birthday, interests, context, nextFollowUp, (/* @__PURE__ */ new Date()).toISOString()]
@@ -2363,7 +2434,7 @@ async function createContact(name, location, country, state, birthday, interests
 }
 async function updateContact(id, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE contacts SET name = ?, location = ?, country = ?, state = ?, birthday = ?, interests = ?, context = ?, lastContactAt = ?, nextFollowUp = ? WHERE id = ?",
     [name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp, id]
@@ -2372,12 +2443,12 @@ async function updateContact(id, name, location, country, state, birthday, inter
 }
 async function logContact(id) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE contacts SET lastContactAt = ?, nextFollowUp = NULL WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id]);
+  run$2(db2, "UPDATE contacts SET lastContactAt = ?, nextFollowUp = NULL WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id]);
   return getOne(db2, "SELECT * FROM contacts WHERE id = ?", [id]);
 }
 async function deleteContact(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM contacts WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM contacts WHERE id = ?", [id]);
 }
 async function getRules() {
   const db2 = await getDb();
@@ -2385,20 +2456,20 @@ async function getRules() {
 }
 async function createRule(type, params) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO rules (type, enabled, params, createdAt) VALUES (?, 1, ?, ?)", [type, params, (/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, "INSERT INTO rules (type, enabled, params, createdAt) VALUES (?, 1, ?, ?)", [type, params, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM rules WHERE id = ?", [lastInsertId(db2)]);
 }
 async function updateRule(id, enabled, params) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE rules SET enabled = ?, params = ? WHERE id = ?", [enabled, params, id]);
+  run$2(db2, "UPDATE rules SET enabled = ?, params = ? WHERE id = ?", [enabled, params, id]);
 }
 async function setRuleFired(id, at) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE rules SET lastFiredAt = ? WHERE id = ?", [at, id]);
+  run$2(db2, "UPDATE rules SET lastFiredAt = ? WHERE id = ?", [at, id]);
 }
 async function deleteRule(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM rules WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM rules WHERE id = ?", [id]);
 }
 async function getScheduledJobs() {
   const db2 = await getDb();
@@ -2406,20 +2477,20 @@ async function getScheduledJobs() {
 }
 async function createScheduledJob(name, prompt, hour) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO scheduled_jobs (name, prompt, hour, enabled, createdAt) VALUES (?, ?, ?, 1, ?)", [name, prompt, hour, (/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, "INSERT INTO scheduled_jobs (name, prompt, hour, enabled, createdAt) VALUES (?, ?, ?, 1, ?)", [name, prompt, hour, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM scheduled_jobs WHERE id = ?", [lastInsertId(db2)]);
 }
 async function updateScheduledJob(id, name, prompt, hour, enabled) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE scheduled_jobs SET name = ?, prompt = ?, hour = ?, enabled = ? WHERE id = ?", [name, prompt, hour, enabled, id]);
+  run$2(db2, "UPDATE scheduled_jobs SET name = ?, prompt = ?, hour = ?, enabled = ? WHERE id = ?", [name, prompt, hour, enabled, id]);
 }
 async function setJobRan(id, at) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE scheduled_jobs SET lastRunAt = ? WHERE id = ?", [at, id]);
+  run$2(db2, "UPDATE scheduled_jobs SET lastRunAt = ? WHERE id = ?", [at, id]);
 }
 async function deleteScheduledJob(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM scheduled_jobs WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM scheduled_jobs WHERE id = ?", [id]);
 }
 async function getGoals(month) {
   const db2 = await getDb();
@@ -2427,7 +2498,7 @@ async function getGoals(month) {
 }
 async function createGoal(month, title, kind, refId, target, unit) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO goals (month, title, kind, refId, target, current, unit, done, createdAt) VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?)",
     [month, title, kind, refId, target, unit, (/* @__PURE__ */ new Date()).toISOString()]
@@ -2436,12 +2507,12 @@ async function createGoal(month, title, kind, refId, target, unit) {
 }
 async function updateGoal(id, title, target, current, unit, done) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE goals SET title = ?, target = ?, current = ?, unit = ?, done = ? WHERE id = ?", [title, target, current, unit, done, id]);
+  run$2(db2, "UPDATE goals SET title = ?, target = ?, current = ?, unit = ?, done = ? WHERE id = ?", [title, target, current, unit, done, id]);
   return getOne(db2, "SELECT * FROM goals WHERE id = ?", [id]);
 }
 async function deleteGoal(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM goals WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM goals WHERE id = ?", [id]);
 }
 async function getStudyTopics() {
   const db2 = await getDb();
@@ -2449,7 +2520,7 @@ async function getStudyTopics() {
 }
 async function createStudyTopic(name, category, status2, targetDate, priority, color) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO study_topics (name, category, status, targetDate, priority, color, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [name, category, status2, targetDate, priority, color, (/* @__PURE__ */ new Date()).toISOString()]
@@ -2458,7 +2529,7 @@ async function createStudyTopic(name, category, status2, targetDate, priority, c
 }
 async function updateStudyTopic(id, name, category, status2, targetDate, priority, color) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE study_topics SET name = ?, category = ?, status = ?, targetDate = ?, priority = ?, color = ? WHERE id = ?",
     [name, category, status2, targetDate, priority, color, id]
@@ -2467,7 +2538,7 @@ async function updateStudyTopic(id, name, category, status2, targetDate, priorit
 }
 async function deleteStudyTopic(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM study_topics WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM study_topics WHERE id = ?", [id]);
 }
 async function getStudyNodes(topicId) {
   const db2 = await getDb();
@@ -2489,7 +2560,7 @@ async function createStudyNode(topicId, parentId, title, description, estimatedH
     [topicId, parentId]
   );
   const orderIndex = siblings[0]?.n ?? 0;
-  run$1(
+  run$2(
     db2,
     "INSERT INTO study_nodes (topicId, parentId, title, description, status, orderIndex, estimatedHours, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [topicId, parentId, title, description, "todo", orderIndex, estimatedHours, (/* @__PURE__ */ new Date()).toISOString()]
@@ -2499,7 +2570,7 @@ async function createStudyNode(topicId, parentId, title, description, estimatedH
 async function updateStudyNode(id, title, description, status2, estimatedHours) {
   const db2 = await getDb();
   const completedAt = status2 === "done" ? (/* @__PURE__ */ new Date()).toISOString() : null;
-  run$1(
+  run$2(
     db2,
     "UPDATE study_nodes SET title = ?, description = ?, status = ?, estimatedHours = ?, completedAt = ? WHERE id = ?",
     [title, description, status2, estimatedHours, completedAt, id]
@@ -2520,7 +2591,7 @@ async function deleteStudyNode(id) {
       }
     }
   }
-  for (const nid of toDelete) run$1(db2, "DELETE FROM study_nodes WHERE id = ?", [nid]);
+  for (const nid of toDelete) run$2(db2, "DELETE FROM study_nodes WHERE id = ?", [nid]);
 }
 async function reorderStudyNode(id, newParentId, newIndex) {
   const db2 = await getDb();
@@ -2548,8 +2619,8 @@ async function reorderStudyNode(id, newParentId, newIndex) {
   );
   const clamped = Math.max(0, Math.min(newIndex, siblings.length));
   siblings.splice(clamped, 0, n);
-  run$1(db2, "UPDATE study_nodes SET parentId = ? WHERE id = ?", [newParentId, id]);
-  siblings.forEach((s2, i) => run$1(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [i, s2.id]));
+  run$2(db2, "UPDATE study_nodes SET parentId = ? WHERE id = ?", [newParentId, id]);
+  siblings.forEach((s2, i) => run$2(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [i, s2.id]));
 }
 async function moveStudyNode(id, dir) {
   const db2 = await getDb();
@@ -2563,8 +2634,8 @@ async function moveStudyNode(id, dir) {
   const idx = siblings.findIndex((s2) => s2.id === id);
   const swapWith = dir === "up" ? siblings[idx - 1] : siblings[idx + 1];
   if (!swapWith) return;
-  run$1(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [swapWith.orderIndex, node.id]);
-  run$1(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [node.orderIndex, swapWith.id]);
+  run$2(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [swapWith.orderIndex, node.id]);
+  run$2(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [node.orderIndex, swapWith.id]);
 }
 async function getStudyNote(topicId, nodeId) {
   const db2 = await getDb();
@@ -2575,10 +2646,10 @@ async function saveStudyNote(topicId, nodeId, content) {
   const existing = await getStudyNote(topicId, nodeId);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   if (existing) {
-    run$1(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [content, now, existing.id]);
+    run$2(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [content, now, existing.id]);
     return getOne(db2, "SELECT * FROM study_notes WHERE id = ?", [existing.id]);
   }
-  run$1(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [topicId, nodeId, content, now]);
+  run$2(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [topicId, nodeId, content, now]);
   return getOne(db2, "SELECT * FROM study_notes WHERE id = ?", [lastInsertId(db2)]);
 }
 async function getStudyFlashcards(topicId) {
@@ -2595,7 +2666,7 @@ async function getDueFlashcards(nowISO) {
 }
 async function createStudyFlashcard(topicId, nodeId, front, back) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "INSERT INTO study_flashcards (topicId, nodeId, front, back, createdAt) VALUES (?, ?, ?, ?, ?)",
     [topicId, nodeId, front, back, (/* @__PURE__ */ new Date()).toISOString()]
@@ -2604,22 +2675,22 @@ async function createStudyFlashcard(topicId, nodeId, front, back) {
 }
 async function updateStudyFlashcard(id, front, back) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE study_flashcards SET front = ?, back = ? WHERE id = ?", [front, back, id]);
+  run$2(db2, "UPDATE study_flashcards SET front = ?, back = ? WHERE id = ?", [front, back, id]);
   return getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id]);
 }
 async function deleteStudyFlashcard(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM study_flashcards WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM study_flashcards WHERE id = ?", [id]);
 }
 async function reviewStudyFlashcard(id, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     "UPDATE study_flashcards SET easeFactor = ?, intervalDays = ?, repetitions = ?, nextReviewAt = ?, lastReviewedAt = ? WHERE id = ?",
     [easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, id]
   );
   const card = getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id]);
-  run$1(
+  run$2(
     db2,
     "INSERT INTO study_review_log (flashcardId, topicId, rating, reviewedAt) VALUES (?, ?, ?, ?)",
     [id, card.topicId, rating ?? null, lastReviewedAt]
@@ -2648,7 +2719,7 @@ async function getStudyQuizAttempts(topicId) {
 }
 async function createStudyQuizAttempt(topicId, score, total, durationMs) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO study_quiz_attempts (topicId, score, total, durationMs, createdAt) VALUES (?, ?, ?, ?, ?)", [topicId, score, total, durationMs, (/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, "INSERT INTO study_quiz_attempts (topicId, score, total, durationMs, createdAt) VALUES (?, ?, ?, ?, ?)", [topicId, score, total, durationMs, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM study_quiz_attempts WHERE id = ?", [lastInsertId(db2)]);
 }
 async function getStudyBundle(topicId) {
@@ -2666,7 +2737,7 @@ async function importStudyBundle(bundle) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const t = bundle.topic;
-  run$1(
+  run$2(
     db2,
     "INSERT INTO study_topics (name, category, status, targetDate, priority, color, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [t.name, t.category, t.status ?? "studying", t.targetDate, t.priority ?? 0, t.color ?? "#6366f1", now]
@@ -2683,7 +2754,7 @@ async function importStudyBundle(bundle) {
         i++;
         continue;
       }
-      run$1(
+      run$2(
         db2,
         "INSERT INTO study_nodes (topicId, parentId, title, description, status, orderIndex, estimatedHours, completedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [newTopicId, n.parentId == null ? null : nodeIdMap.get(n.parentId) ?? null, n.title, n.description ?? null, n.status ?? "todo", n.orderIndex ?? 0, n.estimatedHours ?? null, n.completedAt ?? null, n.createdAt ?? now]
@@ -2694,11 +2765,11 @@ async function importStudyBundle(bundle) {
   }
   for (const note of bundle.notes ?? []) {
     const mappedNode = note.nodeId == null ? null : nodeIdMap.get(note.nodeId) ?? null;
-    run$1(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [newTopicId, mappedNode, note.content ?? "", note.updatedAt ?? now]);
+    run$2(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [newTopicId, mappedNode, note.content ?? "", note.updatedAt ?? now]);
   }
   for (const fc of bundle.flashcards ?? []) {
     const mappedNode = fc.nodeId == null ? null : nodeIdMap.get(fc.nodeId) ?? null;
-    run$1(
+    run$2(
       db2,
       "INSERT INTO study_flashcards (topicId, nodeId, front, back, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [newTopicId, mappedNode, fc.front, fc.back, fc.easeFactor ?? 2.5, fc.intervalDays ?? 0, fc.repetitions ?? 0, fc.nextReviewAt ?? null, fc.lastReviewedAt ?? null, fc.createdAt ?? now]
@@ -2708,7 +2779,7 @@ async function importStudyBundle(bundle) {
 }
 async function recordAiUsage(u) {
   const db2 = await getDb();
-  run$1(
+  run$2(
     db2,
     `INSERT INTO ai_usage (createdAt, source, projectId, model, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, costUsd, durationMs, numTurns, isError)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -2742,7 +2813,7 @@ async function getAiUsage(from, to) {
 const NOTIFICATIONS_KEEP = 500;
 async function createNotification(n) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO notifications (createdAt, title, body, source, page) VALUES (?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO notifications (createdAt, title, body, source, page) VALUES (?, ?, ?, ?, ?)", [
     (/* @__PURE__ */ new Date()).toISOString(),
     n.title,
     n.body ?? "",
@@ -2751,7 +2822,7 @@ async function createNotification(n) {
   ]);
   const created = getOne(db2, "SELECT * FROM notifications ORDER BY id DESC LIMIT 1");
   if (created.id > NOTIFICATIONS_KEEP) {
-    run$1(db2, "DELETE FROM notifications WHERE id <= ?", [created.id - NOTIFICATIONS_KEEP]);
+    run$2(db2, "DELETE FROM notifications WHERE id <= ?", [created.id - NOTIFICATIONS_KEEP]);
   }
   return created;
 }
@@ -2765,19 +2836,19 @@ async function getUnreadNotificationCount() {
 }
 async function markNotificationRead(id, read2 = true) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE notifications SET readAt = ? WHERE id = ?", [read2 ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
+  run$2(db2, "UPDATE notifications SET readAt = ? WHERE id = ?", [read2 ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
 }
 async function markAllNotificationsRead() {
   const db2 = await getDb();
-  run$1(db2, "UPDATE notifications SET readAt = ? WHERE readAt IS NULL", [(/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, "UPDATE notifications SET readAt = ? WHERE readAt IS NULL", [(/* @__PURE__ */ new Date()).toISOString()]);
 }
 async function deleteNotification(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM notifications WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM notifications WHERE id = ?", [id]);
 }
 async function clearNotifications(onlyRead = false) {
   const db2 = await getDb();
-  run$1(db2, onlyRead ? "DELETE FROM notifications WHERE readAt IS NOT NULL" : "DELETE FROM notifications");
+  run$2(db2, onlyRead ? "DELETE FROM notifications WHERE readAt IS NOT NULL" : "DELETE FROM notifications");
 }
 const PROJECT_STATUSES = ["incubadora", "fila", "baixa", "foco", "pausado", "concluido", "encerrado"];
 function normName(s2) {
@@ -2814,7 +2885,7 @@ async function getProject(id) {
 }
 async function addProjectEvent(projectId, kind, text, fromStatus = null, toStatus = null) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
     projectId,
     kind,
     fromStatus,
@@ -2881,9 +2952,9 @@ async function patchProject(id, fields) {
   if ("whereLeftOff" in fields) cols.push(`whereLeftOffAt = '${now}'`);
   if (!cols.length) return prev;
   params.push(id);
-  run$1(db2, `UPDATE projects SET ${cols.join(", ")} WHERE id = ?`, params);
+  run$2(db2, `UPDATE projects SET ${cols.join(", ")} WHERE id = ?`, params);
   const next = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
-  const log2 = (kind, text) => run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, kind, text, now]);
+  const log2 = (kind, text) => run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, kind, text, now]);
   if ("nextAction" in fields && next.nextAction !== prev.nextAction && next.nextAction) log2("proxima_acao", next.nextAction);
   if ("whereLeftOff" in fields && next.whereLeftOff !== prev.whereLeftOff && next.whereLeftOff) log2("onde_parei", next.whereLeftOff);
   if ("blocker" in fields && next.blocker !== prev.blocker) log2("bloqueio", next.blocker ? `Bloqueado: ${next.blocker}${next.blockerNeed ? ` — precisa: ${next.blockerNeed}` : ""}` : "Bloqueio resolvido");
@@ -2920,9 +2991,9 @@ async function setProjectStatus(id, status2, payload = {}) {
     params.push(payload.nextAction, now);
   }
   params.push(id);
-  run$1(db2, `UPDATE projects SET ${sets.join(", ")} WHERE id = ?`, params);
+  run$2(db2, `UPDATE projects SET ${sets.join(", ")} WHERE id = ?`, params);
   const parts = [payload.reason, payload.resumeAt ? `retomar em ${payload.resumeAt}` : null, payload.resumeCondition ? `retomar quando: ${payload.resumeCondition}` : null, payload.note].filter(Boolean).join(" · ");
-  run$1(db2, "INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
     id,
     "status",
     prev.status,
@@ -2931,7 +3002,7 @@ async function setProjectStatus(id, status2, payload = {}) {
     now
   ]);
   if (payload.nextAction && payload.nextAction !== prev.nextAction) {
-    run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", payload.nextAction, now]);
+    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", payload.nextAction, now]);
   }
   return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
 }
@@ -2941,20 +3012,20 @@ async function completeNextAction(id, next, size = null) {
   if (!prev) throw new Error("Projeto não encontrado");
   const now = (/* @__PURE__ */ new Date()).toISOString();
   if (prev.nextAction) {
-    run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "acao_concluida", prev.nextAction, now]);
+    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "acao_concluida", prev.nextAction, now]);
   }
   const n = next && next.trim() ? next.trim() : null;
-  run$1(db2, "UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ? WHERE id = ?", [n, now, n ? size : null, id]);
-  if (n) run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", n, now]);
+  run$2(db2, "UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ? WHERE id = ?", [n, now, n ? size : null, id]);
+  if (n) run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", n, now]);
   return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
 }
 async function updateProjectMilestone(id, title, targetDate, cycleId, description) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE project_milestones SET title = ?, targetDate = ?, cycleId = ?, description = ? WHERE id = ?", [title, targetDate, cycleId, description, id]);
+  run$2(db2, "UPDATE project_milestones SET title = ?, targetDate = ?, cycleId = ?, description = ? WHERE id = ?", [title, targetDate, cycleId, description, id]);
 }
 async function setCycleChangelog(id, changelog) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE project_cycles SET changelog = ? WHERE id = ?", [changelog, id]);
+  run$2(db2, "UPDATE project_cycles SET changelog = ? WHERE id = ?", [changelog, id]);
 }
 async function getProjectCycle(id) {
   const db2 = await getDb();
@@ -2968,7 +3039,7 @@ async function getProjectCycles(projectId) {
 async function createProjectCycle(projectId, name, goal, startDate, dueDate) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  run$1(db2, "INSERT INTO project_cycles (projectId, name, goal, startDate, dueDate, originalDueDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO project_cycles (projectId, name, goal, startDate, dueDate, originalDueDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
     projectId,
     name,
     goal,
@@ -2978,20 +3049,20 @@ async function createProjectCycle(projectId, name, goal, startDate, dueDate) {
     now
   ]);
   const id = lastInsertId(db2);
-  run$1(db2, "UPDATE projects SET continuous = 1 WHERE id = ?", [projectId]);
-  run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [projectId, "ciclo", `Ciclo "${name}" iniciado${dueDate ? ` (prazo ${dueDate})` : ""}`, now]);
+  run$2(db2, "UPDATE projects SET continuous = 1 WHERE id = ?", [projectId]);
+  run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [projectId, "ciclo", `Ciclo "${name}" iniciado${dueDate ? ` (prazo ${dueDate})` : ""}`, now]);
   return getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
 }
 async function updateProjectCycle(id, name, goal, dueDate) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE project_cycles SET name = ?, goal = ?, dueDate = ?, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [name, goal, dueDate, dueDate, id]);
+  run$2(db2, "UPDATE project_cycles SET name = ?, goal = ?, dueDate = ?, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [name, goal, dueDate, dueDate, id]);
 }
 async function extendProjectCycle(id, newDueDate, reason) {
   const db2 = await getDb();
   const c = getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
   if (!c) return;
-  run$1(db2, "UPDATE project_cycles SET dueDate = ?, extensions = extensions + 1, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [newDueDate, c.dueDate, id]);
-  run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [
+  run$2(db2, "UPDATE project_cycles SET dueDate = ?, extensions = extensions + 1, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [newDueDate, c.dueDate, id]);
+  run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [
     c.projectId,
     "ciclo",
     `Prazo de "${c.name}" estendido ${c.dueDate ?? "—"} → ${newDueDate} (extensão nº ${c.extensions + 1})${reason ? `: ${reason}` : ""}`,
@@ -3003,8 +3074,8 @@ async function closeProjectCycle(id, status2, retrospective) {
   const c = getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
   if (!c) return;
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  run$1(db2, "UPDATE project_cycles SET status = ?, closedAt = ?, retrospective = ? WHERE id = ?", [status2, now, retrospective, id]);
-  run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [
+  run$2(db2, "UPDATE project_cycles SET status = ?, closedAt = ?, retrospective = ? WHERE id = ?", [status2, now, retrospective, id]);
+  run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [
     c.projectId,
     "ciclo",
     `Ciclo "${c.name}" ${status2 === "concluido" ? "concluído 🎉" : "cancelado"}`,
@@ -3013,8 +3084,8 @@ async function closeProjectCycle(id, status2, retrospective) {
 }
 async function deleteProjectCycle(id) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE project_milestones SET cycleId = NULL WHERE cycleId = ?", [id]);
-  run$1(db2, "DELETE FROM project_cycles WHERE id = ?", [id]);
+  run$2(db2, "UPDATE project_milestones SET cycleId = NULL WHERE cycleId = ?", [id]);
+  run$2(db2, "DELETE FROM project_cycles WHERE id = ?", [id]);
 }
 async function getProjectNotes(projectId) {
   const db2 = await getDb();
@@ -3023,11 +3094,11 @@ async function getProjectNotes(projectId) {
 async function saveProjectNote(note) {
   const db2 = await getDb();
   if (note.id) {
-    run$1(db2, "UPDATE project_notes SET kind = ?, title = ?, body = ?, url = ?, pinned = ? WHERE id = ?", [note.kind, note.title, note.body, note.url, note.pinned ?? 0, note.id]);
+    run$2(db2, "UPDATE project_notes SET kind = ?, title = ?, body = ?, url = ?, pinned = ? WHERE id = ?", [note.kind, note.title, note.body, note.url, note.pinned ?? 0, note.id]);
     return getOne(db2, "SELECT * FROM project_notes WHERE id = ?", [note.id]);
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  run$1(db2, "INSERT INTO project_notes (projectId, kind, title, body, url, pinned, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO project_notes (projectId, kind, title, body, url, pinned, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
     note.projectId,
     note.kind,
     note.title,
@@ -3037,31 +3108,31 @@ async function saveProjectNote(note) {
     now
   ]);
   if (note.kind === "decisao") {
-    run$1(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [note.projectId, "decisao", note.title, now]);
+    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [note.projectId, "decisao", note.title, now]);
   }
   return getOne(db2, "SELECT * FROM project_notes WHERE id = ?", [lastInsertId(db2)]);
 }
 async function deleteProjectNote(id) {
   const db2 = await getDb();
-  run$1(db2, "DELETE FROM project_notes WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM project_notes WHERE id = ?", [id]);
 }
 async function linkTodosToProject(todoIds, projectId, milestoneId = null) {
   const db2 = await getDb();
   for (const id of todoIds) {
-    run$1(db2, "UPDATE todos SET projectId = ?, milestoneId = ? WHERE id = ?", [projectId, milestoneId, id]);
+    run$2(db2, "UPDATE todos SET projectId = ?, milestoneId = ? WHERE id = ?", [projectId, milestoneId, id]);
   }
 }
 async function setTodoMilestone(todoId, milestoneId) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE todos SET milestoneId = ? WHERE id = ?", [milestoneId, todoId]);
+  run$2(db2, "UPDATE todos SET milestoneId = ? WHERE id = ?", [milestoneId, todoId]);
 }
 async function setTagProject(tagId, projectId) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE tags SET projectId = ? WHERE id = ?", [projectId, tagId]);
+  run$2(db2, "UPDATE tags SET projectId = ? WHERE id = ?", [projectId, tagId]);
 }
 async function setTaskProject(taskId, projectId) {
   const db2 = await getDb();
-  run$1(db2, "UPDATE tasks SET projectId = ? WHERE id = ?", [projectId, taskId]);
+  run$2(db2, "UPDATE tasks SET projectId = ? WHERE id = ?", [projectId, taskId]);
 }
 const TASK_MINUTES = "(julianday(COALESCE(t.endTime, strftime('%Y-%m-%dT%H:%M:%fZ','now'))) - julianday(t.startTime)) * 24 * 60";
 async function getProjectNumbers() {
@@ -3134,7 +3205,7 @@ async function getUnlinkedTagHours() {
 }
 async function createDelegation(d) {
   const db2 = await getDb();
-  run$1(db2, "INSERT INTO project_delegations (projectId, action, instructions, repoPath, branch, worktreePath, baseRef, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
+  run$2(db2, "INSERT INTO project_delegations (projectId, action, instructions, repoPath, branch, worktreePath, baseRef, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
     d.projectId,
     d.action,
     d.instructions,
@@ -3150,7 +3221,7 @@ async function updateDelegation(id, fields) {
   const db2 = await getDb();
   const keys = Object.keys(fields);
   if (!keys.length) return;
-  run$1(db2, `UPDATE project_delegations SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => fields[k] ?? null), id]);
+  run$2(db2, `UPDATE project_delegations SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => fields[k] ?? null), id]);
 }
 async function getDelegation(id) {
   const db2 = await getDb();
@@ -70248,9 +70319,9 @@ const sizeWeight = (a) => airportWeight(a);
 function capFair(list, max) {
   const by = /* @__PURE__ */ new Map();
   for (const a of list) by.set(a.country, [...by.get(a.country) ?? [], a]);
-  const queues = [...by.values()];
+  const queues2 = [...by.values()];
   const out = [];
-  while (out.length < max && queues.some((q) => q.length)) for (const q of queues) if (q.length && out.length < max) out.push(q.shift());
+  while (out.length < max && queues2.some((q) => q.length)) for (const q of queues2) if (q.length && out.length < max) out.push(q.shift());
   return out;
 }
 function paxKey(cfg) {
@@ -70290,8 +70361,8 @@ function interleavePairs(pairs) {
     byCountry.set(p.o.country, list);
   }
   const out = [];
-  const queues = [...byCountry.values()];
-  while (queues.some((q) => q.length)) for (const q of queues) if (q.length) out.push(q.shift());
+  const queues2 = [...byCountry.values()];
+  while (queues2.some((q) => q.length)) for (const q of queues2) if (q.length) out.push(q.shift());
   return out;
 }
 function exactKey(provider, o, d, dep, ret, pk) {
@@ -70375,11 +70446,11 @@ function planDeepen(u, providers, pk, pairMin, datePrices, maxPairs) {
   return out;
 }
 function planValidate(candidates, providers, pk) {
-  const live = providers.find((p) => p.capabilities.automated && p.capabilities.livePrices);
-  if (!live) return [];
+  const live2 = providers.find((p) => p.capabilities.automated && p.capabilities.livePrices);
+  if (!live2) return [];
   return candidates.map((c, i) => ({
-    key: exactKey(live.id, c.origin, c.destination, c.departDate, c.returnDate, pk),
-    provider: live.id,
+    key: exactKey(live2.id, c.origin, c.destination, c.departDate, c.returnDate, pk),
+    provider: live2.id,
     stage: "validate",
     origin: c.origin,
     destination: c.destination,
@@ -70604,7 +70675,7 @@ function configErrors(cfg, today) {
   errs.push(...validateDates(cfg.dates, today));
   return errs;
 }
-function all$1(db2, sql, params = []) {
+function all$2(db2, sql, params = []) {
   const st = db2.prepare(sql);
   if (params.length) st.bind(params);
   const out = [];
@@ -70612,17 +70683,17 @@ function all$1(db2, sql, params = []) {
   st.free();
   return out;
 }
-function one$1(db2, sql, params = []) {
-  return all$1(db2, sql, params)[0] ?? null;
+function one$2(db2, sql, params = []) {
+  return all$2(db2, sql, params)[0] ?? null;
 }
-function exec$1(db2, sql, params = []) {
+function exec$2(db2, sql, params = []) {
   const st = db2.prepare(sql);
   st.run(params);
   st.free();
   return db2.getRowsModified();
 }
 function lastId$1(db2) {
-  return Number(one$1(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  return Number(one$2(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
 }
 async function tx$1(fn) {
   const db2 = await getDb();
@@ -70643,7 +70714,7 @@ async function tx$1(fn) {
 async function read$1(fn) {
   return fn(await getDb());
 }
-const nowIso$1 = () => (/* @__PURE__ */ new Date()).toISOString();
+const nowIso$2 = () => (/* @__PURE__ */ new Date()).toISOString();
 function toMonitor(r) {
   let raw = {};
   try {
@@ -70660,18 +70731,18 @@ function toMonitor(r) {
   return { ...r, config: normalizeConfig(raw), extraDisplay: r.extraDisplay ?? 0, legacy };
 }
 async function listMonitors() {
-  return read$1((db2) => all$1(db2, "SELECT * FROM flight_monitors ORDER BY status = 'paused', updatedAt DESC").map(toMonitor));
+  return read$1((db2) => all$2(db2, "SELECT * FROM flight_monitors ORDER BY status = 'paused', updatedAt DESC").map(toMonitor));
 }
 async function getMonitor(id) {
   return read$1((db2) => {
-    const r = one$1(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
+    const r = one$2(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
     return r ? toMonitor(r) : null;
   });
 }
 async function createMonitor(name, status2, config2, tripId) {
   return tx$1((db2) => {
-    const t = nowIso$1();
-    exec$1(db2, "INSERT INTO flight_monitors (name, status, tripId, config, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [
+    const t = nowIso$2();
+    exec$2(db2, "INSERT INTO flight_monitors (name, status, tripId, config, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [
       name,
       status2,
       tripId,
@@ -70684,31 +70755,31 @@ async function createMonitor(name, status2, config2, tripId) {
 }
 async function updateMonitor(id, patch) {
   await tx$1((db2) => {
-    const cur = one$1(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
+    const cur = one$2(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
     if (!cur) throw new Error("Monitoramento não encontrado.");
-    exec$1(db2, "UPDATE flight_monitors SET name = ?, status = ?, tripId = ?, config = ?, updatedAt = ? WHERE id = ?", [
+    exec$2(db2, "UPDATE flight_monitors SET name = ?, status = ?, tripId = ?, config = ?, updatedAt = ? WHERE id = ?", [
       patch.name ?? cur.name,
       patch.status ?? cur.status,
       patch.tripId !== void 0 ? patch.tripId : cur.tripId,
       patch.config ? JSON.stringify(patch.config) : cur.config,
-      nowIso$1(),
+      nowIso$2(),
       id
     ]);
-    if (patch.config) exec$1(db2, "DELETE FROM flight_search_tasks WHERE monitorId = ? AND status IN ('pending', 'failed')", [id]);
+    if (patch.config) exec$2(db2, "DELETE FROM flight_search_tasks WHERE monitorId = ? AND status IN ('pending', 'failed')", [id]);
   });
 }
 async function setMonitorMeta(id, meta) {
   const keys = Object.keys(meta);
   if (!keys.length) return;
   await tx$1((db2) => {
-    exec$1(db2, `UPDATE flight_monitors SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => meta[k] ?? null), id]);
+    exec$2(db2, `UPDATE flight_monitors SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => meta[k] ?? null), id]);
   });
 }
 async function deleteMonitor(id) {
   await tx$1((db2) => {
-    exec$1(db2, "DELETE FROM flight_price_observations WHERE monitorId = ?", [id]);
-    for (const t of ["flight_offers", "flight_search_tasks", "flight_runs", "flight_alert_events"]) exec$1(db2, `DELETE FROM ${t} WHERE monitorId = ?`, [id]);
-    exec$1(db2, "DELETE FROM flight_monitors WHERE id = ?", [id]);
+    exec$2(db2, "DELETE FROM flight_price_observations WHERE monitorId = ?", [id]);
+    for (const t of ["flight_offers", "flight_search_tasks", "flight_runs", "flight_alert_events"]) exec$2(db2, `DELETE FROM ${t} WHERE monitorId = ?`, [id]);
+    exec$2(db2, "DELETE FROM flight_monitors WHERE id = ?", [id]);
   });
 }
 async function migrateLegacyWatches(resolve, base) {
@@ -70716,7 +70787,7 @@ async function migrateLegacyWatches(resolve, base) {
     let n = 0;
     let rows = [];
     try {
-      rows = all$1(db2, "SELECT * FROM flight_watches WHERE id NOT IN (SELECT legacyWatchId FROM flight_monitors WHERE legacyWatchId IS NOT NULL)");
+      rows = all$2(db2, "SELECT * FROM flight_watches WHERE id NOT IN (SELECT legacyWatchId FROM flight_monitors WHERE legacyWatchId IS NOT NULL)");
     } catch {
       return 0;
     }
@@ -70728,8 +70799,8 @@ async function migrateLegacyWatches(resolve, base) {
       if (d) cfg.destinations.include.push(d);
       cfg.currency = (w.currency || "BRL").toUpperCase();
       cfg.notes = "Migrado do monitoramento antigo: defina datas e revise origens/destinos.";
-      const t = nowIso$1();
-      exec$1(
+      const t = nowIso$2();
+      exec$2(
         db2,
         "INSERT INTO flight_monitors (name, status, tripId, config, createdAt, updatedAt, legacyWatchId, legacy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
@@ -70750,37 +70821,37 @@ async function migrateLegacyWatches(resolve, base) {
 }
 async function createRun(monitorId, trigger) {
   return tx$1((db2) => {
-    exec$1(db2, "INSERT INTO flight_runs (monitorId, trigger, status, startedAt) VALUES (?, ?, 'running', ?)", [monitorId, trigger, nowIso$1()]);
+    exec$2(db2, "INSERT INTO flight_runs (monitorId, trigger, status, startedAt) VALUES (?, ?, 'running', ?)", [monitorId, trigger, nowIso$2()]);
     return lastId$1(db2);
   });
 }
 async function updateRun(id, patch) {
   const keys = Object.keys(patch);
   if (!keys.length) return;
-  await tx$1((db2) => exec$1(db2, `UPDATE flight_runs SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => patch[k] ?? null), id]));
+  await tx$1((db2) => exec$2(db2, `UPDATE flight_runs SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => patch[k] ?? null), id]));
 }
 async function getRun(id) {
-  return read$1((db2) => one$1(db2, "SELECT * FROM flight_runs WHERE id = ?", [id]));
+  return read$1((db2) => one$2(db2, "SELECT * FROM flight_runs WHERE id = ?", [id]));
 }
 async function activeRun(monitorId) {
-  return read$1((db2) => one$1(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
+  return read$1((db2) => one$2(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
 }
 async function listRuns(monitorId, limit = 15) {
-  return read$1((db2) => all$1(db2, "SELECT * FROM flight_runs WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
+  return read$1((db2) => all$2(db2, "SELECT * FROM flight_runs WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
 }
 async function recoverInterrupted() {
   return tx$1((db2) => {
-    exec$1(db2, "UPDATE flight_search_tasks SET status = 'pending' WHERE status = 'running'");
-    return exec$1(db2, "UPDATE flight_runs SET status = 'interrupted', finishedAt = ?, message = 'Servidor reiniciado durante a busca; continue quando quiser.' WHERE status = 'running'", [nowIso$1()]);
+    exec$2(db2, "UPDATE flight_search_tasks SET status = 'pending' WHERE status = 'running'");
+    return exec$2(db2, "UPDATE flight_runs SET status = 'interrupted', finishedAt = ?, message = 'Servidor reiniciado durante a busca; continue quando quiser.' WHERE status = 'running'", [nowIso$2()]);
   });
 }
 async function insertTasks(monitorId, specs) {
   if (!specs.length) return 0;
   return tx$1((db2) => {
     let n = 0;
-    const t = nowIso$1();
+    const t = nowIso$2();
     for (const s2 of specs) {
-      n += exec$1(
+      n += exec$2(
         db2,
         "INSERT OR IGNORE INTO flight_search_tasks (monitorId, key, provider, stage, origin, destination, departDate, returnDate, priority, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [monitorId, s2.key, s2.provider, s2.stage, s2.origin, s2.destination, s2.departDate, s2.returnDate, s2.priority, t]
@@ -70790,38 +70861,38 @@ async function insertTasks(monitorId, specs) {
   });
 }
 async function listTasks(monitorId) {
-  return read$1((db2) => all$1(db2, "SELECT * FROM flight_search_tasks WHERE monitorId = ? ORDER BY priority DESC, id", [monitorId]));
+  return read$1((db2) => all$2(db2, "SELECT * FROM flight_search_tasks WHERE monitorId = ? ORDER BY priority DESC, id", [monitorId]));
 }
 async function nextTasks(monitorId, providers, limit) {
   if (!providers.length) return [];
   return read$1(
-    (db2) => all$1(
+    (db2) => all$2(
       db2,
       `SELECT * FROM flight_search_tasks WHERE monitorId = ? AND status = 'pending' AND provider IN (${providers.map(() => "?").join(",")})
        AND (nextAttemptAt IS NULL OR nextAttemptAt <= ?) ORDER BY priority DESC, id LIMIT ?`,
-      [monitorId, ...providers, nowIso$1(), limit]
+      [monitorId, ...providers, nowIso$2(), limit]
     )
   );
 }
 async function claimTask(id, runId) {
-  return tx$1((db2) => exec$1(db2, "UPDATE flight_search_tasks SET status = 'running', runId = ? WHERE id = ? AND status = 'pending'", [runId, id]) === 1);
+  return tx$1((db2) => exec$2(db2, "UPDATE flight_search_tasks SET status = 'running', runId = ? WHERE id = ? AND status = 'pending'", [runId, id]) === 1);
 }
 async function finishTask(id, r) {
   await tx$1(
-    (db2) => exec$1(
+    (db2) => exec$2(
       db2,
       `UPDATE flight_search_tasks SET status = ?, resultCount = COALESCE(?, resultCount), minPriceMinor = ?, currency = COALESCE(?, currency),
        lastError = ?, nextAttemptAt = ?, attempts = attempts + 1, finishedAt = ? WHERE id = ?`,
-      [r.status, r.resultCount ?? null, r.minPriceMinor ?? null, r.currency ?? null, r.error ?? null, r.retryAt ?? null, nowIso$1(), id]
+      [r.status, r.resultCount ?? null, r.minPriceMinor ?? null, r.currency ?? null, r.error ?? null, r.retryAt ?? null, nowIso$2(), id]
     )
   );
 }
 async function resetTask(id) {
-  await tx$1((db2) => exec$1(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL, lastError = NULL WHERE id = ? AND status != 'running'", [id]));
+  await tx$1((db2) => exec$2(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL, lastError = NULL WHERE id = ? AND status != 'running'", [id]));
 }
 async function requeueStale(monitorId, olderThanIso, limit) {
   return tx$1(
-    (db2) => exec$1(
+    (db2) => exec$2(
       db2,
       `UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL WHERE id IN (
          SELECT id FROM flight_search_tasks WHERE monitorId = ? AND status = 'done' AND finishedAt < ? ORDER BY priority DESC LIMIT ?)`,
@@ -70830,7 +70901,7 @@ async function requeueStale(monitorId, olderThanIso, limit) {
   );
 }
 async function retryFailed(monitorId) {
-  return tx$1((db2) => exec$1(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL WHERE monitorId = ? AND status = 'failed'", [monitorId]));
+  return tx$1((db2) => exec$2(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL WHERE monitorId = ? AND status = 'failed'", [monitorId]));
 }
 async function upsertOffers(monitorId, items, paxKey2, runId) {
   if (!items.length) return [];
@@ -70839,13 +70910,13 @@ async function upsertOffers(monitorId, items, paxKey2, runId) {
     for (const { offer, fp } of items) {
       const s0 = offer.slices[0];
       const s1 = offer.slices[1];
-      const cur = one$1(db2, "SELECT * FROM flight_offers WHERE monitorId = ? AND fingerprint = ?", [monitorId, fp]);
+      const cur = one$2(db2, "SELECT * FROM flight_offers WHERE monitorId = ? AND fingerprint = ?", [monitorId, fp]);
       let id;
       let isNew = false;
       let priceChanged = false;
       let prevMinor = null;
       if (!cur) {
-        exec$1(
+        exec$2(
           db2,
           `INSERT INTO flight_offers (monitorId, fingerprint, provider, origin, destination, departDate, returnDate, priceMinor, currency, verification, data, sources, firstSeenAt, lastSeenAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -70865,7 +70936,7 @@ async function upsertOffers(monitorId, items, paxKey2, runId) {
         if (replace) {
           priceChanged = !sameReading && (cur.priceMinor !== offer.price.amountMinor || cur.currency !== offer.price.currency);
           prevMinor = sameReading ? cur.prevPriceMinor : cur.priceMinor;
-          exec$1(
+          exec$2(
             db2,
             `UPDATE flight_offers SET provider = ?, priceMinor = ?, currency = ?, prevPriceMinor = ?, prevCurrency = ?, verification = ?, data = ?, sources = ?, lastSeenAt = ?, available = 1 WHERE id = ?`,
             [
@@ -70882,10 +70953,10 @@ async function upsertOffers(monitorId, items, paxKey2, runId) {
             ]
           );
         } else {
-          exec$1(db2, "UPDATE flight_offers SET sources = ?, available = 1 WHERE id = ?", [JSON.stringify([...sources]), id]);
+          exec$2(db2, "UPDATE flight_offers SET sources = ?, available = 1 WHERE id = ?", [JSON.stringify([...sources]), id]);
         }
       }
-      exec$1(
+      exec$2(
         db2,
         `INSERT INTO flight_price_observations (offerId, monitorId, observedAt, priceMinor, currency, provider, verification, paxKey, runId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (offerId, provider, observedAt) DO UPDATE SET priceMinor = MIN(priceMinor, excluded.priceMinor)`,
@@ -70898,63 +70969,63 @@ async function upsertOffers(monitorId, items, paxKey2, runId) {
 }
 async function markMissing(monitorId, provider, origin, destination, departDate, seenBefore, keep) {
   return tx$1((db2) => {
-    const rows = all$1(
+    const rows = all$2(
       db2,
       "SELECT id, fingerprint FROM flight_offers WHERE monitorId = ? AND provider = ? AND origin = ? AND destination = ? AND departDate = ? AND available = 1 AND lastSeenAt < ?",
       [monitorId, provider, origin, destination, departDate, seenBefore]
     );
     const gone = rows.filter((r) => !keep.has(r.fingerprint)).map((r) => r.id);
-    for (const id of gone) exec$1(db2, "UPDATE flight_offers SET available = 0 WHERE id = ?", [id]);
+    for (const id of gone) exec$2(db2, "UPDATE flight_offers SET available = 0 WHERE id = ?", [id]);
     return gone;
   });
 }
 async function listOffers(monitorId) {
-  return read$1((db2) => all$1(db2, "SELECT * FROM flight_offers WHERE monitorId = ?", [monitorId]));
+  return read$1((db2) => all$2(db2, "SELECT * FROM flight_offers WHERE monitorId = ?", [monitorId]));
 }
 async function getOffer(id) {
-  return read$1((db2) => one$1(db2, "SELECT * FROM flight_offers WHERE id = ?", [id]));
+  return read$1((db2) => one$2(db2, "SELECT * FROM flight_offers WHERE id = ?", [id]));
 }
 async function setFavorite(id, fav) {
-  await tx$1((db2) => exec$1(db2, "UPDATE flight_offers SET favorite = ? WHERE id = ?", [fav ? 1 : 0, id]));
+  await tx$1((db2) => exec$2(db2, "UPDATE flight_offers SET favorite = ? WHERE id = ?", [fav ? 1 : 0, id]));
 }
 async function listObservations(monitorId, sinceIso) {
-  return read$1((db2) => all$1(db2, "SELECT offerId, observedAt, priceMinor, currency, provider, verification, paxKey FROM flight_price_observations WHERE monitorId = ? AND observedAt >= ? ORDER BY observedAt", [monitorId, sinceIso]));
+  return read$1((db2) => all$2(db2, "SELECT offerId, observedAt, priceMinor, currency, provider, verification, paxKey FROM flight_price_observations WHERE monitorId = ? AND observedAt >= ? ORDER BY observedAt", [monitorId, sinceIso]));
 }
 async function listTracked(monitorId) {
-  return read$1((db2) => all$1(db2, "SELECT origin, destination, departDate, returnDate, createdAt FROM flight_tracked_combos WHERE monitorId = ? ORDER BY id", [monitorId]));
+  return read$1((db2) => all$2(db2, "SELECT origin, destination, departDate, returnDate, createdAt FROM flight_tracked_combos WHERE monitorId = ? ORDER BY id", [monitorId]));
 }
 async function addTracked(monitorId, picks) {
   if (!picks.length) return 0;
   return tx$1((db2) => {
     let n = 0;
     for (const p of picks)
-      n += exec$1(db2, "INSERT OR IGNORE INTO flight_tracked_combos (monitorId, origin, destination, departDate, returnDate, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, p.origin, p.destination, p.depart, p.ret ?? "", nowIso$1()]);
+      n += exec$2(db2, "INSERT OR IGNORE INTO flight_tracked_combos (monitorId, origin, destination, departDate, returnDate, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, p.origin, p.destination, p.depart, p.ret ?? "", nowIso$2()]);
     return n;
   });
 }
 async function backfillTrackedFromSkyscanner() {
   return tx$1(
-    (db2) => exec$1(
+    (db2) => exec$2(
       db2,
       `INSERT OR IGNORE INTO flight_tracked_combos (monitorId, origin, destination, departDate, returnDate, createdAt)
        SELECT monitorId, origin, destination, departDate, COALESCE(returnDate, ''), COALESCE(finishedAt, ?) FROM flight_search_tasks WHERE provider = 'skyscanner_chrome'`,
-      [nowIso$1()]
+      [nowIso$2()]
     )
   );
 }
 async function removeTracked(monitorId, p) {
-  await tx$1((db2) => exec$1(db2, "DELETE FROM flight_tracked_combos WHERE monitorId = ? AND origin = ? AND destination = ? AND departDate = ? AND returnDate = ?", [monitorId, p.origin, p.destination, p.depart, p.ret ?? ""]));
+  await tx$1((db2) => exec$2(db2, "DELETE FROM flight_tracked_combos WHERE monitorId = ? AND origin = ? AND destination = ? AND departDate = ? AND returnDate = ?", [monitorId, p.origin, p.destination, p.depart, p.ret ?? ""]));
 }
 async function recordAlert(monitorId, offerId, kind, dedupeKey, message) {
-  return tx$1((db2) => exec$1(db2, "INSERT OR IGNORE INTO flight_alert_events (monitorId, offerId, kind, dedupeKey, message, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, offerId, kind, dedupeKey, message, nowIso$1()]) === 1);
+  return tx$1((db2) => exec$2(db2, "INSERT OR IGNORE INTO flight_alert_events (monitorId, offerId, kind, dedupeKey, message, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, offerId, kind, dedupeKey, message, nowIso$2()]) === 1);
 }
 async function listAlerts(monitorId, limit = 50) {
-  return read$1((db2) => all$1(db2, "SELECT id, monitorId, offerId, kind, message, createdAt FROM flight_alert_events WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
+  return read$1((db2) => all$2(db2, "SELECT id, monitorId, offerId, kind, message, createdAt FROM flight_alert_events WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
 }
 async function cacheGet(key) {
   return read$1((db2) => {
-    const r = one$1(db2, "SELECT value, expiresAt FROM flight_cache WHERE key = ?", [key]);
-    if (!r || r.expiresAt < nowIso$1()) return null;
+    const r = one$2(db2, "SELECT value, expiresAt FROM flight_cache WHERE key = ?", [key]);
+    if (!r || r.expiresAt < nowIso$2()) return null;
     try {
       return JSON.parse(r.value);
     } catch {
@@ -70964,21 +71035,21 @@ async function cacheGet(key) {
 }
 async function cacheSet(key, value, ttlMs) {
   await tx$1((db2) => {
-    exec$1(db2, "INSERT OR REPLACE INTO flight_cache (key, value, expiresAt) VALUES (?, ?, ?)", [key, JSON.stringify(value), new Date(Date.now() + ttlMs).toISOString()]);
-    exec$1(db2, "DELETE FROM flight_cache WHERE expiresAt < ?", [nowIso$1()]);
+    exec$2(db2, "INSERT OR REPLACE INTO flight_cache (key, value, expiresAt) VALUES (?, ?, ?)", [key, JSON.stringify(value), new Date(Date.now() + ttlMs).toISOString()]);
+    exec$2(db2, "DELETE FROM flight_cache WHERE expiresAt < ?", [nowIso$2()]);
   });
 }
 async function incUsage(provider, day) {
   await tx$1((db2) => {
-    exec$1(db2, "INSERT OR IGNORE INTO flight_provider_usage (provider, day, queries) VALUES (?, ?, 0)", [provider, day]);
-    exec$1(db2, "UPDATE flight_provider_usage SET queries = queries + 1 WHERE provider = ? AND day = ?", [provider, day]);
+    exec$2(db2, "INSERT OR IGNORE INTO flight_provider_usage (provider, day, queries) VALUES (?, ?, 0)", [provider, day]);
+    exec$2(db2, "UPDATE flight_provider_usage SET queries = queries + 1 WHERE provider = ? AND day = ?", [provider, day]);
   });
 }
 async function usageOn(provider, day) {
-  return read$1((db2) => Number(one$1(db2, "SELECT queries AS q FROM flight_provider_usage WHERE provider = ? AND day = ?", [provider, day])?.q ?? 0));
+  return read$1((db2) => Number(one$2(db2, "SELECT queries AS q FROM flight_provider_usage WHERE provider = ? AND day = ?", [provider, day])?.q ?? 0));
 }
 async function monitorQueriesSince(monitorId, sinceIso) {
-  return read$1((db2) => Number(one$1(db2, "SELECT COALESCE(SUM(queries), 0) AS q FROM flight_runs WHERE monitorId = ? AND startedAt >= ?", [monitorId, sinceIso])?.q ?? 0));
+  return read$1((db2) => Number(one$2(db2, "SELECT COALESCE(SUM(queries), 0) AS q FROM flight_runs WHERE monitorId = ? AND startedAt >= ?", [monitorId, sinceIso])?.q ?? 0));
 }
 function searchLinks(o, d, depart, ret, currency2, adults = 1) {
   const q = `Flights from ${o} to ${d} on ${depart}${ret ? ` through ${ret}` : " oneway"}${adults > 1 ? ` for ${adults} adults` : ""}`;
@@ -71109,9 +71180,9 @@ async function coverage(m) {
 async function summarize$3(m, fx) {
   const today = todayLocal();
   const [{ scored, rows }, run2, cov] = await Promise.all([scoredOffers(m, fx), activeRun(m.id), coverage(m)]);
-  const live = scored.filter((s2) => rows.get(s2.offer).available);
-  const eligible = live.filter((s2) => s2.ev.status === "eligible");
-  const pending2 = live.filter((s2) => s2.ev.status === "pending");
+  const live2 = scored.filter((s2) => rows.get(s2.offer).available);
+  const eligible = live2.filter((s2) => s2.ev.status === "eligible");
+  const pending2 = live2.filter((s2) => s2.ev.status === "pending");
   const cheapest = (list) => list.reduce((best, s2) => s2.ev.cost.fareInCurrency && (!best || s2.ev.cost.fareInCurrency.amountMinor < best.ev.cost.fareInCurrency.amountMinor) ? s2 : best, null);
   const minAll = cheapest(eligible.length ? eligible : pending2);
   const minVerified = cheapest(eligible.filter((s2) => s2.offer.verification === "live"));
@@ -71128,7 +71199,7 @@ async function summarize$3(m, fx) {
     minVerifiedPrice: minVerified?.ev.cost.fareInCurrency ?? null,
     eligibleCount: eligible.length,
     pendingCount: pending2.length,
-    offerCount: live.length,
+    offerCount: live2.length,
     trend: await trend(m),
     coverage: cov,
     activeRun: run2
@@ -71520,7 +71591,7 @@ async function startSkyscanner(monitorId, picks) {
         broadcast("flights:updated", { monitorId, runId });
         let queue2 = Promise.resolve();
         let buf = "";
-        const live = (r) => {
+        const live2 = (r) => {
           const i = start + Number(r.combo);
           if (Number(r.combo) < 0 || Number(r.combo) >= chunk.length || settled.has(i)) return;
           settled.add(i);
@@ -71543,7 +71614,7 @@ async function startSkyscanner(monitorId, picks) {
             onChunk: (t) => {
               const r = takeResultLines(buf + t);
               buf = r.rest.slice(-2e4);
-              r.results.forEach(live);
+              r.results.forEach(live2);
             },
             onUsage: (u) => {
               sessionTokens = u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens;
@@ -71552,7 +71623,7 @@ async function startSkyscanner(monitorId, picks) {
           });
         } finally {
           tokens += sessionTokens;
-          takeResultLines(buf + "\n").results.forEach(live);
+          takeResultLines(buf + "\n").results.forEach(live2);
           await queue2;
         }
         if (stopping) return;
@@ -74034,7 +74105,7 @@ async function saveConfig(p) {
   if (p.priorityWeights !== void 0) await set(K.weights, JSON.stringify(p.priorityWeights));
   if (p.professionalLabels !== void 0) await set(K.professional, JSON.stringify(p.professionalLabels.map((x) => x.trim()).filter(Boolean)));
 }
-function all(db2, sql, params = []) {
+function all$1(db2, sql, params = []) {
   const st = db2.prepare(sql);
   if (params.length) st.bind(params);
   const out = [];
@@ -74042,17 +74113,17 @@ function all(db2, sql, params = []) {
   st.free();
   return out;
 }
-function one(db2, sql, params = []) {
-  return all(db2, sql, params)[0] ?? null;
+function one$1(db2, sql, params = []) {
+  return all$1(db2, sql, params)[0] ?? null;
 }
-function exec(db2, sql, params = []) {
+function exec$1(db2, sql, params = []) {
   const st = db2.prepare(sql);
   st.run(params);
   st.free();
   return db2.getRowsModified();
 }
 function lastId(db2) {
-  return Number(one(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  return Number(one$1(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
 }
 async function tx(fn) {
   const db2 = await getDb();
@@ -74073,15 +74144,15 @@ async function tx(fn) {
 async function read(fn) {
   return fn(await getDb());
 }
-const nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+const nowIso$1 = () => (/* @__PURE__ */ new Date()).toISOString();
 const b = (v) => v == null ? null : v ? 1 : 0;
 const chatKey = (providerId, remoteId) => `${providerId}:${remoteId}`;
 const accountKey = (providerId, remoteId) => `${providerId}:${remoteId}`;
 async function upsertAccounts(providerId, accounts) {
   await tx((db2) => {
-    const now = nowIso();
+    const now = nowIso$1();
     for (const a of accounts) {
-      exec(
+      exec$1(
         db2,
         `INSERT INTO chat_accounts (key, providerId, remoteId, network, displayName, selfId, selfName, status, lastSeenAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -74091,7 +74162,7 @@ async function upsertAccounts(providerId, accounts) {
       );
     }
     const keep = accounts.map((a) => accountKey(providerId, a.remoteId));
-    exec(
+    exec$1(
       db2,
       `UPDATE chat_accounts SET status = 'removed' WHERE providerId = ? ${keep.length ? `AND key NOT IN (${keep.map(() => "?").join(",")})` : ""}`,
       [providerId, ...keep]
@@ -74100,7 +74171,7 @@ async function upsertAccounts(providerId, accounts) {
 }
 async function listAccounts(providerId) {
   return read(
-    (db2) => all(
+    (db2) => all$1(
       db2,
       `SELECT a.*, (SELECT COUNT(*) FROM chats c WHERE c.accountKey = a.key) AS chatCount
        FROM chat_accounts a ${providerId ? "WHERE a.providerId = ?" : ""} ORDER BY a.network, a.displayName`,
@@ -74109,7 +74180,7 @@ async function listAccounts(providerId) {
   );
 }
 async function setAccountSync(key, enabled) {
-  await tx((db2) => exec(db2, "UPDATE chat_accounts SET syncEnabled = ? WHERE key = ?", [enabled ? 1 : 0, key]));
+  await tx((db2) => exec$1(db2, "UPDATE chat_accounts SET syncEnabled = ? WHERE key = ?", [enabled ? 1 : 0, key]));
 }
 const PREVIEW_MAX = 160;
 function previewOf(text, store) {
@@ -74119,12 +74190,12 @@ function previewOf(text, store) {
 }
 async function upsertChats(providerId, chats, storePreviews) {
   return tx((db2) => {
-    const now = nowIso();
+    const now = nowIso$1();
     const changed2 = [];
     const ids2 = [];
     for (const c of chats) {
       const key = chatKey(providerId, c.remoteId);
-      const prev = one(
+      const prev = one$1(
         db2,
         "SELECT id, lastActivity, scannedActivity, unreadMentions, mentionsEstimated FROM chats WHERE key = ?",
         [key]
@@ -74151,22 +74222,22 @@ async function upsertChats(providerId, chats, storePreviews) {
         now
       ];
       if (prev) {
-        exec(
+        exec$1(
           db2,
           `UPDATE chats SET accountKey = ?, network = ?, title = ?, type = ?, imgUrl = ?, participantCount = ?, peerHandle = COALESCE(?, peerHandle),
              unreadCount = ?, unreadMentions = ?, lastActivity = ?, lastMessagePreview = ?, lastMessageFromMe = ?, lastMessageSender = ?,
              isMuted = ?, isArchived = ?, syncedAt = ? WHERE id = ?`,
           [...values, prev.id]
         );
-        if (c.unreadMentions != null) exec(db2, "UPDATE chats SET mentionsEstimated = 0 WHERE id = ?", [prev.id]);
+        if (c.unreadMentions != null) exec$1(db2, "UPDATE chats SET mentionsEstimated = 0 WHERE id = ?", [prev.id]);
         if (p) {
-          exec(db2, `UPDATE chats SET ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} = ? WHERE id = ? AND (${p.isMine ? "lastOutboundAt" : "lastInboundAt"} IS NULL OR ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} < ?)`, [p.timestamp, prev.id, p.timestamp]);
+          exec$1(db2, `UPDATE chats SET ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} = ? WHERE id = ? AND (${p.isMine ? "lastOutboundAt" : "lastInboundAt"} IS NULL OR ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} < ?)`, [p.timestamp, prev.id, p.timestamp]);
         }
         ids2.push(prev.id);
         const act = values[9] ?? null;
         if (act !== prev.scannedActivity) changed2.push(prev.id);
       } else {
-        exec(
+        exec$1(
           db2,
           `INSERT INTO chats (accountKey, network, title, type, imgUrl, participantCount, peerHandle, unreadCount, unreadMentions, lastActivity,
              lastMessagePreview, lastMessageFromMe, lastMessageSender, isMuted, isArchived, syncedAt, key, providerId, remoteId, createdAt,
@@ -74202,7 +74273,7 @@ async function applyScans(scans) {
   if (!scans.length) return;
   await tx((db2) => {
     for (const { id, scan: s2 } of scans) {
-      exec(
+      exec$1(
         db2,
         `UPDATE chats SET scannedActivity = ?, lastInboundAt = COALESCE(?, lastInboundAt), lastOutboundAt = COALESCE(?, lastOutboundAt),
            lastInboundClosing = ?, lastInboundQuestion = ?, lastOutboundQuestion = ?, lastInboundRepliesToMe = ?, pendingSince = ?
@@ -74210,7 +74281,7 @@ async function applyScans(scans) {
         [s2.scannedActivity, s2.lastInboundAt, s2.lastOutboundAt, s2.lastInboundClosing ? 1 : 0, s2.lastInboundQuestion ? 1 : 0, s2.lastOutboundQuestion ? 1 : 0, s2.lastInboundRepliesToMe ? 1 : 0, s2.pendingSince, id]
       );
       if (s2.estimatedMentions != null) {
-        exec(db2, "UPDATE chats SET unreadMentions = ?, mentionsEstimated = 1 WHERE id = ? AND (unreadMentions IS NULL OR mentionsEstimated = 1)", [s2.estimatedMentions, id]);
+        exec$1(db2, "UPDATE chats SET unreadMentions = ?, mentionsEstimated = 1 WHERE id = ? AND (unreadMentions IS NULL OR mentionsEstimated = 1)", [s2.estimatedMentions, id]);
       }
     }
   });
@@ -74225,40 +74296,40 @@ const FULL_SELECT = `
   LEFT JOIN contacts ct ON ct.id = o.contactId
   LEFT JOIN chat_accounts a ON a.key = c.accountKey`;
 async function allFullRows() {
-  return read((db2) => all(db2, FULL_SELECT));
+  return read((db2) => all$1(db2, FULL_SELECT));
 }
 async function fullRow(id) {
-  return read((db2) => one(db2, `${FULL_SELECT} WHERE c.id = ?`, [id]));
+  return read((db2) => one$1(db2, `${FULL_SELECT} WHERE c.id = ?`, [id]));
 }
 async function chatById(id) {
-  return read((db2) => one(db2, "SELECT * FROM chats WHERE id = ?", [id]));
+  return read((db2) => one$1(db2, "SELECT * FROM chats WHERE id = ?", [id]));
 }
 async function chatByKey(key) {
-  return read((db2) => one(db2, "SELECT * FROM chats WHERE key = ?", [key]));
+  return read((db2) => one$1(db2, "SELECT * FROM chats WHERE key = ?", [key]));
 }
 async function chatIdsByRemote(providerId, remoteIds) {
   if (!remoteIds.length) return [];
   return read((db2) => {
     const out = [];
     for (const r of remoteIds) {
-      const row = one(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
+      const row = one$1(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
       if (row) out.push(row.id);
     }
     return out;
   });
 }
 async function patchChatCounters(id, unreadCount, unreadMentions) {
-  await tx((db2) => exec(db2, "UPDATE chats SET unreadCount = ?, unreadMentions = ? WHERE id = ?", [unreadCount, unreadMentions, id]));
+  await tx((db2) => exec$1(db2, "UPDATE chats SET unreadCount = ?, unreadMentions = ? WHERE id = ?", [unreadCount, unreadMentions, id]));
 }
 async function applyLastFromScan(id, s2) {
   const inT = s2.lastInboundAt ? Date.parse(s2.lastInboundAt) : 0;
   const outT = s2.lastOutboundAt ? Date.parse(s2.lastOutboundAt) : 0;
   const fromMe = !inT && !outT ? null : outT >= inT ? 1 : 0;
-  await tx((db2) => exec(db2, "UPDATE chats SET lastOutboundAt = COALESCE(?, lastOutboundAt), lastMessageFromMe = ? WHERE id = ?", [s2.lastOutboundAt, fromMe, id]));
+  await tx((db2) => exec$1(db2, "UPDATE chats SET lastOutboundAt = COALESCE(?, lastOutboundAt), lastMessageFromMe = ? WHERE id = ?", [s2.lastOutboundAt, fromMe, id]));
 }
 async function recordOutbound(id, at, question, preview) {
   await tx(
-    (db2) => exec(
+    (db2) => exec$1(
       db2,
       `UPDATE chats SET lastOutboundAt = ?, lastActivity = ?, lastMessageFromMe = 1, lastMessageSender = NULL,
          lastOutboundQuestion = ?, pendingSince = NULL, lastMessagePreview = COALESCE(?, lastMessagePreview) WHERE id = ?`,
@@ -74269,18 +74340,18 @@ async function recordOutbound(id, at, question, preview) {
 async function deleteChatsByRemote(providerId, remoteIds) {
   await tx((db2) => {
     for (const r of remoteIds) {
-      const row = one(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
+      const row = one$1(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
       if (!row) continue;
       if (hasOrgData(db2, row.id)) continue;
-      exec(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [row.id]);
-      exec(db2, "DELETE FROM chats WHERE id = ?", [row.id]);
+      exec$1(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [row.id]);
+      exec$1(db2, "DELETE FROM chats WHERE id = ?", [row.id]);
     }
   });
 }
 function hasOrgData(db2, chatId) {
-  const o = one(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]);
-  const labels = one(db2, "SELECT COUNT(*) AS n FROM label_links WHERE entityType = 'chat' AND entityId = ?", [chatId])?.n ?? 0;
-  const todos = one(db2, "SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?", [chatId])?.n ?? 0;
+  const o = one$1(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]);
+  const labels = one$1(db2, "SELECT COUNT(*) AS n FROM label_links WHERE entityType = 'chat' AND entityId = ?", [chatId])?.n ?? 0;
+  const todos = one$1(db2, "SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?", [chatId])?.n ?? 0;
   if (labels || todos) return true;
   if (!o) return false;
   return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes);
@@ -74288,16 +74359,16 @@ function hasOrgData(db2, chatId) {
 async function clearCache(opts = {}) {
   return tx((db2) => {
     const cutoff = opts.olderThanDays ? new Date(Date.now() - opts.olderThanDays * 864e5).toISOString() : null;
-    const rows = all(db2, cutoff ? "SELECT id FROM chats WHERE lastActivity IS NULL OR lastActivity < ?" : "SELECT id FROM chats", cutoff ? [cutoff] : []);
+    const rows = all$1(db2, cutoff ? "SELECT id FROM chats WHERE lastActivity IS NULL OR lastActivity < ?" : "SELECT id FROM chats", cutoff ? [cutoff] : []);
     let removed = 0;
     let kept = 0;
     for (const r of rows) {
       if (hasOrgData(db2, r.id)) {
-        exec(db2, "UPDATE chats SET lastMessagePreview = NULL, scannedActivity = NULL WHERE id = ?", [r.id]);
+        exec$1(db2, "UPDATE chats SET lastMessagePreview = NULL, scannedActivity = NULL WHERE id = ?", [r.id]);
         kept++;
       } else {
-        exec(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [r.id]);
-        exec(db2, "DELETE FROM chats WHERE id = ?", [r.id]);
+        exec$1(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [r.id]);
+        exec$1(db2, "DELETE FROM chats WHERE id = ?", [r.id]);
         removed++;
       }
     }
@@ -74306,7 +74377,7 @@ async function clearCache(opts = {}) {
 }
 const ORG_COLS = ["contactId", "priority", "manualState", "manualAt", "snoozeUntil", "snoozedAt", "reopenOnMessage", "reminderNote", "reminderNotifiedAt", "notes", "mentionsReviewedCount"];
 function patchOrgDb(db2, chatId, patch) {
-  exec(db2, "INSERT OR IGNORE INTO chat_org (chatId, updatedAt) VALUES (?, ?)", [chatId, nowIso()]);
+  exec$1(db2, "INSERT OR IGNORE INTO chat_org (chatId, updatedAt) VALUES (?, ?)", [chatId, nowIso$1()]);
   const sets = [];
   const params = [];
   for (const c of ORG_COLS) {
@@ -74318,8 +74389,8 @@ function patchOrgDb(db2, chatId, patch) {
   }
   if (!sets.length) return;
   sets.push("updatedAt = ?");
-  params.push(nowIso(), chatId);
-  exec(db2, `UPDATE chat_org SET ${sets.join(", ")} WHERE chatId = ?`, params);
+  params.push(nowIso$1(), chatId);
+  exec$1(db2, `UPDATE chat_org SET ${sets.join(", ")} WHERE chatId = ?`, params);
 }
 async function patchOrg(chatIds, patch) {
   await tx((db2) => {
@@ -74327,11 +74398,11 @@ async function patchOrg(chatIds, patch) {
   });
 }
 async function getOrg(chatId) {
-  return read((db2) => one(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]));
+  return read((db2) => one$1(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]));
 }
 async function dueReminders(nowIsoStr) {
   return read(
-    (db2) => all(
+    (db2) => all$1(
       db2,
       `SELECT o.chatId, c.title, o.reminderNote, o.snoozeUntil FROM chat_org o JOIN chats c ON c.id = o.chatId
        WHERE o.snoozeUntil IS NOT NULL AND o.snoozeUntil <= ? AND (o.reminderNotifiedAt IS NULL OR o.reminderNotifiedAt < o.snoozeUntil)`,
@@ -74340,23 +74411,23 @@ async function dueReminders(nowIsoStr) {
   );
 }
 async function contactsLite() {
-  return read((db2) => all(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts ORDER BY name COLLATE NOCASE"));
+  return read((db2) => all$1(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts ORDER BY name COLLATE NOCASE"));
 }
 async function contactLite(id) {
-  return read((db2) => one(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts WHERE id = ?", [id]));
+  return read((db2) => one$1(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts WHERE id = ?", [id]));
 }
 async function createContactFromChat(name, context) {
   return tx((db2) => {
-    exec(db2, "INSERT INTO contacts (name, context, createdAt) VALUES (?, ?, ?)", [name, context, nowIso()]);
+    exec$1(db2, "INSERT INTO contacts (name, context, createdAt) VALUES (?, ?, ?)", [name, context, nowIso$1()]);
     return lastId(db2);
   });
 }
 async function setContactPriority(id, priority, vip) {
-  await tx((db2) => exec(db2, "UPDATE contacts SET priority = ?, vip = ? WHERE id = ?", [priority, vip ? 1 : 0, id]));
+  await tx((db2) => exec$1(db2, "UPDATE contacts SET priority = ?, vip = ? WHERE id = ?", [priority, vip ? 1 : 0, id]));
 }
 async function touchContactsFromOutbound() {
   await tx(
-    (db2) => exec(
+    (db2) => exec$1(
       db2,
       `UPDATE contacts SET lastContactAt = (
          SELECT MAX(c.lastOutboundAt) FROM chat_org o JOIN chats c ON c.id = o.chatId WHERE o.contactId = contacts.id)
@@ -74367,11 +74438,11 @@ async function touchContactsFromOutbound() {
   );
 }
 async function setContactFollowUp(contactId, date) {
-  await tx((db2) => exec(db2, "UPDATE contacts SET nextFollowUp = ? WHERE id = ? AND (nextFollowUp IS NULL OR nextFollowUp > ?)", [date, contactId, date]));
+  await tx((db2) => exec$1(db2, "UPDATE contacts SET nextFollowUp = ? WHERE id = ? AND (nextFollowUp IS NULL OR nextFollowUp > ?)", [date, contactId, date]));
 }
 async function listLabels() {
   return read(
-    (db2) => all(
+    (db2) => all$1(
       db2,
       `SELECT l.id, l.name, l.color, (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'chat') AS chatCount
        FROM labels l ORDER BY l.name COLLATE NOCASE`
@@ -74380,29 +74451,29 @@ async function listLabels() {
 }
 async function saveLabel(id, name, color) {
   return tx((db2) => {
-    if (id) exec(db2, "UPDATE labels SET name = ?, color = ? WHERE id = ?", [name, color, id]);
-    else exec(db2, "INSERT INTO labels (name, color, createdAt) VALUES (?, ?, ?)", [name, color, nowIso()]);
+    if (id) exec$1(db2, "UPDATE labels SET name = ?, color = ? WHERE id = ?", [name, color, id]);
+    else exec$1(db2, "INSERT INTO labels (name, color, createdAt) VALUES (?, ?, ?)", [name, color, nowIso$1()]);
     const lid = id || lastId(db2);
-    return one(db2, "SELECT id, name, color FROM labels WHERE id = ?", [lid]);
+    return one$1(db2, "SELECT id, name, color FROM labels WHERE id = ?", [lid]);
   });
 }
 async function deleteLabel(id) {
   await tx((db2) => {
-    exec(db2, "DELETE FROM label_links WHERE labelId = ?", [id]);
-    exec(db2, "DELETE FROM labels WHERE id = ?", [id]);
+    exec$1(db2, "DELETE FROM label_links WHERE labelId = ?", [id]);
+    exec$1(db2, "DELETE FROM labels WHERE id = ?", [id]);
   });
 }
 async function setLabels(entityType, ids2, add, remove) {
   await tx((db2) => {
     for (const id of ids2) {
-      for (const l of add) exec(db2, "INSERT OR IGNORE INTO label_links (labelId, entityType, entityId) VALUES (?, ?, ?)", [l, entityType, id]);
-      for (const l of remove) exec(db2, "DELETE FROM label_links WHERE labelId = ? AND entityType = ? AND entityId = ?", [l, entityType, id]);
+      for (const l of add) exec$1(db2, "INSERT OR IGNORE INTO label_links (labelId, entityType, entityId) VALUES (?, ?, ?)", [l, entityType, id]);
+      for (const l of remove) exec$1(db2, "DELETE FROM label_links WHERE labelId = ? AND entityType = ? AND entityId = ?", [l, entityType, id]);
     }
   });
 }
 async function labelMap(entityType) {
   return read((db2) => {
-    const rows = all(
+    const rows = all$1(
       db2,
       "SELECT k.entityId, l.id, l.name, l.color FROM label_links k JOIN labels l ON l.id = k.labelId WHERE k.entityType = ? ORDER BY l.name COLLATE NOCASE",
       [entityType]
@@ -74418,39 +74489,39 @@ async function labelMap(entityType) {
 }
 async function createChatTodo(chatId, title, notes, dueDate, messageId) {
   return tx((db2) => {
-    exec(
+    exec$1(
       db2,
       "INSERT INTO todos (title, notes, status, priority, dueDate, source, aiGenerated, type, createdAt) VALUES (?, ?, 'todo', 0, ?, 'chats', 0, ?, ?)",
-      [title, notes, dueDate, dueDate ? "lembrete" : "projeto", nowIso()]
+      [title, notes, dueDate, dueDate ? "lembrete" : "projeto", nowIso$1()]
     );
     const todoId = lastId(db2);
-    exec(db2, "INSERT OR IGNORE INTO chat_todos (chatId, todoId, messageId) VALUES (?, ?, ?)", [chatId, todoId, messageId]);
+    exec$1(db2, "INSERT OR IGNORE INTO chat_todos (chatId, todoId, messageId) VALUES (?, ?, ?)", [chatId, todoId, messageId]);
     return todoId;
   });
 }
 async function chatTodos(chatId) {
   return read(
-    (db2) => all(db2, "SELECT td.id, td.title, td.status, td.dueDate FROM chat_todos t JOIN todos td ON td.id = t.todoId WHERE t.chatId = ? ORDER BY td.createdAt DESC", [chatId])
+    (db2) => all$1(db2, "SELECT td.id, td.title, td.status, td.dueDate FROM chat_todos t JOIN todos td ON td.id = t.todoId WHERE t.chatId = ? ORDER BY td.createdAt DESC", [chatId])
   );
 }
 async function listTemplates() {
-  return read((db2) => all(db2, "SELECT id, title, body FROM chat_templates ORDER BY title COLLATE NOCASE"));
+  return read((db2) => all$1(db2, "SELECT id, title, body FROM chat_templates ORDER BY title COLLATE NOCASE"));
 }
 async function getTemplate(id) {
-  return read((db2) => one(db2, "SELECT id, title, body FROM chat_templates WHERE id = ?", [id]));
+  return read((db2) => one$1(db2, "SELECT id, title, body FROM chat_templates WHERE id = ?", [id]));
 }
 async function saveTemplate(id, title, body) {
   await tx((db2) => {
-    if (id) exec(db2, "UPDATE chat_templates SET title = ?, body = ? WHERE id = ?", [title, body, id]);
-    else exec(db2, "INSERT INTO chat_templates (title, body, createdAt) VALUES (?, ?, ?)", [title, body, nowIso()]);
+    if (id) exec$1(db2, "UPDATE chat_templates SET title = ?, body = ? WHERE id = ?", [title, body, id]);
+    else exec$1(db2, "INSERT INTO chat_templates (title, body, createdAt) VALUES (?, ?, ?)", [title, body, nowIso$1()]);
   });
 }
 async function deleteTemplate(id) {
-  await tx((db2) => exec(db2, "DELETE FROM chat_templates WHERE id = ?", [id]));
+  await tx((db2) => exec$1(db2, "DELETE FROM chat_templates WHERE id = ?", [id]));
 }
 async function reconcile(activeProviderId) {
   return tx((db2) => {
-    const fresh = all(
+    const fresh = all$1(
       db2,
       `SELECT c.id, c.network, c.peerHandle FROM chats c LEFT JOIN chat_org o ON o.chatId = c.id
        WHERE c.providerId = ? AND c.type = 'single' AND c.peerHandle IS NOT NULL AND o.chatId IS NULL`,
@@ -74458,16 +74529,16 @@ async function reconcile(activeProviderId) {
     );
     let moved = 0;
     for (const f of fresh) {
-      const old = one(
+      const old = one$1(
         db2,
         `SELECT c.id FROM chats c JOIN chat_org o ON o.chatId = c.id
          WHERE c.providerId != ? AND c.network = ? AND c.peerHandle = ? ORDER BY c.lastActivity DESC LIMIT 1`,
         [activeProviderId, f.network, f.peerHandle]
       );
       if (!old) continue;
-      exec(db2, "UPDATE chat_org SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
-      exec(db2, "UPDATE label_links SET entityId = ? WHERE entityType = 'chat' AND entityId = ?", [f.id, old.id]);
-      exec(db2, "UPDATE OR IGNORE chat_todos SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
+      exec$1(db2, "UPDATE chat_org SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
+      exec$1(db2, "UPDATE label_links SET entityId = ? WHERE entityType = 'chat' AND entityId = ?", [f.id, old.id]);
+      exec$1(db2, "UPDATE OR IGNORE chat_todos SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
       moved++;
     }
     return moved;
@@ -75773,7 +75844,7 @@ async function requireProviderFor(chatId) {
   if (provider.id !== chat.providerId) throw new ProviderUnavailableError("Esta conversa é de um provedor que não está ativo: envio bloqueado.");
   return { provider, chat };
 }
-async function sendMessage(chatId, text, replyToId) {
+async function sendMessage$1(chatId, text, replyToId) {
   const body = text.trim();
   if (!body) throw new Error("Mensagem vazia.");
   if (body.length > 1e4) throw new Error("Mensagem longa demais.");
@@ -76286,14 +76357,14 @@ async function doSync(full) {
     const accounts = await provider.listAccounts();
     await upsertAccounts(provider.id, accounts);
     const accRows = await listAccounts(provider.id);
-    const live = accRows.filter((a) => a.status !== "removed");
-    const enabled = live.filter((a) => a.syncEnabled).map((a) => a.remoteId);
+    const live2 = accRows.filter((a) => a.status !== "removed");
+    const enabled = live2.filter((a) => a.syncEnabled).map((a) => a.remoteId);
     if (!enabled.length) {
       status.progress = null;
       await finishOk("Nenhuma conta selecionada para sincronizar.");
       return;
     }
-    const allEnabled = enabled.length === live.length;
+    const allEnabled = enabled.length === live2.length;
     const initial = full || !lastSyncMs;
     const since = initial ? 0 : lastSyncMs - MARGIN_MS;
     const changedIds = [];
@@ -76550,7 +76621,7 @@ function registerChatRpc(handle) {
     const page = await getMessages(Number(id), cursor ?? null);
     return page;
   });
-  handle("chats:send", (_e, id, text, replyToId) => sendMessage(Number(id), String(text ?? ""), replyToId ?? null));
+  handle("chats:send", (_e, id, text, replyToId) => sendMessage$1(Number(id), String(text ?? ""), replyToId ?? null));
   handle("chats:editMessage", (_e, id, messageId, text) => editMessage(Number(id), String(messageId ?? ""), String(text ?? "")));
   handle("chats:deleteMessage", (_e, id, messageId, forEveryone) => deleteMessage(Number(id), String(messageId ?? ""), forEveryone !== false));
   handle("chats:markRead", (_e, id, read2) => markRead(Number(id), read2 !== false));
@@ -76698,6 +76769,1477 @@ Abrir: #/chats?c=${chat.id}`;
   });
   handle("chats:aiSummarize", (_e, id, messageIds, includeNotes) => summarize$1(Number(id), Array.isArray(messageIds) ? messageIds.map(String) : [], !!includeNotes));
 }
+const IMAGE_MEDIA_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const MAX_IMAGES_PER_MESSAGE = 8;
+const DIFF_MAX = 6e4;
+const NEW_FILE_MAX = 2e4;
+function run$1(cmd, args, cwd, timeoutMs = 3e4) {
+  return new Promise((resolve, reject) => {
+    const child = child_process.spawn(cmd, args, { cwd, env: { ...process.env, PATH: buildPath(), GIT_TERMINAL_PROMPT: "0" } });
+    let out = "";
+    let err = "";
+    const timer2 = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`${cmd} ${args[0]} demorou demais`));
+    }, timeoutMs);
+    child.stdout.on("data", (d) => out += d.toString());
+    child.stderr.on("data", (d) => err += d.toString());
+    child.on("error", (e) => {
+      clearTimeout(timer2);
+      reject(e);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer2);
+      if (code === 0) resolve(out);
+      else reject(new Error(err.trim() || out.trim() || `${cmd} saiu com código ${code}`));
+    });
+  });
+}
+const git$1 = (cwd, args, timeoutMs) => run$1("git", args, cwd, timeoutMs);
+const gitOk$1 = (cwd, args) => git$1(cwd, args).catch(() => null);
+async function repoTop(dir) {
+  if (!fs.existsSync(dir)) return null;
+  return (await gitOk$1(dir, ["rev-parse", "--show-toplevel"]))?.trim() || null;
+}
+function slugify$1(s2) {
+  return s2.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "conversa";
+}
+function stamp$1() {
+  const d = /* @__PURE__ */ new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+async function createWorktree(projectDir, title) {
+  const top = await repoTop(projectDir);
+  if (!top) throw new Error("A pasta do projeto não é um repositório git; desmarque o worktree isolado.");
+  const baseRef = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
+  const name = `rickos-${slugify$1(title)}-${stamp$1()}`;
+  const branch = `claude/${name}`;
+  const wtDir = path.join(path.dirname(top), ".worktrees", `${path.basename(top)}-${name}`);
+  fs.mkdirSync(path.dirname(wtDir), { recursive: true });
+  await git$1(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"], 6e4);
+  if (!fs.existsSync(wtDir)) throw new Error("Não consegui criar o worktree (git worktree add falhou).");
+  const rel = path.relative(top, path.resolve(projectDir));
+  const cwd = rel && !rel.startsWith("..") ? path.join(wtDir, rel) : wtDir;
+  return { cwd: fs.existsSync(cwd) ? cwd : wtDir, repoPath: top, branch, baseRef };
+}
+async function removeWorktree(repoPath, worktreeDir, branch) {
+  const top = await repoTop(worktreeDir) ?? worktreeDir;
+  if (fs.existsSync(top)) await gitOk$1(repoPath, ["worktree", "remove", "--force", top]);
+  await gitOk$1(repoPath, ["worktree", "prune"]);
+  if (branch) await gitOk$1(repoPath, ["branch", "-D", branch]);
+}
+async function statusEntries(top) {
+  const raw = await gitOk$1(top, ["status", "--porcelain", "-z", "--untracked-files=all"]) ?? "";
+  const parts = raw.split("\0");
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p) continue;
+    const xy = p.slice(0, 2);
+    const file = p.slice(3);
+    if (xy[0] === "R" || xy[0] === "C") i++;
+    const st = xy === "??" ? "??" : (xy[0] !== " " ? xy[0] : xy[1]).trim() || "M";
+    out.push({ path: file, status: st });
+  }
+  return out;
+}
+async function getChanges(dir, baseRef) {
+  const top = await repoTop(dir);
+  if (!top) return { isRepo: false, branch: null, baseRef, files: [], unpushed: 0, hasRemote: false };
+  const [branchRaw, entries, numstatRaw, remotes] = await Promise.all([
+    gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]),
+    statusEntries(top),
+    gitOk$1(top, ["diff", "HEAD", "--numstat", "-z"]),
+    gitOk$1(top, ["remote"])
+  ]);
+  const branch = branchRaw?.trim() || null;
+  const counts2 = /* @__PURE__ */ new Map();
+  const ns = (numstatRaw ?? "").split("\0");
+  for (let i = 0; i < ns.length; i++) {
+    const m = /^(\d+|-)\t(\d+|-)\t(.*)$/.exec(ns[i]);
+    if (!m) continue;
+    let file = m[3];
+    if (!file) {
+      file = ns[i + 2] ?? "";
+      i += 2;
+    }
+    counts2.set(file, { a: m[1] === "-" ? 0 : Number(m[1]), d: m[2] === "-" ? 0 : Number(m[2]) });
+  }
+  let budget = DIFF_MAX;
+  const files = [];
+  for (const e of entries.slice(0, 200)) {
+    let diff = "";
+    let additions = counts2.get(e.path)?.a ?? 0;
+    const deletions = counts2.get(e.path)?.d ?? 0;
+    if (budget > 0) {
+      if (e.status === "??") {
+        const abs = path.join(top, e.path);
+        try {
+          const st = fs.statSync(abs);
+          if (st.isFile() && st.size <= 512 * 1024) {
+            const txt = fs.readFileSync(abs, "utf8");
+            if (txt.includes("\0")) diff = "(arquivo binário)";
+            else {
+              const body = txt.slice(0, NEW_FILE_MAX);
+              additions = txt.split("\n").length;
+              diff = body.split("\n").map((l) => "+" + l).join("\n");
+              if (txt.length > body.length) diff += "\n… (truncado)";
+            }
+          } else diff = "(arquivo grande ou binário)";
+        } catch {
+          diff = "";
+        }
+      } else {
+        diff = await gitOk$1(top, ["diff", "HEAD", "--no-color", "--", e.path]) ?? "";
+        diff = diff.replace(/^diff --git[\s\S]*?\n(?=@@)/m, "");
+      }
+      if (diff.length > budget) diff = diff.slice(0, budget) + "\n… (truncado)";
+      budget -= diff.length;
+    }
+    files.push({ path: e.path, status: e.status, additions, deletions, diff });
+  }
+  const hasRemote = !!remotes?.trim();
+  let unpushed = 0;
+  if (hasRemote && branch && branch !== "HEAD") {
+    const upstream = await gitOk$1(top, ["rev-list", "--count", "@{upstream}..HEAD"]);
+    if (upstream != null) unpushed = Number(upstream.trim()) || 0;
+    else if (baseRef) unpushed = Number((await gitOk$1(top, ["rev-list", "--count", `${baseRef}..HEAD`]))?.trim() ?? 0) || 0;
+  }
+  return { isRepo: true, branch, baseRef, files, unpushed, hasRemote };
+}
+async function checkedPaths(top, paths) {
+  const entries = await statusEntries(top);
+  if (!paths) return entries;
+  const wanted = new Set(paths);
+  const ok = entries.filter((e) => wanted.has(e.path));
+  if (ok.length !== wanted.size) throw new Error("Arquivo fora da lista de alterados.");
+  return ok;
+}
+async function commit(dir, message, paths) {
+  const top = await repoTop(dir);
+  if (!top) throw new Error("Não é um repositório git.");
+  const msg = message.trim();
+  if (!msg) throw new Error("Escreva a mensagem do commit.");
+  const entries = await checkedPaths(top, paths);
+  if (!entries.length) throw new Error("Nada para commitar.");
+  await git$1(top, ["add", "-A", "--", ...entries.map((e) => e.path)]);
+  await git$1(top, ["commit", "-m", msg, "--", ...entries.map((e) => e.path)], 6e4);
+  return (await gitOk$1(top, ["rev-parse", "--short", "HEAD"]) ?? "").trim();
+}
+async function discard(dir, filePath) {
+  const top = await repoTop(dir);
+  if (!top) throw new Error("Não é um repositório git.");
+  const [e] = await checkedPaths(top, [filePath]);
+  if (e.status === "??") {
+    const abs = path.resolve(top, e.path);
+    if (!abs.startsWith(top + path.sep)) throw new Error("Caminho inválido.");
+    fs.rmSync(abs, { force: true });
+    return;
+  }
+  if (e.status === "A") {
+    await git$1(top, ["rm", "-f", "--", e.path]);
+    return;
+  }
+  await git$1(top, ["checkout", "HEAD", "--", e.path]);
+}
+async function openPullRequest(dir, baseRef) {
+  const top = await repoTop(dir);
+  if (!top) throw new Error("Não é um repositório git.");
+  const branch = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim();
+  if (!branch || branch === "HEAD") throw new Error("HEAD destacado: não há branch para o PR.");
+  if (baseRef && branch === baseRef) throw new Error(`Você está na própria branch base (${branch}); use um worktree isolado para abrir PR.`);
+  await git$1(top, ["push", "-u", "origin", branch], 12e4);
+  const args = ["pr", "create", "--fill", "--head", branch, ...baseRef ? ["--base", baseRef] : []];
+  try {
+    const out = await run$1("gh", args, top, 6e4);
+    return out.trim().split("\n").pop() || "";
+  } catch (e) {
+    const existing = await run$1("gh", ["pr", "view", branch, "--json", "url", "-q", ".url"], top, 3e4).catch(() => "");
+    if (existing.trim()) return existing.trim();
+    throw e;
+  }
+}
+async function commitContext(dir) {
+  const top = await repoTop(dir);
+  if (!top) return "";
+  const [log2, stat, diff] = await Promise.all([
+    gitOk$1(top, ["log", "--oneline", "-12"]),
+    gitOk$1(top, ["diff", "HEAD", "--stat"]),
+    gitOk$1(top, ["diff", "HEAD", "--no-color"])
+  ]);
+  const untracked = (await statusEntries(top)).filter((e) => e.status === "??").map((e) => e.path);
+  return [
+    "### Commits recentes (siga o mesmo estilo e idioma)",
+    log2?.trim() || "(nenhum)",
+    "### Resumo",
+    stat?.trim() || "",
+    untracked.length ? `Arquivos novos: ${untracked.join(", ")}` : "",
+    "### Diff",
+    (diff ?? "").slice(0, 14e3)
+  ].join("\n");
+}
+function all(db2, sql, params = []) {
+  const st = db2.prepare(sql);
+  if (params.length) st.bind(params);
+  const out = [];
+  while (st.step()) out.push(st.getAsObject());
+  st.free();
+  return out;
+}
+function one(db2, sql, params = []) {
+  return all(db2, sql, params)[0] ?? null;
+}
+function exec(db2, sql, params = []) {
+  const st = db2.prepare(sql);
+  st.run(params);
+  st.free();
+}
+const nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+function parseJson(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+function toConv(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    projectId: r.projectId ?? null,
+    agentId: r.agentId ?? null,
+    skillIds: parseJson(r.skillIds, []),
+    model: r.model ?? "",
+    effort: r.effort ?? "",
+    permissionMode: r.permissionMode || "default",
+    sessionId: r.sessionId ?? null,
+    cwd: r.cwd ?? null,
+    configDir: r.configDir ?? null,
+    claudeCommand: r.claudeCommand ?? "",
+    contextTokens: r.contextTokens ?? 0,
+    contextWindow: r.contextWindow ?? 0,
+    totalCostUsd: r.totalCostUsd ?? 0,
+    totalInputTokens: r.totalInputTokens ?? 0,
+    totalOutputTokens: r.totalOutputTokens ?? 0,
+    pinned: !!r.pinned,
+    archived: !!r.archived,
+    origin: r.origin === "terminal" ? "terminal" : "rickos",
+    useWorktree: !!r.useWorktree,
+    worktreeBranch: r.worktreeBranch ?? null,
+    repoPath: r.repoPath ?? null,
+    baseRef: r.baseRef ?? null,
+    forkFrom: r.forkFrom ?? null,
+    turnCount: r.turnCount
+  };
+}
+function toTurn(r) {
+  return {
+    id: r.id,
+    conversationId: r.conversationId,
+    createdAt: r.createdAt,
+    prompt: r.prompt,
+    blocks: parseJson(r.blocks, []),
+    status: r.status,
+    error: r.error ?? null,
+    costUsd: r.costUsd ?? 0,
+    inputTokens: r.inputTokens ?? 0,
+    outputTokens: r.outputTokens ?? 0,
+    contextTokens: r.contextTokens ?? 0,
+    durationMs: r.durationMs ?? null,
+    attachments: parseJson(r.attachments, [])
+  };
+}
+const CONV_SELECT = `SELECT c.*, (SELECT COUNT(*) FROM ai_conv_turns t WHERE t.conversationId = c.id) AS turnCount FROM ai_conversations c`;
+async function listConversations(opts = {}) {
+  const db2 = await getDb();
+  return all(db2, `${CONV_SELECT} WHERE c.archived = ? ORDER BY c.pinned DESC, c.updatedAt DESC LIMIT 300`, [opts.archived ? 1 : 0]).map(toConv);
+}
+async function getConversation(id) {
+  const db2 = await getDb();
+  const r = one(db2, `${CONV_SELECT} WHERE c.id = ?`, [id]);
+  return r ? toConv(r) : null;
+}
+async function findConversationBySession(sessionId) {
+  const db2 = await getDb();
+  const r = one(db2, `${CONV_SELECT} WHERE c.sessionId = ? ORDER BY c.updatedAt DESC`, [sessionId]);
+  return r ? toConv(r) : null;
+}
+async function sessionIdsInUse() {
+  const db2 = await getDb();
+  const rows = all(db2, "SELECT id, sessionId FROM ai_conversations WHERE sessionId IS NOT NULL");
+  return new Map(rows.map((r) => [r.sessionId, r.id]));
+}
+async function createConversation(c) {
+  const db2 = await getDb();
+  const id = crypto.randomUUID();
+  const now = nowIso();
+  exec(
+    db2,
+    `INSERT INTO ai_conversations (id, title, createdAt, updatedAt, projectId, agentId, skillIds, model, effort, permissionMode, sessionId, cwd, configDir, claudeCommand, origin, contextTokens,
+       useWorktree, forkFrom, repoPath, worktreeBranch, baseRef, contextWindow)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      c.title ?? "",
+      c.createdAt ?? now,
+      c.updatedAt ?? now,
+      c.projectId ?? null,
+      c.agentId ?? null,
+      JSON.stringify(c.skillIds ?? []),
+      c.model ?? "",
+      c.effort ?? "",
+      c.permissionMode ?? "default",
+      c.sessionId ?? null,
+      c.cwd ?? null,
+      c.configDir ?? null,
+      c.claudeCommand ?? "",
+      c.origin ?? "rickos",
+      c.contextTokens ?? 0,
+      c.useWorktree ? 1 : 0,
+      c.forkFrom ?? null,
+      c.repoPath ?? null,
+      c.worktreeBranch ?? null,
+      c.baseRef ?? null,
+      c.contextWindow ?? 0
+    ]
+  );
+  saveDb();
+  return await getConversation(id);
+}
+async function updateConversation(id, patch) {
+  const db2 = await getDb();
+  const sets = [];
+  const params = [];
+  const put = (col, v) => {
+    sets.push(`${col} = ?`);
+    params.push(v);
+  };
+  if (patch.title !== void 0) put("title", patch.title.trim());
+  if (patch.projectId !== void 0) put("projectId", patch.projectId);
+  if (patch.agentId !== void 0) put("agentId", patch.agentId);
+  if (patch.skillIds !== void 0) put("skillIds", JSON.stringify(patch.skillIds));
+  if (patch.model !== void 0) put("model", patch.model);
+  if (patch.effort !== void 0) put("effort", patch.effort);
+  if (patch.permissionMode !== void 0) put("permissionMode", patch.permissionMode);
+  if (patch.pinned !== void 0) put("pinned", patch.pinned ? 1 : 0);
+  if (patch.archived !== void 0) put("archived", patch.archived ? 1 : 0);
+  if (patch.claudeCommand !== void 0) put("claudeCommand", patch.claudeCommand.trim());
+  if (patch.useWorktree !== void 0) put("useWorktree", patch.useWorktree ? 1 : 0);
+  if (sets.length) {
+    params.push(id);
+    exec(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+    saveDb();
+  }
+  return getConversation(id);
+}
+async function setConversationRuntime(id, r) {
+  const db2 = await getDb();
+  const sets = ["updatedAt = ?"];
+  const params = [nowIso()];
+  for (const k of ["worktreeBranch", "repoPath", "baseRef", "forkFrom"]) {
+    if (r[k] !== void 0) {
+      sets.push(`${k} = ?`);
+      params.push(r[k] ?? null);
+    }
+  }
+  if (r.sessionId !== void 0) {
+    sets.push("sessionId = ?");
+    params.push(r.sessionId);
+  }
+  if (r.cwd !== void 0) {
+    sets.push("cwd = ?");
+    params.push(r.cwd);
+  }
+  if (r.title !== void 0) {
+    sets.push("title = ?");
+    params.push(r.title);
+  }
+  if (r.contextTokens !== void 0) {
+    sets.push("contextTokens = ?");
+    params.push(r.contextTokens);
+  }
+  if (r.contextWindow !== void 0) {
+    sets.push("contextWindow = ?");
+    params.push(r.contextWindow);
+  }
+  if (r.addCost) {
+    sets.push("totalCostUsd = totalCostUsd + ?");
+    params.push(r.addCost);
+  }
+  if (r.addInput) {
+    sets.push("totalInputTokens = totalInputTokens + ?");
+    params.push(r.addInput);
+  }
+  if (r.addOutput) {
+    sets.push("totalOutputTokens = totalOutputTokens + ?");
+    params.push(r.addOutput);
+  }
+  params.push(id);
+  exec(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+  saveDb();
+}
+async function deleteConversation(id) {
+  const db2 = await getDb();
+  exec(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [id]);
+  exec(db2, "DELETE FROM ai_conversations WHERE id = ?", [id]);
+  saveDb();
+}
+async function listTurns(conversationId) {
+  const db2 = await getDb();
+  return all(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id", [conversationId]).map(toTurn);
+}
+async function createTurn(conversationId, prompt, attachments = []) {
+  const db2 = await getDb();
+  exec(db2, "INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, attachments) VALUES (?, ?, ?, ?, ?, ?)", [
+    conversationId,
+    nowIso(),
+    prompt,
+    "[]",
+    "running",
+    JSON.stringify(attachments)
+  ]);
+  const id = Number(one(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  saveDb();
+  return toTurn(one(db2, "SELECT * FROM ai_conv_turns WHERE id = ?", [id]));
+}
+async function saveTurn(t) {
+  const db2 = await getDb();
+  exec(
+    db2,
+    `UPDATE ai_conv_turns SET prompt = ?, blocks = ?, status = ?, error = ?, costUsd = ?, inputTokens = ?, outputTokens = ?, contextTokens = ?, durationMs = ? WHERE id = ?`,
+    [t.prompt, JSON.stringify(t.blocks), t.status, t.error, t.costUsd, t.inputTokens, t.outputTokens, t.contextTokens, t.durationMs, t.id]
+  );
+  saveDb();
+}
+async function replaceTurns(conversationId, turns) {
+  const db2 = await getDb();
+  db2.run("BEGIN");
+  try {
+    exec(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [conversationId]);
+    for (const t of turns) {
+      exec(
+        db2,
+        `INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, error, costUsd, inputTokens, outputTokens, contextTokens, durationMs, attachments)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          conversationId,
+          t.createdAt,
+          t.prompt,
+          JSON.stringify(t.blocks),
+          t.status,
+          t.error,
+          t.costUsd,
+          t.inputTokens,
+          t.outputTokens,
+          t.contextTokens,
+          t.durationMs,
+          JSON.stringify(t.attachments ?? [])
+        ]
+      );
+    }
+    db2.run("COMMIT");
+  } catch (e) {
+    try {
+      db2.run("ROLLBACK");
+    } catch {
+    }
+    throw e;
+  }
+  saveDb();
+}
+async function markStaleTurnsInterrupted() {
+  const db2 = await getDb();
+  exec(db2, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'Servidor reiniciado durante a execução.') WHERE status = 'running'`);
+  saveDb();
+}
+const live = /* @__PURE__ */ new Map();
+const queues = /* @__PURE__ */ new Map();
+let deps = null;
+const TOOL_RESULT_MAX$1 = 8e3;
+function initRunner(d) {
+  deps = d;
+}
+function isRunning(conversationId) {
+  return live.has(conversationId);
+}
+function liveTurn(conversationId) {
+  return live.get(conversationId)?.turn ?? null;
+}
+function pendingCount(conversationId) {
+  return live.get(conversationId)?.pending.size ?? 0;
+}
+function queuedMessages(conversationId) {
+  return (queues.get(conversationId) ?? []).map((m) => (m.images.length ? `🖼️×${m.images.length} ` : "") + (m.text || "(só imagens)"));
+}
+function withLive(c) {
+  return { ...c, running: isRunning(c.id), pendingPrompts: pendingCount(c.id), queued: queuedMessages(c.id) };
+}
+async function emitConversation(conversationId) {
+  const c = await getConversation(conversationId);
+  if (c) broadcast("conv:update", { conversationId, conversation: withLive(c) });
+}
+function emitTurn(run2, immediate = false) {
+  const send = () => {
+    run2.emitTimer = null;
+    broadcast("conv:update", { conversationId: run2.conversationId, turn: run2.turn });
+  };
+  if (immediate) {
+    if (run2.emitTimer) clearTimeout(run2.emitTimer);
+    send();
+    return;
+  }
+  if (!run2.emitTimer) run2.emitTimer = setTimeout(send, 120);
+}
+async function sendMessage(conversationId, text, images = []) {
+  const msg = { text: text.trim(), images };
+  if (!msg.text && !msg.images.length) return;
+  if (live.has(conversationId)) {
+    queues.set(conversationId, [...queues.get(conversationId) ?? [], msg]);
+    await emitConversation(conversationId);
+    return;
+  }
+  await startTurn(conversationId, msg);
+}
+async function removeQueued(conversationId, index) {
+  const q = [...queues.get(conversationId) ?? []];
+  q.splice(index, 1);
+  if (q.length) queues.set(conversationId, q);
+  else queues.delete(conversationId);
+  await emitConversation(conversationId);
+}
+async function cancel(conversationId) {
+  queues.delete(conversationId);
+  const run2 = live.get(conversationId);
+  if (!run2) {
+    await emitConversation(conversationId);
+    return false;
+  }
+  run2.cancelled = true;
+  writeLine(run2, { type: "control_request", request_id: crypto.randomUUID(), request: { subtype: "interrupt" } });
+  for (const [requestId] of run2.pending) {
+    writeLine(run2, controlResponse(requestId, { behavior: "deny", message: "O usuário interrompeu a execução.", interrupt: true }));
+  }
+  run2.pending.clear();
+  run2.killTimer = setTimeout(() => {
+    try {
+      run2.child?.kill("SIGKILL");
+    } catch {
+    }
+  }, 4e3);
+  return true;
+}
+function controlResponse(requestId, response) {
+  return { type: "control_response", response: { subtype: "success", request_id: requestId, response } };
+}
+function writeLine(run2, obj) {
+  try {
+    run2.child?.stdin?.write(JSON.stringify(obj) + "\n");
+  } catch {
+  }
+}
+function findTool(turn, id) {
+  return turn.blocks.find((b2) => b2.type === "tool" && b2.id === id);
+}
+async function respond(conversationId, requestId, r) {
+  const run2 = live.get(conversationId);
+  const p = run2?.pending.get(requestId);
+  if (!run2 || !p) return false;
+  run2.pending.delete(requestId);
+  const block = findTool(run2.turn, p.toolUseId);
+  let response;
+  let note = "";
+  let status2 = "allowed";
+  if (r.kind === "allow") {
+    response = { behavior: "allow", updatedInput: p.input };
+    if (r.always && p.suggestions?.length) {
+      response.updatedPermissions = p.suggestions;
+      note = "Permitido sempre";
+    } else note = "Permitido";
+  } else if (r.kind === "answer") {
+    response = { behavior: "allow", updatedInput: { ...p.input, answers: r.answers } };
+    if (block) block.answers = r.answers;
+    note = "Respondido";
+  } else if (r.kind === "approvePlan") {
+    response = { behavior: "allow", updatedInput: p.input, updatedPermissions: [{ type: "setMode", mode: r.mode, destination: "session" }] };
+    note = r.mode === "acceptEdits" ? "Plano aprovado · aceitando edições" : "Plano aprovado";
+    await updateConversation(conversationId, { permissionMode: r.mode });
+    void emitConversation(conversationId);
+  } else {
+    const msg = r.message?.trim();
+    response = { behavior: "deny", message: msg ? `O usuário negou e disse: ${msg}` : "O usuário negou esta ação." };
+    status2 = "denied";
+    note = msg ? `Negado: ${msg}` : "Negado";
+  }
+  writeLine(run2, controlResponse(requestId, response));
+  if (block?.permission) block.permission = { ...block.permission, status: status2, note };
+  emitTurn(run2, true);
+  void emitConversation(conversationId);
+  return true;
+}
+function contextFromUsage(u) {
+  if (!u) return 0;
+  return (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.output_tokens ?? 0);
+}
+function toolResultText$1(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((x) => x?.type === "text" ? x.text ?? "" : x?.type === "image" ? "[imagem]" : "").join("\n");
+  }
+  return "";
+}
+function clip$1(s2, max = TOOL_RESULT_MAX$1) {
+  return s2.length > max ? s2.slice(0, max) + `
+… (${s2.length - max} caracteres omitidos)` : s2;
+}
+function defaultCwd() {
+  return os.homedir();
+}
+function isDefaultConfigDir(dir) {
+  if (!dir) return true;
+  return path.resolve(dir) === path.join(os.homedir(), ".claude");
+}
+async function startTurn(conversationId, message) {
+  if (!deps) throw new Error("Executor de conversas não inicializado.");
+  let conv = await getConversation(conversationId);
+  if (!conv) throw new Error("Conversa não encontrada.");
+  const prompt = message.text;
+  if (!conv.title) {
+    const title = (prompt || "Imagem").replace(/\s+/g, " ").trim().slice(0, 60);
+    await setConversationRuntime(conversationId, { title });
+    conv = await getConversation(conversationId);
+  }
+  const turn = await createTurn(
+    conversationId,
+    prompt,
+    message.images.map((i) => i.thumb)
+  );
+  const run2 = {
+    conversationId,
+    turn,
+    child: null,
+    pending: /* @__PURE__ */ new Map(),
+    startedAt: Date.now(),
+    cancelled: false,
+    gotResult: false,
+    stderr: "",
+    mainModel: "",
+    contextWindow: 0,
+    compacted: false,
+    emitTimer: null,
+    killTimer: null
+  };
+  live.set(conversationId, run2);
+  emitTurn(run2, true);
+  void emitConversation(conversationId);
+  let cwd;
+  try {
+    if (conv.cwd) {
+      cwd = conv.cwd;
+      if (!fs.existsSync(cwd)) throw new Error(`O diretório desta conversa não existe mais: ${cwd}`);
+    } else {
+      const projectDir = await deps.resolveProjectCwd(conv.projectId);
+      if (conv.useWorktree) {
+        if (!projectDir || !fs.existsSync(projectDir)) throw new Error("O worktree isolado precisa de um projeto com pasta local.");
+        turn.blocks.push({ type: "notice", text: "🌿 Criando worktree isolado…" });
+        emitTurn(run2, true);
+        const wt = await createWorktree(projectDir, conv.title || prompt);
+        turn.blocks = turn.blocks.filter((b2) => b2.type !== "notice");
+        turn.blocks.push({ type: "notice", text: `🌿 Worktree isolado na branch ${wt.branch}` });
+        cwd = wt.cwd;
+        await setConversationRuntime(conversationId, { cwd, repoPath: wt.repoPath, worktreeBranch: wt.branch, baseRef: wt.baseRef });
+      } else {
+        cwd = projectDir && fs.existsSync(projectDir) ? projectDir : defaultCwd();
+        await setConversationRuntime(conversationId, { cwd });
+      }
+      conv = await getConversation(conversationId);
+      void emitConversation(conversationId);
+    }
+    const command = await deps.resolveCommand(conv);
+    const model2 = await deps.resolveModel(conv);
+    const system = await deps.systemPrompt(conv);
+    const args = [
+      ...await deps.allowedToolsArgs(),
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages",
+      "--permission-prompt-tool",
+      "stdio",
+      "--permission-mode",
+      conv.permissionMode,
+      ...model2 ? ["--model", model2] : [],
+      ...conv.effort ? ["--effort", conv.effort] : [],
+      // ramificação: retoma a sessão de origem numa sessão nova
+      ...conv.forkFrom && !conv.sessionId ? ["--resume", conv.forkFrom, "--fork-session"] : conv.sessionId ? ["--resume", conv.sessionId] : [],
+      ...system.trim() ? ["--append-system-prompt", system] : []
+    ];
+    const env = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: "1" };
+    if (!isDefaultConfigDir(conv.configDir)) env.CLAUDE_CONFIG_DIR = conv.configDir;
+    run2.child = await spawnCli(command, args, cwd, env);
+  } catch (e) {
+    await finishTurn(run2, e instanceof Error ? e.message : String(e));
+    return;
+  }
+  wireChild(run2, conv);
+  const content = message.images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } }));
+  content.push({ type: "text", text: prompt || "Veja a(s) imagem(ns) anexada(s)." });
+  writeLine(run2, { type: "user", message: { role: "user", content } });
+}
+function spawnCli(command, args, cwd, env) {
+  const bin = (command || "").trim() || "claude";
+  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(`Comando inválido: "${bin}".`));
+  const trySpawn = (viaShell) => new Promise((resolve, reject) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    const child = viaShell ? child_process.spawn(shell, ["-ilc", `${bin} "$@"`, shell, ...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] }) : child_process.spawn(bin, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    const onError = (err) => reject(err);
+    child.once("error", onError);
+    child.once("spawn", () => {
+      child.off("error", onError);
+      resolve(child);
+    });
+  });
+  return trySpawn(false).catch((err) => {
+    if (err?.code !== "ENOENT") throw err;
+    return trySpawn(true);
+  });
+}
+function wireChild(run2, conv) {
+  const child = run2.child;
+  let buf = "";
+  child.stdout?.on("data", (d) => {
+    buf += d.toString();
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      let evt;
+      try {
+        evt = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      handleEvent(run2, conv, evt);
+    }
+  });
+  child.stderr?.on("data", (d) => {
+    run2.stderr = (run2.stderr + d.toString()).slice(-4e3);
+  });
+  child.on("close", (code) => {
+    if (run2.killTimer) clearTimeout(run2.killTimer);
+    let error = null;
+    if (run2.cancelled) error = null;
+    else if (!run2.gotResult) error = run2.stderr.trim().split("\n").slice(-6).join("\n") || `Claude CLI saiu com código ${code}.`;
+    void finishTurn(run2, error);
+  });
+  child.stdin?.on("error", () => {
+  });
+}
+function lastLive(turn, type) {
+  for (let i = turn.blocks.length - 1; i >= 0; i--) {
+    const b2 = turn.blocks[i];
+    if (b2.type === type && b2.live) return b2;
+  }
+  return void 0;
+}
+function handleEvent(run2, conv, evt) {
+  const turn = run2.turn;
+  if (evt.parent_tool_use_id) return;
+  if (evt.type === "system" && evt.subtype === "init") {
+    if (evt.model) run2.mainModel = evt.model;
+    if (evt.session_id && evt.session_id !== conv.sessionId) {
+      conv.sessionId = evt.session_id;
+      conv.forkFrom = null;
+      void setConversationRuntime(conv.id, { sessionId: evt.session_id, forkFrom: null }).then(() => emitConversation(conv.id));
+    }
+    return;
+  }
+  if (evt.type === "system" && evt.subtype === "compact_boundary") {
+    turn.blocks.push({ type: "notice", text: "🗜️ Contexto compactado" });
+    turn.contextTokens = 0;
+    run2.compacted = true;
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "stream_event" && evt.event) {
+    const ev = evt.event;
+    if (ev.type === "content_block_start") {
+      const t = ev.content_block?.type;
+      if (t === "text" || t === "thinking") turn.blocks.push({ type: t, text: "", live: true });
+    } else if (ev.type === "content_block_delta" && ev.delta) {
+      if (ev.delta.type === "text_delta" && ev.delta.text) {
+        const b2 = lastLive(turn, "text");
+        if (b2) b2.text += ev.delta.text;
+      } else if (ev.delta.type === "thinking_delta" && ev.delta.thinking) {
+        const b2 = lastLive(turn, "thinking");
+        if (b2) b2.text += ev.delta.thinking;
+      }
+    }
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "assistant" && evt.message?.content) {
+    for (const c of evt.message.content) {
+      if (c.type === "text" || c.type === "thinking") {
+        const full = (c.type === "text" ? c.text : c.thinking) ?? "";
+        const b2 = turn.blocks.find((x) => x.type === c.type && "live" in x && x.live);
+        if (b2) {
+          if (full) b2.text = full;
+          b2.live = false;
+        } else if (full) turn.blocks.push({ type: c.type, text: full });
+      } else if (c.type === "tool_use" && c.id) {
+        if (!findTool(turn, c.id)) turn.blocks.push({ type: "tool", id: c.id, name: c.name || "tool", input: c.input ?? {} });
+      }
+    }
+    turn.blocks = turn.blocks.filter((b2) => !(b2.type === "thinking" && !b2.live && !b2.text.trim()));
+    const ctx = contextFromUsage(evt.message.usage);
+    if (ctx) turn.contextTokens = ctx;
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "user" && evt.message?.content && Array.isArray(evt.message.content)) {
+    for (const c of evt.message.content) {
+      if (c.type === "tool_result" && c.tool_use_id) {
+        const b2 = findTool(turn, c.tool_use_id);
+        if (b2) {
+          b2.result = clip$1(toolResultText$1(c.content));
+          b2.isError = !!c.is_error;
+        }
+      }
+    }
+    emitTurn(run2);
+    return;
+  }
+  if (evt.type === "control_request" && evt.request_id) {
+    const req = evt.request ?? {};
+    if (req.subtype !== "can_use_tool") {
+      writeLine(run2, { type: "control_response", response: { subtype: "error", request_id: evt.request_id, error: `Não suportado: ${req.subtype}` } });
+      return;
+    }
+    const toolUseId = req.tool_use_id || evt.request_id;
+    let block = findTool(turn, toolUseId);
+    if (!block) {
+      block = { type: "tool", id: toolUseId, name: req.tool_name || "tool", input: req.input ?? {} };
+      turn.blocks.push(block);
+    }
+    block.permission = {
+      requestId: evt.request_id,
+      status: "pending",
+      suggestions: req.permission_suggestions,
+      blockedPath: req.blocked_path,
+      description: req.description
+    };
+    run2.pending.set(evt.request_id, { toolUseId, toolName: req.tool_name || "tool", input: req.input ?? {}, suggestions: req.permission_suggestions });
+    emitTurn(run2, true);
+    void emitConversation(run2.conversationId);
+    scheduleAttentionNotice(run2, evt.request_id, req.tool_name || "tool", conv);
+    return;
+  }
+  if (evt.type === "result") {
+    run2.gotResult = true;
+    const r = evt;
+    const u = usageFromResult(r);
+    if (u) {
+      turn.costUsd = u.costUsd;
+      turn.inputTokens = u.inputTokens + u.cacheReadTokens + u.cacheCreationTokens;
+      turn.outputTokens = u.outputTokens;
+      turn.durationMs = u.durationMs;
+      recordAiUsage({ ...u, source: "prompt-runner", projectId: conv.projectId, model: u.model || run2.mainModel || null }).catch(() => {
+      });
+    }
+    const mu = Object.entries(r.modelUsage ?? {});
+    const base = run2.mainModel.replace(/\[.*\]$/, "");
+    const main = base && mu.find(([m]) => m === base || m.startsWith(base) || base.startsWith(m)) || mu.sort((a, b2) => (b2[1]?.outputTokens ?? 0) - (a[1]?.outputTokens ?? 0))[0];
+    if (main?.[1]?.contextWindow) run2.contextWindow = main[1].contextWindow;
+    const hasText = turn.blocks.some((b2) => b2.type === "text" && b2.text.trim());
+    if (!hasText && typeof r.result === "string" && r.result.trim()) turn.blocks.push({ type: "text", text: r.result });
+    if (r.is_error && !run2.cancelled) turn.error = typeof r.result === "string" && r.result.trim() ? r.result : `Erro (${r.subtype ?? "desconhecido"})`;
+    try {
+      run2.child?.stdin?.end();
+    } catch {
+    }
+    emitTurn(run2);
+  }
+}
+function scheduleAttentionNotice(run2, requestId, toolName, conv) {
+  setTimeout(() => {
+    if (!run2.pending.has(requestId) || live.get(run2.conversationId) !== run2) return;
+    const what = toolName === "AskUserQuestion" ? "tem uma pergunta" : toolName === "ExitPlanMode" ? "quer aprovar um plano" : `pede permissão para ${toolName}`;
+    void notify({ title: `🤚 Claude ${what}`, body: conv.title || "Prompt Runner", source: "ia", page: "ai-runner" });
+  }, 15e3);
+}
+async function finishTurn(run2, error) {
+  if (live.get(run2.conversationId) !== run2) return;
+  if (run2.emitTimer) clearTimeout(run2.emitTimer);
+  const turn = run2.turn;
+  for (const b2 of turn.blocks) {
+    if ((b2.type === "text" || b2.type === "thinking") && b2.live) b2.live = false;
+    if (b2.type === "tool" && b2.permission?.status === "pending") b2.permission = { ...b2.permission, status: "denied", note: "Sem resposta" };
+  }
+  turn.blocks = turn.blocks.filter((b2) => !(b2.type === "thinking" && !b2.text.trim()));
+  if (run2.cancelled) {
+    turn.status = "cancelled";
+    turn.error = null;
+  } else if (error || turn.error) {
+    turn.status = "error";
+    turn.error = turn.error || error;
+  } else turn.status = "done";
+  if (!turn.durationMs) turn.durationMs = Date.now() - run2.startedAt;
+  live.delete(run2.conversationId);
+  try {
+    await saveTurn(turn);
+    const cw = run2.contextWindow;
+    await setConversationRuntime(run2.conversationId, {
+      ...turn.contextTokens || run2.compacted ? { contextTokens: turn.contextTokens } : {},
+      ...cw ? { contextWindow: cw } : {},
+      addCost: turn.costUsd,
+      addInput: turn.inputTokens,
+      addOutput: turn.outputTokens
+    });
+  } catch {
+  }
+  broadcast("conv:update", { conversationId: run2.conversationId, turn });
+  await emitConversation(run2.conversationId);
+  if (Date.now() - run2.startedAt >= 6e4 && !run2.cancelled) {
+    const conv = await getConversation(run2.conversationId);
+    void notify({
+      title: turn.status === "done" ? "✅ Claude terminou" : "⚠️ Claude parou com erro",
+      body: conv?.title || turn.prompt.slice(0, 120),
+      source: "ia",
+      page: "ai-runner"
+    });
+  }
+  const q = queues.get(run2.conversationId) ?? [];
+  if (q.length && turn.status === "done") {
+    const [next, ...rest] = q;
+    if (rest.length) queues.set(run2.conversationId, rest);
+    else queues.delete(run2.conversationId);
+    startTurn(run2.conversationId, next).catch(() => {
+    });
+  }
+}
+const HEAD_BYTES = 96 * 1024;
+const TAIL_BYTES = 64 * 1024;
+const TOOL_RESULT_MAX = 8e3;
+function configDirs() {
+  const home = os.homedir();
+  const out = [];
+  const env = process.env.CLAUDE_CONFIG_DIR;
+  if (env && fs.existsSync(path.join(env, "projects"))) out.push(path.resolve(env));
+  let names = [];
+  try {
+    names = fs.readdirSync(home);
+  } catch {
+    return out;
+  }
+  for (const n of names) {
+    if (n !== ".claude" && !n.startsWith(".claude-")) continue;
+    const dir = path.join(home, n);
+    try {
+      if (fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, "projects")) && !out.includes(dir)) out.push(dir);
+    } catch {
+    }
+  }
+  return out;
+}
+function readSlice(file, start, length) {
+  const fd = fs.openSync(file, "r");
+  try {
+    const buf = Buffer.alloc(length);
+    const n = fs.readSync(fd, buf, 0, length, start);
+    return buf.subarray(0, n).toString("utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+function parseLines(text, dropFirstPartial) {
+  const lines = text.split("\n");
+  if (dropFirstPartial) lines.shift();
+  const out = [];
+  for (const l of lines) {
+    if (!l.trim()) continue;
+    try {
+      out.push(JSON.parse(l));
+    } catch {
+    }
+  }
+  return out;
+}
+function userText(e) {
+  const c = e.message?.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    const texts = c.filter((x) => x.type === "text").map((x) => x.text ?? "");
+    if (texts.length && !c.some((x) => x.type === "tool_result")) return texts.join("\n");
+  }
+  return null;
+}
+function cleanPrompt(text, e) {
+  if (e.isCompactSummary) return "🗜️ (resumo da conversa anterior, gerado ao compactar)";
+  const cmd = /<command-name>([^<]+)<\/command-name>/.exec(text);
+  if (cmd) {
+    const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(text)?.[1]?.trim();
+    return `${cmd[1].trim()}${args ? " " + args : ""}`;
+  }
+  if (/^\s*<local-command-(stdout|stderr|caveat)>/.test(text)) return null;
+  if (/^\s*<task-notification>/.test(text)) {
+    const summary = /<summary>([\s\S]*?)<\/summary>/.exec(text)?.[1]?.trim();
+    return `🔔 ${summary || "Notificação de tarefa em segundo plano"}`;
+  }
+  return text;
+}
+function oneLine(s2, max = 120) {
+  return s2.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+function listTerminalSessions(limit = 60) {
+  const files = [];
+  for (const cfg of configDirs()) {
+    const root = path.join(cfg, "projects");
+    let dirs = [];
+    try {
+      dirs = fs.readdirSync(root);
+    } catch {
+      continue;
+    }
+    for (const d of dirs) {
+      const dir = path.join(root, d);
+      let names = [];
+      try {
+        names = fs.readdirSync(dir);
+      } catch {
+        continue;
+      }
+      for (const n of names) {
+        if (!n.endsWith(".jsonl")) continue;
+        const file = path.join(dir, n);
+        try {
+          const st = fs.statSync(file);
+          if (st.isFile() && st.size > 0) files.push({ file, configDir: cfg, mtime: st.mtimeMs, size: st.size });
+        } catch {
+        }
+      }
+    }
+  }
+  files.sort((a, b2) => b2.mtime - a.mtime);
+  const out = [];
+  for (const f of files) {
+    if (out.length >= limit) break;
+    try {
+      const head = parseLines(readSlice(f.file, 0, Math.min(HEAD_BYTES, f.size)), false);
+      const firstUser = head.find((e) => e.type === "user" && !e.isSidechain && !e.isMeta && e.cwd);
+      if (!firstUser) continue;
+      if (firstUser.entrypoint && firstUser.entrypoint !== "cli") continue;
+      const tailStart = Math.max(0, f.size - TAIL_BYTES);
+      const tail = tailStart > 0 ? parseLines(readSlice(f.file, tailStart, f.size - tailStart), true) : head;
+      const pick = (k) => {
+        for (let i = tail.length - 1; i >= 0; i--) if (tail[i][k]) return String(tail[i][k]);
+        for (let i = head.length - 1; i >= 0; i--) if (head[i][k]) return String(head[i][k]);
+        return "";
+      };
+      let firstPrompt = "";
+      for (const e of head) {
+        if (e.type !== "user" || e.isMeta || e.isSidechain) continue;
+        const t = userText(e);
+        const c = t != null ? cleanPrompt(t, e) : null;
+        if (c) {
+          firstPrompt = c;
+          break;
+        }
+      }
+      const title = pick("customTitle") || pick("aiTitle") || pick("summary") || oneLine(firstPrompt, 80) || "(sem título)";
+      out.push({
+        sessionId: path.basename(f.file, ".jsonl"),
+        file: f.file,
+        configDir: f.configDir,
+        cwd: firstUser.cwd,
+        title,
+        lastPrompt: oneLine(pick("lastPrompt") || firstPrompt),
+        updatedAt: new Date(f.mtime).toISOString(),
+        sizeBytes: f.size
+      });
+    } catch {
+    }
+  }
+  return out;
+}
+function findTranscript(sessionId, configDir) {
+  if (!/^[A-Za-z0-9-]+$/.test(sessionId)) return null;
+  const dirs = configDir ? [configDir, ...configDirs().filter((d) => d !== configDir)] : configDirs();
+  for (const cfg of dirs) {
+    const root = path.join(cfg, "projects");
+    let subs = [];
+    try {
+      subs = fs.readdirSync(root);
+    } catch {
+      continue;
+    }
+    for (const d of subs) {
+      const file = path.join(root, d, `${sessionId}.jsonl`);
+      if (fs.existsSync(file)) return { file, configDir: cfg };
+    }
+  }
+  return null;
+}
+function toolResultText(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((x) => x?.type === "text" ? x.text ?? "" : x?.type === "image" ? "[imagem]" : "").join("\n");
+  }
+  return "";
+}
+function parseTranscript(file) {
+  const entries = parseLines(fs.readFileSync(file, "utf8"), false);
+  const byUuid = /* @__PURE__ */ new Map();
+  for (const e of entries) if (e.uuid) byUuid.set(e.uuid, e);
+  let leaf;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if ((e.type === "user" || e.type === "assistant") && e.uuid && !e.isSidechain) {
+      leaf = e;
+      break;
+    }
+  }
+  const chain = [];
+  const seen2 = /* @__PURE__ */ new Set();
+  let cur = leaf;
+  while (cur && cur.uuid && !seen2.has(cur.uuid)) {
+    seen2.add(cur.uuid);
+    chain.push(cur);
+    cur = cur.parentUuid ? byUuid.get(cur.parentUuid) : void 0;
+  }
+  chain.reverse();
+  const turns = [];
+  let turn = null;
+  let cwd = null;
+  let contextTokens = 0;
+  const tools = /* @__PURE__ */ new Map();
+  const newTurn = (prompt, ts2) => {
+    const t = {
+      createdAt: ts2 || (/* @__PURE__ */ new Date()).toISOString(),
+      prompt,
+      blocks: [],
+      status: "done",
+      error: null,
+      costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      contextTokens: 0,
+      durationMs: null,
+      attachments: []
+    };
+    turns.push(t);
+    return t;
+  };
+  for (const e of chain) {
+    if (e.cwd && !cwd) cwd = e.cwd;
+    if (e.type === "user") {
+      if (e.isMeta) continue;
+      const c = e.message?.content;
+      if (Array.isArray(c) && c.some((x) => x.type === "tool_result")) {
+        for (const x of c) {
+          if (x.type !== "tool_result" || !x.tool_use_id) continue;
+          const b2 = tools.get(x.tool_use_id);
+          if (b2) {
+            const r = toolResultText(x.content);
+            b2.result = r.length > TOOL_RESULT_MAX ? r.slice(0, TOOL_RESULT_MAX) + "\n…" : r;
+            b2.isError = !!x.is_error;
+          }
+        }
+        continue;
+      }
+      const t = userText(e);
+      let p = t != null ? cleanPrompt(t, e) : null;
+      const imgs = Array.isArray(c) ? c.filter((x) => x.type === "image").length : 0;
+      if (imgs) p = `${p ?? ""}${p ? "\n" : ""}[🖼️ ${imgs} imagem${imgs > 1 ? "ns" : ""}]`;
+      if (p) turn = newTurn(p, e.timestamp);
+      continue;
+    }
+    if (e.type === "assistant" && e.message?.content && Array.isArray(e.message.content)) {
+      if (!turn) turn = newTurn("(início da sessão)", e.timestamp);
+      for (const c of e.message.content) {
+        if (c.type === "text" && c.text?.trim()) turn.blocks.push({ type: "text", text: c.text });
+        else if (c.type === "thinking" && c.thinking?.trim()) turn.blocks.push({ type: "thinking", text: c.thinking });
+        else if (c.type === "tool_use" && c.id) {
+          const b2 = { type: "tool", id: c.id, name: c.name || "tool", input: c.input ?? {} };
+          tools.set(c.id, b2);
+          turn.blocks.push(b2);
+        }
+      }
+      const u = e.message.usage;
+      if (u) {
+        const ctx = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.output_tokens ?? 0);
+        if (ctx) {
+          contextTokens = ctx;
+          turn.contextTokens = ctx;
+          turn.outputTokens += u.output_tokens ?? 0;
+        }
+      }
+    }
+  }
+  let title = "";
+  for (let i = entries.length - 1; i >= 0 && !title; i--) title = entries[i].customTitle || entries[i].aiTitle || "";
+  if (!title && turns[0]) title = oneLine(turns[0].prompt, 60);
+  const st = fs.statSync(file);
+  return {
+    cwd,
+    title,
+    turns,
+    contextTokens,
+    createdAt: turns[0]?.createdAt ?? new Date(st.birthtimeMs || st.mtimeMs).toISOString(),
+    updatedAt: new Date(st.mtimeMs).toISOString()
+  };
+}
+const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"];
+const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"];
+function sanitizePatch(p) {
+  const out = {};
+  if (typeof p.title === "string") out.title = p.title.slice(0, 200);
+  if (p.projectId === null || typeof p.projectId === "number") out.projectId = p.projectId;
+  if (p.agentId === null || typeof p.agentId === "string") out.agentId = p.agentId || null;
+  if (Array.isArray(p.skillIds)) out.skillIds = p.skillIds.filter((x) => typeof x === "string");
+  if (typeof p.model === "string") out.model = p.model.trim();
+  if (typeof p.effort === "string" && EFFORTS.includes(p.effort)) out.effort = p.effort;
+  if (typeof p.permissionMode === "string" && PERMISSION_MODES.includes(p.permissionMode)) out.permissionMode = p.permissionMode;
+  if (typeof p.pinned === "boolean") out.pinned = p.pinned;
+  if (typeof p.archived === "boolean") out.archived = p.archived;
+  if (typeof p.claudeCommand === "string" && /^[A-Za-z0-9_./-]*$/.test(p.claudeCommand.trim())) out.claudeCommand = p.claudeCommand;
+  if (typeof p.useWorktree === "boolean") out.useWorktree = p.useWorktree;
+  return out;
+}
+const MAX_IMAGE_B64 = 7 * 1024 * 1024;
+const MAX_THUMB = 80 * 1024;
+function sanitizeImages(raw) {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`Máximo de ${MAX_IMAGES_PER_MESSAGE} imagens por mensagem.`);
+  return raw.map((x) => {
+    if (!x || !IMAGE_MEDIA_TYPES.includes(x.mediaType)) throw new Error("Formato de imagem não suportado.");
+    if (typeof x.data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(x.data) || x.data.length > MAX_IMAGE_B64) throw new Error("Imagem inválida ou grande demais.");
+    const thumb = typeof x.thumb === "string" && x.thumb.startsWith("data:image/") && x.thumb.length <= MAX_THUMB ? x.thumb : "";
+    return { mediaType: x.mediaType, data: x.data, thumb };
+  });
+}
+function matchProject(cwd, projects) {
+  const norm2 = (s2) => path.resolve(s2).replace(/\/+$/, "");
+  const c = norm2(cwd);
+  let best = null;
+  for (const p of projects) {
+    const lp = norm2(p.localPath);
+    if ((c === lp || c.startsWith(lp + "/")) && (!best || lp.length > best.len)) best = { id: p.id, len: lp.length };
+  }
+  return best?.id ?? null;
+}
+function sq(s2) {
+  return `'${s2.replace(/'/g, `'\\''`)}'`;
+}
+function registerAiConvRpc(handle, deps2) {
+  initRunner(deps2);
+  markStaleTurnsInterrupted().catch(() => {
+  });
+  const emitConv = async (id) => {
+    const c = await getConversation(id);
+    if (c) broadcast("conv:update", { conversationId: id, conversation: withLive(c) });
+  };
+  handle("conv:list", async (_e, archived) => (await listConversations({ archived: !!archived })).map(withLive));
+  handle("conv:get", async (_e, id) => {
+    const c = await getConversation(id);
+    if (!c) return null;
+    const turns = await listTurns(id);
+    const lt = liveTurn(id);
+    if (lt) {
+      const i = turns.findIndex((t) => t.id === lt.id);
+      if (i >= 0) turns[i] = lt;
+      else turns.push(lt);
+    }
+    return { conversation: withLive(c), turns };
+  });
+  handle("conv:create", async (_e, params = {}) => {
+    const p = sanitizePatch(params);
+    const c = await createConversation({
+      title: p.title,
+      projectId: p.projectId ?? null,
+      agentId: p.agentId ?? null,
+      skillIds: p.skillIds ?? [],
+      model: p.model ?? "",
+      effort: p.effort ?? "",
+      permissionMode: p.permissionMode ?? "default",
+      useWorktree: !!p.useWorktree
+    });
+    await emitConv(c.id);
+    return withLive(c);
+  });
+  handle("conv:update", async (_e, id, patch) => {
+    const before = await getConversation(id);
+    if (!before) return null;
+    const p = sanitizePatch(patch ?? {});
+    if (before.cwd) {
+      delete p.projectId;
+      delete p.useWorktree;
+    }
+    const c = await updateConversation(id, p);
+    await emitConv(id);
+    return c ? withLive(c) : null;
+  });
+  handle("conv:delete", async (_e, id, removeWorktree$1) => {
+    const c = await getConversation(id);
+    await cancel(id);
+    if (removeWorktree$1 && c?.useWorktree && c.repoPath && c.cwd) {
+      for (let i = 0; i < 20 && isRunning(id); i++) await new Promise((r) => setTimeout(r, 250));
+      await removeWorktree(c.repoPath, c.cwd, c.worktreeBranch);
+    }
+    await deleteConversation(id);
+    broadcast("conv:update", { conversationId: id, removed: true });
+    return true;
+  });
+  handle("conv:send", async (_e, id, text, images) => {
+    const imgs = sanitizeImages(images);
+    if (typeof text !== "string" || !text.trim() && !imgs.length) return false;
+    await sendMessage(id, text, imgs);
+    return true;
+  });
+  handle("conv:fork", async (_e, id) => {
+    const c = await getConversation(id);
+    if (!c?.sessionId) throw new Error("A conversa ainda não tem sessão para ramificar.");
+    if (isRunning(id)) throw new Error("Espere a execução terminar para ramificar.");
+    const turns = await listTurns(id);
+    const f = await createConversation({
+      title: `↳ ${c.title}`.slice(0, 200),
+      projectId: c.projectId,
+      agentId: c.agentId,
+      skillIds: c.skillIds,
+      model: c.model,
+      effort: c.effort,
+      permissionMode: c.permissionMode,
+      cwd: c.cwd,
+      configDir: c.configDir,
+      claudeCommand: c.claudeCommand,
+      forkFrom: c.sessionId,
+      useWorktree: c.useWorktree,
+      repoPath: c.repoPath,
+      worktreeBranch: c.worktreeBranch,
+      baseRef: c.baseRef,
+      contextTokens: c.contextTokens,
+      contextWindow: c.contextWindow,
+      origin: c.origin
+    });
+    await replaceTurns(f.id, turns.map(({ id: _id, conversationId: _c, ...t }) => t));
+    await emitConv(f.id);
+    return withLive(await getConversation(f.id));
+  });
+  const convDir = async (id) => {
+    const c = await getConversation(id);
+    if (!c) throw new Error("Conversa não encontrada.");
+    const dir = c.cwd || await deps2.resolveProjectCwd(c.projectId);
+    if (!dir) throw new Error("Esta conversa não tem pasta de trabalho.");
+    return { dir, baseRef: c.baseRef };
+  };
+  handle("conv:changes", async (_e, id) => {
+    const c = await getConversation(id);
+    const dir = c?.cwd || (c ? await deps2.resolveProjectCwd(c.projectId) : void 0);
+    if (!c || !dir) return { isRepo: false, branch: null, baseRef: null, files: [], unpushed: 0, hasRemote: false };
+    return getChanges(dir, c.baseRef);
+  });
+  handle("conv:commit", async (_e, id, message, paths) => {
+    const { dir } = await convDir(id);
+    return commit(dir, String(message ?? ""), Array.isArray(paths) ? paths.map(String) : null);
+  });
+  handle("conv:discard", async (_e, id, filePath) => {
+    if (isRunning(id)) throw new Error("Espere a execução terminar.");
+    const { dir } = await convDir(id);
+    await discard(dir, String(filePath));
+    return true;
+  });
+  handle("conv:pr", async (_e, id) => {
+    const { dir, baseRef } = await convDir(id);
+    return openPullRequest(dir, baseRef);
+  });
+  handle("conv:suggestCommit", async (_e, id) => {
+    const c = await getConversation(id);
+    const { dir } = await convDir(id);
+    const ctx = await commitContext(dir);
+    if (!ctx.trim()) throw new Error("Nada para descrever.");
+    const out = await runClaude(
+      `Escreva UMA mensagem de commit para as mudanças abaixo, no mesmo estilo e idioma dos commits recentes (ex.: convencional "tipo(escopo): resumo"). Responda só com a mensagem, sem aspas nem explicação; corpo opcional depois de uma linha em branco.
+
+${ctx}`,
+      c ? await deps2.resolveCommand(c) : "claude",
+      { model: "haiku", timeoutMs: 9e4, usage: { source: "prompt-runner", projectId: c?.projectId ?? null } }
+    );
+    return out.replace(/^```\w*\n?|```$/g, "").trim();
+  });
+  handle("conv:removeWorktree", async (_e, id) => {
+    const c = await getConversation(id);
+    if (!c?.useWorktree || !c.repoPath || !c.cwd) throw new Error("Esta conversa não tem worktree.");
+    if (isRunning(id)) throw new Error("Espere a execução terminar.");
+    await removeWorktree(c.repoPath, c.cwd, c.worktreeBranch);
+    await updateConversation(id, { archived: true });
+    await emitConv(id);
+    return true;
+  });
+  handle("conv:cancel", (_e, id) => cancel(id));
+  handle("conv:respond", (_e, id, requestId, response) => respond(id, requestId, response));
+  handle("conv:removeQueued", (_e, id, index) => removeQueued(id, Number(index) || 0));
+  handle("conv:terminalSessions", async () => {
+    const [sessions, inUse, projects] = await Promise.all([Promise.resolve(listTerminalSessions(60)), sessionIdsInUse(), deps2.projectPaths()]);
+    return sessions.map((s2) => ({ ...s2, projectId: matchProject(s2.cwd, projects), conversationId: inUse.get(s2.sessionId) ?? null }));
+  });
+  handle("conv:importTerminal", async (_e, sessionId, configDir) => {
+    const found = findTranscript(sessionId, configDir);
+    if (!found) throw new Error("Transcript da sessão não encontrado.");
+    const parsed = parseTranscript(found.file);
+    const existing = await findConversationBySession(sessionId);
+    if (existing) {
+      if (isRunning(existing.id)) return withLive(existing);
+      await replaceTurns(existing.id, parsed.turns);
+      await setConversationRuntime(existing.id, { contextTokens: parsed.contextTokens });
+      await emitConv(existing.id);
+      return withLive(await getConversation(existing.id));
+    }
+    const projects = await deps2.projectPaths();
+    const c = await createConversation({
+      title: parsed.title,
+      sessionId,
+      cwd: parsed.cwd,
+      configDir: found.configDir,
+      projectId: parsed.cwd ? matchProject(parsed.cwd, projects) : null,
+      origin: "terminal",
+      contextTokens: parsed.contextTokens,
+      createdAt: parsed.createdAt,
+      updatedAt: parsed.updatedAt
+    });
+    await replaceTurns(c.id, parsed.turns);
+    await emitConv(c.id);
+    return withLive(await getConversation(c.id));
+  });
+  handle("conv:resync", async (_e, id) => {
+    const c = await getConversation(id);
+    if (!c?.sessionId) throw new Error("Esta conversa ainda não tem sessão.");
+    if (isRunning(id)) throw new Error("A conversa está executando.");
+    const found = findTranscript(c.sessionId, c.configDir);
+    if (!found) throw new Error("Transcript da sessão não encontrado.");
+    const parsed = parseTranscript(found.file);
+    const current = await listTurns(id);
+    if (parsed.turns.length <= current.length) return { updated: false };
+    await replaceTurns(id, parsed.turns);
+    await setConversationRuntime(id, { contextTokens: parsed.contextTokens });
+    await emitConv(id);
+    return { updated: true };
+  });
+  handle("conv:terminalCommand", async (_e, id) => {
+    const c = await getConversation(id);
+    if (!c?.sessionId) return null;
+    const command = await deps2.resolveCommand(c);
+    const home = os.homedir();
+    const envPart = c.configDir && path.resolve(c.configDir) !== path.join(home, ".claude") ? `CLAUDE_CONFIG_DIR=${sq(c.configDir)} ` : "";
+    const cdPart = c.cwd ? `cd ${sq(c.cwd)} && ` : "";
+    return `${cdPart}${envPart}${command} --resume ${c.sessionId}`;
+  });
+}
 const PROJECTS_ROOT_KEY = "projects_root";
 const IGNORED_KEY = "projects_suggestions_ignored";
 const DEFAULT_ROOT = "~/Projects";
@@ -76835,15 +78377,15 @@ function detect(dir, entries) {
     try {
       const pkg = JSON.parse(readText(path.join(dir, "package.json")) || "{}");
       if (pkg.description?.trim()) description = pkg.description.trim();
-      const deps = { ...pkg.dependencies || {}, ...pkg.devDependencies || {} };
-      if (deps.next) tags.push("Next.js");
-      else if (deps.react) tags.push("React");
-      if (deps.vue) tags.push("Vue");
-      if (deps.svelte) tags.push("Svelte");
-      if (deps.electron) tags.push("Electron");
-      if (deps["react-native"] || deps.expo) tags.push("React Native");
-      if (deps.typescript) tags.push("TypeScript");
-      if (deps.three) tags.push("Three.js");
+      const deps2 = { ...pkg.dependencies || {}, ...pkg.devDependencies || {} };
+      if (deps2.next) tags.push("Next.js");
+      else if (deps2.react) tags.push("React");
+      if (deps2.vue) tags.push("Vue");
+      if (deps2.svelte) tags.push("Svelte");
+      if (deps2.electron) tags.push("Electron");
+      if (deps2["react-native"] || deps2.expo) tags.push("React Native");
+      if (deps2.typescript) tags.push("TypeScript");
+      if (deps2.three) tags.push("Three.js");
       if (!tags.length) tags.push("Node");
     } catch {
       tags.push("Node");
@@ -78833,6 +80375,32 @@ ipcMain.handle("ai:runStream", async (_, prompt, projectId, model2, runId, sourc
       broadcast("ai:chunk", { runId, text });
     }
   });
+});
+registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
+  resolveCommand: async (c) => c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? void 0),
+  resolveModel: (c) => resolveModel(c.model),
+  resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
+  allowedToolsArgs: () => resolveAllowedToolsArgs(),
+  systemPrompt: async (c) => {
+    const parts = [];
+    const ctx = (await buildProjectContext(c.projectId)).trim();
+    if (ctx) parts.push(ctx);
+    if (c.agentId) {
+      const ag = (await getAgents()).find((a) => a.id === c.agentId);
+      if (ag?.systemPrompt.trim()) parts.push(`### AGENTE: ${ag.name}
+${ag.systemPrompt.trim()}`);
+    }
+    if (c.skillIds.length) {
+      const all2 = await getSkills();
+      for (const id of c.skillIds) {
+        const sk = all2.find((x) => x.id === id);
+        if (sk?.content.trim()) parts.push(`### SKILL: ${sk.name}
+${sk.content.trim()}`);
+      }
+    }
+    return parts.join("\n\n");
+  },
+  projectPaths: async () => (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath.trim() }))
 });
 ipcMain.handle("ai:cancel", (_, runId) => {
   const r = aiRuns.get(runId);
