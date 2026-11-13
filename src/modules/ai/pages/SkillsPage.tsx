@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Skill } from '../../../types'
 import { useSkillStore, parseTags } from '../store/skillStore'
+import { ClaudeSkillsView } from '../components/ClaudeSkillsView'
+
+const TAB_KEY = 'rickos:skillsTab'
 
 interface FormState {
   name: string
@@ -90,6 +93,21 @@ export function SkillsPage(): React.ReactElement {
   const [sort, setSort] = useState<'updated' | 'name'>('updated')
   const [editing, setEditing] = useState<Skill | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [tab, setTab] = useState<'rickos' | 'claude'>(() => {
+    try {
+      return localStorage.getItem(TAB_KEY) === 'claude' ? 'claude' : 'rickos'
+    } catch {
+      return 'rickos'
+    }
+  })
+  const switchTab = (t: 'rickos' | 'claude'): void => {
+    setTab(t)
+    try {
+      localStorage.setItem(TAB_KEY, t)
+    } catch {
+      // armazenamento indisponível
+    }
+  }
 
   useEffect(() => {
     refresh()
@@ -116,14 +134,35 @@ export function SkillsPage(): React.ReactElement {
       <div className="module-header">
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>🧩 Skills</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{skills.length} skills</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {tab === 'rickos' ? `${skills.length} skills do rickOS` : 'Skills e comandos do Claude Code criados por você'}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="cc-skill-tabs" role="tablist">
+          <button role="tab" aria-selected={tab === 'rickos'} className={tab === 'rickos' ? 'active' : ''} onClick={() => switchTab('rickos')}>
+            🧩 rickOS
+          </button>
+          <button role="tab" aria-selected={tab === 'claude'} className={tab === 'claude' ? 'active' : ''} onClick={() => switchTab('claude')}>
+            ⌨️ Claude Code
+          </button>
+        </div>
+        <div style={{ display: tab === 'rickos' ? 'flex' : 'none', gap: 8 }}>
           <button className="btn btn-secondary btn-sm" onClick={importOne}>📥 Importar</button>
           <button className="btn btn-primary btn-sm" onClick={() => { setEditing(null); setShowForm(true) }}>+ Nova skill</button>
         </div>
       </div>
 
+      {tab === 'claude' && (
+        <>
+          <div className="todo-toolbar">
+            <input type="text" placeholder="🔍 Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+          </div>
+          <ClaudeSkillsView search={search} />
+        </>
+      )}
+
+      {tab === 'rickos' && (
+      <>
       <div className="todo-toolbar">
         <input type="text" placeholder="🔍 Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
@@ -167,6 +206,9 @@ export function SkillsPage(): React.ReactElement {
           </div>
         ))}
       </div>
+
+      </>
+      )}
 
       {showForm && <SkillEditor skill={editing} onClose={() => setShowForm(false)} />}
     </div>

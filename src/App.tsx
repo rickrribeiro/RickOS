@@ -47,6 +47,7 @@ import { AIPage } from './modules/ai/pages/AIPage'
 import { SkillsPage } from './modules/ai/pages/SkillsPage'
 import { AgentsPage } from './modules/ai/pages/AgentsPage'
 import { PromptRunnerPage } from './modules/ai/pages/PromptRunnerPage'
+import { RunnerNavBadge, RunnerWatcher } from './modules/ai/components/runner/RunnerAttention'
 import { HistoryPage } from './modules/ai/pages/HistoryPage'
 import { JarvisPage } from './modules/jarvis/pages/JarvisPage'
 import { Page } from './types'
@@ -279,6 +280,7 @@ export default function App(): React.ReactElement {
                     >
                       <span className="nav-icon">{group.groupIcon}</span>
                       <span className="nav-label">{group.label}</span>
+                      {group.items.some((i) => i.id === 'ai-runner') && <RunnerNavBadge compact />}
                     </button>
                     <button
                       className="nav-module-toggle"
@@ -301,6 +303,7 @@ export default function App(): React.ReactElement {
                             onClick={() => setPage(item.id)}
                           >
                             <span className="nav-label">{item.label}</span>
+                            {item.id === 'ai-runner' && <RunnerNavBadge />}
                           </button>
                         </li>
                       ))}
@@ -322,6 +325,7 @@ export default function App(): React.ReactElement {
                     <span className={`nav-group-chevron ${isCollapsed ? 'collapsed' : ''}`}>▾</span>
                     {group.groupIcon && <span className="nav-group-icon">{group.groupIcon}</span>}
                     <span>{group.label}</span>
+                    {isCollapsed && group.items.some((i) => i.id === 'ai-runner') && <RunnerNavBadge compact />}
                   </button>
                 )}
                 {!isCollapsed && (
@@ -334,6 +338,7 @@ export default function App(): React.ReactElement {
                         >
                           {!group.label && <span className="nav-icon">{item.icon}</span>}
                           <span className="nav-label">{item.label}</span>
+                          {item.id === 'ai-runner' && <RunnerNavBadge />}
                         </button>
                       </li>
                     ))}
@@ -392,6 +397,7 @@ export default function App(): React.ReactElement {
                 >
                   <span className="module-tab-icon">{item.icon}</span>
                   {item.label}
+                  {item.id === 'ai-runner' && <RunnerNavBadge />}
                 </button>
               ))}
             </div>
@@ -401,6 +407,7 @@ export default function App(): React.ReactElement {
       </main>
 
       <QuickCapture />
+      <RunnerWatcher />
       <SaveContextModal />
     </div>
     </AuthGate>

@@ -4,6 +4,7 @@ import type { AiConversationPatch, AiImageInput, AiPromptResponse, AiTurn, ConvE
 import { IMAGE_MEDIA_TYPES, MAX_IMAGES_PER_MESSAGE } from '../../shared/aiConversations'
 import { runClaude } from '../services/claude'
 import * as gitc from './git'
+import { listClaudeSkills, readSkill, saveSkill, slashCommands } from './claudeSkills'
 import { broadcast } from '../events'
 import * as repo from './repo'
 import * as runner from './runner'
@@ -19,7 +20,7 @@ type Handle = (channel: string, fn: (event: unknown, ...args: any[]) => unknown)
 
 export interface AiConvDeps extends RunnerDeps {
   /** Projetos com pasta local, para associar sessões do terminal ao projeto. */
-  projectPaths: () => Promise<{ id: number; localPath: string }[]>
+  projectPaths: () => Promise<{ id: number; localPath: string; name: string }[]>
 }
 
 interface CreateParams {
@@ -242,6 +243,25 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   })
 
   handle('conv:cancel', (_e, id: string) => runner.cancel(id))
+
+  // ── Skills / comandos do Claude Code ──
+  /** Comandos `/` para o autocompletar (conversa aberta ou rascunho de um projeto). */
+  handle('conv:slashCommands', async (_e, id: string | null, projectId?: number | null) => {
+    const projects = await deps.projectPaths()
+    const c = id ? await repo.getConversation(id) : null
+    return slashCommands(c ? runner.knownSlashNames(c) : null, projects, {
+      projectId: c ? c.projectId : projectId ?? null,
+      configDir: c?.configDir ?? null
+    })
+  })
+  handle('claudeSkills:list', async (_e, fresh?: boolean) => listClaudeSkills(await deps.projectPaths(), !!fresh))
+  handle('claudeSkills:read', async (_e, id: string) => readSkill(String(id), await deps.projectPaths()))
+  handle('claudeSkills:save', async (_e, id: string, content: string) => saveSkill(String(id), content, await deps.projectPaths()))
+
+  handle('conv:markSeen', async (_e, id: string) => {
+    if (await repo.markSeen(id)) await emitConv(id)
+    return true
+  })
 
   handle('conv:respond', (_e, id: string, requestId: string, response: AiPromptResponse) => runner.respond(id, requestId, response))
 

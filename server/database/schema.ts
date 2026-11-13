@@ -754,7 +754,8 @@ export const SCHEMA = `
     worktreeBranch TEXT,
     repoPath TEXT,
     baseRef TEXT,
-    forkFrom TEXT
+    forkFrom TEXT,
+    seenAt TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_ai_conversations_updated ON ai_conversations(updatedAt);
   CREATE INDEX IF NOT EXISTS idx_ai_conversations_session ON ai_conversations(sessionId);

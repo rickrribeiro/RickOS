@@ -51,6 +51,8 @@ interface LiveRun {
   pending: Map<string, PendingRequest>
   startedAt: number
   cancelled: boolean
+  /** "Conversar sobre isso": o usuário interrompeu de propósito (não é erro). */
+  chatAbout: boolean
   gotResult: boolean
   stderr: string
   mainModel: string
@@ -61,6 +63,14 @@ interface LiveRun {
 }
 
 const live = new Map<string, LiveRun>()
+/** Comandos `/` que o CLI anunciou no init, por conversa e por pasta (+ conta). */
+const slashByConv = new Map<string, string[]>()
+const slashByDir = new Map<string, string[]>()
+const dirKey = (cwd: string | null, configDir: string | null): string => `${cwd ?? ''}|${configDir ?? ''}`
+
+export function knownSlashNames(c: AiConversation): string[] | null {
+  return slashByConv.get(c.id) ?? (c.cwd ? slashByDir.get(dirKey(c.cwd, c.configDir)) ?? null : null)
+}
 const queues = new Map<string, AiQueuedMessage[]>()
 let deps: RunnerDeps | null = null
 
@@ -189,6 +199,15 @@ export async function respond(conversationId: string, requestId: string, r: AiPr
     response = { behavior: 'allow', updatedInput: { ...p.input, answers: r.answers } }
     if (block) block.answers = r.answers
     note = 'Respondido'
+  } else if (r.kind === 'chat') {
+    response = {
+      behavior: 'deny',
+      message: 'O usuário quer conversar sobre isso antes de escolher. Pare aqui e aguarde a próxima mensagem dele.',
+      interrupt: true
+    }
+    run.chatAbout = true
+    status = 'denied'
+    note = '💬 Conversar sobre isso'
   } else if (r.kind === 'approvePlan') {
     response = { behavior: 'allow', updatedInput: p.input, updatedPermissions: [{ type: 'setMode', mode: r.mode, destination: 'session' }] }
     note = r.mode === 'acceptEdits' ? 'Plano aprovado · aceitando edições' : 'Plano aprovado'
@@ -260,6 +279,7 @@ async function startTurn(conversationId: string, message: AiQueuedMessage): Prom
     pending: new Map(),
     startedAt: Date.now(),
     cancelled: false,
+    chatAbout: false,
     gotResult: false,
     stderr: '',
     mainModel: '',
@@ -364,6 +384,7 @@ interface StreamEvent {
   subtype?: string
   session_id?: string
   model?: string
+  slash_commands?: string[]
   parent_tool_use_id?: string | null
   request_id?: string
   request?: {
@@ -438,6 +459,10 @@ function handleEvent(run: LiveRun, conv: AiConversation, evt: StreamEvent): void
 
   if (evt.type === 'system' && evt.subtype === 'init') {
     if (evt.model) run.mainModel = evt.model
+    if (Array.isArray(evt.slash_commands)) {
+      slashByConv.set(conv.id, evt.slash_commands)
+      slashByDir.set(dirKey(conv.cwd, conv.configDir), evt.slash_commands)
+    }
     if (evt.session_id && evt.session_id !== conv.sessionId) {
       conv.sessionId = evt.session_id
       conv.forkFrom = null
@@ -552,7 +577,7 @@ function handleEvent(run: LiveRun, conv: AiConversation, evt: StreamEvent): void
     if (main?.[1]?.contextWindow) run.contextWindow = main[1].contextWindow
     const hasText = turn.blocks.some((b) => b.type === 'text' && b.text.trim())
     if (!hasText && typeof r.result === 'string' && r.result.trim()) turn.blocks.push({ type: 'text', text: r.result })
-    if (r.is_error && !run.cancelled) turn.error = typeof r.result === 'string' && r.result.trim() ? r.result : `Erro (${r.subtype ?? 'desconhecido'})`
+    if (r.is_error && !run.cancelled && !run.chatAbout) turn.error = typeof r.result === 'string' && r.result.trim() ? r.result : `Erro (${r.subtype ?? 'desconhecido'})`
     // fim do turno: fecha o stdin para o CLI sair
     try {
       run.child?.stdin?.end()
@@ -584,6 +609,9 @@ async function finishTurn(run: LiveRun, error: string | null): Promise<void> {
   if (run.cancelled) {
     turn.status = 'cancelled'
     turn.error = null
+  } else if (run.chatAbout && !turn.error) {
+    turn.status = 'done'
+    turn.blocks.push({ type: 'notice', text: '💬 Você quis conversar sobre a pergunta: escreva abaixo.' })
   } else if (error || turn.error) {
     turn.status = 'error'
     turn.error = turn.error || error

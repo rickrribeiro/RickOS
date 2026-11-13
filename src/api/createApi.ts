@@ -3,7 +3,7 @@ import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBa
 import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ConvChanges, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -584,6 +584,12 @@ export function createApi() {
       onDone: (cb: (payload: { runId: string; ok: boolean; output: string; error: string | null }) => void) =>
         subscribe('ai:done', (p) => cb(p as { runId: string; ok: boolean; output: string; error: string | null }))
     },
+    // Skills/comandos do Claude Code criados por você (~/.claude*, <projeto>/.claude)
+    claudeSkills: {
+      list: (fresh?: boolean) => invoke<ClaudeSkillInfo[]>('claudeSkills:list', !!fresh),
+      read: (id: string) => invoke<{ info: ClaudeSkillInfo; content: string }>('claudeSkills:read', id),
+      save: (id: string, content: string) => invoke<ClaudeSkillInfo>('claudeSkills:save', id, content)
+    },
     // Prompt Runner: conversas com o Claude CLI (server/aiconv)
     conv: {
       list: (archived?: boolean) => invoke<AiConversation[]>('conv:list', archived),
@@ -600,6 +606,8 @@ export function createApi() {
       suggestCommit: (id: string) => invoke<string>('conv:suggestCommit', id),
       removeWorktree: (id: string) => invoke<boolean>('conv:removeWorktree', id),
       cancel: (id: string) => invoke<boolean>('conv:cancel', id),
+      markSeen: (id: string) => invoke<boolean>('conv:markSeen', id),
+      slashCommands: (id: string | null, projectId?: number | null) => invoke<SlashCommandInfo[]>('conv:slashCommands', id, projectId ?? null),
       respond: (id: string, requestId: string, response: AiPromptResponse) => invoke<boolean>('conv:respond', id, requestId, response),
       removeQueued: (id: string, index: number) => invoke<void>('conv:removeQueued', id, index),
       terminalSessions: () => invoke<TerminalSession[]>('conv:terminalSessions'),

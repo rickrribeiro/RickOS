@@ -1313,7 +1313,7 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
     return parts.join('\n\n')
   },
   projectPaths: async () =>
-    (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath!.trim() }))
+    (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath!.trim(), name: p.name }))
 })
 
 ipcMain.handle('ai:cancel', (_, runId: string) => {

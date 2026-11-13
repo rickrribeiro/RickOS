@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { AiConversation, AiConversationPatch, AiImageInput, AiPromptResponse, ConvEffort, ConvPermissionMode } from '../../../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiImageInput, AiPromptResponse, ConvEffort, ConvPermissionMode, SlashCommandInfo } from '../../../../shared/aiConversations'
 import { DEFAULT_CONTEXT_WINDOW, MAX_IMAGES_PER_MESSAGE, PERMISSION_MODE_LABELS } from '../../../../shared/aiConversations'
 import { useSkillStore, parseTags } from '../store/skillStore'
 import { useAgentStore } from '../store/agentStore'
 import { useProjectStore } from '../../projects/store/projectStore'
-import { useConvStore } from '../store/convStore'
+import { isUnseen, useConvStore } from '../store/convStore'
 import { timeAgo } from '../../../utils/dates'
 import { ContextMeter, fmtCost, fmtTokens, TurnView } from '../components/runner/TurnView'
 import { TerminalSessionsModal } from '../components/runner/TerminalSessionsModal'
@@ -23,6 +23,9 @@ import '../runner.css'
 export const DRAFT_KEY = 'rickos:promptRunnerDraft'
 const LEGACY_TABS_KEY = 'rickos:promptRunnerTabs'
 const COMPOSER_KEY = (id: string | null): string => `rickos:runnerComposer:${id ?? 'new'}`
+const PROJECT_FILTER_KEY = 'rickos:runnerProjectFilter'
+/** Texto que abre o autocompletar: um único token começando com "/". */
+const SLASH_RE = /^\/([\w:.-]*)$/
 
 const MODES: ConvPermissionMode[] = ['default', 'acceptEdits', 'plan', 'bypassPermissions']
 const MODE_HINT: Record<ConvPermissionMode, string> = {
@@ -75,7 +78,7 @@ export function PromptRunnerPage(): React.ReactElement {
   const { agents, refresh: refreshAgents } = useAgentStore()
   const { projects, refresh: refreshProjects } = useProjectStore()
   const store = useConvStore()
-  const { conversations, archived, showArchived, selectedId, turns, unseen } = store
+  const { conversations, archived, showArchived, selectedId, turns } = store
 
   const [draft, setDraft] = useState<DraftSettings>(EMPTY_DRAFT)
   const [text, setText] = useState('')
@@ -92,6 +95,12 @@ export function PromptRunnerPage(): React.ReactElement {
   const [dragOver, setDragOver] = useState(false)
   const [showChanges, setShowChanges] = useState(false)
   const [changeCount, setChangeCount] = useState<number | null>(null)
+  // filtro da lista: 'all' | 'none' (sem projeto) | id do projeto
+  const [projectFilter, setProjectFilter] = useState<string>(() => readStorage(PROJECT_FILTER_KEY) || 'all')
+  // autocompletar de "/" (skills e comandos do Claude Code)
+  const [slashList, setSlashList] = useState<{ key: string; items: SlashCommandInfo[] } | null>(null)
+  const [slashIdx, setSlashIdx] = useState(0)
+  const [slashDismissed, setSlashDismissed] = useState(false)
 
   const messagesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -125,7 +134,8 @@ export function PromptRunnerPage(): React.ReactElement {
     refreshSkills()
     refreshAgents()
     refreshProjects()
-    const off = store.listen()
+    store.listen()
+    store.setViewing(true)
     store.refresh().then(() => {
       const st = useConvStore.getState()
       if (st.selectedId) st.loadTurns(st.selectedId)
@@ -157,7 +167,7 @@ export function PromptRunnerPage(): React.ReactElement {
       setText(handoff.userPrompt ?? '')
       setPane('chat')
     }
-    return off
+    return () => store.setViewing(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -259,6 +269,7 @@ export function PromptRunnerPage(): React.ReactElement {
     async (requestId: string, r: AiPromptResponse) => {
       if (!selectedId) return
       await store.respond(selectedId, requestId, r)
+      if (r.kind === 'chat') setTimeout(() => textareaRef.current?.focus(), 50)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selectedId]
@@ -269,7 +280,31 @@ export function PromptRunnerPage(): React.ReactElement {
     patch({ permissionMode: MODES[(i + 1) % MODES.length] })
   }
 
+  function applySlash(c: SlashCommandInfo): void {
+    setText(`/${c.name} `)
+    setSlashDismissed(true)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (slashOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const n = slashMatches.length
+        setSlashIdx((i) => (e.key === 'ArrowDown' ? (i + 1) % n : (i - 1 + n) % n))
+        return
+      }
+      if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Tab' && !e.shiftKey)) {
+        e.preventDefault()
+        applySlash(slashMatches[Math.min(slashIdx, slashMatches.length - 1)])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashDismissed(true)
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isTouch()) {
       e.preventDefault()
       send()
@@ -375,9 +410,47 @@ export function PromptRunnerPage(): React.ReactElement {
   const list = showArchived ? archived : conversations
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return list
-    return list.filter((c) => `${c.title} ${projectName(c.projectId) ?? ''}`.toLowerCase().includes(q))
-  }, [list, search, projectName])
+    return list.filter(
+      (c) =>
+        (projectFilter === 'all' || (projectFilter === 'none' ? c.projectId == null : String(c.projectId) === projectFilter)) &&
+        (!q || `${c.title} ${projectName(c.projectId) ?? ''}`.toLowerCase().includes(q))
+    )
+  }, [list, search, projectName, projectFilter])
+  // projetos que aparecem no filtro: os que têm conversa (+ o filtrado, se sumiu)
+  const filterProjects = useMemo(() => {
+    const ids = new Set([...conversations, ...archived].map((c) => c.projectId).filter((x): x is number => x != null))
+    if (/^\d+$/.test(projectFilter)) ids.add(Number(projectFilter))
+    return projects.filter((p) => ids.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+  }, [conversations, archived, projects, projectFilter])
+  const hasNoProject = conversations.some((c) => c.projectId == null)
+
+  // ── autocompletar de "/" ──
+  const slashKey = `${selectedId ?? 'new'}|${settings.projectId ?? ''}`
+  const slashQuery = SLASH_RE.exec(text)?.[1]
+  const wantSlash = slashQuery !== undefined && !slashDismissed
+  useEffect(() => {
+    setSlashDismissed(false)
+    setSlashIdx(0)
+  }, [slashQuery])
+  useEffect(() => {
+    if (!wantSlash || slashList?.key === slashKey) return
+    let alive = true
+    window.api.conv
+      .slashCommands(selectedId, settings.projectId)
+      .then((items) => alive && setSlashList({ key: slashKey, items }))
+      .catch(() => alive && setSlashList({ key: slashKey, items: [] }))
+    return () => {
+      alive = false
+    }
+  }, [wantSlash, slashKey, slashList?.key, selectedId, settings.projectId])
+  const slashMatches = useMemo(() => {
+    if (!wantSlash || !slashList || slashList.key !== slashKey) return []
+    const q = (slashQuery ?? '').toLowerCase()
+    const starts = slashList.items.filter((c) => c.name.toLowerCase().startsWith(q))
+    const contains = slashList.items.filter((c) => !c.name.toLowerCase().startsWith(q) && (c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)))
+    return [...starts, ...contains].slice(0, 30)
+  }, [wantSlash, slashList, slashKey, slashQuery])
+  const slashOpen = slashMatches.length > 0
 
   const activeAgent = agents.find((a) => a.id === settings.agentId) ?? null
   const agentSkillIds = activeAgent ? parseTags(activeAgent.defaultSkillIds) : []
@@ -405,7 +478,26 @@ export function PromptRunnerPage(): React.ReactElement {
               </button>
             </div>
           </div>
-          <input type="text" className="cv-search" placeholder="🔍 Buscar conversas…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="cv-filters">
+            <input type="text" className="cv-search" placeholder="🔍 Buscar conversas…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <select
+              className={`cv-project-filter ${projectFilter !== 'all' ? 'cv-on' : ''}`}
+              value={projectFilter}
+              onChange={(e) => {
+                setProjectFilter(e.target.value)
+                writeStorage(PROJECT_FILTER_KEY, e.target.value === 'all' ? '' : e.target.value)
+              }}
+              title="Filtrar por projeto"
+            >
+              <option value="all">📁 Todos os projetos</option>
+              {hasNoProject && <option value="none">Sem projeto</option>}
+              {filterProjects.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="cv-list">
             {filtered.length === 0 && (
               <div className="empty-hint" style={{ fontSize: 12, padding: 16 }}>
@@ -414,14 +506,20 @@ export function PromptRunnerPage(): React.ReactElement {
             )}
             {filtered.map((c) => {
               const ctxPct = c.contextTokens && (c.contextWindow || DEFAULT_CONTEXT_WINDOW) ? Math.round((c.contextTokens / (c.contextWindow || DEFAULT_CONTEXT_WINDOW)) * 100) : 0
+              const fresh = c.id !== selectedId && isUnseen(c)
               return (
-                <button key={c.id} className={`cv-item ${c.id === selectedId ? 'active' : ''}`} onClick={() => open(c.id)}>
+                <button
+                  key={c.id}
+                  className={`cv-item ${c.id === selectedId ? 'active' : ''} ${fresh ? 'unseen' : ''} ${c.pendingPrompts ? 'attn' : ''}`}
+                  onClick={() => open(c.id)}
+                >
                   <div className="cv-item-title">
                     {c.running && <span className="active-task-dot" style={{ width: 7, height: 7, flexShrink: 0 }} />}
-                    {!c.running && unseen.includes(c.id) && <span className="runner-tab-unseen-dot" />}
+                    {fresh && <span className="cv-unseen-dot" />}
                     {c.pinned && <span title="Fixada">📌</span>}
                     <span className="cv-item-name">{c.title || 'Nova conversa'}</span>
                     {!!c.pendingPrompts && <span className="cv-badge-attn" title="Esperando sua resposta">🤚 {c.pendingPrompts}</span>}
+                    {fresh && !c.pendingPrompts && <span className="cv-badge-new">nova resposta</span>}
                   </div>
                   <div className="cv-item-meta">
                     {c.origin === 'terminal' && <span title="Veio do terminal">⌨️</span>}
@@ -628,7 +726,7 @@ export function PromptRunnerPage(): React.ReactElement {
                   <li><kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha</li>
                   <li><kbd>Shift</kbd>+<kbd>Tab</kbd> troca o modo de permissão · <kbd>Esc</kbd> interrompe</li>
                   <li>Mensagens enviadas durante uma execução entram na fila.</li>
-                  <li>Comandos do CLI funcionam: <code className="md-code">/compact</code>, <code className="md-code">/clear</code>…</li>
+                  <li>Digite <code className="md-code">/</code> para usar suas skills e comandos do Claude Code (pessoais, da conta de trabalho e do projeto).</li>
                   <li>Cole, arraste ou anexe (📎) imagens: prints de tela, erros, layouts.</li>
                 </ul>
               </div>
@@ -685,6 +783,30 @@ export function PromptRunnerPage(): React.ReactElement {
                       ✕
                     </button>
                   </div>
+                ))}
+              </div>
+            )}
+            {slashOpen && (
+              <div className="cv-slash" role="listbox">
+                {slashMatches.map((c, i) => (
+                  <button
+                    key={c.name}
+                    role="option"
+                    aria-selected={i === slashIdx}
+                    className={`cv-slash-item ${i === slashIdx ? 'on' : ''}`}
+                    onMouseEnter={() => setSlashIdx(i)}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      applySlash(c)
+                    }}
+                  >
+                    <span className="cv-slash-name">
+                      /{c.name}
+                      {c.argumentHint && <span className="cv-slash-hint"> {c.argumentHint}</span>}
+                    </span>
+                    <span className="cv-slash-desc">{c.description}</span>
+                    <span className="cv-slash-src">{c.source}</span>
+                  </button>
                 ))}
               </div>
             )}

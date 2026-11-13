@@ -187,6 +187,15 @@ function QuestionCard({ block: b, onRespond }: Props): React.ReactElement {
           <button
             className="btn btn-secondary btn-sm"
             disabled={busy}
+            title="Recusa a pergunta e para: você escreve o que quiser discutir antes de escolher"
+            onClick={() => b.permission && onRespond(b.permission.requestId, { kind: 'chat' })}
+          >
+            💬 Conversar sobre isso
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={busy}
+            title="Deixa o Claude decidir sozinho"
             onClick={() => b.permission && onRespond(b.permission.requestId, { kind: 'deny', message: 'Prefiro não responder agora; siga com o seu melhor julgamento.' })}
           >
             Pular

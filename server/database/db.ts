@@ -306,6 +306,15 @@ const MIGRATIONS: Migration[] = [
         try { db.run(`ALTER TABLE ${t} ADD COLUMN ${c} ${def};`) } catch { /* exists */ }
       }
     }
+  },
+  {
+    version: 20,
+    label: 'Prompt Runner: "visto" por conversa (resposta não lida, sincronizado entre aparelhos)',
+    run: (db) => {
+      try { db.run('ALTER TABLE ai_conversations ADD COLUMN seenAt TEXT;') } catch { /* exists */ }
+      // o que já existia conta como lido
+      try { db.run('UPDATE ai_conversations SET seenAt = updatedAt WHERE seenAt IS NULL;') } catch { /* tabela nova */ }
+    }
   }
 ]
 

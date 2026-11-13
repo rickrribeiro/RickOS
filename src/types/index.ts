@@ -1,7 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ConvChanges, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
 export interface Tag {
@@ -1024,6 +1024,11 @@ declare global {
         onChunk: (cb: (runId: string | undefined, text: string) => void) => () => void
         onDone: (cb: (payload: { runId: string; ok: boolean; output: string; error: string | null }) => void) => () => void
       }
+      claudeSkills: {
+        list: (fresh?: boolean) => Promise<ClaudeSkillInfo[]>
+        read: (id: string) => Promise<{ info: ClaudeSkillInfo; content: string }>
+        save: (id: string, content: string) => Promise<ClaudeSkillInfo>
+      }
       conv: {
         list: (archived?: boolean) => Promise<AiConversation[]>
         get: (id: string) => Promise<{ conversation: AiConversation; turns: AiTurn[] } | null>
@@ -1039,6 +1044,8 @@ declare global {
         suggestCommit: (id: string) => Promise<string>
         removeWorktree: (id: string) => Promise<boolean>
         cancel: (id: string) => Promise<boolean>
+        markSeen: (id: string) => Promise<boolean>
+        slashCommands: (id: string | null, projectId?: number | null) => Promise<SlashCommandInfo[]>
         respond: (id: string, requestId: string, response: AiPromptResponse) => Promise<boolean>
         removeQueued: (id: string, index: number) => Promise<void>
         terminalSessions: () => Promise<TerminalSession[]>

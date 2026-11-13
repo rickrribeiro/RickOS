@@ -6,23 +6,15 @@ import type { AiConversation, AiConversationPatch, AiImageInput, AiPromptRespons
  * lista, os turnos da conversa aberta e as atualizações ao vivo (`conv:update`).
  */
 
-const UNSEEN_KEY = 'rickos:runnerUnseen'
+/**
+ * "Não lida": a conversa foi atualizada (turno terminou) depois da última vez que você a
+ * viu. O `seenAt` fica no servidor, então ler no celular limpa o destaque no desktop.
+ */
+export function isUnseen(c: AiConversation): boolean {
+  return !c.running && !!c.seenAt && c.updatedAt > c.seenAt
+}
 
-function loadUnseen(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(UNSEEN_KEY) || '[]')
-    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []
-  } catch {
-    return []
-  }
-}
-function saveUnseen(ids: string[]): void {
-  try {
-    localStorage.setItem(UNSEEN_KEY, JSON.stringify(ids))
-  } catch {
-    // armazenamento indisponível
-  }
-}
+let unlisten: (() => void) | null = null
 
 interface ConvState {
   conversations: AiConversation[]
@@ -30,9 +22,11 @@ interface ConvState {
   showArchived: boolean
   selectedId: string | null
   turns: Record<string, AiTurn[]>
-  /** Conversas que terminaram enquanto não estavam abertas. */
-  unseen: string[]
+  /** A tela do Prompt Runner está aberta (a conversa selecionada conta como vista). */
+  viewing: boolean
   loaded: boolean
+  setViewing: (v: boolean) => void
+  markSeen: (id: string) => void
   refresh: () => Promise<void>
   setShowArchived: (v: boolean) => Promise<void>
   select: (id: string | null) => Promise<void>
@@ -43,8 +37,8 @@ interface ConvState {
   send: (id: string, text: string, images?: AiImageInput[]) => Promise<void>
   cancel: (id: string) => Promise<void>
   respond: (id: string, requestId: string, r: AiPromptResponse) => Promise<void>
-  /** Liga a escuta do SSE; devolve a função para desligar. */
-  listen: () => () => void
+  /** Liga a escuta do SSE (uma vez por app). */
+  listen: () => void
 }
 
 function upsert(list: AiConversation[], c: AiConversation): AiConversation[] {
@@ -59,12 +53,30 @@ export const useConvStore = create<ConvState>((set, get) => ({
   showArchived: false,
   selectedId: null,
   turns: {},
-  unseen: loadUnseen(),
+  viewing: false,
   loaded: false,
+
+  setViewing: (v) => {
+    set({ viewing: v })
+    const id = get().selectedId
+    if (v && id) get().markSeen(id)
+  },
+
+  markSeen: (id) => {
+    const c = get().conversations.find((x) => x.id === id) ?? get().archived.find((x) => x.id === id)
+    if (!c || c.running || !isUnseen(c)) return
+    // otimista: some o destaque já; o servidor confirma via conv:update
+    set((s) => ({ conversations: s.conversations.map((x) => (x.id === id ? { ...x, seenAt: x.updatedAt } : x)) }))
+    window.api.conv.markSeen(id).catch(() => {
+      // sem rede: tenta de novo na próxima visita
+    })
+  },
 
   refresh: async () => {
     const conversations = await window.api.conv.list(false)
     set({ conversations, loaded: true })
+    const st = get()
+    if (st.viewing && st.selectedId) st.markSeen(st.selectedId)
     if (get().showArchived) set({ archived: await window.api.conv.list(true) })
   },
 
@@ -74,10 +86,12 @@ export const useConvStore = create<ConvState>((set, get) => ({
   },
 
   select: async (id) => {
-    const unseen = id ? get().unseen.filter((x) => x !== id) : get().unseen
-    saveUnseen(unseen)
-    set({ selectedId: id, unseen })
-    if (id) await get().loadTurns(id)
+    set({ selectedId: id })
+    if (id) {
+      get().markSeen(id)
+      await get().loadTurns(id)
+      get().markSeen(id)
+    }
   },
 
   loadTurns: async (id) => {
@@ -91,7 +105,10 @@ export const useConvStore = create<ConvState>((set, get) => ({
 
   create: async (params) => {
     const c = await window.api.conv.create(params)
-    set((s) => ({ conversations: upsert(s.conversations, c), turns: { ...s.turns, [c.id]: [] } }))
+    set((s) => ({
+      conversations: upsert(s.conversations, c),
+      turns: { ...s.turns, [c.id]: [] }
+    }))
     return c
   },
 
@@ -130,26 +147,21 @@ export const useConvStore = create<ConvState>((set, get) => ({
     await window.api.conv.respond(id, requestId, r)
   },
 
-  listen: () =>
-    window.api.conv.onUpdate((u) => {
+  listen: () => {
+    if (unlisten) return
+    unlisten = window.api.conv.onUpdate((u) => {
       const s = get()
       if (u.removed) {
-        set({ conversations: s.conversations.filter((x) => x.id !== u.conversationId) })
+        set({
+          conversations: s.conversations.filter((x) => x.id !== u.conversationId)
+        })
         return
       }
       if (u.conversation) {
         const c = u.conversation
-        const prev = s.conversations.find((x) => x.id === c.id)
-        // terminou fora da tela → marca como não vista
-        let unseen = s.unseen
-        if (prev?.running && !c.running && s.selectedId !== c.id && !unseen.includes(c.id)) {
-          unseen = [...unseen, c.id]
-          saveUnseen(unseen)
-        }
-        set({
-          conversations: c.archived ? s.conversations.filter((x) => x.id !== c.id) : upsert(s.conversations, c),
-          unseen
-        })
+        set({ conversations: c.archived ? s.conversations.filter((x) => x.id !== c.id) : upsert(s.conversations, c) })
+        // resposta chegou com você olhando a conversa → já conta como vista
+        if (s.viewing && s.selectedId === c.id && document.visibilityState === 'visible' && isUnseen(c)) get().markSeen(c.id)
       }
       if (u.turn) {
         const t = u.turn
@@ -160,4 +172,20 @@ export const useConvStore = create<ConvState>((set, get) => ({
         set({ turns: { ...get().turns, [u.conversationId]: next } })
       }
     })
+    // voltou para a aba do navegador com a conversa aberta → conta como vista
+    document.addEventListener('visibilitychange', () => {
+      const st = get()
+      if (document.visibilityState === 'visible' && st.viewing && st.selectedId) st.markSeen(st.selectedId)
+    })
+  }
 }))
+
+/** Conversas com resposta não lida e com pedido esperando você (para badges). */
+export function useRunnerAttention(): { unseen: number; pending: number } {
+  // seletores que devolvem números: o zustand só re-renderiza quando a contagem muda
+  const pending = useConvStore((s) => s.conversations.filter((c) => !!c.pendingPrompts).length)
+  const unseen = useConvStore(
+    (s) => s.conversations.filter((c) => !c.pendingPrompts && isUnseen(c) && !(s.viewing && s.selectedId === c.id)).length
+  )
+  return { unseen, pending }
+}

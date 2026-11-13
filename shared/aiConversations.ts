@@ -112,6 +112,8 @@ export interface AiConversation {
   baseRef: string | null
   /** Ramificação ainda não iniciada: o primeiro turno usa `--resume <forkFrom> --fork-session`. */
   forkFrom: string | null
+  /** Última vez que você viu a conversa (updatedAt visto); resposta mais nova = não lida. */
+  seenAt: string | null
   /** Só na listagem: estado ao vivo. */
   running?: boolean
   pendingPrompts?: number
@@ -170,6 +172,8 @@ export type AiPromptResponse =
   | { kind: 'answer'; answers: Record<string, string> }
   /** ExitPlanMode aprovado: segue no modo escolhido. */
   | { kind: 'approvePlan'; mode: 'default' | 'acceptEdits' }
+  /** "Chat about this": recusa a pergunta e para, esperando a sua próxima mensagem. */
+  | { kind: 'chat' }
 
 /** Sessão encontrada nos transcripts do Claude Code (terminal). */
 export interface TerminalSession {
@@ -196,3 +200,28 @@ export interface AiConvUpdate {
 
 /** Janela de contexto conhecida quando o CLI ainda não informou. */
 export const DEFAULT_CONTEXT_WINDOW = 200_000
+
+/** Skill ou comando do Claude Code criado por você (usuário ou projeto). */
+export interface ClaudeSkillInfo {
+  id: string
+  name: string
+  description: string
+  argumentHint: string | null
+  kind: 'skill' | 'command'
+  scope: 'user' | 'project'
+  /** "Pessoal", "Trabalho" (conta ~/.claude-trabalho) ou o nome do projeto */
+  source: string
+  configDir: string | null
+  projectId: number | null
+  path: string
+  updatedAt: string
+}
+
+/** Item do autocompletar de `/` no Prompt Runner. */
+export interface SlashCommandInfo {
+  name: string
+  description: string
+  /** "Pessoal", "projeto X", "CLI", "plugin"… */
+  source: string
+  argumentHint: string | null
+}

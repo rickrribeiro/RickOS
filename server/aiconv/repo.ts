@@ -53,6 +53,7 @@ interface ConvRow {
   repoPath: string | null
   baseRef: string | null
   forkFrom: string | null
+  seenAt: string | null
   turnCount?: number
 }
 
@@ -110,6 +111,7 @@ function toConv(r: ConvRow): AiConversation {
     repoPath: r.repoPath ?? null,
     baseRef: r.baseRef ?? null,
     forkFrom: r.forkFrom ?? null,
+    seenAt: r.seenAt ?? null,
     turnCount: r.turnCount
   }
 }
@@ -188,8 +190,8 @@ export async function createConversation(c: NewConversation): Promise<AiConversa
   exec(
     db,
     `INSERT INTO ai_conversations (id, title, createdAt, updatedAt, projectId, agentId, skillIds, model, effort, permissionMode, sessionId, cwd, configDir, claudeCommand, origin, contextTokens,
-       useWorktree, forkFrom, repoPath, worktreeBranch, baseRef, contextWindow)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       useWorktree, forkFrom, repoPath, worktreeBranch, baseRef, contextWindow, seenAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       c.title ?? '',
@@ -212,7 +214,9 @@ export async function createConversation(c: NewConversation): Promise<AiConversa
       c.repoPath ?? null,
       c.worktreeBranch ?? null,
       c.baseRef ?? null,
-      c.contextWindow ?? 0
+      c.contextWindow ?? 0,
+      // quem cria (ou importa) a conversa já viu o estado atual
+      c.updatedAt ?? now
     ]
   )
   saveDb()
@@ -299,6 +303,16 @@ export async function setConversationRuntime(
   params.push(id)
   exec(db, `UPDATE ai_conversations SET ${sets.join(', ')} WHERE id = ?`, params)
   saveDb()
+}
+
+/** Marca a conversa como vista até a última atualização (não mexe no updatedAt). */
+export async function markSeen(id: string): Promise<boolean> {
+  const db = await getDb()
+  const r = one<{ updatedAt: string; seenAt: string | null }>(db, 'SELECT updatedAt, seenAt FROM ai_conversations WHERE id = ?', [id])
+  if (!r || (r.seenAt && r.seenAt >= r.updatedAt)) return false
+  exec(db, 'UPDATE ai_conversations SET seenAt = updatedAt WHERE id = ?', [id])
+  saveDb()
+  return true
 }
 
 export async function deleteConversation(id: string): Promise<void> {
