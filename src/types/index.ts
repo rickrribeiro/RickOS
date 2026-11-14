@@ -1,7 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
 export interface Tag {
@@ -1057,6 +1057,7 @@ declare global {
         slashCommands: (id: string | null, projectId?: number | null) => Promise<SlashCommandInfo[]>
         respond: (id: string, requestId: string, response: AiPromptResponse) => Promise<boolean>
         removeQueued: (id: string, index: number) => Promise<void>
+        usageLimits: (refresh?: boolean) => Promise<ClaudeUsageSnapshot>
         terminalSessions: () => Promise<TerminalSession[]>
         importTerminal: (sessionId: string, configDir?: string | null) => Promise<AiConversation>
         resync: (id: string) => Promise<{ updated: boolean }>

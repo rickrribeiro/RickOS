@@ -10,6 +10,7 @@ import * as repo from './repo'
 import * as runner from './runner'
 import type { RunnerDeps } from './runner'
 import { findTranscript, listTerminalSessions, parseTranscript } from './transcripts'
+import { getUsageLimits } from './usageLimits'
 
 /**
  * Canais `conv:*` do Prompt Runner (conversas com o Claude CLI). Eventos ao vivo saem
@@ -274,6 +275,9 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   handle('conv:respond', (_e, id: string, requestId: string, response: AiPromptResponse) => runner.respond(id, requestId, response))
 
   handle('conv:removeQueued', (_e, id: string, index: number) => runner.removeQueued(id, Number(index) || 0))
+
+  // ── Limites de uso (/usage) ──
+  handle('conv:usageLimits', (_e, refresh?: boolean) => getUsageLimits(!!refresh))
 
   // ── Sessões do terminal ──
   handle('conv:terminalSessions', async (): Promise<TerminalSession[]> => {

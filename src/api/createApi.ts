@@ -3,7 +3,7 @@ import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBa
 import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -612,6 +612,7 @@ export function createApi() {
       slashCommands: (id: string | null, projectId?: number | null) => invoke<SlashCommandInfo[]>('conv:slashCommands', id, projectId ?? null),
       respond: (id: string, requestId: string, response: AiPromptResponse) => invoke<boolean>('conv:respond', id, requestId, response),
       removeQueued: (id: string, index: number) => invoke<void>('conv:removeQueued', id, index),
+      usageLimits: (refresh?: boolean) => invoke<ClaudeUsageSnapshot>('conv:usageLimits', !!refresh),
       terminalSessions: () => invoke<TerminalSession[]>('conv:terminalSessions'),
       importTerminal: (sessionId: string, configDir?: string | null) => invoke<AiConversation>('conv:importTerminal', sessionId, configDir ?? null),
       resync: (id: string) => invoke<{ updated: boolean }>('conv:resync', id),

@@ -232,3 +232,30 @@ export interface SlashCommandInfo {
   source: string
   argumentHint: string | null
 }
+
+/** Uma linha do `/usage` do Claude Code (ex.: "Current session: 13% used · resets …"). */
+export interface ClaudeUsageLimit {
+  /** 'session' = janela de 5 horas; 'week' = semanal. */
+  kind: 'session' | 'week'
+  /** Qualificador da semanal: "all models", "Fable"… (null na de 5 horas). */
+  scope: string | null
+  percent: number
+  /** Quando zera, em ISO (null se não deu para interpretar; veja `resetsText`). */
+  resetsAt: string | null
+  resetsText: string | null
+}
+
+/** Limites de uma conta do Claude Code (`~/.claude`, `~/.claude-trabalho`…). */
+export interface ClaudeUsageAccount {
+  configDir: string
+  label: string
+  limits: ClaudeUsageLimit[]
+  /** Texto cru quando nada foi reconhecido (ex.: conta via API key). */
+  raw: string | null
+  error: string | null
+}
+
+export interface ClaudeUsageSnapshot {
+  fetchedAt: string
+  accounts: ClaudeUsageAccount[]
+}

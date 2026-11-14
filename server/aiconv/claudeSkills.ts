@@ -45,7 +45,7 @@ export function parseFrontmatter(text: string): { data: Record<string, string>; 
   return { data, body: text.slice(m[0].length) }
 }
 
-function configLabel(dir: string): string {
+export function configLabel(dir: string): string {
   const base = path.basename(dir)
   if (base === '.claude') return 'Pessoal'
   const rest = base.replace(/^\.claude-?/, '')

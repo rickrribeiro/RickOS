@@ -24,6 +24,37 @@
 .cv-side-foot { background: none; border: none; border-top: 1px solid var(--border); padding: 10px; font-size: 12px; color: var(--text-secondary); cursor: pointer; text-align: left; }
 .cv-side-foot:hover { color: var(--text-primary); background: var(--bg-hover); }
 
+/* limites do Claude (/usage) */
+.cv-usage { border-top: 1px solid var(--border); padding: 6px 10px 8px; font-size: 12px; }
+.cv-usage-head { display: flex; align-items: center; gap: 6px; }
+.cv-usage-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: none; border: none; padding: 2px 0; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer; text-align: left; }
+.cv-usage-title:hover { color: var(--text-primary); }
+.cv-usage-mini { font-weight: 400; color: var(--text-muted); white-space: nowrap; }
+.cv-usage-mini i { font-style: normal; margin-right: 4px; }
+.cv-usage-mini b { font-weight: 600; color: var(--text-secondary); }
+.cv-usage-mini b.warm { color: var(--warning); }
+.cv-usage-mini b.hot { color: var(--danger); }
+.cv-usage-refresh { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; width: 26px; height: 24px; font-size: 14px; line-height: 1; flex-shrink: 0; }
+.cv-usage-refresh:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); }
+.cv-usage-refresh:disabled { cursor: default; opacity: 0.7; }
+.cv-usage-refresh .spin { display: inline-block; animation: cv-usage-spin 0.9s linear infinite; }
+@keyframes cv-usage-spin { to { transform: rotate(360deg); } }
+.cv-usage-body { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.cv-usage-acc { display: flex; flex-direction: column; gap: 3px; }
+.cv-usage-acc-name { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cv-usage-row { display: grid; grid-template-columns: 74px minmax(30px, 1fr) 34px 64px; align-items: center; column-gap: 6px; }
+.cv-usage-label { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-usage-pct { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); text-align: right; }
+.cv-usage-bar { height: 5px; border-radius: 3px; background: var(--bg-tertiary); overflow: hidden; }
+.cv-usage-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+.cv-usage-row.warm .cv-usage-bar > span { background: var(--warning); }
+.cv-usage-row.warm .cv-usage-pct { color: var(--warning); }
+.cv-usage-row.hot .cv-usage-bar > span { background: var(--danger); }
+.cv-usage-row.hot .cv-usage-pct { color: var(--danger); }
+.cv-usage-reset { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-usage-note { font-size: 11px; color: var(--text-muted); white-space: pre-wrap; }
+.cv-usage-err { font-size: 11px; color: var(--danger); }
+
 /* conversa */
 .cv-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--bg-primary); }
 .cv-head { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }

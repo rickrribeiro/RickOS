@@ -9,6 +9,7 @@ import { timeAgo } from '../../../utils/dates'
 import { ContextMeter, fmtCost, fmtTokens, TurnView } from '../components/runner/TurnView'
 import { TerminalSessionsModal } from '../components/runner/TerminalSessionsModal'
 import { ChangesPanel } from '../components/runner/ChangesPanel'
+import { UsageLimits } from '../components/runner/UsageLimits'
 import { imageFiles, prepareImage } from '../images'
 import '../runner.css'
 
@@ -549,6 +550,7 @@ export function PromptRunnerPage(): React.ReactElement {
               )
             })}
           </div>
+          <UsageLimits />
           <button className="cv-side-foot" onClick={() => store.setShowArchived(!showArchived)}>
             {showArchived ? '← Voltar às conversas' : '🗄️ Arquivadas'}
           </button>
