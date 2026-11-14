@@ -2870,17 +2870,22 @@ async function markNotificationRead(id, read2 = true) {
   const db2 = await getDb();
   run$2(db2, "UPDATE notifications SET readAt = ? WHERE id = ?", [read2 ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
 }
-async function markAllNotificationsRead() {
+function notificationScopeSql(scope) {
+  if (scope === "claude") return " AND (source = 'claude' OR page = 'ai-runner')";
+  if (scope === "other") return " AND source <> 'claude' AND (page IS NULL OR page <> 'ai-runner')";
+  return "";
+}
+async function markAllNotificationsRead(scope) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE notifications SET readAt = ? WHERE readAt IS NULL", [(/* @__PURE__ */ new Date()).toISOString()]);
+  run$2(db2, `UPDATE notifications SET readAt = ? WHERE readAt IS NULL${notificationScopeSql(scope)}`, [(/* @__PURE__ */ new Date()).toISOString()]);
 }
 async function deleteNotification(id) {
   const db2 = await getDb();
   run$2(db2, "DELETE FROM notifications WHERE id = ?", [id]);
 }
-async function clearNotifications(onlyRead = false) {
+async function clearNotifications(onlyRead = false, scope) {
   const db2 = await getDb();
-  run$2(db2, onlyRead ? "DELETE FROM notifications WHERE readAt IS NOT NULL" : "DELETE FROM notifications");
+  run$2(db2, `DELETE FROM notifications WHERE 1 = 1${onlyRead ? " AND readAt IS NOT NULL" : ""}${notificationScopeSql(scope)}`);
 }
 const PROJECT_STATUSES = ["incubadora", "fila", "baixa", "foco", "pausado", "concluido", "encerrado"];
 function normName(s2) {
@@ -72774,7 +72779,7 @@ function scheduleAttentionNotice(run2, requestId, toolName, conv) {
   setTimeout(() => {
     if (!run2.pending.has(requestId) || live.get(run2.conversationId) !== run2) return;
     const what = toolName === "AskUserQuestion" ? "tem uma pergunta" : toolName === "ExitPlanMode" ? "quer aprovar um plano" : `pede permissão para ${toolName}`;
-    void notify({ title: `🤚 Claude ${what}`, body: conv.title || "Prompt Runner", source: "ia", page: "ai-runner" });
+    void notify({ title: `🤚 Claude ${what}`, body: conv.title || "Prompt Runner", source: "claude", page: "ai-runner" });
   }, 15e3);
 }
 async function finishTurn(run2, error) {
@@ -72817,7 +72822,7 @@ async function finishTurn(run2, error) {
     void notify({
       title: turn.status === "done" ? "✅ Claude terminou" : "⚠️ Claude parou com erro",
       body: conv?.title || turn.prompt.slice(0, 120),
-      source: "ia",
+      source: "claude",
       page: "ai-runner"
     });
   }
@@ -80067,16 +80072,16 @@ ipcMain.handle("notifications:markRead", async (_, id, read2) => {
   await markNotificationRead(id, read2 !== false);
   notificationsChanged();
 });
-ipcMain.handle("notifications:markAllRead", async () => {
-  await markAllNotificationsRead();
+ipcMain.handle("notifications:markAllRead", async (_, scope) => {
+  await markAllNotificationsRead(scope);
   notificationsChanged();
 });
 ipcMain.handle("notifications:delete", async (_, id) => {
   await deleteNotification(id);
   notificationsChanged();
 });
-ipcMain.handle("notifications:clear", async (_, onlyRead) => {
-  await clearNotifications(!!onlyRead);
+ipcMain.handle("notifications:clear", async (_, onlyRead, scope) => {
+  await clearNotifications(!!onlyRead, scope);
   notificationsChanged();
 });
 function todayRangeISO() {
@@ -80961,7 +80966,7 @@ electron.ipcMain.on("desktop:token", (e) => {
 });
 electron.ipcMain.on("desktop:notify", (_e, title, body) => {
   try {
-    if (electron.Notification.isSupported()) new electron.Notification({ title, body }).show();
+    if (electron.Notification.isSupported()) new electron.Notification({ title, body, silent: true }).show();
   } catch {
   }
 });
