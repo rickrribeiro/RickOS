@@ -5,7 +5,7 @@ import { timeAgo } from '../../../../utils/dates'
 const OPEN_KEY = 'rickos.runner.usageOpen'
 
 function limitLabel(l: ClaudeUsageLimit): string {
-  if (l.kind === 'session') return '5 horas'
+  if (l.kind === 'session') return l.scope ? `5h · ${l.scope}` : '5 horas'
   return l.scope && !/^all models$/i.test(l.scope) ? `Sem. ${l.scope}` : 'Semanal'
 }
 
@@ -32,7 +32,7 @@ function updated(iso: string): string {
 
 const level = (p: number): string => (p >= 90 ? 'hot' : p >= 70 ? 'warm' : '')
 
-/** Limites de 5 horas e semanal do Claude (o mesmo do `/usage`), por conta, com botão de atualizar. */
+/** Limites de 5 horas e semanal do Claude (o mesmo do `/usage`) e do Codex, por conta, com botão de atualizar. */
 export function UsageLimits(): React.ReactElement {
   const [data, setData] = useState<ClaudeUsageSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
@@ -79,12 +79,14 @@ export function UsageLimits(): React.ReactElement {
 
   const accounts = data?.accounts ?? []
   const multi = accounts.length > 1
+  const mixed = accounts.some((a) => a.provider === 'codex') && accounts.some((a) => a.provider === 'claude')
+  const name = (a: ClaudeUsageSnapshot['accounts'][number]): string => (mixed && a.provider === 'claude' ? `Claude · ${a.label}` : a.label)
 
   return (
     <div className="cv-usage">
       <div className="cv-usage-head">
         <button className="cv-usage-title" onClick={toggle} aria-expanded={open}>
-          <span>{open ? '▾' : '▸'}</span> Limites do Claude
+          <span>{open ? '▾' : '▸'}</span> Limites de uso
           {!open &&
             accounts.map((a) => {
               const s = a.limits.find((l) => l.kind === 'session')
@@ -92,7 +94,7 @@ export function UsageLimits(): React.ReactElement {
               if (!s && !w) return null
               return (
                 <span key={a.configDir} className="cv-usage-mini">
-                  {multi && <i>{a.label}</i>}
+                  {multi && <i>{name(a)}</i>}
                   {s && (
                     <>
                       5h <b className={level(s.percent)}>{s.percent}%</b>
@@ -111,7 +113,7 @@ export function UsageLimits(): React.ReactElement {
           className="cv-usage-refresh"
           onClick={() => void load(true)}
           disabled={loading}
-          title={data ? `${updated(data.fetchedAt)} · clique para ler o /usage de novo` : 'Atualizar'}
+          title={data ? `${updated(data.fetchedAt)} · clique para ler os limites de novo` : 'Atualizar'}
           aria-label="Atualizar limites"
         >
           <span className={loading ? 'spin' : ''}>↻</span>
@@ -121,10 +123,10 @@ export function UsageLimits(): React.ReactElement {
       {open && (
         <div className="cv-usage-body">
           {error && <div className="cv-usage-err">{error}</div>}
-          {!data && !error && <div className="cv-usage-note">{loading ? 'Lendo o /usage…' : '—'}</div>}
+          {!data && !error && <div className="cv-usage-note">{loading ? 'Lendo os limites…' : '—'}</div>}
           {accounts.map((a) => (
             <div key={a.configDir} className="cv-usage-acc">
-              {multi && <div className="cv-usage-acc-name">{a.label}</div>}
+              {multi && <div className="cv-usage-acc-name">{name(a)}</div>}
               {a.error && <div className="cv-usage-err">{a.error}</div>}
               {!a.error && !a.limits.length && <div className="cv-usage-note">{a.raw || 'Sem limites informados pelo /usage.'}</div>}
               {a.limits.map((l, i) => (

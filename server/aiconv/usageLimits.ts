@@ -9,6 +9,7 @@ import { configDirs } from './transcripts'
  * Limites de uso do Claude Code (os mesmos do `/usage` do terminal): roda
  * `claude -p /usage` em cada conta. É um comando local do CLI, não gasta tokens,
  * e `--no-session-persistence` evita criar transcript (não aparece em "Terminal").
+ * Codex: pergunta `account/rateLimits/read` ao `codex app-server` (JSON-RPC via stdio).
  */
 
 const TIMEOUT_MS = 30_000
@@ -116,9 +117,119 @@ async function fetchAccount(configDir: string): Promise<ClaudeUsageAccount> {
   try {
     const out = await runUsage(configDir)
     const limits = parseUsageOutput(out)
-    return { configDir, label, limits, raw: limits.length ? null : out.trim().slice(0, 600) || null, error: null }
+    return { provider: 'claude', configDir, label, limits, raw: limits.length ? null : out.trim().slice(0, 600) || null, error: null }
   } catch (e) {
-    return { configDir, label, limits: [], raw: null, error: e instanceof Error ? e.message : String(e) }
+    return { provider: 'claude', configDir, label, limits: [], raw: null, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+// ── Codex ─────────────────────────────────────────────────────────────────────
+
+interface CodexWindow {
+  usedPercent?: number
+  windowDurationMins?: number | null
+  resetsAt?: number | null
+}
+interface CodexLimit {
+  limitId?: string
+  limitName?: string | null
+  primary?: CodexWindow | null
+  secondary?: CodexWindow | null
+}
+export interface CodexRateLimitsResult {
+  rateLimits?: CodexLimit | null
+  rateLimitsByLimitId?: Record<string, CodexLimit> | null
+}
+
+/** Converte a resposta de `account/rateLimits/read` em linhas (5 horas / semanal / outras janelas). */
+export function codexLimits(res: CodexRateLimitsResult): ClaudeUsageLimit[] {
+  const groups = res.rateLimitsByLimitId && Object.keys(res.rateLimitsByLimitId).length ? Object.values(res.rateLimitsByLimitId) : res.rateLimits ? [res.rateLimits] : []
+  const out: ClaudeUsageLimit[] = []
+  for (const g of groups) {
+    const extra = g.limitId && g.limitId !== 'codex' ? g.limitName || g.limitId : null
+    for (const w of [g.primary, g.secondary]) {
+      if (!w || typeof w.usedPercent !== 'number') continue
+      const mins = w.windowDurationMins ?? 0
+      const kind: ClaudeUsageLimit['kind'] = mins && mins <= 24 * 60 ? 'session' : 'week'
+      // janelas fora do padrão (≠ 5h / 7d) levam a duração no nome
+      const odd = mins && mins !== 300 && mins !== 10080 ? (mins % 1440 === 0 ? `${mins / 1440}d` : `${Math.round(mins / 60)}h`) : null
+      out.push({
+        kind,
+        scope: [extra, odd].filter(Boolean).join(' · ') || null,
+        percent: Math.max(0, Math.min(100, Math.round(w.usedPercent))),
+        resetsAt: w.resetsAt ? new Date(w.resetsAt * 1000).toISOString() : null,
+        resetsText: null
+      })
+    }
+  }
+  return out
+}
+
+/** Sobe o `codex app-server`, pede os limites e encerra. null = Codex não instalado. */
+function readCodexRateLimits(): Promise<CodexRateLimitsResult | null> {
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: buildPath() }
+  const start = (viaShell: boolean): Promise<CodexRateLimitsResult | null> =>
+    new Promise((resolve, reject) => {
+      const shell = process.env.SHELL || '/bin/zsh'
+      const child = viaShell
+        ? spawn(shell, ['-ilc', 'codex app-server'], { cwd: os.tmpdir(), env, stdio: ['pipe', 'pipe', 'pipe'] })
+        : spawn('codex', ['app-server'], { cwd: os.tmpdir(), env, stdio: ['pipe', 'pipe', 'pipe'] })
+      let buf = ''
+      let err = ''
+      let done = false
+      const finish = (fn: () => void): void => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        child.kill('SIGTERM')
+        fn()
+      }
+      const timer = setTimeout(() => finish(() => reject(new Error('O Codex demorou demais para responder.'))), TIMEOUT_MS)
+      const send = (msg: unknown): void => {
+        child.stdin.write(JSON.stringify(msg) + '\n')
+      }
+      child.on('error', (e: NodeJS.ErrnoException) => finish(() => (e.code === 'ENOENT' ? resolve(null) : reject(e))))
+      child.stdin.on('error', () => undefined) // EPIPE se o processo já saiu
+      child.stderr.on('data', (b: Buffer) => (err += b.toString()))
+      child.on('close', (code) => {
+        // shell sem o comando: 127 = "command not found"
+        finish(() => (code === 127 ? resolve(null) : reject(new Error(err.trim().split('\n').pop() || `codex saiu com código ${code}`))))
+      })
+      child.stdout.on('data', (b: Buffer) => {
+        buf += b.toString()
+        let nl: number
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim()
+          buf = buf.slice(nl + 1)
+          if (!line) continue
+          let msg: { id?: number; result?: unknown; error?: { message?: string } }
+          try {
+            msg = JSON.parse(line)
+          } catch {
+            continue
+          }
+          if (msg.id === 1) {
+            send({ method: 'initialized' })
+            send({ method: 'account/rateLimits/read', id: 2 })
+          } else if (msg.id === 2) {
+            finish(() => (msg.error ? reject(new Error(msg.error.message || 'Erro do Codex.')) : resolve(msg.result as CodexRateLimitsResult)))
+          }
+        }
+      })
+      send({ method: 'initialize', id: 1, params: { clientInfo: { name: 'rickos', title: 'rickOS', version: '1.0.0' } } })
+    })
+  // binário direto; se não estiver no PATH (app aberto pelo Finder, nvm), tenta pelo shell de login
+  return start(false).then((r) => (r === null ? start(true) : r))
+}
+
+async function fetchCodex(): Promise<ClaudeUsageAccount | null> {
+  try {
+    const res = await readCodexRateLimits()
+    if (!res) return null
+    const limits = codexLimits(res)
+    return { provider: 'codex', configDir: 'codex', label: 'Codex', limits, raw: limits.length ? null : 'Sem limites informados pelo Codex (login por API key?).', error: null }
+  } catch (e) {
+    return { provider: 'codex', configDir: 'codex', label: 'Codex', limits: [], raw: null, error: e instanceof Error ? e.message : String(e) }
   }
 }
 
@@ -132,8 +243,8 @@ export function getUsageLimits(refresh = false): Promise<ClaudeUsageSnapshot> {
   inflight ??= (async () => {
     try {
       const dirs = configDirs()
-      const accounts = await Promise.all((dirs.length ? dirs : [`${os.homedir()}/.claude`]).map(fetchAccount))
-      cache = { fetchedAt: new Date().toISOString(), accounts }
+      const [claude, codex] = await Promise.all([Promise.all((dirs.length ? dirs : [`${os.homedir()}/.claude`]).map(fetchAccount)), fetchCodex()])
+      cache = { fetchedAt: new Date().toISOString(), accounts: codex ? [...claude, codex] : claude }
       return cache
     } finally {
       inflight = null

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { parseResetTime, parseUsageOutput } from '../usageLimits'
+import { codexLimits, parseResetTime, parseUsageOutput } from '../usageLimits'
 
 const SAMPLE = `You are currently using your subscription to power your Claude Code usage
 
@@ -45,5 +45,35 @@ describe('parseResetTime', () => {
   })
   it('texto desconhecido → null', () => {
     assert.equal(parseResetTime('amanhã cedo'), null)
+  })
+})
+
+describe('codexLimits', () => {
+  it('primary = 5 horas, secondary = semanal, resetsAt em segundos', () => {
+    const l = codexLimits({
+      rateLimitsByLimitId: {
+        codex: {
+          limitId: 'codex',
+          primary: { usedPercent: 12.4, windowDurationMins: 300, resetsAt: 1794712989 },
+          secondary: { usedPercent: 18, windowDurationMins: 10080, resetsAt: 1795193617 }
+        },
+        codex_bengalfox: { limitId: 'codex_bengalfox', limitName: 'GPT-5.3-Codex-Spark', primary: { usedPercent: 0, windowDurationMins: 300, resetsAt: null } }
+      }
+    })
+    assert.deepEqual(
+      l.map((x) => [x.kind, x.scope, x.percent]),
+      [
+        ['session', null, 12],
+        ['week', null, 18],
+        ['session', 'GPT-5.3-Codex-Spark', 0]
+      ]
+    )
+    assert.equal(l[0].resetsAt, new Date(1794712989 * 1000).toISOString())
+    assert.equal(l[2].resetsAt, null)
+  })
+
+  it('cai para rateLimits quando não há o mapa por id', () => {
+    const l = codexLimits({ rateLimits: { primary: { usedPercent: 50, windowDurationMins: 60 } } })
+    assert.deepEqual(l.map((x) => [x.kind, x.scope]), [['session', '1h']])
   })
 })

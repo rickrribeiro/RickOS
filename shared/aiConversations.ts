@@ -245,8 +245,10 @@ export interface ClaudeUsageLimit {
   resetsText: string | null
 }
 
-/** Limites de uma conta do Claude Code (`~/.claude`, `~/.claude-trabalho`…). */
+/** Limites de uma conta: Claude Code (`~/.claude`, `~/.claude-trabalho`…) ou Codex CLI. */
 export interface ClaudeUsageAccount {
+  provider: 'claude' | 'codex'
+  /** Claude: diretório de config; Codex: 'codex'. Serve de chave. */
   configDir: string
   label: string
   limits: ClaudeUsageLimit[]
