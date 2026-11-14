@@ -3284,7 +3284,7 @@ function broadcast(channel, payload) {
     }
   }
 }
-const TIMEOUT_MS$1 = 12e4;
+const TIMEOUT_MS$2 = 12e4;
 function buildPath() {
   const home = os.homedir();
   const extra = [
@@ -3437,7 +3437,7 @@ function attempt(bin, prompt, viaShell, opts = {}) {
         }
       }
     };
-    const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS$1;
+    const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS$2;
     const timer2 = timeoutMs > 0 ? setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -74883,7 +74883,7 @@ function validateBeeperUrl(raw) {
   if (!ok) return { ok: false, error: "Por segurança, só endereços locais, de rede privada ou Tailscale são aceitos." };
   return { ok: true, url: `${u.protocol}//${u.host}` };
 }
-const TIMEOUT_MS = 2e4;
+const TIMEOUT_MS$1 = 2e4;
 function directTransport(baseUrl, token2) {
   const v = validateBeeperUrl(baseUrl);
   return {
@@ -74904,7 +74904,7 @@ function directTransport(baseUrl, token2) {
             ...req.body !== void 0 ? { "Content-Type": "application/json" } : {}
           },
           body: req.body !== void 0 ? JSON.stringify(req.body) : void 0,
-          signal: AbortSignal.timeout(TIMEOUT_MS)
+          signal: AbortSignal.timeout(TIMEOUT_MS$1)
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -74939,7 +74939,7 @@ const POLL_WAIT_MS = 25e3;
 const REQUEST_TIMEOUT_MS = 3e4;
 const ONLINE_GRACE_MS = 45e3;
 const queue = [];
-const inflight = /* @__PURE__ */ new Map();
+const inflight$1 = /* @__PURE__ */ new Map();
 let waiter = null;
 let lastSeen = 0;
 let eventSink = null;
@@ -74960,7 +74960,7 @@ function flush() {
   waiter = null;
   for (const p of items) {
     p.sent = true;
-    inflight.set(p.id, p);
+    inflight$1.set(p.id, p);
   }
   w(items);
 }
@@ -74982,7 +74982,7 @@ function agentTransport() {
           timer: setTimeout(() => {
             const qi = queue.indexOf(p);
             if (qi >= 0) queue.splice(qi, 1);
-            inflight.delete(p.id);
+            inflight$1.delete(p.id);
             reject(new ProviderUnavailableError("O agente local não respondeu a tempo."));
           }, REQUEST_TIMEOUT_MS)
         };
@@ -75042,9 +75042,9 @@ function registerChatAgentRoutes(app, requireAuth) {
     async (req) => {
       lastSeen = Date.now();
       const b2 = req.body;
-      const p = inflight.get(b2?.id);
+      const p = inflight$1.get(b2?.id);
       if (!p) return { ok: false };
-      inflight.delete(p.id);
+      inflight$1.delete(p.id);
       clearTimeout(p.timer);
       if (b2.error) {
         p.reject(b2.status === 401 ? new ProviderAuthError(b2.error) : new ProviderUnavailableError(b2.error));
@@ -75078,6 +75078,7 @@ const K = {
   retentionDays: "chats_retention_days",
   initialLimit: "chats_initial_limit",
   markReadOnOpen: "chats_mark_read_on_open",
+  markReadOnReply: "chats_mark_read_on_reply",
   aiModel: "chats_ai_model",
   aiStyle: "chats_ai_style_instructions",
   homeWidget: "chats_home_widget",
@@ -75127,6 +75128,7 @@ async function loadConfig() {
     retentionDays: int(s2[K.retentionDays], 0, 0, 3650),
     initialLimit: int(s2[K.initialLimit], 1500, 50, 2e4),
     markReadOnOpen: bool(s2[K.markReadOnOpen], false),
+    markReadOnReply: bool(s2[K.markReadOnReply], true),
     aiModel: s2[K.aiModel] ?? "sonnet",
     aiStyleInstructions: s2[K.aiStyle] ?? "",
     homeWidget: bool(s2[K.homeWidget], true),
@@ -75166,6 +75168,7 @@ async function saveConfig(p) {
   if (p.retentionDays !== void 0) await set(K.retentionDays, String(p.retentionDays));
   if (p.initialLimit !== void 0) await set(K.initialLimit, String(p.initialLimit));
   if (p.markReadOnOpen !== void 0) await set(K.markReadOnOpen, b2(p.markReadOnOpen));
+  if (p.markReadOnReply !== void 0) await set(K.markReadOnReply, b2(p.markReadOnReply));
   if (p.aiModel !== void 0) {
     const m = p.aiModel.trim();
     if (m && !/^[A-Za-z0-9._:-]+$/.test(m)) throw new Error("Modelo inválido.");
@@ -76935,6 +76938,13 @@ async function sendMessage(chatId, text, replyToId) {
   if (org && (org.snoozeUntil || org.manualState === "needs_reply")) {
     await patchOrg([chatId], { snoozeUntil: null, snoozedAt: null, reminderNote: null, ...org.manualState === "needs_reply" ? { manualState: null, manualAt: null } : {} });
   }
+  if (cfg.markReadOnReply && provider.markRead && provider.capabilities().markAsRead && (chat.unreadCount ?? 1) !== 0) {
+    try {
+      await provider.markRead(chat.remoteId, null);
+      await patchChatCounters(chatId, chat.unreadCount == null ? null : 0, chat.unreadMentions == null ? null : 0);
+    } catch {
+    }
+  }
   await touchContactsFromOutbound();
   invalidateMessages(chatId);
   changed$1([chatId]);
@@ -78203,9 +78213,9 @@ function scanRoot(root, base) {
   walk(cmdDir, 0);
   return out;
 }
-let cache = null;
+let cache$1 = null;
 function listClaudeSkills(projects, fresh = false) {
-  if (!fresh && cache && Date.now() - cache.at < 15e3) return cache.items;
+  if (!fresh && cache$1 && Date.now() - cache$1.at < 15e3) return cache$1.items;
   const items = [];
   for (const dir of configDirs()) {
     items.push(...scanRoot(dir, { scope: "user", source: configLabel(dir), configDir: dir, projectId: null }));
@@ -78218,7 +78228,7 @@ function listClaudeSkills(projects, fresh = false) {
     items.push(...scanRoot(root, { scope: "project", source: p.name, configDir: null, projectId: p.id }));
   }
   items.sort((a, b2) => a.source.localeCompare(b2.source) || a.name.localeCompare(b2.name));
-  cache = { at: Date.now(), items };
+  cache$1 = { at: Date.now(), items };
   return items;
 }
 function skillFile(id, projects) {
@@ -78234,7 +78244,7 @@ function saveSkill(id, content, projects) {
   if (!info) throw new Error("Skill não encontrada.");
   if (typeof content !== "string" || content.length > MAX_FILE) throw new Error("Conteúdo inválido.");
   fs.writeFileSync(info.path, content, "utf8");
-  cache = null;
+  cache$1 = null;
   return skillFile(id, projects) ?? info;
 }
 const BUILTIN = {
@@ -78272,6 +78282,204 @@ function slashCommands(initNames, projects, opts) {
   }
   const rank = (x) => x.source.startsWith("projeto") ? 0 : x.source === "CLI" || x.source === "plugin" ? 2 : 1;
   return out.sort((a, b2) => rank(a) - rank(b2) || a.name.localeCompare(b2.name));
+}
+const TIMEOUT_MS = 3e4;
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+function tzOffsetMs(utcMs, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric"
+  }).formatToParts(new Date(utcMs));
+  const get2 = (t) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return Date.UTC(get2("year"), get2("month") - 1, get2("day"), get2("hour"), get2("minute"), get2("second")) - Math.floor(utcMs / 1e3) * 1e3;
+}
+function parseResetTime(text, now = /* @__PURE__ */ new Date()) {
+  const m = /^(?:([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?\s+at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*(?:\(([^)]+)\))?$/i.exec(text.trim());
+  if (!m) return null;
+  const [, mon, day, year, hh, mm, ampm, tzRaw] = m;
+  const timeZone = tzRaw?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+  } catch {
+    return null;
+  }
+  let hour = Number(hh) % 12;
+  if (ampm.toLowerCase() === "pm") hour += 12;
+  const minute = Number(mm ?? 0);
+  const local = new Date(now.getTime() + tzOffsetMs(now.getTime(), timeZone));
+  let y = year ? Number(year) : local.getUTCFullYear();
+  let mo = local.getUTCMonth();
+  let d = local.getUTCDate();
+  if (mon) {
+    const idx = MONTHS.indexOf(mon.toLowerCase());
+    if (idx < 0) return null;
+    mo = idx;
+    d = Number(day);
+  }
+  const toUtc = (yy, mmo, dd) => {
+    const wall = Date.UTC(yy, mmo, dd, hour, minute);
+    return wall - tzOffsetMs(wall - tzOffsetMs(wall, timeZone), timeZone);
+  };
+  let at = toUtc(y, mo, d);
+  const DAY2 = 864e5;
+  if (!mon && at < now.getTime() - 6e4) at += DAY2;
+  if (mon && !year && at < now.getTime() - DAY2) at = toUtc(++y, mo, d);
+  return new Date(at).toISOString();
+}
+function parseUsageOutput(out, now = /* @__PURE__ */ new Date()) {
+  const limits = [];
+  for (const line of out.split("\n")) {
+    const m = /^\s*Current (session|week)(?:\s*\(([^)]+)\))?\s*:\s*(\d+(?:\.\d+)?)%\s*used(?:\s*·\s*resets\s+(.+?))?\s*$/i.exec(line);
+    if (!m) continue;
+    const resetsText = m[4]?.trim() || null;
+    limits.push({
+      kind: m[1].toLowerCase() === "session" ? "session" : "week",
+      scope: m[2]?.trim() || null,
+      percent: Math.max(0, Math.min(100, Number(m[3]))),
+      resetsAt: resetsText ? parseResetTime(resetsText, now) : null,
+      resetsText
+    });
+  }
+  return limits;
+}
+function runUsage(configDir) {
+  return new Promise((resolve, reject) => {
+    const env = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: "1" };
+    if (configDir === `${os.homedir()}/.claude`) delete env.CLAUDE_CONFIG_DIR;
+    else env.CLAUDE_CONFIG_DIR = configDir;
+    const child = child_process.spawn("claude", ["-p", "/usage", "--no-session-persistence"], { cwd: os.tmpdir(), env, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let err = "";
+    const timer2 = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("O Claude CLI demorou demais para responder."));
+    }, TIMEOUT_MS);
+    child.stdout.on("data", (b2) => out += b2.toString());
+    child.stderr.on("data", (b2) => err += b2.toString());
+    child.on("error", (e) => {
+      clearTimeout(timer2);
+      reject(new Error(e.code === "ENOENT" ? "Claude CLI não encontrado no PATH." : e.message));
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer2);
+      if (code === 0 || out.trim()) resolve(out);
+      else reject(new Error(err.trim().split("\n").pop() || `claude saiu com código ${code}`));
+    });
+  });
+}
+async function fetchAccount(configDir) {
+  const label = configLabel(configDir);
+  try {
+    const out = await runUsage(configDir);
+    const limits = parseUsageOutput(out);
+    return { provider: "claude", configDir, label, limits, raw: limits.length ? null : out.trim().slice(0, 600) || null, error: null };
+  } catch (e) {
+    return { provider: "claude", configDir, label, limits: [], raw: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+function codexLimits(res) {
+  const groups = res.rateLimitsByLimitId && Object.keys(res.rateLimitsByLimitId).length ? Object.values(res.rateLimitsByLimitId) : res.rateLimits ? [res.rateLimits] : [];
+  const out = [];
+  for (const g of groups) {
+    const extra = g.limitId && g.limitId !== "codex" ? g.limitName || g.limitId : null;
+    for (const w of [g.primary, g.secondary]) {
+      if (!w || typeof w.usedPercent !== "number") continue;
+      const mins = w.windowDurationMins ?? 0;
+      const kind = mins && mins <= 24 * 60 ? "session" : "week";
+      const odd = mins && mins !== 300 && mins !== 10080 ? mins % 1440 === 0 ? `${mins / 1440}d` : `${Math.round(mins / 60)}h` : null;
+      out.push({
+        kind,
+        scope: [extra, odd].filter(Boolean).join(" · ") || null,
+        percent: Math.max(0, Math.min(100, Math.round(w.usedPercent))),
+        resetsAt: w.resetsAt ? new Date(w.resetsAt * 1e3).toISOString() : null,
+        resetsText: null
+      });
+    }
+  }
+  return out;
+}
+function readCodexRateLimits() {
+  const env = { ...process.env, PATH: buildPath() };
+  const start = (viaShell) => new Promise((resolve, reject) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    const child = viaShell ? child_process.spawn(shell, ["-ilc", "codex app-server"], { cwd: os.tmpdir(), env, stdio: ["pipe", "pipe", "pipe"] }) : child_process.spawn("codex", ["app-server"], { cwd: os.tmpdir(), env, stdio: ["pipe", "pipe", "pipe"] });
+    let buf = "";
+    let err = "";
+    let done = false;
+    const finish = (fn) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer2);
+      child.kill("SIGTERM");
+      fn();
+    };
+    const timer2 = setTimeout(() => finish(() => reject(new Error("O Codex demorou demais para responder."))), TIMEOUT_MS);
+    const send = (msg) => {
+      child.stdin.write(JSON.stringify(msg) + "\n");
+    };
+    child.on("error", (e) => finish(() => e.code === "ENOENT" ? resolve(null) : reject(e)));
+    child.stdin.on("error", () => void 0);
+    child.stderr.on("data", (b2) => err += b2.toString());
+    child.on("close", (code) => {
+      finish(() => code === 127 ? resolve(null) : reject(new Error(err.trim().split("\n").pop() || `codex saiu com código ${code}`)));
+    });
+    child.stdout.on("data", (b2) => {
+      buf += b2.toString();
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (msg.id === 1) {
+          send({ method: "initialized" });
+          send({ method: "account/rateLimits/read", id: 2 });
+        } else if (msg.id === 2) {
+          finish(() => msg.error ? reject(new Error(msg.error.message || "Erro do Codex.")) : resolve(msg.result));
+        }
+      }
+    });
+    send({ method: "initialize", id: 1, params: { clientInfo: { name: "rickos", title: "rickOS", version: "1.0.0" } } });
+  });
+  return start(false).then((r) => r === null ? start(true) : r);
+}
+async function fetchCodex() {
+  try {
+    const res = await readCodexRateLimits();
+    if (!res) return null;
+    const limits = codexLimits(res);
+    return { provider: "codex", configDir: "codex", label: "Codex", limits, raw: limits.length ? null : "Sem limites informados pelo Codex (login por API key?).", error: null };
+  } catch (e) {
+    return { provider: "codex", configDir: "codex", label: "Codex", limits: [], raw: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+let cache = null;
+let inflight = null;
+const FRESH_MS = 5 * 6e4;
+function getUsageLimits(refresh = false) {
+  if (!refresh && cache && Date.now() - new Date(cache.fetchedAt).getTime() < FRESH_MS) return Promise.resolve(cache);
+  inflight ??= (async () => {
+    try {
+      const dirs = configDirs();
+      const [claude, codex] = await Promise.all([Promise.all((dirs.length ? dirs : [`${os.homedir()}/.claude`]).map(fetchAccount)), fetchCodex()]);
+      cache = { fetchedAt: (/* @__PURE__ */ new Date()).toISOString(), accounts: codex ? [...claude, codex] : claude };
+      return cache;
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"];
 const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"];
@@ -78482,6 +78690,7 @@ ${ctx}`,
   });
   handle("conv:respond", (_e, id, requestId, response) => respond(id, requestId, response));
   handle("conv:removeQueued", (_e, id, index) => removeQueued(id, Number(index) || 0));
+  handle("conv:usageLimits", (_e, refresh) => getUsageLimits(!!refresh));
   handle("conv:terminalSessions", async () => {
     const [sessions, inUse, projects] = await Promise.all([Promise.resolve(listTerminalSessions(60)), sessionIdsInUse(), deps2.projectPaths()]);
     return sessions.map((s2) => ({ ...s2, projectId: matchProject(s2.cwd, projects), conversationId: inUse.get(s2.sessionId) ?? null }));
