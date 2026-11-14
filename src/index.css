@@ -173,6 +173,15 @@ select:focus {
   padding: 12px 14px 8px;
   font-size: 14px;
 }
+.notif-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.notif-link.notif-sound {
+  font-size: 14px;
+  line-height: 1;
+}
 .notif-link {
   background: none;
   border: none;

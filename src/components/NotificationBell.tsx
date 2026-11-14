@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNotificationStore, wireNotifications, isClaudeNotification } from '../store/notificationStore'
 import { useUIStore } from '../store/uiStore'
 import { AppNotification } from '../types'
+import { isNotificationSoundOn, playNotificationSound, setNotificationSoundOn } from '../utils/notificationSound'
 
 const SOURCE_LABEL: Record<string, string> = {
   automacao: 'Automação',
@@ -30,6 +31,7 @@ export function NotificationBell(): React.ReactElement {
   const setPage = useUIStore((s) => s.setPage)
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unread' | 'claude'>('all')
+  const [soundOn, setSoundOn] = useState(isNotificationSoundOn)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -106,9 +108,24 @@ export function NotificationBell(): React.ReactElement {
         <div ref={panelRef} className="notif-panel" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="Notificações">
           <div className="notif-head">
             <strong>Notificações</strong>
-            <button className="notif-link" onClick={() => void markAllRead(scope)} disabled={!scopedUnread}>
-              Marcar todas como lidas
-            </button>
+            <span className="notif-head-actions">
+              <button
+                className="notif-link notif-sound"
+                title={soundOn ? 'Som ligado neste aparelho (clique para silenciar)' : 'Som desligado neste aparelho'}
+                aria-label={soundOn ? 'Desligar som das notificações' : 'Ligar som das notificações'}
+                onClick={() => {
+                  const next = !soundOn
+                  setNotificationSoundOn(next)
+                  setSoundOn(next)
+                  if (next) playNotificationSound('default', true)
+                }}
+              >
+                {soundOn ? '🔊' : '🔇'}
+              </button>
+              <button className="notif-link" onClick={() => void markAllRead(scope)} disabled={!scopedUnread}>
+                Marcar todas como lidas
+              </button>
+            </span>
           </div>
           <div className="notif-tabs">
             <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>

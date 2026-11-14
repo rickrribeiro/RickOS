@@ -73,7 +73,8 @@ ipcMain.on('desktop:token', (e) => {
 })
 ipcMain.on('desktop:notify', (_e, title: string, body: string) => {
   try {
-    if (Notification.isSupported()) new Notification({ title, body }).show()
+    // silent: o renderer toca o som do rickOS (com liga/desliga no sino)
+    if (Notification.isSupported()) new Notification({ title, body, silent: true }).show()
   } catch {
     // ignore
   }
