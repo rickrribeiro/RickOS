@@ -313,6 +313,10 @@ export function ChatsSection(): React.ReactElement {
           <input type="checkbox" checked={cfg.markReadOnOpen} onChange={(e) => void save({ markReadOnOpen: e.target.checked })} />
           <span>Marcar como lida ao abrir a conversa (desligado = só pelo botão)</span>
         </label>
+        <label className="chats-switch">
+          <input type="checkbox" checked={cfg.markReadOnReply} onChange={(e) => void save({ markReadOnReply: e.target.checked })} />
+          <span>Marcar como lida ao responder pelo rickOS (no app também deixa de aparecer como não lida)</span>
+        </label>
         <div className="editor-field">
           <label>Retenção do cache (dias sem atividade; 0 = sem limite)</label>
           <input type="number" min={0} max={3650} defaultValue={cfg.retentionDays} onBlur={(e) => void save({ retentionDays: Number(e.target.value) })} />

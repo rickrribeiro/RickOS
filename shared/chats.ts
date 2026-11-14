@@ -364,6 +364,8 @@ export interface ChatsConfig {
   retentionDays: number
   initialLimit: number
   markReadOnOpen: boolean
+  /** Ao enviar uma resposta pelo rickOS, marca a conversa como lida no app (ação explícita sua). */
+  markReadOnReply: boolean
   aiModel: string
   aiStyleInstructions: string
   homeWidget: boolean

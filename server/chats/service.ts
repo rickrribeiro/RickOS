@@ -540,6 +540,15 @@ export async function sendMessage(chatId: number, text: string, replyToId: strin
   if (org && (org.snoozeUntil || org.manualState === 'needs_reply')) {
     await repo.patchOrg([chatId], { snoozeUntil: null, snoozedAt: null, reminderNote: null, ...(org.manualState === 'needs_reply' ? { manualState: null, manualAt: null } : {}) })
   }
+  // responder é ação explícita: marca como lida no app também (configurável); falha aqui não desfaz o envio
+  if (cfg.markReadOnReply && provider.markRead && provider.capabilities().markAsRead && (chat.unreadCount ?? 1) !== 0) {
+    try {
+      await provider.markRead(chat.remoteId, null)
+      await repo.patchChatCounters(chatId, chat.unreadCount == null ? null : 0, chat.unreadMentions == null ? null : 0)
+    } catch {
+      // a próxima sincronização mostra o estado real
+    }
+  }
   await repo.touchContactsFromOutbound()
   invalidateMessages(chatId)
   changed([chatId])

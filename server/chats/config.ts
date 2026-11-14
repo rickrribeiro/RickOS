@@ -19,6 +19,7 @@ export const K = {
   retentionDays: 'chats_retention_days',
   initialLimit: 'chats_initial_limit',
   markReadOnOpen: 'chats_mark_read_on_open',
+  markReadOnReply: 'chats_mark_read_on_reply',
   aiModel: 'chats_ai_model',
   aiStyle: 'chats_ai_style_instructions',
   homeWidget: 'chats_home_widget',
@@ -75,6 +76,7 @@ export async function loadConfig(): Promise<ServerChatsConfig> {
     retentionDays: int(s[K.retentionDays], 0, 0, 3650),
     initialLimit: int(s[K.initialLimit], 1500, 50, 20000),
     markReadOnOpen: bool(s[K.markReadOnOpen], false),
+    markReadOnReply: bool(s[K.markReadOnReply], true),
     aiModel: s[K.aiModel] ?? 'sonnet',
     aiStyleInstructions: s[K.aiStyle] ?? '',
     homeWidget: bool(s[K.homeWidget], true),
@@ -122,6 +124,7 @@ export async function saveConfig(p: ConfigPatch): Promise<void> {
   if (p.retentionDays !== undefined) await set(K.retentionDays, String(p.retentionDays))
   if (p.initialLimit !== undefined) await set(K.initialLimit, String(p.initialLimit))
   if (p.markReadOnOpen !== undefined) await set(K.markReadOnOpen, b(p.markReadOnOpen))
+  if (p.markReadOnReply !== undefined) await set(K.markReadOnReply, b(p.markReadOnReply))
   if (p.aiModel !== undefined) {
     const m = p.aiModel.trim()
     if (m && !/^[A-Za-z0-9._:-]+$/.test(m)) throw new Error('Modelo inválido.')

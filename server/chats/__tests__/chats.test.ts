@@ -416,6 +416,25 @@ describe('central de mensagens (mock)', () => {
     provider.control.offline = false
   })
 
+  it('responder marca como lida no app (configurável); abrir não marca', async () => {
+    await call('chats:syncNow', true)
+    const maria = await byRemote('wa-maria')
+    assert.ok((maria.unreadCount ?? 0) > 0)
+    await call('chats:messages', maria.id)
+    assert.ok(((await call<ChatSummary>('chats:get', maria.id)).unreadCount ?? 0) > 0, 'carregar não marca como lida')
+    await call('chats:send', maria.id, 'Vou sim!', null)
+    assert.equal((await call<ChatSummary>('chats:get', maria.id)).unreadCount, 0)
+    await call('chats:syncNow', true)
+    assert.equal((await byRemote('wa-maria')).unreadCount, 0, 'o provedor também ficou lido')
+    // desligado: enviar não mexe nas não lidas
+    await call('chats:saveConfig', { markReadOnReply: false })
+    const joao = await byRemote('wa-joao')
+    assert.ok((joao.unreadCount ?? 0) > 0)
+    await call('chats:send', joao.id, 'Já te respondo', null)
+    assert.ok(((await call<ChatSummary>('chats:get', joao.id)).unreadCount ?? 0) > 0)
+    await call('chats:saveConfig', { markReadOnReply: true })
+  })
+
   it('conta removida no provedor: conversas ficam inativas e saem da lista', async () => {
     await call('chats:syncNow', true)
     const before = (await list()).total
