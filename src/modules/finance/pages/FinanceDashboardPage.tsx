@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
-import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth } from '../util'
+import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, iofInBase } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
   const { accounts, transactions, allTransactions, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
@@ -55,6 +55,15 @@ export function FinanceDashboardPage(): React.ReactElement {
   const expenseBase = sumInBase(expense, base, rates)
   const netBase = incomeBase - expenseBase
 
+  // IOF: mês selecionado e ano corrente do mês selecionado
+  const iofMonth = iofInBase(transactions, base, rates)
+  const year = month.slice(0, 4)
+  const iofYear = iofInBase(
+    allTransactions.filter((t) => t.date.slice(0, 4) === year && t.date.slice(0, 7) <= month),
+    base,
+    rates
+  )
+
   const money = (rec: Record<string, number>): string =>
     Object.keys(rec).length ? Object.entries(rec).map(([c, v]) => formatMoney(v, c)).join(' · ') : formatMoney(0)
 
@@ -96,6 +105,15 @@ export function FinanceDashboardPage(): React.ReactElement {
             {formatMoney(netBase, base)}
           </div>
           <div className="stat-card-sub">receitas {formatMoney(incomeBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">IOF do mês</div>
+          <div className="stat-card-value" style={{ fontSize: 16, color: iofMonth.total > 0 ? 'var(--danger)' : undefined }}>
+            {formatMoney(iofMonth.total, base)}
+          </div>
+          <div className="stat-card-sub">
+            {iofMonth.count} {iofMonth.count === 1 ? 'cobrança' : 'cobranças'} · {year} até agora: {formatMoney(iofYear.total, base)}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Investimentos em {base}</div>

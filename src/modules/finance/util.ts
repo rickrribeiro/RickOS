@@ -60,6 +60,34 @@ export function sumInBase(
   return items.reduce((s, t) => s + convertToBase(t.amount, t.currency, base, rates), 0)
 }
 
+/** Transação de IOF (cobrança ou estorno), detectada pela descrição. */
+export function isIof(t: { type: string; description: string | null }): boolean {
+  return t.type === 'expense' && /\biof\b/i.test(t.description ?? '')
+}
+
+/**
+ * IOF líquido em `base`: cobranças somam, estornos subtraem (o banco importa
+ * o estorno como gasto, então o sinal vem da descrição).
+ */
+export function iofInBase(
+  items: { type: string; description: string | null; amount: number; currency: string }[],
+  base: string,
+  rates: Record<string, number>
+): { total: number; count: number } {
+  let total = 0
+  let count = 0
+  for (const t of items) {
+    if (!isIof(t)) continue
+    const v = convertToBase(t.amount, t.currency, base, rates)
+    if (/estorno/i.test(t.description ?? '')) total -= v
+    else {
+      total += v
+      count++
+    }
+  }
+  return { total, count }
+}
+
 /**
  * Value of an investment for a given month, carrying forward the most recent
  * snapshot at or before that month (holdings persist until re-entered). null if
