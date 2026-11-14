@@ -286,3 +286,16 @@
 .fm-delta { font-weight: 700; }
 .fm-delta.down { color: var(--success); }
 .fm-delta.up { color: var(--danger); }
+
+/* Skyscanner: seleção por rota */
+.fm-sky-routes { max-height: 380px; }
+.fm-sky-routebox { border-bottom: 1px solid var(--border); }
+.fm-sky-routebox:last-child { border-bottom: none; }
+.fm-sky-routebox .fm-sky-row { border-bottom: none; cursor: default; }
+.fm-sky-routebox.on > .fm-sky-row { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.fm-sky-routebox .fm-sky-route { cursor: pointer; }
+.fm-sky-routedates { padding: 4px 8px 8px 30px; max-height: none; }
+@media (max-width: 600px) {
+  .fm-sky-routedates { padding-left: 8px; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+}
+.fm-linkbtn.fm-sky-caret { font-size: 15px; line-height: 1; padding: 2px 6px; }

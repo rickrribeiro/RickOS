@@ -70,15 +70,32 @@ function PlacePicker(props: { places: SkyPlace[]; value: string; onChange: (iata
   )
 }
 
+const SUGGESTED_ROUTES = 8
+const pairKey = (o: string, d: string): string => `${o}|${d}`
+
+/** Checkbox com estado "parcial" (algumas datas da rota marcadas). */
+function TriCheck(props: { state: 'none' | 'some' | 'all'; disabled?: boolean; onChange: () => void; label: string }): React.ReactElement {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = props.state === 'some'
+  }, [props.state])
+  return <input ref={ref} type="checkbox" checked={props.state === 'all'} disabled={props.disabled} onChange={props.onChange} aria-label={props.label} />
+}
+
 /**
- * Escolha das combinações para o Skyscanner pelo Chrome: sugestões (variando rota e data)
- * marcáveis uma a uma + seletor de rota com TODAS as datas do intervalo.
+ * Escolha das combinações para o Skyscanner pelo Chrome. A unidade é a ROTA: marcar uma rota
+ * (sugerida ou escolhida no buscador) já marca todas as datas do intervalo; dá para desmarcar
+ * datas uma a uma logo abaixo dela.
  */
 export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[]; onClose: () => void; onStarted: () => void }): React.ReactElement {
   const [pv, setPv] = useState<SkyPreview | null>(null)
   const [sel, setSel] = useState<Map<string, SkyPick>>(new Map())
+  const [extra, setExtra] = useState<string[]>([]) // rotas adicionadas pelo buscador
+  const [open, setOpen] = useState<Set<string>>(new Set())
   const [origin, setOrigin] = useState('')
   const [dest, setDest] = useState('')
+  const [notice, setNotice] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
   const [err, setErr] = useState('')
   const [starting, setStarting] = useState(false)
 
@@ -87,10 +104,15 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
       .skyscannerPreview(props.m.id)
       .then((r) => {
         setPv(r)
-        const start = props.initial?.length ? props.initial.slice(0, r.maxPerRun) : r.recommended.slice(0, 5)
+        let start: SkyPick[]
+        if (props.initial?.length) start = props.initial.slice(0, r.maxPerRun)
+        else {
+          // 1ª rota sugerida com todas as datas do intervalo
+          const first = r.recommended[0]
+          start = first ? datesFor(r, first.origin, first.destination).slice(0, r.maxPerRun) : []
+        }
         setSel(new Map(start.map((c) => [skyKey(c), { origin: c.origin, destination: c.destination, depart: c.depart, ret: c.ret }])))
-        const first = r.recommended[0] ?? (r.pairs[0] ? { origin: r.pairs[0].split('|')[0], destination: r.pairs[0].split('|')[1] } : null)
-        if (first) (setOrigin(first.origin), setDest(first.destination))
+        setOpen(new Set(props.initial?.length ? [] : start.slice(0, 1).map((c) => pairKey(c.origin, c.destination))))
       })
       .catch((e) => setErr(errMsg(e)))
   }, [])
@@ -101,10 +123,35 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
     return map
   }, [pv])
   const pairSet = useMemo(() => new Set(pv?.pairs ?? []), [pv])
-  const destOptions = (pv?.destinations ?? []).filter((d) => pairSet.has(`${origin}|${d.iata}`))
-  const pairOk = pairSet.has(`${origin}|${dest}`)
+  // rotas na ordem das sugestões (as com preço conhecido barato primeiro)
+  const suggested = useMemo(() => [...new Set((pv?.recommended ?? []).map((c) => pairKey(c.origin, c.destination)))], [pv])
+  // menor preço conhecido por rota
+  const routeBest = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const [k, v] of Object.entries(pv?.known ?? {})) {
+      const [o, d] = k.split('|')
+      const pk = pairKey(o, d)
+      if (!m.has(pk) || v < (m.get(pk) as number)) m.set(pk, v)
+    }
+    return m
+  }, [pv])
+  const destOptions = (pv?.destinations ?? []).filter((d) => pairSet.has(pairKey(origin, d.iata)))
   const max = pv?.maxPerRun ?? 30
   const full = sel.size >= max
+
+  const selectedPairs = [...new Set([...sel.values()].map((c) => pairKey(c.origin, c.destination)))]
+  const shown = [...new Set([...extra, ...suggested.slice(0, SUGGESTED_ROUTES), ...selectedPairs])]
+
+  function routeCombos(pk: string): SkyPick[] {
+    if (!pv) return []
+    const [o, d] = pk.split('|')
+    return datesFor(pv, o, d)
+  }
+  function routeState(pk: string): 'none' | 'some' | 'all' {
+    const all = routeCombos(pk)
+    const n = all.filter((c) => sel.has(skyKey(c))).length
+    return n === 0 ? 'none' : n === all.length ? 'all' : 'some'
+  }
 
   function toggle(p: SkyPick, on?: boolean): void {
     setSel((prev) => {
@@ -116,29 +163,45 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
       return next
     })
   }
-  function setRecommended(n: number): void {
+  /** Marca todas as datas da rota (as consultadas nas últimas 12 h por último) ou desmarca todas. */
+  function setRoute(pk: string, on: boolean): void {
     if (!pv) return
-    setSel((prev) => {
-      const recKeys = new Set(pv.recommended.map(skyKey))
-      const next = new Map([...prev].filter(([k]) => !recKeys.has(k)))
-      for (const c of pv.recommended.slice(0, n)) if (next.size < max) next.set(skyKey(c), c)
-      return next
-    })
-  }
-  function setRouteDates(on: boolean): void {
-    if (!pv || !pairOk) return
-    setSel((prev) => {
-      const next = new Map(prev)
-      for (const d of pv.dates) {
-        const p = { origin, destination: dest, depart: d.depart, ret: d.ret }
-        const k = skyKey(p)
-        if (!on) next.delete(k)
-        else if (!next.has(k) && !pv.recent[k] && next.size < max) next.set(k, p)
+    const combos = routeCombos(pk)
+    const fresh = combos.filter((c) => !pv.recent[skyKey(c)])
+    const order = [...fresh, ...combos.filter((c) => pv.recent[skyKey(c)])]
+    let skipped = 0
+    const next = new Map(sel)
+    for (const c of order) {
+      const k = skyKey(c)
+      if (!on) next.delete(k)
+      else if (!next.has(k)) {
+        if (next.size < max) next.set(k, c)
+        else skipped++
       }
-      return next
+    }
+    setSel(next)
+    if (on) {
+      setOpen((o) => new Set(o).add(pk))
+      setNotice(skipped ? `Limite de ${max} combinações por busca: ${skipped} data(s) de ${names.get(pk.split('|')[0]) ?? pk} ficaram de fora. Desmarque outras para incluir.` : '')
+    } else setNotice('')
+  }
+  function addRoute(o: string, d: string): void {
+    const pk = pairKey(o, d)
+    if (!pairSet.has(pk)) return
+    setExtra((e) => [pk, ...e.filter((x) => x !== pk)]) // a mais recente no topo
+    if (routeState(pk) === 'none') setRoute(pk, true)
+    else setOpen((x) => new Set(x).add(pk))
+    setDest('')
+    listRef.current?.scrollTo({ top: 0 })
+  }
+  function toggleOpen(pk: string): void {
+    setOpen((o) => {
+      const n = new Set(o)
+      if (n.has(pk)) n.delete(pk)
+      else n.add(pk)
+      return n
     })
   }
-
   function setTracked(on: boolean): void {
     if (!pv) return
     setSel((prev) => {
@@ -165,9 +228,8 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
     }
   }
 
-  const price = (k: string): string | null => (pv?.known[k] != null ? formatMoney({ amountMinor: pv.known[k], currency: pv.currency }) : null)
+  const money = (minor: number | undefined | null): string | null => (minor != null && pv ? formatMoney({ amountMinor: minor, currency: pv.currency }) : null)
   const sessions = pv ? Math.ceil(sel.size / pv.perSession) : 0
-  const recCount = pv ? pv.recommended.filter((c) => sel.has(skyKey(c))).length : 0
 
   return (
     <Modal
@@ -207,92 +269,84 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
               </button>
             </div>
           )}
+
           <div className="fm-row" style={{ margin: '4px 0 6px' }}>
             <span className="fm-label" style={{ margin: 0 }}>
-              Sugestões ({recCount}/{pv.recommended.length})
+              Rotas
             </span>
-            <span className="fm-spacer" />
-            <div className="fm-seg">
-              {[5, 10, 20].filter((n) => n <= pv.recommended.length || n === 5).map((n) => (
-                <button key={n} onClick={() => setRecommended(n)} type="button">
-                  {n} primeiras
-                </button>
-              ))}
-              <button onClick={() => setRecommended(pv.recommended.length)} type="button">
-                todas
-              </button>
-              <button onClick={() => setRecommended(0)} type="button">
-                nenhuma
-              </button>
-            </div>
+            <span className="fm-small fm-grow">
+              marcar a rota marca as {pv.dates.length} data(s) do intervalo{pv.datesTotal > pv.dates.length ? ` (de ${pv.datesTotal}; estreite a duração para ver todas)` : ''} · desmarque as que não quiser
+            </span>
+            <button className="fm-linkbtn" type="button" disabled={!sel.size} onClick={() => (setSel(new Map()), setNotice(''))}>
+              limpar tudo
+            </button>
           </div>
-          {pv.recommended.length === 0 ? (
-            <div className="fm-note">Nenhuma sugestão nova (o que havia foi consultado nas últimas 12 h). Escolha abaixo.</div>
-          ) : (
-            <div className="fm-sky-list">
-              {pv.recommended.map((c) => {
-                const k = skyKey(c)
-                const p = price(k)
-                return (
-                  <label className={`fm-sky-row ${sel.has(k) ? 'on' : ''}`} key={k}>
-                    <input type="checkbox" checked={sel.has(k)} disabled={!sel.has(k) && full} onChange={() => toggle(c)} />
-                    <span className="fm-sky-route">
-                      <b>{names.get(c.origin) ?? c.origin}</b> → {names.get(c.destination) ?? c.destination}
+          {notice && <div className="fm-note warn" style={{ marginBottom: 6 }}>{notice}</div>}
+
+          <div className="fm-sky-list fm-sky-routes" ref={listRef}>
+            {shown.length === 0 && <div className="fm-muted" style={{ padding: 8 }}>Nenhuma rota sugerida — adicione abaixo.</div>}
+            {shown.map((pk) => {
+              const [o, d] = pk.split('|')
+              const st = routeState(pk)
+              const combos = routeCombos(pk)
+              const n = combos.filter((c) => sel.has(skyKey(c))).length
+              const isOpen = open.has(pk)
+              const best = money(routeBest.get(pk))
+              return (
+                <div className={`fm-sky-routebox ${st !== 'none' ? 'on' : ''}`} key={pk}>
+                  <div className="fm-sky-row">
+                    <TriCheck state={st} disabled={st === 'none' && full} onChange={() => setRoute(pk, st === 'none')} label={`Rota ${o} → ${d}`} />
+                    <span className="fm-sky-route" onClick={() => toggleOpen(pk)}>
+                      <b>{names.get(o) ?? o}</b> → {names.get(d) ?? d}
                     </span>
-                    <span className="fm-sky-date">{dateText(c)}</span>
-                    {p && <span className="fm-pill ok" title="Melhor tarifa já vista nesta combinação">{p}</span>}
-                  </label>
-                )
-              })}
-            </div>
-          )}
+                    {suggested.indexOf(pk) >= 0 && suggested.indexOf(pk) < SUGGESTED_ROUTES && <span className="fm-pill outline">sugerida</span>}
+                    {best && <span className="fm-pill ok" title="Melhor tarifa já vista nesta rota">{best}</span>}
+                    <span className="fm-sky-date">
+                      {n}/{combos.length} datas
+                    </span>
+                    <button className="fm-linkbtn fm-sky-caret" type="button" onClick={() => toggleOpen(pk)} aria-expanded={isOpen} title={isOpen ? 'Esconder datas' : 'Ver datas'}>
+                      {isOpen ? '▴' : '▾'}
+                    </button>
+                  </div>
+                  {isOpen && (
+                    <div className="fm-datechips fm-sky-routedates">
+                      {combos.map((p) => {
+                        const k = skyKey(p)
+                        const on = sel.has(k)
+                        const pr = money(pv.known[k])
+                        const rc = pv.recent[k]
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            className={`fm-datechip ${on ? 'on' : ''} ${rc ? 'recent' : ''}`}
+                            disabled={!on && full}
+                            onClick={() => toggle(p)}
+                            title={rc ? `Consultado no Skyscanner às ${new Date(rc).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : undefined}
+                          >
+                            <span>{dateText(p)}</span>
+                            <small>{pr ?? (rc ? 'consultado' : ' ')}</small>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
           <div className="fm-label" style={{ margin: '12px 0 6px' }}>
-            Escolher rota e datas
+            Adicionar outra rota ({pv.pairs.length} possíveis)
           </div>
           <div className="fm-sky-pick">
-            <PlacePicker places={pv.origins} value={origin} onChange={setOrigin} placeholder="Buscar origem (cidade, país ou IATA)" />
+            <PlacePicker places={pv.origins} value={origin} onChange={(o) => (setOrigin(o), setDest(''))} placeholder="Buscar origem (cidade, país ou IATA)" />
             <span className="fm-muted">→</span>
-            <PlacePicker places={destOptions} value={pairOk ? dest : ''} onChange={setDest} placeholder="Buscar destino (cidade, país ou IATA)" />
+            <PlacePicker places={destOptions} value={dest} onChange={(d) => addRoute(origin, d)} placeholder={origin ? 'Buscar destino (cidade, país ou IATA)' : 'Escolha a origem primeiro'} />
           </div>
-          {pairOk && (
-            <>
-              <div className="fm-row" style={{ margin: '6px 0' }}>
-                <span className="fm-small">
-                  {pv.dates.length} data(s){pv.datesTotal > pv.dates.length ? ` (de ${pv.datesTotal}; estreite a duração para ver todas)` : ''} · clique para marcar
-                </span>
-                <span className="fm-spacer" />
-                <button className="fm-linkbtn" type="button" disabled={full} onClick={() => setRouteDates(true)}>
-                  marcar todas
-                </button>
-                <button className="fm-linkbtn" type="button" onClick={() => setRouteDates(false)}>
-                  desmarcar
-                </button>
-              </div>
-              <div className="fm-datechips">
-                {pv.dates.map((d) => {
-                  const p = { origin, destination: dest, depart: d.depart, ret: d.ret }
-                  const k = skyKey(p)
-                  const on = sel.has(k)
-                  const pr = price(k)
-                  const rc = pv.recent[k]
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className={`fm-datechip ${on ? 'on' : ''} ${rc ? 'recent' : ''}`}
-                      disabled={!on && full}
-                      onClick={() => toggle(p)}
-                      title={rc ? `Consultado no Skyscanner às ${new Date(rc).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : undefined}
-                    >
-                      <span>{dateText(d)}</span>
-                      <small>{pr ?? (rc ? 'consultado' : ' ')}</small>
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+          <div className="fm-small" style={{ marginTop: 4 }}>
+            Ao escolher o destino, a rota entra na lista acima com todas as datas marcadas.
+          </div>
 
           {sel.size > 0 && (
             <>
@@ -315,4 +369,9 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
       )}
     </Modal>
   )
+}
+
+/** Todas as datas do intervalo para uma rota. */
+function datesFor(pv: SkyPreview, origin: string, destination: string): SkyPick[] {
+  return pv.dates.map((d) => ({ origin, destination, depart: d.depart, ret: d.ret }))
 }

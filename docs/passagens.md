@@ -193,13 +193,13 @@ app pesquisa o Skyscanner **no seu Chrome**, sob demanda e com você acompanhand
   `mcp__claude-in-chrome__*` e o app libera **só** essas.
 - **Fluxo:**
   1. O botão "🔍 Skyscanner (Chrome)" abre o seletor (`buildPreview`):
-     - **Sugestões** (até 24), marcáveis uma a uma: primeiro as combinações com melhor preço
-       já visto, depois um rodízio de pares (países intercalados) em que a data muda a cada par
-       e a cada rodada (`spreadOrder`: extremos, meio, quartos…), sem repetir o consultado
-       nas últimas 12 h.
-     - **Escolher rota e datas:** origem e destino (com cidade e país quando o lado tem
-       vários países) e **todas** as datas do intervalo, com o preço conhecido e o que já foi
-       consultado. "Marcar todas" seleciona o intervalo inteiro da rota.
+     - A unidade é a **rota**. A lista mostra as 8 rotas sugeridas (na ordem das sugestões
+       de `buildPreview`: melhor preço já visto primeiro, depois o rodízio de pares) com o
+       menor preço conhecido. Marcar uma rota marca **todas** as datas do intervalo (as
+       consultadas nas últimas 12 h por último); as datas abrem logo abaixo para desmarcar
+       uma a uma (o checkbox fica "parcial"). Ao abrir, a 1ª sugerida já vem marcada.
+     - **Adicionar outra rota:** origem e destino com busca (cidade, país ou IATA); ao
+       escolher o destino, a rota entra no topo da lista com todas as datas marcadas.
      - Até 30 combinações por execução. O servidor revalida cada escolha contra os pares e
        datas do monitor e remonta as URLs (`validatePicks`).
   2. Ao confirmar, roda sessões do Claude de até 5 combinações, uma após a outra (sessões
