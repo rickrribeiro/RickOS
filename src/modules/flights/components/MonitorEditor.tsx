@@ -9,6 +9,16 @@ import { LocationPicker, PlaceSearch } from './LocationPicker'
 import { Modal } from './Modal'
 
 const CURRENCIES = ['BRL', 'USD', 'EUR', 'JPY', 'GBP', 'THB']
+const SAVED_COUNTRIES_KEY = 'flights_saved_forbidden_countries'
+const parseCodes = (v: string | null | undefined): string[] => {
+  try {
+    const a: unknown = JSON.parse(v || '[]')
+    return Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string' && /^[A-Z]{2}$/.test(x)) : []
+  } catch {
+    return []
+  }
+}
+const sameSet = (a: string[], b: string[]): boolean => a.length === b.length && a.every((x) => b.includes(x))
 const NEED_LABEL: Record<Need, string> = { required: 'Obrigatória', preferred: 'Preferência', any: 'Tanto faz' }
 
 function Counter(props: { value: number; min: number; max: number; onChange: (n: number) => void; label: string }): React.ReactElement {
@@ -182,6 +192,30 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const providers = useFlightStore((s) => s.providers)
+  // Seleção salva de "Países proibidos para conexão": já vem marcada em monitor novo.
+  const [savedCountries, setSavedCountries] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    window.api.settings
+      .get(SAVED_COUNTRIES_KEY)
+      .then((v) => {
+        const list = parseCodes(v)
+        setSavedCountries(list)
+        if (!m && list.length) setCfg((c) => ({ ...c, constraints: { ...c.constraints, forbiddenConnectionCountries: [...new Set([...c.constraints.forbiddenConnectionCountries, ...list])] } }))
+      })
+      .catch(() => setSavedCountries([]))
+  }, []) // só na abertura
+
+  async function saveCountries(): Promise<void> {
+    const list = [...cfg.constraints.forbiddenConnectionCountries]
+    try {
+      await window.api.settings.set(SAVED_COUNTRIES_KEY, JSON.stringify(list))
+      setSavedCountries(list)
+    } catch (e) {
+      setErr(errMsg(e))
+    }
+  }
+  const countriesSaved = savedCountries !== null && sameSet(savedCountries, cfg.constraints.forbiddenConnectionCountries)
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -265,7 +299,8 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
         <AiBox
           currency={cfg.currency}
           onDraft={(d) => {
-            setCfg(d.config)
+            const saved = savedCountries ?? []
+            setCfg({ ...d.config, constraints: { ...d.config.constraints, forbiddenConnectionCountries: [...new Set([...d.config.constraints.forbiddenConnectionCountries, ...saved])] } })
             if (!name.trim() || draftInfo) setName(d.name)
             setDraftInfo(d)
           }}
@@ -450,6 +485,20 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
             ))}
           </div>
           <CodeChips kind="country" codes={cfg.constraints.forbiddenConnectionCountries} onChange={(c) => con({ forbiddenConnectionCountries: c })} placeholder="outro país…" />
+          <div className="fm-row" style={{ gap: 6, marginTop: 4 }}>
+            <button className="btn btn-sm" type="button" disabled={savedCountries === null || countriesSaved} onClick={() => void saveCountries()} title="Monitores novos já abrem com estes países marcados">
+              💾 Salvar seleção
+            </button>
+            <span className="fm-small">
+              {countriesSaved
+                ? savedCountries?.length
+                  ? '✓ seleção salva — monitores novos já abrem com ela'
+                  : 'nenhuma seleção salva'
+                : savedCountries?.length
+                  ? `salva: ${savedCountries.join(', ')}`
+                  : 'salve para já vir marcada nos próximos monitores'}
+            </span>
+          </div>
         </div>
         {advanced && (
           <>
