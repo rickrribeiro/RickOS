@@ -165,9 +165,9 @@ export function createApi() {
       unreadCount: () => invoke('notifications:unreadCount'),
       create: (n: { title: string; body?: string; source?: string; page?: string | null }) => invoke('notifications:create', n),
       markRead: (id: number, read?: boolean) => invoke('notifications:markRead', id, read),
-      markAllRead: () => invoke('notifications:markAllRead'),
+      markAllRead: (scope?: 'claude' | 'other') => invoke('notifications:markAllRead', scope),
       delete: (id: number) => invoke('notifications:delete', id),
-      clear: (onlyRead?: boolean) => invoke('notifications:clear', onlyRead)
+      clear: (onlyRead?: boolean, scope?: 'claude' | 'other') => invoke('notifications:clear', onlyRead, scope)
     },
     rules: {
       getAll: () => invoke('rules:getAll'),

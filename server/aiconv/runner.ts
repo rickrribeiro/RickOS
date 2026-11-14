@@ -638,7 +638,7 @@ function scheduleAttentionNotice(run: LiveRun, requestId: string, toolName: stri
   setTimeout(() => {
     if (!run.pending.has(requestId) || live.get(run.conversationId) !== run) return
     const what = toolName === 'AskUserQuestion' ? 'tem uma pergunta' : toolName === 'ExitPlanMode' ? 'quer aprovar um plano' : `pede permissão para ${toolName}`
-    void notify({ title: `🤚 Claude ${what}`, body: conv.title || 'Prompt Runner', source: 'ia', page: 'ai-runner' })
+    void notify({ title: `🤚 Claude ${what}`, body: conv.title || 'Prompt Runner', source: 'claude', page: 'ai-runner' })
   }, 15_000)
 }
 
@@ -685,7 +685,7 @@ async function finishTurn(run: LiveRun, error: string | null): Promise<void> {
     void notify({
       title: turn.status === 'done' ? '✅ Claude terminou' : '⚠️ Claude parou com erro',
       body: conv?.title || turn.prompt.slice(0, 120),
-      source: 'ia',
+      source: 'claude',
       page: 'ai-runner'
     })
   }

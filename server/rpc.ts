@@ -185,7 +185,7 @@ import {
   deleteNotification,
   clearNotifications
 } from './database/queries'
-import type { NotificationInput } from './database/queries'
+import type { NotificationInput, NotificationScope } from './database/queries'
 import type { DbTransaction, DbSkill, DbAgent, StudyBundle, DbStayFavorite, DbStayWatch, DbStayPricePoint } from './database/queries'
 import { syncGithubIssues, createIssueViaClaude } from './services/github'
 import { runClaude } from './services/claude'
@@ -470,16 +470,16 @@ ipcMain.handle('notifications:markRead', async (_, id: number, read?: boolean) =
   await markNotificationRead(id, read !== false)
   notificationsChanged()
 })
-ipcMain.handle('notifications:markAllRead', async () => {
-  await markAllNotificationsRead()
+ipcMain.handle('notifications:markAllRead', async (_, scope?: NotificationScope) => {
+  await markAllNotificationsRead(scope)
   notificationsChanged()
 })
 ipcMain.handle('notifications:delete', async (_, id: number) => {
   await deleteNotification(id)
   notificationsChanged()
 })
-ipcMain.handle('notifications:clear', async (_, onlyRead?: boolean) => {
-  await clearNotifications(!!onlyRead)
+ipcMain.handle('notifications:clear', async (_, onlyRead?: boolean, scope?: NotificationScope) => {
+  await clearNotifications(!!onlyRead, scope)
   notificationsChanged()
 })
 

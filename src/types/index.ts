@@ -91,6 +91,9 @@ export interface AppNotification {
   readAt: string | null
 }
 
+/** Aba do sino: 'claude' = avisos do Prompt Runner; 'other' = o resto. */
+export type NotificationScope = 'claude' | 'other'
+
 export interface AppNotificationInput {
   title: string
   body?: string
@@ -772,9 +775,9 @@ declare global {
         unreadCount: () => Promise<number>
         create: (n: AppNotificationInput) => Promise<AppNotification | null>
         markRead: (id: number, read?: boolean) => Promise<void>
-        markAllRead: () => Promise<void>
+        markAllRead: (scope?: NotificationScope) => Promise<void>
         delete: (id: number) => Promise<void>
-        clear: (onlyRead?: boolean) => Promise<void>
+        clear: (onlyRead?: boolean, scope?: NotificationScope) => Promise<void>
       }
       rules: {
         getAll: () => Promise<Rule[]>

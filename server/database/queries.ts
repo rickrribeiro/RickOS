@@ -2357,9 +2357,18 @@ export async function markNotificationRead(id: number, read = true): Promise<voi
   run(db, 'UPDATE notifications SET readAt = ? WHERE id = ?', [read ? new Date().toISOString() : null, id])
 }
 
-export async function markAllNotificationsRead(): Promise<void> {
+/** Aba do sino: 'claude' = avisos do Prompt Runner; 'other' = o resto; sem escopo = todas. */
+export type NotificationScope = 'claude' | 'other'
+
+function notificationScopeSql(scope?: NotificationScope): string {
+  if (scope === 'claude') return " AND (source = 'claude' OR page = 'ai-runner')"
+  if (scope === 'other') return " AND source <> 'claude' AND (page IS NULL OR page <> 'ai-runner')"
+  return ''
+}
+
+export async function markAllNotificationsRead(scope?: NotificationScope): Promise<void> {
   const db = await getDb()
-  run(db, 'UPDATE notifications SET readAt = ? WHERE readAt IS NULL', [new Date().toISOString()])
+  run(db, `UPDATE notifications SET readAt = ? WHERE readAt IS NULL${notificationScopeSql(scope)}`, [new Date().toISOString()])
 }
 
 export async function deleteNotification(id: number): Promise<void> {
@@ -2368,9 +2377,9 @@ export async function deleteNotification(id: number): Promise<void> {
 }
 
 /** Remove todas (onlyRead = só as já lidas). */
-export async function clearNotifications(onlyRead = false): Promise<void> {
+export async function clearNotifications(onlyRead = false, scope?: NotificationScope): Promise<void> {
   const db = await getDb()
-  run(db, onlyRead ? 'DELETE FROM notifications WHERE readAt IS NOT NULL' : 'DELETE FROM notifications')
+  run(db, `DELETE FROM notifications WHERE 1 = 1${onlyRead ? ' AND readAt IS NOT NULL' : ''}${notificationScopeSql(scope)}`)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

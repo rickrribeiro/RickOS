@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNotificationStore, wireNotifications } from '../store/notificationStore'
+import { useNotificationStore, wireNotifications, isClaudeNotification } from '../store/notificationStore'
 import { useUIStore } from '../store/uiStore'
 import { AppNotification } from '../types'
 
@@ -8,6 +8,7 @@ const SOURCE_LABEL: Record<string, string> = {
   automacao: 'Automação',
   agendador: 'Agente agendado',
   ia: 'IA',
+  claude: 'Prompt Runner',
   sistema: 'Sistema'
 }
 
@@ -28,7 +29,7 @@ export function NotificationBell(): React.ReactElement {
   const { items, unread, loaded, load, markRead, markAllRead, remove, clear } = useNotificationStore()
   const setPage = useUIStore((s) => s.setPage)
   const [open, setOpen] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [filter, setFilter] = useState<'all' | 'unread' | 'claude'>('all')
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -70,8 +71,14 @@ export function NotificationBell(): React.ReactElement {
     }
   }, [open])
 
-  const visible = filter === 'unread' ? items.filter((n) => !n.readAt) : items
-  const hasRead = items.some((n) => n.readAt)
+  // Os avisos do Prompt Runner ficam só na aba "Claude" para não lotar as outras.
+  const scope = filter === 'claude' ? 'claude' : 'other'
+  const scoped = items.filter((n) => isClaudeNotification(n) === (scope === 'claude'))
+  const visible = filter === 'unread' ? scoped.filter((n) => !n.readAt) : scoped
+  const hasRead = scoped.some((n) => n.readAt)
+  const unreadOther = items.filter((n) => !n.readAt && !isClaudeNotification(n)).length
+  const unreadClaude = items.filter((n) => !n.readAt && isClaudeNotification(n)).length
+  const scopedUnread = scope === 'claude' ? unreadClaude : unreadOther
 
   const openItem = (n: AppNotification): void => {
     if (!n.readAt) void markRead(n.id)
@@ -99,7 +106,7 @@ export function NotificationBell(): React.ReactElement {
         <div ref={panelRef} className="notif-panel" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="Notificações">
           <div className="notif-head">
             <strong>Notificações</strong>
-            <button className="notif-link" onClick={() => void markAllRead()} disabled={!unread}>
+            <button className="notif-link" onClick={() => void markAllRead(scope)} disabled={!scopedUnread}>
               Marcar todas como lidas
             </button>
           </div>
@@ -108,7 +115,10 @@ export function NotificationBell(): React.ReactElement {
               Todas
             </button>
             <button className={filter === 'unread' ? 'active' : ''} onClick={() => setFilter('unread')}>
-              Não lidas{unread ? ` (${unread})` : ''}
+              Não lidas{unreadOther ? ` (${unreadOther})` : ''}
+            </button>
+            <button className={filter === 'claude' ? 'active' : ''} onClick={() => setFilter('claude')}>
+              Claude{unreadClaude ? ` (${unreadClaude})` : ''}
             </button>
           </div>
 
@@ -117,7 +127,11 @@ export function NotificationBell(): React.ReactElement {
             {loaded && visible.length === 0 && (
               <div className="notif-empty">
                 <div style={{ fontSize: 28 }}>🔕</div>
-                {filter === 'unread' ? 'Nada pendente por aqui.' : 'Nenhuma notificação ainda.'}
+                {filter === 'unread'
+                  ? 'Nada pendente por aqui.'
+                  : filter === 'claude'
+                    ? 'Nenhum aviso do Prompt Runner.'
+                    : 'Nenhuma notificação ainda.'}
               </div>
             )}
             {visible.map((n) => (
@@ -131,7 +145,7 @@ export function NotificationBell(): React.ReactElement {
                   <div className="notif-title">{n.title}</div>
                   {n.body && <div className="notif-text">{n.body}</div>}
                   <div className="notif-meta">
-                    {SOURCE_LABEL[n.source] ?? n.source} · {timeAgo(n.createdAt)}
+                    {isClaudeNotification(n) ? SOURCE_LABEL.claude : SOURCE_LABEL[n.source] ?? n.source} · {timeAgo(n.createdAt)}
                   </div>
                 </div>
                 <div className="notif-actions">
@@ -158,15 +172,16 @@ export function NotificationBell(): React.ReactElement {
             ))}
           </div>
 
-          {items.length > 0 && (
+          {scoped.length > 0 && (
             <div className="notif-foot">
-              <button className="notif-link" onClick={() => void clear(true)} disabled={!hasRead}>
+              <button className="notif-link" onClick={() => void clear(true, scope)} disabled={!hasRead}>
                 Limpar lidas
               </button>
               <button
                 className="notif-link danger"
                 onClick={() => {
-                  if (window.confirm('Apagar todas as notificações?')) void clear(false)
+                  const what = scope === 'claude' ? 'todos os avisos do Claude' : 'todas as notificações (exceto as do Claude)'
+                  if (window.confirm(`Apagar ${what}?`)) void clear(false, scope)
                 }}
               >
                 Apagar todas
