@@ -141,7 +141,7 @@ export async function suggestReplies(req: AiSuggestRequest): Promise<AiSuggestRe
       `Estilo: ${STYLE[req.style] ?? STYLE.natural}.`,
       req.language ? `Idioma da resposta: ${req.language}.` : 'Idioma: o mesmo usado na conversa.',
       cfg.aiStyleInstructions ? `Preferências gerais de escrita do usuário: ${cfg.aiStyleInstructions}` : '',
-      req.extraInstruction ? `Pedido do usuário para esta resposta: ${req.extraInstruction.slice(0, 500)}` : '',
+      req.extraInstruction ? `Pedido do usuário para esta resposta: ${req.extraInstruction.slice(0, 900)}` : '',
       template ? `Use como base este modelo de resposta do usuário, adaptando ao contexto: """${template.body.slice(0, 1500)}"""` : '',
       'Mensagens selecionadas pelo usuário (só estas; "EU" é o usuário):',
       messagesBlock(p),

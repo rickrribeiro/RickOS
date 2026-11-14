@@ -12,6 +12,8 @@ interface Row {
   error: string | null
   result: AiSuggestResult | null
   text: string
+  /** Orientação só para esta conversa (somada à geral). */
+  guide: string
   generating: boolean
   sent: boolean
 }
@@ -24,6 +26,7 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
   const items = useChatsStore((s) => s.items)
   const [rows, setRows] = useState<Row[]>([])
   const [style, setStyle] = useState<AiStyle>('natural')
+  const [guide, setGuide] = useState('')
   const [running, setRunning] = useState(false)
   const [confirm, setConfirm] = useState<Row | null>(null)
   const [sending, setSending] = useState(false)
@@ -35,7 +38,7 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
       const found = await Promise.all(chatIds.slice(0, 30).map(async (id) => items.find((i) => i.id === id) ?? (await window.api.chats.get(id).catch(() => null))))
       const chats = found.filter((c): c is ChatSummary => !!c)
       if (cancelled) return
-      setRows(chats.map((chat) => ({ chat, messages: [], picked: [], loading: true, error: null, result: null, text: '', generating: false, sent: false })))
+      setRows(chats.map((chat) => ({ chat, messages: [], picked: [], loading: true, error: null, result: null, text: '', guide: '', generating: false, sent: false })))
       // carrega as pendentes de cada conversa (concorrência baixa)
       let i = 0
       const worker = async (): Promise<void> => {
@@ -59,12 +62,14 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
 
   const patch = (id: number, p: Partial<Row>): void => setRows((rs) => rs.map((r) => (r.chat.id === id ? { ...r, ...p } : r)))
 
+  const instructionFor = (r: Row): string | null => [guide.trim(), r.guide.trim()].filter(Boolean).join('\n') || null
+
   async function generate(only?: Row): Promise<void> {
     const targets = (only ? [only] : rows).filter((r) => r.picked.length && !r.sent)
     if (!targets.length) return
     setRunning(true)
     targets.forEach((r) => patch(r.chat.id, { generating: true, error: null }))
-    const results = await window.api.chats.aiBatch(targets.map((r) => ({ chatId: r.chat.id, messageIds: r.picked, mode: 'single', style })))
+    const results = await window.api.chats.aiBatch(targets.map((r) => ({ chatId: r.chat.id, messageIds: r.picked, mode: 'single', style, extraInstruction: instructionFor(r) })))
     for (const res of results) {
       patch(res.chatId, { generating: false, result: res, text: res.suggestions[0]?.reply ?? '', error: res.error })
     }
@@ -95,6 +100,15 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
           Vão para a IA só as mensagens marcadas abaixo ({totalMsgs} no total), as recebidas desde a sua última resposta. Nada é
           enviado sem você confirmar, conversa por conversa.
         </p>
+        <textarea
+          className="chats-guide"
+          rows={2}
+          maxLength={500}
+          value={guide}
+          onChange={(e) => setGuide(e.target.value)}
+          placeholder="Orientação para a IA (opcional), ex.: não recusar; agradecer e dizer que tenho interesse em conversar."
+          aria-label="Orientação para todas as conversas"
+        />
         <div className="chats-row" style={{ marginBottom: 10 }}>
           <select value={style} onChange={(e) => setStyle(e.target.value as AiStyle)} aria-label="Estilo">
             {(Object.keys(AI_STYLE_LABELS) as AiStyle[]).map((s) => (
@@ -120,8 +134,8 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
                   checked={r.picked.includes(m.id)}
                   onChange={() => patch(r.chat.id, { picked: r.picked.includes(m.id) ? r.picked.filter((x) => x !== m.id) : [...r.picked, m.id] })}
                 />
-                <span style={{ fontSize: 12 }}>
-                  <b>{m.senderName}:</b> {m.text.slice(0, 200) || '[anexo]'}
+                <span className="chats-batch-msg">
+                  <b>{m.senderName}:</b> {m.text || '[anexo]'}
                 </span>
               </label>
             ))}
@@ -133,8 +147,19 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
             )}
             {r.result && !r.error && (
               <>
-                <textarea rows={3} value={r.text} onChange={(e) => patch(r.chat.id, { text: e.target.value })} style={{ width: '100%', marginTop: 6 }} />
+                <textarea rows={4} value={r.text} onChange={(e) => patch(r.chat.id, { text: e.target.value })} style={{ width: '100%', marginTop: 6 }} />
                 <div className="chats-ai-actions">
+                  <input
+                    className="chats-guide-row"
+                    value={r.guide}
+                    maxLength={300}
+                    onChange={(e) => patch(r.chat.id, { guide: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void generate(r)
+                    }}
+                    placeholder="Orientar só esta conversa…"
+                    aria-label="Orientação só para esta conversa"
+                  />
                   <button className="btn btn-secondary btn-sm" onClick={() => void generate(r)} disabled={r.generating}>↻ Regenerar</button>
                   <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(r.text)}>Copiar</button>
                   <button className="btn btn-primary btn-sm" disabled={!r.text.trim() || r.sent || r.chat.stale} onClick={() => setConfirm(r)}>{r.sent ? '✓ Enviada' : 'Enviar…'}</button>
