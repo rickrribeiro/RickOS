@@ -1,7 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
 export interface Tag {
@@ -178,6 +178,9 @@ export interface Project {
   workMinutes: number | null
   calendarEventId: string | null
   calendarAccount: string | null
+  /** Tags do timer ao "Trabalhar nisso" (principal e secundária); vazio = automático. */
+  workTagId?: number | null
+  workTagId2?: number | null
 }
 export type NextActionSize = 'rapida' | 'longa'
 export interface ProjectDelegation {
@@ -218,7 +221,7 @@ export type ProjectPatch = Partial<
     | 'name' | 'description' | 'githubRepoUrl' | 'color' | 'claudeCommand' | 'localPath' | 'stage' | 'businessModel' | 'pricing' | 'audience'
     | 'area' | 'priority' | 'finishLine' | 'scope' | 'futureIdeas' | 'nextAction' | 'whereLeftOff' | 'blocker' | 'blockerNeed'
     | 'pauseReason' | 'resumeAt' | 'resumeCondition' | 'closeReason' | 'retrospective' | 'continuous' | 'triagedAt' | 'lastReviewedAt'
-    | 'nextActionSize'
+    | 'nextActionSize' | 'workTagId' | 'workTagId2'
   >
 >
 export interface ProjectStatusPayload {
@@ -1040,6 +1043,7 @@ declare global {
         send: (id: string, text: string, images?: AiImageInput[]) => Promise<boolean>
         fork: (id: string) => Promise<AiConversation>
         changes: (id: string) => Promise<ConvChanges>
+        fileDiff: (id: string, path: string) => Promise<ConvFileDiff>
         commit: (id: string, message: string, paths?: string[] | null) => Promise<string>
         discard: (id: string, path: string) => Promise<boolean>
         pr: (id: string) => Promise<string>
@@ -1055,6 +1059,7 @@ declare global {
         resync: (id: string) => Promise<{ updated: boolean }>
         terminalCommand: (id: string) => Promise<string | null>
         onUpdate: (cb: (u: AiConvUpdate) => void) => () => void
+        onReconnect: (cb: () => void) => () => void
       }
       skills: {
         getAll: () => Promise<Skill[]>

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ProjectCycle, GitBranch, GithubIssue, ProjectCommit, ProjectEvent, ProjectNote, ProjectStatus, TaskWithTag, Todo } from '../../../types'
 import { useUIStore } from '../../../store/uiStore'
-import { useProjectStore } from '../store/projectStore'
+import { useProjectStore, workTagsFor } from '../store/projectStore'
+import { useTagStore } from '../../timetracker/store/tagStore'
 import { StatusChangeModal } from '../components/StatusChangeModal'
 import { NextActionModal } from '../components/NextActionModal'
 import { ProjectForm } from '../components/ProjectForm'
@@ -56,6 +57,7 @@ export function ProjectDetailPage(): React.ReactElement {
   const { selectedProjectId, setPage } = useUIStore()
   const { projects, overview, milestones, cycles, refreshAll, refreshMilestones, refreshCycles, patch, startWorking } = useProjectStore()
   const p = projects.find((x) => x.id === selectedProjectId) ?? null
+  const allTags = useTagStore((s) => s.tags)
   const ov = p ? overview[p.id] : undefined
   const [tab, setTab] = useState<Tab>('geral')
   const [statusTo, setStatusTo] = useState<ProjectStatus | null>(null)
@@ -275,7 +277,17 @@ ${ctx}`
         </div>
         <div className="ph-hero-actions">
           {!isClosed(project) && (
-            <button className="btn btn-primary" onClick={() => startWorking(project)}>▶ Trabalhar nisso</button>
+            <button
+              className="btn btn-primary"
+              onClick={() => startWorking(project)}
+              title={(() => {
+                const w = workTagsFor(project, allTags)
+                const names = [w.primary?.name, w.secondary?.name].filter(Boolean).join(' + ')
+                return `Inicia o timer ${names ? `com a tag ${names}` : 'sem tag'}${w.auto ? ' (automático — configure em ✏️ Editar)' : ''}`
+              })()}
+            >
+              ▶ Trabalhar nisso
+            </button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>✏️ Editar</button>
           {project.githubRepoUrl && (

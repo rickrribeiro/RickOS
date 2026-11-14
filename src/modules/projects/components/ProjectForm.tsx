@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { Project, ProjectArea } from '../../../types'
-import { useProjectStore } from '../store/projectStore'
+import { useProjectStore, workTagsFor } from '../store/projectStore'
+import { useTagStore } from '../../timetracker/store/tagStore'
 import { AREAS, PRESET_COLORS, STAGES } from '../lib/constants'
 
 interface FormState {
@@ -15,6 +16,8 @@ interface FormState {
   businessModel: string
   pricing: string
   audience: string
+  workTagId: number | null
+  workTagId2: number | null
 }
 
 const fromProject = (p: Project | null): FormState => ({
@@ -28,7 +31,9 @@ const fromProject = (p: Project | null): FormState => ({
   color: p?.color ?? '#6366f1',
   businessModel: p?.businessModel ?? '',
   pricing: p?.pricing ?? '',
-  audience: p?.audience ?? ''
+  audience: p?.audience ?? '',
+  workTagId: p?.workTagId ?? null,
+  workTagId2: p?.workTagId2 ?? null
 })
 
 /** Criar (vai para a incubadora) ou editar os dados cadastrais de um projeto. */
@@ -37,6 +42,13 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
   const [form, setForm] = useState<FormState>(fromProject(project))
   const [advanced, setAdvanced] = useState(!!project)
   const set = <K extends keyof FormState>(k: K, v: FormState[K]): void => setForm({ ...form, [k]: v })
+  const { tags, refreshTags } = useTagStore()
+  useEffect(() => {
+    if (!tags.length) refreshTags()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // o que o "Trabalhar nisso" usaria sem configuração (tag vinculada ou de mesmo nome)
+  const autoTag = workTagsFor({ ...(project ?? ({} as Project)), id: project?.id ?? -1, name: form.name, workTagId: null, workTagId2: null }, tags).primary
 
   async function submit(): Promise<void> {
     if (!form.name.trim()) return
@@ -55,7 +67,11 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
         form.pricing.trim() || null,
         form.audience.trim() || null
       )
-      if (form.area !== 'pessoal') await patch(p.id, { area: form.area })
+      const extra = {
+        ...(form.area !== 'pessoal' ? { area: form.area } : {}),
+        ...(form.workTagId != null ? { workTagId: form.workTagId, workTagId2: form.workTagId2 } : {})
+      }
+      if (Object.keys(extra).length) await patch(p.id, extra)
       onCreated?.(p)
     }
     onClose()
@@ -80,6 +96,31 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
               {STAGES.map((s) => (
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}
+            </select>
+          </div>
+          <div className="ph-worktags">
+            <span className="ph-worktags-label" title="Tags que o timer recebe quando você clica em ▶ Trabalhar nisso">⏱ Tags ao trabalhar</span>
+            <select value={form.workTagId ?? ''} onChange={(e) => set('workTagId', e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Automático{autoTag ? ` (${autoTag.name})` : ' (sem tag)'}</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={form.workTagId2 ?? ''}
+              onChange={(e) => set('workTagId2', e.target.value ? Number(e.target.value) : null)}
+              title="Tag secundária (opcional)"
+            >
+              <option value="">Sem tag secundária</option>
+              {tags
+                .filter((t) => t.id !== (form.workTagId ?? autoTag?.id))
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
             </select>
           </div>
           <button className="ph-linkbtn" onClick={() => setAdvanced((v) => !v)}>

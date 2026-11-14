@@ -193,7 +193,7 @@ import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAcco
 import { syncPluggy, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
-import { registerAiConvRpc } from './aiconv/rpc'
+import { recoverConversations, registerAiConvRpc } from './aiconv/rpc'
 import { startChatsEngine } from './chats/sync'
 import { schedulerTick as flightsTick, bootFlights } from './flights/runner'
 import { encodeSecret, decodeSecret, legacySecrets, SERVER_ONLY_KEYS } from './services/secrets'
@@ -300,6 +300,7 @@ export function startScheduler(): void {
   // Radar de projetos: notificações 1x/dia (pausa vencida, foco sem próxima ação, ciclos…).
   setTimeout(() => void checkProjectRadar().catch(() => undefined), 60000)
   void recoverDelegations().catch(() => undefined)
+  void recoverConversations().catch((e) => console.error('[prompt-runner] recuperação', e))
   setInterval(() => void checkProjectRadar().catch(() => undefined), 60 * 60 * 1000)
   // Passagens: retoma execuções interrompidas, migra registros antigos e dispara monitores vencidos.
   void bootFlights().catch((e) => console.error('[flights] boot', e))

@@ -1,9 +1,9 @@
-import { invoke, subscribe, downloadUrl } from './transport'
+import { invoke, subscribe, downloadUrl, onReconnect } from './transport'
 import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBase64, saveFolder } from './files'
 import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -601,6 +601,7 @@ export function createApi() {
       send: (id: string, text: string, images?: AiImageInput[]) => invoke<boolean>('conv:send', id, text, images ?? []),
       fork: (id: string) => invoke<AiConversation>('conv:fork', id),
       changes: (id: string) => invoke<ConvChanges>('conv:changes', id),
+      fileDiff: (id: string, path: string) => invoke<ConvFileDiff>('conv:fileDiff', id, path),
       commit: (id: string, message: string, paths?: string[] | null) => invoke<string>('conv:commit', id, message, paths ?? null),
       discard: (id: string, path: string) => invoke<boolean>('conv:discard', id, path),
       pr: (id: string) => invoke<string>('conv:pr', id),
@@ -615,7 +616,9 @@ export function createApi() {
       importTerminal: (sessionId: string, configDir?: string | null) => invoke<AiConversation>('conv:importTerminal', sessionId, configDir ?? null),
       resync: (id: string) => invoke<{ updated: boolean }>('conv:resync', id),
       terminalCommand: (id: string) => invoke<string | null>('conv:terminalCommand', id),
-      onUpdate: (cb: (u: AiConvUpdate) => void) => subscribe('conv:update', (p) => cb(p as AiConvUpdate))
+      onUpdate: (cb: (u: AiConvUpdate) => void) => subscribe('conv:update', (p) => cb(p as AiConvUpdate)),
+      /** A conexão de eventos voltou (ex.: servidor reiniciou): hora de recarregar. */
+      onReconnect: (cb: () => void) => onReconnect(cb)
     },
     // Events (main → renderer)
     on: {

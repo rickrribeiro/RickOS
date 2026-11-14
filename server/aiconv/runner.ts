@@ -117,6 +117,51 @@ function emitTurn(run: LiveRun, immediate = false): void {
   if (!run.emitTimer) run.emitTimer = setTimeout(send, 120)
 }
 
+/**
+ * Servidor desligando: encerra os processos do Claude (senão ficam órfãos, ainda editando
+ * arquivos sem ninguém ouvindo) e grava os turnos como interrompidos.
+ */
+export async function stopAllRuns(): Promise<void> {
+  const runs = [...live.values()]
+  queues.clear()
+  for (const run of runs) {
+    live.delete(run.conversationId)
+    if (run.emitTimer) clearTimeout(run.emitTimer)
+    if (run.killTimer) clearTimeout(run.killTimer)
+    try {
+      run.child?.kill('SIGTERM')
+    } catch {
+      // já saiu
+    }
+    const turn = run.turn
+    for (const b of turn.blocks) {
+      if ((b.type === 'text' || b.type === 'thinking') && b.live) b.live = false
+      if (b.type === 'tool' && b.permission?.status === 'pending') b.permission = { ...b.permission, status: 'denied', note: 'Sem resposta' }
+    }
+    turn.status = 'interrupted'
+    turn.error = 'O servidor foi reiniciado durante a execução.'
+    turn.durationMs = Date.now() - run.startedAt
+    try {
+      await repo.saveTurn(turn)
+    } catch {
+      // banco indisponível: a limpeza da próxima inicialização marca o turno
+    }
+  }
+  // o CLI pode demorar para sair com SIGTERM: espera um pouco e força quem ficou
+  const pending = runs.map((r) => r.child).filter((c): c is ChildProcess => !!c && c.exitCode === null && c.signalCode === null)
+  if (!pending.length) return
+  await Promise.race([Promise.all(pending.map((c) => new Promise((res) => c.once('exit', res)))), new Promise((res) => setTimeout(res, 1500))])
+  for (const c of pending) {
+    if (c.exitCode === null && c.signalCode === null) {
+      try {
+        c.kill('SIGKILL')
+      } catch {
+        // já saiu
+      }
+    }
+  }
+}
+
 /** Envia uma mensagem: roda já, ou entra na fila se a conversa estiver ocupada. */
 export async function sendMessage(conversationId: string, text: string, images: AiImageInput[] = []): Promise<void> {
   const msg: AiQueuedMessage = { text: text.trim(), images }

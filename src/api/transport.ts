@@ -75,11 +75,19 @@ export async function checkAuth(): Promise<boolean> {
 type Listener = (payload: unknown) => void
 const listeners = new Map<string, Set<Listener>>()
 let source: EventSource | null = null
+const reconnectListeners = new Set<() => void>()
+let everOpened = false
 
 function ensureSource(): void {
   if (source) return
   const t = getToken()
   source = new EventSource(`${serverBase()}/api/events${t ? `?token=${encodeURIComponent(t)}` : ''}`)
+  // O EventSource reconecta sozinho (ex.: servidor reiniciou). Eventos perdidos nesse
+  // intervalo não voltam: quem depende deles recarrega o estado ao reconectar.
+  source.onopen = () => {
+    if (everOpened) reconnectListeners.forEach((fn) => fn())
+    everOpened = true
+  }
   source.onmessage = (ev) => {
     try {
       const { channel, payload } = JSON.parse(ev.data) as { channel: string; payload: unknown }
@@ -100,6 +108,15 @@ export function subscribe(channel: string, fn: Listener): () => void {
   set.add(fn)
   return () => {
     set?.delete(fn)
+  }
+}
+
+/** Chamado quando a conexão de eventos volta depois de cair (não na primeira conexão). */
+export function onReconnect(fn: () => void): () => void {
+  ensureSource()
+  reconnectListeners.add(fn)
+  return () => {
+    reconnectListeners.delete(fn)
   }
 }
 

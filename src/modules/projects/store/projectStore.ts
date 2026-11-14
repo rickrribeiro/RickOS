@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { NextActionSize, Project, ProjectCycle, ProjectDelegation, ProjectMilestone, ProjectOverview, ProjectPatch, ProjectStatus, ProjectStatusPayload } from '../../../types'
+import { NextActionSize, Project, ProjectCycle, ProjectDelegation, ProjectMilestone, ProjectOverview, ProjectPatch, ProjectStatus, ProjectStatusPayload, Tag } from '../../../types'
 import { useTaskStore } from '../../timetracker/store/taskStore'
 import { useTagStore } from '../../timetracker/store/tagStore'
 
@@ -36,6 +36,30 @@ interface ProjectState {
   remove: (id: number) => Promise<void>
   /** "Trabalhar nisso": inicia o timer vinculado ao projeto. */
   startWorking: (project: Project, title?: string) => Promise<void>
+}
+
+const norm = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
+/**
+ * Tags do timer ao "Trabalhar nisso": as configuradas no projeto → a tag vinculada ao
+ * projeto → a tag com o mesmo nome do projeto → nenhuma. ("Work" não é mais o padrão:
+ * só entra nos projetos em que você a configurar.)
+ */
+export function workTagsFor(project: Project, tags: Tag[]): { primary: Tag | null; secondary: Tag | null; auto: boolean } {
+  const byId = (id: number | null | undefined): Tag | null => (id != null ? tags.find((t) => t.id === id) ?? null : null)
+  const configured = byId(project.workTagId)
+  if (configured) {
+    const second = byId(project.workTagId2)
+    return { primary: configured, secondary: second && second.id !== configured.id ? second : null, auto: false }
+  }
+  const linked = tags.find((t) => t.projectId === project.id) ?? null
+  const named = linked ?? tags.find((t) => norm(t.name) === norm(project.name)) ?? null
+  return { primary: named, secondary: byId(project.workTagId2), auto: true }
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -129,14 +153,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   startWorking: async (project, title) => {
-    let tags = useTagStore.getState().tags
-    if (!tags.length) {
-      await useTagStore.getState().refreshTags()
-      tags = useTagStore.getState().tags
-    }
-    // tag vinculado ao projeto > "Work" (id 2) > nenhum
-    const tag = tags.find((t) => t.projectId === project.id) ?? tags.find((t) => t.id === 2) ?? null
-    await useTaskStore.getState().startTask(title?.trim() || project.nextAction || project.name, tag?.id ?? null, null, null, project.id)
+    // sempre relê: a tag pode ter sido criada/vinculada em outro aparelho
+    await useTagStore
+      .getState()
+      .refreshTags()
+      .catch(() => {
+        // sem rede: usa o que já está carregado
+      })
+    const tags = useTagStore.getState().tags
+    const { primary, secondary } = workTagsFor(project, tags)
+    await useTaskStore.getState().startTask(title?.trim() || project.nextAction || project.name, primary?.id ?? null, secondary?.id ?? null, null, project.id)
     void get().refreshOverview()
   }
 }))

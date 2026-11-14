@@ -420,6 +420,9 @@ export interface DbProject {
   workMinutes: number | null
   calendarEventId: string | null
   calendarAccount: string | null
+  /** Tags do timer ao "Trabalhar nisso" (principal e secundária). */
+  workTagId: number | null
+  workTagId2: number | null
 }
 export interface DbProjectMilestone {
   id: number
@@ -2447,7 +2450,7 @@ const PROJECT_PATCHABLE = new Set([
   'name', 'description', 'githubRepoUrl', 'color', 'claudeCommand', 'localPath', 'stage', 'businessModel', 'pricing', 'audience',
   'area', 'priority', 'finishLine', 'scope', 'futureIdeas', 'nextAction', 'whereLeftOff', 'blocker', 'blockerNeed',
   'pauseReason', 'resumeAt', 'resumeCondition', 'closeReason', 'retrospective', 'continuous', 'triagedAt', 'lastReviewedAt',
-  'nextActionSize', 'workDays', 'workStart', 'workMinutes', 'calendarEventId', 'calendarAccount'
+  'nextActionSize', 'workDays', 'workStart', 'workMinutes', 'calendarEventId', 'calendarAccount', 'workTagId', 'workTagId2'
 ])
 
 /** Atualiza só os campos enviados. Mudanças em próxima ação / onde parei / bloqueio entram no histórico. */

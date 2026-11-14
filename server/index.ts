@@ -6,6 +6,7 @@ import path from 'path'
 import { getConfig, setConfig, isLocalHost, ServerConfig } from './config'
 import { getDb, saveDb, closeDb, dbFilePath, snapshotDailyIfNeeded } from './database/db'
 import { assistedBusy, stopAssisted } from './flights/assisted'
+import { stopAllRuns } from './aiconv/runner'
 import { callRpc, handlers, startScheduler } from './rpc'
 import { subscribe } from './events'
 import { finishGoogleConnect } from './services/google'
@@ -161,6 +162,8 @@ export async function startServer(overrides: Partial<ServerConfig> = {}): Promis
       // para sempre e o processo fica vivo SEM a porta, gravando no mesmo banco que o próximo
       // servidor (dois escritores do sql.js = um apaga o que o outro gravou).
       stopAssisted()
+      // Prompt Runner: mata os processos do Claude e grava os turnos como interrompidos
+      await stopAllRuns().catch(() => undefined)
       const closing = app.close()
       app.server.closeAllConnections?.()
       await Promise.race([closing, new Promise((r) => setTimeout(r, 3000))])

@@ -39,6 +39,11 @@ interface ConvState {
   respond: (id: string, requestId: string, r: AiPromptResponse) => Promise<void>
   /** Liga a escuta do SSE (uma vez por app). */
   listen: () => void
+  /**
+   * Turno mostrado como "rodando" numa conversa que o servidor diz estar parada (evento
+   * perdido, servidor reiniciado…): recarrega os turnos do servidor.
+   */
+  checkStale: (c: AiConversation) => void
 }
 
 function upsert(list: AiConversation[], c: AiConversation): AiConversation[] {
@@ -77,6 +82,7 @@ export const useConvStore = create<ConvState>((set, get) => ({
     set({ conversations, loaded: true })
     const st = get()
     if (st.viewing && st.selectedId) st.markSeen(st.selectedId)
+    for (const c of conversations) st.checkStale(c)
     if (get().showArchived) set({ archived: await window.api.conv.list(true) })
   },
 
@@ -147,8 +153,27 @@ export const useConvStore = create<ConvState>((set, get) => ({
     await window.api.conv.respond(id, requestId, r)
   },
 
+  checkStale: (c) => {
+    if (c.running) return
+    const list = get().turns[c.id]
+    if (list?.some((t) => t.status === 'running')) void get().loadTurns(c.id)
+  },
+
   listen: () => {
     if (unlisten) return
+    // servidor reiniciou / rede voltou: eventos perdidos não voltam, então recarrega tudo
+    window.api.conv.onReconnect(() => {
+      const st = get()
+      st.refresh().catch(() => undefined)
+      if (st.selectedId) void st.loadTurns(st.selectedId)
+    })
+    // rede de segurança: com um turno "rodando" na tela, confere o servidor de tempos em tempos
+    setInterval(() => {
+      const st = get()
+      if (document.visibilityState !== 'visible' || !st.selectedId) return
+      const turns = st.turns[st.selectedId]
+      if (turns?.some((t) => t.status === 'running')) st.refresh().catch(() => undefined)
+    }, 45_000)
     unlisten = window.api.conv.onUpdate((u) => {
       const s = get()
       if (u.removed) {
@@ -160,6 +185,7 @@ export const useConvStore = create<ConvState>((set, get) => ({
       if (u.conversation) {
         const c = u.conversation
         set({ conversations: c.archived ? s.conversations.filter((x) => x.id !== c.id) : upsert(s.conversations, c) })
+        get().checkStale(c)
         // resposta chegou com você olhando a conversa → já conta como vista
         if (s.viewing && s.selectedId === c.id && document.visibilityState === 'visible' && isUnseen(c)) get().markSeen(c.id)
       }

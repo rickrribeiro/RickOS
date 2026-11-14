@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import type { AiConversation, ConvChanges } from '../../../../../shared/aiConversations'
+import type { AiConversation, ConvChanges, ConvFileDiff } from '../../../../../shared/aiConversations'
 
 interface Props {
   conv: AiConversation
@@ -10,8 +10,35 @@ interface Props {
 
 const STATUS_LABEL: Record<string, string> = { M: 'modificado', A: 'novo', D: 'apagado', R: 'renomeado', C: 'copiado', '??': 'novo', U: 'conflito' }
 
+/** Diff de um arquivo, carregado ao abrir (cada arquivo com o seu próprio limite). */
+function FileDiff({ convId, path, version }: { convId: string; path: string; version: number }): React.ReactElement {
+  const [d, setD] = useState<ConvFileDiff | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let alive = true
+    setD(null)
+    setError('')
+    window.api.conv
+      .fileDiff(convId, path)
+      .then((r) => alive && setD(r))
+      .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)))
+    return () => {
+      alive = false
+    }
+  }, [convId, path, version])
+  if (error) return <div className="cv-ch-nodiff">{error}</div>
+  if (!d) return <div className="cv-ch-nodiff">Carregando diff…</div>
+  if (d.binary) return <div className="cv-ch-nodiff">(arquivo binário)</div>
+  return (
+    <>
+      <DiffView diff={d.diff} />
+      {d.truncated && <div className="cv-ch-nodiff">… diff muito grande: mostrando só o começo.</div>}
+    </>
+  )
+}
+
 function DiffView({ diff }: { diff: string }): React.ReactElement {
-  if (!diff) return <div className="cv-ch-nodiff">(sem diff)</div>
+  if (!diff) return <div className="cv-ch-nodiff">(sem diferenças de conteúdo)</div>
   return (
     <pre className="cv-diff cv-ch-diff">
       {diff.split('\n').map((l, i) => {
@@ -31,6 +58,8 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
   const [data, setData] = useState<ConvChanges | null>(null)
   const [error, setError] = useState('')
   const [open, setOpen] = useState<Set<string>>(new Set())
+  // muda a cada recarga da lista: os diffs abertos são buscados de novo
+  const [version, setVersion] = useState(0)
   const [selected, setSelected] = useState<Set<string> | null>(null) // null = todos
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -40,6 +69,7 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
     try {
       const d = await window.api.conv.changes(conv.id)
       setData(d)
+      setVersion((v) => v + 1)
       setError('')
       onCount(d.files.length)
       setSelected((sel) => (sel ? new Set([...sel].filter((p) => d.files.some((f) => f.path === p))) : null))
@@ -155,7 +185,7 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
                 ↺
               </button>
             </div>
-            {open.has(f.path) && <DiffView diff={f.diff} />}
+            {open.has(f.path) && (f.binary ? <div className="cv-ch-nodiff">(arquivo binário)</div> : <FileDiff convId={conv.id} path={f.path} version={version} />)}
           </div>
         ))}
       </div>

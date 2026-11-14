@@ -83,12 +83,16 @@ function sq(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
+/**
+ * Inicialização (com o banco aberto): turnos que ficaram "rodando" quando o servidor
+ * parou de repente viram "interrompidos" — nenhum processo os acompanha mais.
+ */
+export async function recoverConversations(): Promise<void> {
+  await repo.markStaleTurnsInterrupted()
+}
+
 export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   runner.initRunner(deps)
-  // turnos que ficaram "rodando" quando o servidor parou
-  repo.markStaleTurnsInterrupted().catch(() => {
-    // banco ainda não pronto: nada a corrigir
-  })
 
   const emitConv = async (id: string): Promise<void> => {
     const c = await repo.getConversation(id)
@@ -204,6 +208,10 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     const dir = c?.cwd || (c ? await deps.resolveProjectCwd(c.projectId) : undefined)
     if (!c || !dir) return { isRepo: false, branch: null, baseRef: null, files: [], unpushed: 0, hasRemote: false }
     return gitc.getChanges(dir, c.baseRef)
+  })
+  handle('conv:fileDiff', async (_e, id: string, filePath: string) => {
+    const { dir } = await convDir(id)
+    return gitc.fileDiff(dir, String(filePath))
   })
   handle('conv:commit', async (_e, id: string, message: string, paths?: string[] | null) => {
     const { dir } = await convDir(id)

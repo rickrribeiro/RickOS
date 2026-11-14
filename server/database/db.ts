@@ -315,6 +315,15 @@ const MIGRATIONS: Migration[] = [
       // o que já existia conta como lido
       try { db.run('UPDATE ai_conversations SET seenAt = updatedAt WHERE seenAt IS NULL;') } catch { /* tabela nova */ }
     }
+  },
+  {
+    version: 21,
+    label: 'Projetos: tags usadas ao "Trabalhar nisso"',
+    run: (db) => {
+      for (const c of ['workTagId', 'workTagId2']) {
+        try { db.run(`ALTER TABLE projects ADD COLUMN ${c} INTEGER;`) } catch { /* exists */ }
+      }
+    }
   }
 ]
 
@@ -335,8 +344,21 @@ function runMigrations(database: Database): void {
   database.run(`PRAGMA user_version = ${target}`)
 }
 
+// Abertura em andamento: chamadas simultâneas na primeira vez esperam a MESMA abertura.
+// (Sem isso, cada uma criava sua própria instância e as escritas de uma se perdiam.)
+let opening: Promise<Database> | null = null
+
 export async function getDb(): Promise<Database> {
   if (db) return db
+  if (!opening) {
+    opening = openDb().finally(() => {
+      opening = null
+    })
+  }
+  return opening
+}
+
+async function openDb(): Promise<Database> {
 
   dbPath = dbFilePath()
 
@@ -348,21 +370,17 @@ export async function getDb(): Promise<Database> {
     locateFile: () => wasmPath
   })
 
-  if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath)
-    db = new SQL.Database(fileBuffer)
-  } else {
-    db = new SQL.Database()
-  }
+  const fresh = fs.existsSync(dbPath) ? new SQL.Database(fs.readFileSync(dbPath)) : new SQL.Database()
 
-  db.run('PRAGMA foreign_keys = ON;')
-  db.run(SCHEMA)
-  runMigrations(db)
-  seedAiLibrary(db)
+  fresh.run('PRAGMA foreign_keys = ON;')
+  fresh.run(SCHEMA)
+  runMigrations(fresh)
+  seedAiLibrary(fresh)
 
+  db = fresh
   saveDb()
 
-  return db
+  return fresh
 }
 
 /** Absolute path of the live database file. */

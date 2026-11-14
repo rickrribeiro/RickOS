@@ -394,6 +394,8 @@ export async function replaceTurns(conversationId: string, turns: Omit<AiTurn, '
 /** Turnos que ficaram "running" quando o servidor caiu/reiniciou. */
 export async function markStaleTurnsInterrupted(): Promise<void> {
   const db = await getDb()
-  exec(db, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'Servidor reiniciado durante a execução.') WHERE status = 'running'`)
+  const stale = one<{ n: number }>(db, `SELECT COUNT(*) AS n FROM ai_conv_turns WHERE status = 'running'`)?.n ?? 0
+  if (!stale) return
+  exec(db, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'O servidor foi reiniciado durante a execução.') WHERE status = 'running'`)
   saveDb()
 }

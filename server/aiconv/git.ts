@@ -10,8 +10,14 @@ import { buildPath } from '../services/claude'
  * `git status` atual: nada fora da lista de alterados é aceito.
  */
 
-const DIFF_MAX = 60_000
-const NEW_FILE_MAX = 20_000
+/** Limite do diff de UM arquivo (carregado sob demanda, ao abrir no painel). */
+const FILE_DIFF_MAX = 400_000
+const NEW_FILE_MAX = 400_000
+const NEW_FILE_STAT_MAX = 2 * 1024 * 1024
+
+/** Arquivos gerados que poluem o diff: vão para o fim da lista e saem do contexto do commit. */
+const LOCKFILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'Cargo.lock', 'poetry.lock', 'composer.lock', 'Gemfile.lock', 'go.sum']
+const isLockfile = (p: string): boolean => LOCKFILES.includes(path.basename(p))
 
 function run(cmd: string, args: string[], cwd: string, timeoutMs = 30_000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -123,6 +129,7 @@ export async function getChanges(dir: string, baseRef: string | null): Promise<C
   ])
   const branch = branchRaw?.trim() || null
   const counts = new Map<string, { a: number; d: number }>()
+  const numstatBinary = new Set<string>()
   // numstat -z: "a\td\tpath\0" (renomeado: "a\td\t\0old\0new\0")
   const ns = (numstatRaw ?? '').split('\0')
   for (let i = 0; i < ns.length; i++) {
@@ -134,45 +141,31 @@ export async function getChanges(dir: string, baseRef: string | null): Promise<C
       i += 2
     }
     counts.set(file, { a: m[1] === '-' ? 0 : Number(m[1]), d: m[2] === '-' ? 0 : Number(m[2]) })
+    if (m[1] === '-') numstatBinary.add(file)
   }
 
-  let budget = DIFF_MAX
+  // Só estatísticas aqui: o diff de cada arquivo vem sob demanda (fileDiff), senão um
+  // lockfile gigante esgota o espaço e os outros arquivos ficam sem diff.
   const files: ConvChangedFile[] = []
-  for (const e of entries.slice(0, 200)) {
-    let diff = ''
+  for (const e of entries.slice(0, 500)) {
     let additions = counts.get(e.path)?.a ?? 0
     const deletions = counts.get(e.path)?.d ?? 0
-    if (budget > 0) {
-      if (e.status === '??') {
-        const abs = path.join(top, e.path)
-        try {
-          const st = fs.statSync(abs)
-          if (st.isFile() && st.size <= 512 * 1024) {
-            const txt = fs.readFileSync(abs, 'utf8')
-            if (txt.includes('\0')) diff = '(arquivo binário)'
-            else {
-              const body = txt.slice(0, NEW_FILE_MAX)
-              additions = txt.split('\n').length
-              diff = body
-                .split('\n')
-                .map((l) => '+' + l)
-                .join('\n')
-              if (txt.length > body.length) diff += '\n… (truncado)'
-            }
-          } else diff = '(arquivo grande ou binário)'
-        } catch {
-          diff = ''
+    let binary = false
+    if (e.status === '??') {
+      try {
+        const st = fs.statSync(path.join(top, e.path))
+        if (st.isFile() && st.size <= NEW_FILE_STAT_MAX) {
+          const buf = fs.readFileSync(path.join(top, e.path))
+          if (buf.includes(0)) binary = true
+          else additions = buf.length ? buf.toString('utf8').split('\n').length - (buf[buf.length - 1] === 10 ? 1 : 0) : 0
         }
-      } else {
-        diff = (await gitOk(top, ['diff', 'HEAD', '--no-color', '--', e.path])) ?? ''
-        // tira o cabeçalho (diff --git / index / --- / +++)
-        diff = diff.replace(/^diff --git[\s\S]*?\n(?=@@)/m, '')
+      } catch {
+        // sumiu entre o status e a leitura
       }
-      if (diff.length > budget) diff = diff.slice(0, budget) + '\n… (truncado)'
-      budget -= diff.length
-    }
-    files.push({ path: e.path, status: e.status, additions, deletions, diff })
+    } else if (numstatBinary.has(e.path)) binary = true
+    files.push({ path: e.path, status: e.status, additions, deletions, diff: '', binary })
   }
+  files.sort((a, b) => Number(isLockfile(a.path)) - Number(isLockfile(b.path)))
 
   const hasRemote = !!remotes?.trim()
   let unpushed = 0
@@ -182,6 +175,35 @@ export async function getChanges(dir: string, baseRef: string | null): Promise<C
     else if (baseRef) unpushed = Number((await gitOk(top, ['rev-list', '--count', `${baseRef}..HEAD`]))?.trim() ?? 0) || 0
   }
   return { isRepo: true, branch, baseRef, files, unpushed, hasRemote }
+}
+
+/** Diff de um arquivo alterado (só os que estão no `git status`). */
+export async function fileDiff(dir: string, filePath: string): Promise<{ diff: string; truncated: boolean; binary: boolean }> {
+  const top = await repoTop(dir)
+  if (!top) throw new Error('Não é um repositório git.')
+  const [e] = await checkedPaths(top, [filePath])
+  let diff = ''
+  if (e.status === '??') {
+    const abs = path.resolve(top, e.path)
+    const st = fs.statSync(abs)
+    if (!st.isFile()) return { diff: '', truncated: false, binary: false }
+    const buf = fs.readFileSync(abs)
+    if (buf.includes(0)) return { diff: '', truncated: false, binary: true }
+    const txt = buf.toString('utf8')
+    const body = txt.slice(0, NEW_FILE_MAX)
+    diff = body
+      .replace(/\n$/, '')
+      .split('\n')
+      .map((l) => '+' + l)
+      .join('\n')
+    return { diff, truncated: txt.length > body.length, binary: false }
+  }
+  diff = (await git(top, ['diff', 'HEAD', '--no-color', '--', e.path], 60_000).catch(() => '')) ?? ''
+  if (/^Binary files /m.test(diff)) return { diff: '', truncated: false, binary: true }
+  // tira o cabeçalho (diff --git / index / --- / +++)
+  diff = diff.replace(/^diff --git[\s\S]*?\n(?=@@)/m, '')
+  const truncated = diff.length > FILE_DIFF_MAX
+  return { diff: truncated ? diff.slice(0, FILE_DIFF_MAX) : diff, truncated, binary: false }
 }
 
 /** Confere que os caminhos pedidos estão entre os alterados (nada arbitrário). */
@@ -250,7 +272,7 @@ export async function commitContext(dir: string): Promise<string> {
   const [log, stat, diff] = await Promise.all([
     gitOk(top, ['log', '--oneline', '-12']),
     gitOk(top, ['diff', 'HEAD', '--stat']),
-    gitOk(top, ['diff', 'HEAD', '--no-color'])
+    gitOk(top, ['diff', 'HEAD', '--no-color', '--', '.', ...LOCKFILES.map((f) => `:(exclude,glob)**/${f}`)])
   ])
   const untracked = (await statusEntries(top)).filter((e) => e.status === '??').map((e) => e.path)
   return [

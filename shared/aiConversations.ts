@@ -150,8 +150,15 @@ export interface ConvChangedFile {
   status: string
   additions: number
   deletions: number
-  /** diff unificado (ou conteúdo, para arquivo novo); pode vir truncado */
+  /** diff unificado: vazio na listagem (carregado sob demanda com conv:fileDiff) */
   diff: string
+  binary?: boolean
+}
+
+export interface ConvFileDiff {
+  diff: string
+  truncated: boolean
+  binary: boolean
 }
 
 export interface ConvChanges {
