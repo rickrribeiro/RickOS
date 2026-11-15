@@ -173,7 +173,20 @@ export function ContactEditor({ contact, onClose }: { contact: Contact | null; o
           </div>
           <div className="editor-field">
             <label>Próximo follow-up</label>
-            <input type="date" value={nextFollowUp} onChange={(e) => setNextFollowUp(e.target.value)} />
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="date"
+                value={nextFollowUp}
+                onChange={(e) => setNextFollowUp(e.target.value)}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              {nextFollowUp && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNextFollowUp('')} title="Remover o follow-up">
+                  Limpar
+                </button>
+              )}
+            </div>
+            {!nextFollowUp && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sem follow-up</span>}
           </div>
         </div>
         <div className="editor-row">
