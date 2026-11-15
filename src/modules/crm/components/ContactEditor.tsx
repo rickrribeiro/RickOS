@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react'
 import { Contact } from '../../../types'
 import { useContactStore } from '../store/contactStore'
 import { COUNTRIES, BRAZIL_STATES, BRAZIL, norm } from '../geo'
+import type { ChatLabel } from '../../../../shared/chats'
+import { TagChip } from './TagsModal'
 
 /** Campo de país com busca por texto (sem acentos): digita, filtra a lista e escolhe. */
 function CountryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }): React.ReactElement {
@@ -90,7 +92,19 @@ function CountryPicker({ value, onChange }: { value: string; onChange: (v: strin
 }
 
 /** Create (contact=null) or edit a personal-CRM contact. */
-export function ContactEditor({ contact, onClose }: { contact: Contact | null; onClose: () => void }): React.ReactElement {
+export function ContactEditor({
+  contact,
+  labels = [],
+  currentTags = [],
+  onManageTags,
+  onClose
+}: {
+  contact: Contact | null
+  labels?: ChatLabel[]
+  currentTags?: ChatLabel[]
+  onManageTags?: () => void
+  onClose: () => void
+}): React.ReactElement {
   const { create, update } = useContactStore()
   const [name, setName] = useState(contact?.name ?? '')
   const [location, setLocation] = useState(contact?.location ?? '')
@@ -102,6 +116,14 @@ export function ContactEditor({ contact, onClose }: { contact: Contact | null; o
   const [nextFollowUp, setNextFollowUp] = useState(contact?.nextFollowUp ?? '')
   const [priority, setPriority] = useState<'alta' | 'normal' | 'baixa'>(contact?.priority ?? 'normal')
   const [vip, setVip] = useState(!!contact?.vip)
+  const [tagIds, setTagIds] = useState<Set<number>>(() => new Set(currentTags.map((t) => t.id)))
+  const toggleTag = (id: number): void =>
+    setTagIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const isBrazil = country === BRAZIL
 
@@ -129,6 +151,13 @@ export function ContactEditor({ contact, onClose }: { contact: Contact | null; o
     if (id && (priority !== (contact?.priority ?? 'normal') || vip !== !!contact?.vip)) {
       await window.api.chats.setContactPriority(id, priority, vip)
       await useContactStore.getState().refresh()
+    }
+    if (id) {
+      const before = new Set(currentTags.map((t) => t.id))
+      // ignora tags apagadas no "gerenciar" enquanto o editor estava aberto
+      const add = [...tagIds].filter((t) => !before.has(t) && labels.some((l) => l.id === t))
+      const remove = [...before].filter((t) => !tagIds.has(t))
+      if (add.length || remove.length) await window.api.chats.setLabels('contact', [id], add, remove)
     }
     onClose()
   }
@@ -202,6 +231,20 @@ export function ContactEditor({ contact, onClose }: { contact: Contact | null; o
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', textTransform: 'none', letterSpacing: 0, fontSize: 13, color: 'var(--text-primary)' }}>
               <input type="checkbox" checked={vip} onChange={(e) => setVip(e.target.checked)} style={{ width: 'auto' }} /> ⭐ VIP (não deixar esquecer)
             </label>
+          </div>
+        </div>
+        <div className="editor-field">
+          <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Tags</span>
+            {onManageTags && (
+              <button type="button" className="crm-linkbtn" onClick={onManageTags}>gerenciar</button>
+            )}
+          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {labels.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Nenhuma tag criada.</span>}
+            {labels.map((l) => (
+              <TagChip key={l.id} tag={l} active={tagIds.has(l.id)} onClick={() => toggleTag(l.id)} />
+            ))}
           </div>
         </div>
         <div className="editor-field">

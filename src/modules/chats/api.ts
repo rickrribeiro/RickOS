@@ -91,6 +91,7 @@ export interface ChatsApi {
   deleteLabel: (id: number) => Promise<void>
   setLabels: (entity: 'chat' | 'contact', ids: number[], add: number[], remove: number[]) => Promise<void>
   contactLabels: (contactId: number) => Promise<ChatLabel[]>
+  contactLabelMap: () => Promise<Record<number, ChatLabel[]>>
   createTodo: (id: number, title: string, dueDate: string | null, messageId: string | null) => Promise<{ todoId: number }>
   todos: (id: number) => Promise<{ id: number; title: string; status: string; dueDate: string | null }[]>
   presets: () => Promise<ChatPreset[]>
@@ -109,6 +110,6 @@ export const CHATS_METHODS: (keyof ChatsApi)[] = [
   'status', 'config', 'saveConfig', 'test', 'agentKey', 'agentStatus', 'syncNow', 'accounts', 'setAccountSync', 'clearCache', 'disconnect',
   'list', 'counts', 'get', 'radar', 'networks', 'messages', 'send', 'editMessage', 'deleteMessage', 'markRead', 'search', 'pendingMessages', 'setState', 'snooze',
   'setPriority', 'setNotes', 'reviewMentions', 'suggestContacts', 'link', 'createContact', 'contactChats', 'contactNetworks', 'contacts',
-  'setContactPriority', 'labels', 'saveLabel', 'deleteLabel', 'setLabels', 'contactLabels', 'createTodo', 'todos', 'presets', 'savePreset',
+  'setContactPriority', 'labels', 'saveLabel', 'deleteLabel', 'setLabels', 'contactLabels', 'contactLabelMap', 'createTodo', 'todos', 'presets', 'savePreset',
   'deletePreset', 'templates', 'saveTemplate', 'deleteTemplate', 'aiSuggest', 'aiBatch', 'aiSummarize'
 ]

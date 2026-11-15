@@ -212,6 +212,7 @@ export function registerChatRpc(handle: Handle): void {
     svc.changed(entity === 'chat' ? ids(entityIds) : [])
   })
   handle('chats:contactLabels', async (_e, contactId: number) => (await repo.labelMap('contact')).get(Number(contactId)) ?? [])
+  handle('chats:contactLabelMap', async () => Object.fromEntries(await repo.labelMap('contact')))
 
   // ── TODOs ──
   handle('chats:createTodo', async (_e, id: number, title: string, dueDate: string | null, messageId: string | null) => {

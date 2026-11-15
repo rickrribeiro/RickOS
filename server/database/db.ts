@@ -324,6 +324,30 @@ const MIGRATIONS: Migration[] = [
         try { db.run(`ALTER TABLE projects ADD COLUMN ${c} INTEGER;`) } catch { /* exists */ }
       }
     }
+  },
+  {
+    version: 22,
+    label: 'Pessoas: tags padrão (só uma vez; apagar uma não a recria)',
+    run: (db) => {
+      const defaults: [string, string][] = [
+        ['Familia', '#ef4444'],
+        ['Profissional', '#6366f1'],
+        ['Amigo', '#22c55e'],
+        ['Das antigas', '#64748b'],
+        ['Squad Busters', '#f59e0b'],
+        ['Jogos', '#a855f7'],
+        ['Facul', '#06b6d4'],
+        ['Viagem', '#ec4899']
+      ]
+      const now = new Date().toISOString()
+      for (const [name, color] of defaults) {
+        try {
+          const st = db.prepare('INSERT OR IGNORE INTO labels (name, color, createdAt) VALUES (?, ?, ?)')
+          st.run([name, color, now])
+          st.free()
+        } catch { /* tabela ausente */ }
+      }
+    }
   }
 ]
 

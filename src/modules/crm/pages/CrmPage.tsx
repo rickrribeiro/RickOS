@@ -5,6 +5,8 @@ import { ContactEditor } from '../components/ContactEditor'
 import { BRAZIL, BRAZIL_STATES, norm } from '../geo'
 import { timeAgo, localDateStr } from '../../../utils/dates'
 import { networkInfo } from '../../../../shared/chats'
+import type { ChatLabel } from '../../../../shared/chats'
+import { TagsModal, TagChip } from '../components/TagsModal'
 import { openChat } from '../../chats/store/chatsStore'
 
 /** Days until the next occurrence of a MM-DD / YYYY-MM-DD birthday, or null. */
@@ -76,9 +78,21 @@ export function CrmPage(): React.ReactElement {
 
   // conversas vinculadas (Central de Mensagens): redes por pessoa e pendências
   const [nets, setNets] = useState<Record<number, { network: string; chatId: number; pending: boolean }[]>>({})
+  // tags das pessoas (catálogo compartilhado com a Central de Mensagens)
+  const [labels, setLabels] = useState<ChatLabel[]>([])
+  const [tagMap, setTagMap] = useState<Record<number, ChatLabel[]>>({})
+  const [tagFilter, setTagFilter] = useState<number | ''>('')
+  const [managingTags, setManagingTags] = useState(false)
+  async function loadTags(): Promise<void> {
+    const [ls, map] = await Promise.all([window.api.chats.labels(), window.api.chats.contactLabelMap()])
+    setLabels(ls)
+    setTagMap(map)
+    if (tagFilter && !ls.some((l) => l.id === tagFilter)) setTagFilter('')
+  }
   useEffect(() => {
     refresh()
     window.api.chats.contactNetworks().then(setNets).catch(() => setNets({}))
+    loadTags().catch(() => undefined)
   }, [])
 
   function onCountryFilterChange(value: string): void {
@@ -98,7 +112,11 @@ export function CrmPage(): React.ReactElement {
   const nameQuery = nameFilter.trim()
   const terms = norm(nameQuery).split(/\s+/).filter(Boolean)
   const haystack = (c: Contact): string =>
-    norm([c.name, c.location, c.state, c.state ? ufLabel(c.state) : null, c.country, c.interests, c.context].filter(Boolean).join(' '))
+    norm(
+      [c.name, c.location, c.state, c.state ? ufLabel(c.state) : null, c.country, c.interests, c.context, ...(tagMap[c.id] ?? []).map((t) => t.name)]
+        .filter(Boolean)
+        .join(' ')
+    )
   const filtered = contacts.filter((c) => {
     if (terms.length) {
       const h = haystack(c)
@@ -106,6 +124,7 @@ export function CrmPage(): React.ReactElement {
     }
     if (countryFilter && c.country !== countryFilter) return false
     if (countryFilter === BRAZIL && stateFilter && c.state !== stateFilter) return false
+    if (tagFilter && !(tagMap[c.id] ?? []).some((t) => t.id === tagFilter)) return false
     return true
   })
 
@@ -129,7 +148,7 @@ export function CrmPage(): React.ReactElement {
     return at - bt
   })
   const attentionCount = contacts.filter(needsAttention).length
-  const isFiltering = !!(nameQuery || countryFilter || stateFilter)
+  const isFiltering = !!(nameQuery || countryFilter || stateFilter || tagFilter)
 
   return (
     <div className="module-page">
@@ -164,6 +183,15 @@ export function CrmPage(): React.ReactElement {
               ))}
             </select>
           )}
+          {labels.length > 0 && (
+            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value ? Number(e.target.value) : '')} title="Filtrar por tag">
+              <option value="">🏷 Todas as tags</option>
+              {labels.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={() => setManagingTags(true)}>🏷 Tags</button>
           <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>＋ Pessoa</button>
         </div>
       </div>
@@ -179,6 +207,9 @@ export function CrmPage(): React.ReactElement {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span className="list-row-title">{c.vip ? '⭐ ' : ''}{c.name}</span>
+                  {(tagMap[c.id] ?? []).map((t) => (
+                    <TagChip key={t.id} tag={t} />
+                  ))}
                   {c.priority === 'alta' && <span className="due-badge due-overdue">prioridade alta</span>}
                   {(nets[c.id] ?? []).map((n) => (
                     <button
@@ -213,7 +244,20 @@ export function CrmPage(): React.ReactElement {
         })}
       </div>
 
-      {(creating || editing) && <ContactEditor contact={editing} onClose={() => { setCreating(false); setEditing(null) }} />}
+      {(creating || editing) && (
+        <ContactEditor
+          contact={editing}
+          labels={labels}
+          currentTags={editing ? tagMap[editing.id] ?? [] : []}
+          onManageTags={() => setManagingTags(true)}
+          onClose={() => {
+            setCreating(false)
+            setEditing(null)
+            void loadTags()
+          }}
+        />
+      )}
+      {managingTags && <TagsModal labels={labels} onChanged={loadTags} onClose={() => setManagingTags(false)} />}
       {suggest && <SuggestModal contact={suggest} onClose={() => setSuggest(null)} />}
     </div>
   )

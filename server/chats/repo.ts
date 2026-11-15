@@ -531,7 +531,9 @@ export async function listLabels(): Promise<ChatLabel[]> {
   return read((db) =>
     all<ChatLabel>(
       db,
-      `SELECT l.id, l.name, l.color, (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'chat') AS chatCount
+      `SELECT l.id, l.name, l.color,
+         (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'chat') AS chatCount,
+         (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'contact') AS contactCount
        FROM labels l ORDER BY l.name COLLATE NOCASE`
     )
   )

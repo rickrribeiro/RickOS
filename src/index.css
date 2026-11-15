@@ -2351,6 +2351,46 @@ button.todo-divider:hover {
   white-space: nowrap;
 }
 
+.crm-tag {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  color: var(--text-primary);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.crm-tag.clickable {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.crm-tags-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.crm-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crm-linkbtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .cal-day-num-wrap {
   display: inline-flex;
   align-items: center;

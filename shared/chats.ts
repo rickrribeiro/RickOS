@@ -119,6 +119,7 @@ export interface ChatLabel {
   name: string
   color: string
   chatCount?: number
+  contactCount?: number
 }
 
 export interface ChatSummary {
