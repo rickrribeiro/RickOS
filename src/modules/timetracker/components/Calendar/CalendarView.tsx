@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { DailyStats } from '@/types'
 import { localDateStr, localDayStartISO } from '@/utils/dates'
 import { useHabitStore } from '../../../habits/store/habitStore'
+import { useContactStore } from '../../../crm/store/contactStore'
 
 interface Props {
   year: number
@@ -75,6 +76,34 @@ export function CalendarView({
   const habitsDone = activeHabits.filter((h) => isDone(h.id)).length
   const habitsAllDone = habitsTotal > 0 && habitsDone === habitsTotal
   const habitsPending = activeHabits.filter((h) => !isDone(h.id)).map((h) => h.name)
+
+  // Aniversários dos contatos do CRM (MM-DD ou AAAA-MM-DD), por dia do mês exibido
+  const { contacts, refresh: refreshContacts } = useContactStore()
+  useEffect(() => {
+    refreshContacts()
+  }, [])
+  const [bdayOpen, setBdayOpen] = useState<string | null>(null)
+  useEffect(() => {
+    if (!bdayOpen) return
+    const close = () => setBdayOpen(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [bdayOpen])
+  const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+  const birthdaysOn = (date: string): string[] => {
+    const [y, mm, dd] = date.split('-')
+    const names: string[] = []
+    for (const c of contacts) {
+      const m = /^(?:(\d{4})-)?(\d{2})-(\d{2})$/.exec(c.birthday?.trim() ?? '')
+      if (!m) continue
+      // 29/02 cai em 28/02 nos anos não bissextos
+      const md = m[2] === '02' && m[3] === '29' && !isLeap(Number(y)) ? '02-28' : `${m[2]}-${m[3]}`
+      if (md !== `${mm}-${dd}`) continue
+      const age = m[1] ? Number(y) - Number(m[1]) : 0
+      names.push(age > 0 ? `${c.name} (${age} anos)` : c.name)
+    }
+    return names
+  }
 
   const toggleWorkDay = async (date: string, current: number) => {
     const next = current === 1 ? 0 : 1
@@ -169,7 +198,41 @@ export function CalendarView({
                 onClick={() => cell.date && onSelectDate(cell.date)}
               >
                 <div className="calendar-day-top">
-                  <span className="calendar-day-num">{cell.day}</span>
+                  <span className="cal-day-num-wrap">
+                    <span className="calendar-day-num">{cell.day}</span>
+                    {(() => {
+                      if (cell.otherMonth) return null
+                      const bdays = birthdaysOn(cell.date)
+                      if (bdays.length === 0) return null
+                      const open = bdayOpen === cell.date
+                      return (
+                        <span className="cal-bday">
+                          <button
+                            type="button"
+                            className="cal-bday-btn"
+                            aria-label={`Aniversários: ${bdays.join(', ')}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setBdayOpen(open ? null : cell.date)
+                            }}
+                          >
+                            🎂
+                          </button>
+                          {open && (
+                            <span
+                              className={`cal-bday-pop ${i >= 4 ? 'align-right' : ''}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <strong>Aniversário</strong>
+                              {bdays.map((n) => (
+                                <span key={n}>{n}</span>
+                              ))}
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })()}
+                  </span>
                   {!cell.otherMonth && eventDays[cell.date] > 0 && (
                     <span className="cal-event-badge" title={`${eventDays[cell.date]} evento(s)`}>
                       📅 {eventDays[cell.date]}
