@@ -156,6 +156,16 @@ export async function deleteMonitor(id: number): Promise<void> {
     // sql.js nem sempre tem foreign_keys ativo numa conexão reaberta: apaga explicitamente
     exec(db, 'DELETE FROM flight_price_observations WHERE monitorId = ?', [id])
     for (const t of ['flight_offers', 'flight_search_tasks', 'flight_runs', 'flight_alert_events']) exec(db, `DELETE FROM ${t} WHERE monitorId = ?`, [id])
+    // monitor migrado de `flight_watches`: apaga o registro antigo também, senão o
+    // migrateLegacyWatches do boot o recria (ele só pula watches que ainda têm monitor)
+    const legacy = one<{ legacyWatchId: number | null }>(db, 'SELECT legacyWatchId FROM flight_monitors WHERE id = ?', [id])
+    if (legacy?.legacyWatchId != null) {
+      try {
+        exec(db, 'DELETE FROM flight_watches WHERE id = ?', [legacy.legacyWatchId])
+      } catch {
+        /* tabela antiga não existe */
+      }
+    }
     exec(db, 'DELETE FROM flight_monitors WHERE id = ?', [id])
   })
 }
