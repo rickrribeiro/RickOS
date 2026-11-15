@@ -39,7 +39,7 @@ import {
   InvestmentsPage,
   ReportsPage
 } from './modules/finance/pages'
-import { DestinationsPage } from './modules/travel/pages'
+import { DestinationsPage, ItineraryPage } from './modules/travel/pages'
 import { ExportDbModal } from './components/ExportDbModal'
 import { SettingsPage } from './modules/settings/pages/SettingsPage'
 import { LinksPage } from './modules/links/pages/LinksPage'
@@ -90,6 +90,7 @@ const PAGES: Record<Page, React.ComponentType> = {
   'trip-monitoring': FlightsDashboardPage,
   'flight-monitor': FlightMonitorPage,
   destinations: DestinationsPage,
+  itinerary: ItineraryPage,
   ai: AIPage,
   'ai-skills': SkillsPage,
   'ai-agents': AgentsPage,

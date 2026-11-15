@@ -674,6 +674,7 @@ export type Page =
   | 'trip-monitoring'
   | 'flight-monitor'
   | 'destinations'
+  | 'itinerary'
   // Jarvis
   | 'jarvis'
   // IA

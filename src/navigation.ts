@@ -83,7 +83,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'destinations', label: 'Destinos', icon: '🗺' },
       { id: 'stays', label: 'Hospedagens', icon: '🏨' },
-      { id: 'trip-monitoring', label: 'Passagens', icon: '🔔' }
+      { id: 'trip-monitoring', label: 'Passagens', icon: '🔔' },
+      { id: 'itinerary', label: 'Roteiro', icon: '🧭' }
     ]
   },
   {
