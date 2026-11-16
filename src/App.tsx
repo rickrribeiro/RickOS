@@ -14,7 +14,6 @@ import { TodoPage } from './modules/todo/pages/TodoPage'
 import { BrainDumpPage } from './modules/braindump/pages/BrainDumpPage'
 import { GoalsPage } from './modules/goals/pages/GoalsPage'
 import { AutomationsPage } from './modules/automations/pages/AutomationsPage'
-import { WeeklyReviewPage } from './modules/review/pages/WeeklyReviewPage'
 import { CrmPage } from './modules/crm/pages/CrmPage'
 import { ChatsPage } from './modules/chats/pages/ChatsPage'
 import { StayFinderPage } from './modules/travel-stays/pages/StayFinderPage'
@@ -69,7 +68,6 @@ const PAGES: Record<Page, React.ComponentType> = {
   braindump: BrainDumpPage,
   goals: GoalsPage,
   automations: AutomationsPage,
-  'weekly-review': WeeklyReviewPage,
   crm: CrmPage,
   chats: ChatsPage,
   estudos: EstudosDashboardPage,

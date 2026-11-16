@@ -650,7 +650,6 @@ export type Page =
   | 'knowledge'
   | 'goals'
   | 'automations'
-  | 'weekly-review'
   // Social
   | 'crm'
   | 'chats'

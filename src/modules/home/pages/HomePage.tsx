@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useUIStore } from '../../../store/uiStore'
 import { DailyStandup } from '../components/DailyStandup'
+import { WeeklyReview } from '../components/WeeklyReview'
 import { ProjectHomeBlocks } from '../../projects/components/ProjectHomeBlocks'
 import { LostWorkCard } from '../../projects/components/LostWorkCard'
 import { HomeChatsWidget } from '../../chats/components/HomeChatsWidget'
@@ -101,6 +102,7 @@ export function HomePage(): React.ReactElement {
       </button>
 
       <DailyStandup />
+      <WeeklyReview />
 
       {/* ── Projetos: em foco, foco de hoje, onde parei, decisões ── */}
       <ProjectHomeBlocks />

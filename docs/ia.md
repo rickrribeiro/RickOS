@@ -167,7 +167,7 @@ Muita coisa foi construída após a 1ª versão deste dump. Resumo do que já ex
 - **Brain Dump** ("Despejar minha cabeça"): texto livre → IA vira tarefas/projetos/passos/agenda; revisão com checkboxes → importa de verdade.
 - **Metas mensais** (`🎯`): metas por mês, livres ou ligadas a um projeto/tópico de estudo, com progresso e navegação por mês.
 - **Automações** (`⚡`): **motor de regras condição→ação** avaliado no processo main a cada 1 min (sem foco produtivo por X min no horário; gasto de categoria > P% do orçamento; flashcards vencidos > N → notificação nativa / cria TODO) **+ agendador de agentes → Inbox** (roda o Claude no horário definido e o resultado vira item de Inbox com `aiGenerated=1`).
-- **Revisão semanal** (`🗓️`): wizard guiado (inbox zero → TODOs zumbis → hábitos → finanças → plano) com rascunho da IA por etapa.
+- **Revisão semanal** (`🗓️`, card no Dashboard): um botão gera o relatório final (focos, plano por dia, decisão por projeto, inbox/zumbis, hábitos, finanças) a partir de todo o contexto da semana; o último fica salvo no servidor (`weekly_review_report`) até ser gerado de novo.
 - **TODO**: recorrências (a cada N dias / dia X do mês / N dias após concluir — próxima instância nasce ao concluir) e indicador de idade ("há X"); campo `aiGenerated` + filtro no Inbox.
 - **Inbox por OCR**: arrastar/colar print/boleto/foto → Claude local (multimodal, ferramenta Read) extrai título/valor/data/link/nota → item de Inbox.
 

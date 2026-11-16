@@ -36,7 +36,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'goals', label: 'Metas', icon: '🎯' },
       { id: 'habits', label: 'Hábitos', icon: '🔥' },
       { id: 'automations', label: 'Automações', icon: '⚡' },
-      { id: 'weekly-review', label: 'Revisão semanal', icon: '🗓️' },
       { id: 'knowledge', label: 'Base de Conhecimento', icon: '📚' }
     ]
   },
