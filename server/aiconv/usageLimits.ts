@@ -112,14 +112,39 @@ function runUsage(configDir: string): Promise<string> {
   })
 }
 
+/** Última leitura com limites de cada conta (o `/usage` às vezes vem sem eles). */
+const lastGood = new Map<string, { limits: ClaudeUsageLimit[]; at: string }>()
+const RETRIES = 2
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
 async function fetchAccount(configDir: string): Promise<ClaudeUsageAccount> {
   const label = configLabel(configDir)
   try {
-    const out = await runUsage(configDir)
-    const limits = parseUsageOutput(out)
-    return { provider: 'claude', configDir, label, limits, raw: limits.length ? null : out.trim().slice(0, 600) || null, error: null }
+    let out = ''
+    let limits: ClaudeUsageLimit[] = []
+    // o CLI às vezes omite as linhas "Current …" (só traz "What's contributing…"): tenta de novo
+    for (let i = 0; i <= RETRIES; i++) {
+      if (i) await wait(1500)
+      out = await runUsage(configDir)
+      limits = parseUsageOutput(out)
+      if (limits.length) break
+    }
+    if (limits.length) {
+      lastGood.set(configDir, { limits, at: new Date().toISOString() })
+      return { provider: 'claude', configDir, label, limits, raw: null, error: null }
+    }
+    // conta de assinatura sem os limites nesta leitura: usa a última boa em vez do texto cru
+    if (/subscription/i.test(out)) {
+      const prev = lastGood.get(configDir)
+      if (prev) return { provider: 'claude', configDir, label, limits: prev.limits, raw: null, error: null, staleAt: prev.at }
+      return { provider: 'claude', configDir, label, limits: [], raw: null, error: null, unavailable: true }
+    }
+    return { provider: 'claude', configDir, label, limits, raw: out.trim().slice(0, 600) || null, error: null }
   } catch (e) {
-    return { provider: 'claude', configDir, label, limits: [], raw: null, error: e instanceof Error ? e.message : String(e) }
+    const prev = lastGood.get(configDir)
+    const error = e instanceof Error ? e.message : String(e)
+    if (prev) return { provider: 'claude', configDir, label, limits: prev.limits, raw: null, error: null, staleAt: prev.at }
+    return { provider: 'claude', configDir, label, limits: [], raw: null, error }
   }
 }
 

@@ -255,6 +255,13 @@ export interface ClaudeUsageAccount {
   /** Texto cru quando nada foi reconhecido (ex.: conta via API key). */
   raw: string | null
   error: string | null
+  /**
+   * Os limites vieram de uma leitura anterior (ISO dela): às vezes o `/usage` do CLI
+   * responde sem as linhas "Current …", e aí mostramos a última leitura boa.
+   */
+  staleAt?: string | null
+  /** O `/usage` respondeu (conta de assinatura) mas sem os limites, e não há leitura anterior. */
+  unavailable?: boolean
 }
 
 export interface ClaudeUsageSnapshot {

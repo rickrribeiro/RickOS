@@ -128,7 +128,11 @@ export function UsageLimits(): React.ReactElement {
             <div key={a.configDir} className="cv-usage-acc">
               {multi && <div className="cv-usage-acc-name">{name(a)}</div>}
               {a.error && <div className="cv-usage-err">{a.error}</div>}
-              {!a.error && !a.limits.length && <div className="cv-usage-note">{a.raw || 'Sem limites informados pelo /usage.'}</div>}
+              {!a.error && !a.limits.length && (
+                <div className="cv-usage-note">
+                  {a.unavailable ? 'Limites indisponíveis agora: o /usage do Claude respondeu sem eles. Tente atualizar daqui a pouco.' : a.raw || 'Sem limites informados pelo /usage.'}
+                </div>
+              )}
               {a.limits.map((l, i) => (
                 <div key={i} className={`cv-usage-row ${level(l.percent)}`} title={l.resetsText ? `${limitLabel(l)}: ${l.percent}% · zera ${l.resetsText}` : undefined}>
                   <span className="cv-usage-label">{limitLabel(l)}</span>
@@ -139,6 +143,7 @@ export function UsageLimits(): React.ReactElement {
                   <span className="cv-usage-reset">{resetLabel(l) ? `↺ ${resetLabel(l)}` : ''}</span>
                 </div>
               ))}
+              {a.staleAt && <div className="cv-usage-note">última leitura {updated(a.staleAt).replace('atualizado ', '')} · o /usage não trouxe os limites agora</div>}
             </div>
           ))}
           {data && <div className="cv-usage-note">{updated(data.fetchedAt)}</div>}
