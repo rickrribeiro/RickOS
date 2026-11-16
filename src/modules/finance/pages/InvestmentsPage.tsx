@@ -2,20 +2,41 @@ import React, { useEffect, useState } from 'react'
 import { Investment } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
-import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth } from '../util'
+import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth } from '../util'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
+
+/** Tag de variação vs. mês anterior: ▲ R$ 1.234,00 · +5,2% (some quando não houve mudança). */
+function DeltaTag({ prev, curr, currency }: { prev: number | null; curr: number | null; currency: string }): React.ReactElement | null {
+  if (prev == null || curr == null) return null
+  const diff = curr - prev
+  if (Math.abs(diff) < 0.005) return null
+  const up = diff > 0
+  const pct = prev !== 0 ? (diff / Math.abs(prev)) * 100 : null
+  const pctText =
+    pct != null
+      ? ` · ${up ? '+' : '−'}${Math.abs(pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+      : ''
+  return (
+    <span className={`delta-tag ${up ? 'up' : 'down'}`} title="Variação em relação ao mês anterior">
+      {up ? '▲' : '▼'} {formatMoney(Math.abs(diff), currency)}
+      {pctText}
+    </span>
+  )
+}
 
 /** A single investment row with an editable value for the selected month. */
 function InvestmentRow({
   investment,
   value,
+  prevValue,
   isExplicit,
   onSave,
   onRemove
 }: {
   investment: Investment
   value: number | null // carried-forward value for the month (null if none yet)
+  prevValue: number | null // carried-forward value for the previous month
   isExplicit: boolean // true if there's a snapshot for this exact month
   onSave: (amount: number) => void
   onRemove: () => void
@@ -40,6 +61,7 @@ function InvestmentRow({
       <span style={{ fontSize: 11, color: isExplicit ? 'var(--success)' : 'var(--text-muted)' }}>
         {isExplicit ? '● registrado' : value != null ? 'mantido' : 'sem valor'}
       </span>
+      <DeltaTag prev={prevValue} curr={value} currency={investment.currency} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{investment.currency}</span>
         <input
@@ -88,6 +110,10 @@ export function InvestmentsPage(): React.ReactElement {
     amount: investmentValueAtMonth(investmentHistory, i.id, month) ?? 0
   }))
   const totals = sumByCurrency(monthItems)
+  const prevMonth = shiftMonth(month, -1)
+  const prevTotals = sumByCurrency(
+    investments.map((i) => ({ currency: i.currency, amount: investmentValueAtMonth(investmentHistory, i.id, prevMonth) ?? 0 }))
+  )
 
   return (
     <div className="module-page">
@@ -100,6 +126,13 @@ export function InvestmentsPage(): React.ReactElement {
               .map(([c, v]) => formatMoney(v, c))
               .join(' · ') || formatMoney(0)}
           </p>
+          {Object.keys(totals).length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              {Object.entries(totals).map(([c, v]) => (
+                <DeltaTag key={c} prev={prevTotals[c] ?? 0} curr={v} currency={c} />
+              ))}
+            </div>
+          )}
         </div>
         <MonthNav />
       </div>
@@ -131,11 +164,13 @@ export function InvestmentsPage(): React.ReactElement {
         {investments.map((i) => {
           const explicit = investmentHistory.some((h) => h.investmentId === i.id && h.month === month)
           const value = investmentValueAtMonth(investmentHistory, i.id, month)
+          const prevValue = investmentValueAtMonth(investmentHistory, i.id, shiftMonth(month, -1))
           return (
             <InvestmentRow
               key={`${i.id}|${month}`}
               investment={i}
               value={value}
+              prevValue={prevValue}
               isExplicit={explicit}
               onSave={(v) => setInvestmentValue(i.id, month, v)}
               onRemove={() => removeInvestment(i.id)}

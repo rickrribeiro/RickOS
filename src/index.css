@@ -1707,6 +1707,24 @@ select:focus {
   white-space: nowrap;
 }
 
+.delta-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid currentColor;
+}
+.delta-tag.up {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+.delta-tag.down {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
 .todo-type-chip {
   font-size: 11px;
   padding: 2px 8px;
