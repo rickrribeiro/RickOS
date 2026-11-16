@@ -1216,7 +1216,7 @@ ipcMain.handle('ai:start', async (_, params: AiStartParams) => {
   // Execuções longas (≥ 1 min) avisam ao terminar: o usuário provavelmente saiu da tela.
   const notifyIfLong = (title: string, body: string): void => {
     if (Date.now() - startedAt < 60 * 1000) return
-    void notify({ title, body, source: 'ia', page: params.save !== false ? 'ai-history' : null })
+    void notify({ title, body, source: 'claude', page: params.save !== false ? 'ai-history' : null })
   }
   const promptPreview = (params.userPrompt || params.prompt).replace(/\s+/g, ' ').trim().slice(0, 120)
   const command = await resolveClaudeCommand(params.projectId ?? undefined)

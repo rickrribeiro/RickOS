@@ -348,6 +348,15 @@ const MIGRATIONS: Migration[] = [
         } catch { /* tabela ausente */ }
       }
     }
+  },
+  {
+    version: 23,
+    label: 'Notificações: "Execução de IA concluída/falhou" vão para a aba Claude',
+    run: (db) => {
+      try {
+        db.run("UPDATE notifications SET source = 'claude' WHERE source = 'ia' AND title LIKE '%Execução de IA%';")
+      } catch { /* tabela ausente */ }
+    }
   }
 ]
 
