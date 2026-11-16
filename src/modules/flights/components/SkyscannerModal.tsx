@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { MonitorSummary, SkyPick, SkyPlace, SkyPreview } from '../../../../shared/flights'
+import type { ChromeStatus, MonitorSummary, SkyPick, SkyPlace, SkyPreview } from '../../../../shared/flights'
 import { formatMoney, skyKey } from '../../../../shared/flights'
 import { errMsg } from '../store/flightStore'
 import { Modal } from './Modal'
@@ -71,6 +71,53 @@ function PlacePicker(props: { places: SkyPlace[]; value: string; onChange: (iata
 }
 
 const SUGGESTED_ROUTES = 8
+
+/** Aviso de conexão do Chrome, com o passo a passo para o caso encontrado. */
+function ChromeCheck(props: { st: ChromeStatus | null; checking: boolean; forced: boolean; onRecheck: () => void; onForce: () => void }): React.ReactElement | null {
+  const { st } = props
+  if (!st) return <div className="fm-small fm-muted" style={{ marginBottom: 8 }}>Verificando a conexão com o Chrome…</div>
+  if (st.unknown) return null
+  if (st.ok)
+    return (
+      <div className="fm-small" style={{ marginBottom: 8 }}>
+        <span className="fm-pill ok">✓ Chrome conectado ao Claude Code</span>
+      </div>
+    )
+  return (
+    <div className="fm-note warn fm-chromecheck">
+      <b>{st.chrome ? 'O Chrome não está conectado ao Claude Code.' : 'O Chrome não está aberto.'}</b>
+      {st.chrome && st.desktopHost && !st.desktopApp && (
+        <div>A extensão Claude in Chrome está presa ao app Claude desktop, que está fechado.</div>
+      )}
+      {st.chrome && st.desktopHost && st.desktopApp && <div>A extensão Claude in Chrome está ligada ao app Claude desktop, não ao Claude Code.</div>}
+      <ol>
+        {st.chrome ? (
+          <li>
+            Feche o Chrome por completo (<b>⌘Q</b>) e abra de novo.
+          </li>
+        ) : (
+          <li>Abra o Chrome.</li>
+        )}
+        <li>Confira se a extensão Claude in Chrome está ativa e logada.</li>
+        <li>
+          Se continuar, rode <code>claude --chrome</code> no terminal e use <code>/chrome</code> para reconectar.
+        </li>
+      </ol>
+      <div className="fm-row" style={{ gap: 10 }}>
+        <button className="btn btn-sm" type="button" disabled={props.checking} onClick={props.onRecheck}>
+          {props.checking ? 'Verificando…' : '↻ Verificar de novo'}
+        </button>
+        {!props.forced ? (
+          <button className="fm-linkbtn" type="button" onClick={props.onForce} title="A checagem olha os processos da máquina; se ela errar, dá para tentar assim mesmo">
+            tentar mesmo assim
+          </button>
+        ) : (
+          <span className="fm-small">vai tentar mesmo assim</span>
+        )}
+      </div>
+    </div>
+  )
+}
 const pairKey = (o: string, d: string): string => `${o}|${d}`
 
 /** Checkbox com estado "parcial" (algumas datas da rota marcadas). */
@@ -98,21 +145,60 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
   const listRef = useRef<HTMLDivElement>(null)
   const [err, setErr] = useState('')
   const [starting, setStarting] = useState(false)
+  const [chrome, setChrome] = useState<ChromeStatus | null>(null)
+  const [restored, setRestored] = useState(0)
+  const loaded = useRef(false)
+  const selKey = `flights_sky_selection_${props.m.id}`
+  // A seleção fica guardada (no servidor, vale para desktop e celular) para a próxima vez que abrir.
+  useEffect(() => {
+    if (!loaded.current) return
+    const t = setTimeout(() => {
+      window.api.settings.set(selKey, JSON.stringify([...sel.values()])).catch(() => undefined)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [sel])
+  const [checking, setChecking] = useState(false)
+  const [forced, setForced] = useState(false)
+
+  async function checkChrome(): Promise<ChromeStatus | null> {
+    setChecking(true)
+    try {
+      const st = await window.api.flightMon.chromeStatus()
+      setChrome(st)
+      return st
+    } catch {
+      const st = { ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true }
+      setChrome(st)
+      return st
+    } finally {
+      setChecking(false)
+    }
+  }
+  // verifica ao abrir e ao voltar para a janela (depois de reabrir o Chrome, por exemplo)
+  useEffect(() => {
+    void checkChrome()
+    const onFocus = (): void => void checkChrome()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   useEffect(() => {
-    window.api.flightMon
-      .skyscannerPreview(props.m.id)
-      .then((r) => {
+    Promise.all([window.api.flightMon.skyscannerPreview(props.m.id), window.api.settings.get(selKey).catch(() => null)])
+      .then(([r, savedRaw]) => {
         setPv(r)
+        const saved = props.initial?.length ? [] : validSaved(r, savedRaw)
         let start: SkyPick[]
         if (props.initial?.length) start = props.initial.slice(0, r.maxPerRun)
+        else if (saved.length) start = saved.slice(0, r.maxPerRun)
         else {
           // 1ª rota sugerida com todas as datas do intervalo
           const first = r.recommended[0]
           start = first ? datesFor(r, first.origin, first.destination).slice(0, r.maxPerRun) : []
         }
         setSel(new Map(start.map((c) => [skyKey(c), { origin: c.origin, destination: c.destination, depart: c.depart, ret: c.ret }])))
-        setOpen(new Set(props.initial?.length ? [] : start.slice(0, 1).map((c) => pairKey(c.origin, c.destination))))
+        setOpen(new Set(props.initial?.length || saved.length ? [] : start.slice(0, 1).map((c) => pairKey(c.origin, c.destination))))
+        setRestored(saved.length)
+        loaded.current = true
       })
       .catch((e) => setErr(errMsg(e)))
   }, [])
@@ -219,6 +305,8 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
     setStarting(true)
     setErr('')
     try {
+      const st = await checkChrome()
+      if (st && !st.ok && !forced) return
       await window.api.flightMon.skyscanner(props.m.id, [...sel.values()])
       props.onStarted()
     } catch (e) {
@@ -241,7 +329,7 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
           <span className="fm-grow fm-small">
             {sel.size} de no máx. {max} · {sessions} sessão(ões) do Claude de até {pv?.perSession ?? 5} combinações, uma após a outra. Acompanhe pelo Chrome.
           </span>
-          <button className="btn btn-primary btn-sm" disabled={starting || !sel.size || !!pv?.busy} onClick={start} type="button">
+          <button className="btn btn-primary btn-sm" disabled={starting || !sel.size || !!pv?.busy || (!!chrome && !chrome.ok && !forced)} onClick={start} type="button">
             {starting ? 'Iniciando…' : `Pesquisar ${sel.size} combinação(ões)`}
           </button>
         </>
@@ -250,6 +338,7 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
       <div className="fm-small" style={{ marginBottom: 8 }}>
         Chrome aberto com a extensão <b>Claude in Chrome</b> conectada. Se o Skyscanner pedir verificação, o Claude para (o app não contorna) e o resto volta para a fila. Cada sessão custa ~US$ 0,10–0,25 (equivalente API) — só abrir as ferramentas do Chrome já custa isso.
       </div>
+      <ChromeCheck st={chrome} checking={checking} forced={forced} onRecheck={() => void checkChrome()} onForce={() => setForced(true)} />
       {pv?.busy && <div className="fm-note warn">Já há uma busca no Chrome em andamento (uma por vez).</div>}
       {err && <div className="fm-error">{err}</div>}
       {!pv ? (
@@ -281,6 +370,11 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
               limpar tudo
             </button>
           </div>
+          {restored > 0 && (
+            <div className="fm-small" style={{ marginBottom: 6 }}>
+              ↺ {restored} combinação(ões) da última vez já marcada(s).
+            </div>
+          )}
           {notice && <div className="fm-note warn" style={{ marginBottom: 6 }}>{notice}</div>}
 
           <div className="fm-sky-list fm-sky-routes" ref={listRef}>
@@ -369,6 +463,21 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
       )}
     </Modal>
   )
+}
+
+/** Seleção guardada da última vez, só com o que ainda vale (rota do monitor, data no intervalo). */
+function validSaved(pv: SkyPreview, raw: string | null): SkyPick[] {
+  try {
+    const arr: unknown = JSON.parse(raw || '[]')
+    if (!Array.isArray(arr)) return []
+    const pairs = new Set(pv.pairs)
+    const dates = new Set(pv.dates.map((d) => `${d.depart}|${d.ret ?? '-'}`))
+    return (arr as SkyPick[]).filter(
+      (c) => c && typeof c.origin === 'string' && pairs.has(pairKey(c.origin, c.destination)) && dates.has(`${c.depart}|${c.ret ?? '-'}`)
+    ).map((c) => ({ origin: c.origin, destination: c.destination, depart: c.depart, ret: c.ret ?? null }))
+  } catch {
+    return []
+  }
 }
 
 /** Todas as datas do intervalo para uma rota. */

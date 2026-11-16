@@ -200,6 +200,16 @@ app pesquisa o Skyscanner **no seu Chrome**, sob demanda e com você acompanhand
        uma a uma (o checkbox fica "parcial"). Ao abrir, a 1ª sugerida já vem marcada.
      - **Adicionar outra rota:** origem e destino com busca (cidade, país ou IATA); ao
        escolher o destino, a rota entra no topo da lista com todas as datas marcadas.
+     - **Checagem do Chrome** (`chromeStatus`): ao abrir o seletor, ao voltar para a janela e
+       antes de iniciar, o servidor lista os processos (`ps`) e procura o conector do Claude
+       Code (`claude --chrome-native-host`), que só roda enquanto a extensão está ligada a
+       ele. Sem ele, o botão fica desativado e aparece o passo a passo; se a extensão estiver
+       presa ao conector do app Claude desktop, o aviso diz isso. "Tentar mesmo assim" ignora
+       a checagem.
+     - A seleção fica guardada no servidor (`flights_sky_selection_<id>`) e volta marcada na
+       próxima abertura, filtrada pelo que ainda vale (rota do monitor, data no intervalo).
+     - Se a última busca no Chrome falhou ou ficou pela metade (últimas 24 h), a página do
+       monitor mostra a causa (`lastAssisted` no resumo) com "Tentar de novo".
      - Até 30 combinações por execução. O servidor revalida cada escolha contra os pares e
        datas do monitor e remonta as URLs (`validatePicks`).
   2. Ao confirmar, roda sessões do Claude de até 5 combinações, uma após a outra (sessões

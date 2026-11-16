@@ -235,6 +235,10 @@ export async function activeRun(monitorId: number): Promise<RunInfo | null> {
   return read((db) => one<RunInfo>(db, "SELECT * FROM flight_runs WHERE monitorId = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [monitorId]))
 }
 
+export async function lastAssistedRun(monitorId: number): Promise<RunInfo | null> {
+  return read((db) => one<RunInfo>(db, "SELECT * FROM flight_runs WHERE monitorId = ? AND trigger = 'assisted' AND status != 'running' ORDER BY id DESC LIMIT 1", [monitorId]))
+}
+
 export async function listRuns(monitorId: number, limit = 15): Promise<RunInfo[]> {
   return read((db) => all<RunInfo>(db, 'SELECT * FROM flight_runs WHERE monitorId = ? ORDER BY id DESC LIMIT ?', [monitorId, limit]))
 }

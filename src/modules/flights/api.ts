@@ -21,6 +21,7 @@ import type {
   SkyCombo,
   SkyPick,
   SkyPreview,
+  ChromeStatus,
   TrackedView
 } from '../../../shared/flights'
 
@@ -73,6 +74,7 @@ export interface FlightMonApi {
   insights: (id: number) => Promise<{ text: string; cached: boolean }>
   skyscanner: (id: number, picks: SkyPick[]) => Promise<{ runId: number; combos: SkyCombo[] }>
   skyscannerPreview: (id: number) => Promise<SkyPreview>
+  chromeStatus: () => Promise<ChromeStatus>
   tracked: (id: number, days?: number) => Promise<TrackedView>
   track: (id: number, picks: SkyPick[]) => Promise<number>
   untrack: (id: number, pick: SkyPick) => Promise<void>

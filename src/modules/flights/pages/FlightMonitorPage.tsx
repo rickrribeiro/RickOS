@@ -41,6 +41,13 @@ export function FlightMonitorPage(): React.ReactElement {
   const [sources, setSources] = useState(false)
   const [insight, setInsight] = useState<{ text: string; cached: boolean } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [skyDismissed, setSkyDismissed] = useState<number | null>(() => {
+    try {
+      return Number(localStorage.getItem('fm-sky-dismissed')) || null
+    } catch {
+      return null
+    }
+  })
 
   const load = async (): Promise<void> => {
     if (id == null) return
@@ -105,6 +112,18 @@ export function FlightMonitorPage(): React.ReactElement {
   const run = m.activeRun
   const cov = m.coverage
   const skyOn = providers.some((p) => p.id === 'skyscanner_chrome' && p.available)
+  // Última busca no Chrome falhou/ficou pela metade nas últimas 24 h: mostra a causa.
+  const la = m.lastAssisted
+  const skyFail =
+    !running && la && la.status !== 'done' && la.id !== skyDismissed && Date.now() - new Date(la.finishedAt ?? la.startedAt).getTime() < 24 * 3600 * 1000 ? la : null
+  function dismissSky(id: number): void {
+    setSkyDismissed(id)
+    try {
+      localStorage.setItem('fm-sky-dismissed', String(id))
+    } catch {
+      /* sem armazenamento: só some nesta sessão */
+    }
+  }
 
   return (
     <div className="module-page fm-page">
@@ -205,6 +224,30 @@ export function FlightMonitorPage(): React.ReactElement {
           </button>
         </div>
       </div>
+
+      {skyFail && (
+        <div className={`fm-note ${skyFail.status === 'failed' ? 'danger' : 'warn'}`} style={{ marginBottom: 10 }}>
+          <div className="fm-row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <div className="fm-grow">
+              <b>
+                Busca no Skyscanner {skyFail.status === 'failed' ? 'falhou' : skyFail.status === 'interrupted' ? 'interrompida' : 'incompleta'}
+              </b>{' '}
+              <span className="fm-small">
+                ({rel(skyFail.finishedAt ?? skyFail.startedAt)} · {skyFail.done}/{skyFail.planned} combinação(ões) lida(s))
+              </span>
+              <div style={{ marginTop: 4 }}>{skyFail.message ?? 'Sem detalhes.'}</div>
+            </div>
+            <button className="fm-x" type="button" onClick={() => dismissSky(skyFail.id)} title="Dispensar" aria-label="Dispensar">
+              ✕
+            </button>
+          </div>
+          {skyOn && (
+            <button className="btn btn-sm" type="button" style={{ marginTop: 6 }} onClick={() => setSky(true)}>
+              🔍 Tentar de novo (mesma seleção)
+            </button>
+          )}
+        </div>
+      )}
 
       {m.state === 'needs_config' && (
         <div className="fm-note warn" style={{ marginBottom: 10 }}>

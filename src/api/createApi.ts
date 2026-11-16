@@ -433,6 +433,7 @@ export function createApi() {
       insights: (id: number) => invoke('flightMon:insights', id),
       skyscanner: (id: number, picks: unknown[]) => invoke('flightMon:skyscanner', id, picks),
       skyscannerPreview: (id: number) => invoke('flightMon:skyscannerPreview', id),
+      chromeStatus: () => invoke('flightMon:chromeStatus'),
       tracked: (id: number, days?: number) => invoke('flightMon:tracked', id, days),
       track: (id: number, picks: unknown[]) => invoke('flightMon:track', id, picks),
       untrack: (id: number, pick: unknown) => invoke('flightMon:untrack', id, pick),

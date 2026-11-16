@@ -257,6 +257,8 @@ export interface MonitorSummary extends FlightMonitor {
   trend: { direction: 'up' | 'down' | 'flat'; deltaPercent: number } | null
   coverage: Coverage
   activeRun: RunInfo | null
+  /** Última busca no Skyscanner (Chrome) já terminada — para mostrar a causa quando falha. */
+  lastAssisted: RunInfo | null
 }
 
 // ── Provedores ───────────────────────────────────────────────────────────────
@@ -589,6 +591,24 @@ export interface SkyPreview {
   tracked: SkyPick[]
   maxPerRun: number
   perSession: number
+}
+
+/**
+ * Conexão do Chrome com o Claude Code, vista pelos processos da máquina: a extensão Claude in
+ * Chrome mantém um "native host" vivo enquanto está ligada a ele. `ok` = dá para buscar.
+ */
+export interface ChromeStatus {
+  ok: boolean
+  /** Chrome aberto. */
+  chrome: boolean
+  /** Conector do Claude Code (`claude --chrome-native-host`) rodando. */
+  codeHost: boolean
+  /** Conector do app Claude desktop ligado à extensão. */
+  desktopHost: boolean
+  /** App Claude desktop aberto (sem ele, o conector acima está órfão). */
+  desktopApp: boolean
+  /** Não deu para verificar (ex.: sistema sem `ps`): não bloqueia. */
+  unknown?: boolean
 }
 
 /** Uma combinação acompanhada: preço por dia de observação (todas as fontes, sem excluídas). */

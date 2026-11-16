@@ -150,7 +150,7 @@ export async function coverage(m: FlightMonitor): Promise<ReturnType<typeof cove
 
 export async function summarize(m: FlightMonitor, fx: Fx): Promise<MonitorSummary> {
   const today = todayLocal()
-  const [{ scored, rows }, run, cov] = await Promise.all([scoredOffers(m, fx), repo.activeRun(m.id), coverage(m)])
+  const [{ scored, rows }, run, cov, lastAssisted] = await Promise.all([scoredOffers(m, fx), repo.activeRun(m.id), coverage(m), repo.lastAssistedRun(m.id)])
   const live = scored.filter((s) => rows.get(s.offer)!.available)
   const eligible = live.filter((s) => s.ev.status === 'eligible')
   const pending = live.filter((s) => s.ev.status === 'pending')
@@ -174,7 +174,8 @@ export async function summarize(m: FlightMonitor, fx: Fx): Promise<MonitorSummar
     offerCount: live.length,
     trend: await trend(m),
     coverage: cov,
-    activeRun: run
+    activeRun: run,
+    lastAssisted
   }
 }
 

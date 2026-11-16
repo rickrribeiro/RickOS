@@ -1,5 +1,6 @@
-import type { AirportInfo, FlightMonitor, Money, NormalizedOffer, RunInfo, SkyCombo, SkyPick, SkyPlace, SkyPreview, TrackedCombo, TrackedView } from '../../shared/flights'
+import type { AirportInfo, ChromeStatus, FlightMonitor, Money, NormalizedOffer, RunInfo, SkyCombo, SkyPick, SkyPlace, SkyPreview, TrackedCombo, TrackedView } from '../../shared/flights'
 import { skyKey } from '../../shared/flights'
+import { execFile } from 'node:child_process'
 import { getSetting, recordAiUsage } from '../database/queries'
 import { broadcast } from '../events'
 import { runClaude } from '../services/claude'
@@ -414,7 +415,7 @@ export async function startSkyscanner(monitorId: number, picks: SkyPick[] | numb
         if (stopping) return
         const j = firstJson(raw)
         const status = String(j.status ?? 'error')
-        if (status === 'no_browser' && !settled.size) throw new Error('Chrome não conectado: abra o Chrome com a extensão Claude in Chrome ativa (e logada) e tente de novo.')
+        if (status === 'no_browser' && !settled.size) throw new Error('Chrome não conectado ao Claude Code: feche o Chrome (⌘Q) e abra de novo, com a extensão Claude in Chrome ativa e logada. Se continuar, rode `claude --chrome` no terminal e use /chrome para reconectar.')
         const results = Array.isArray(j.results) ? (j.results as Record<string, unknown>[]) : []
         // o JSON final completa o que não veio nas linhas RESULT
         for (const [k, c] of chunk.entries()) {
@@ -537,3 +538,30 @@ export async function trackedView(m: FlightMonitor, days = 60): Promise<TrackedV
 }
 
 export type { RunInfo }
+
+/**
+ * Checagem antes de abrir o Claude: lista os processos e procura o Chrome e o conector do
+ * Claude Code. Sem o conector, o `claude --chrome` responde "no_browser" depois de gastar uma
+ * sessão — melhor avisar antes. Ver docs/passagens.md.
+ */
+export function chromeStatus(): Promise<ChromeStatus> {
+  return new Promise((resolve) => {
+    execFile('ps', ['-Ao', 'command'], { maxBuffer: 16 * 1024 * 1024, timeout: 5000 }, (err, out) => {
+      if (err) return resolve({ ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true })
+      resolve(parseChromeStatus(String(out)))
+    })
+  })
+}
+
+export function parseChromeStatus(ps: string): ChromeStatus {
+  // Só o executável de cada processo conta (um `bash -c "... --chrome-native-host ..."` não é o conector).
+  const lines = ps.split('\n').map((l) => l.trim()).filter(Boolean)
+  const exe = (l: string): string => (l.split(/\s+/)[0] ?? '').split('/').pop() ?? ''
+  const chrome = lines.some((l) => /^\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome(\s|$)/.test(l) || (/^(google-chrome|chrome|chromium)$/.test(exe(l)) && !/--type=/.test(l)))
+  const codeHost = lines.some(
+    (l) => (/^(claude|node)$/.test(exe(l)) && /\s--chrome-native-host(\s|$)/.test(l)) || (/^(sh|bash|zsh)$/.test(exe(l)) && /^\S+\s+\S*\/\.claude\/chrome\/chrome-native-host(\s|$)/.test(l))
+  )
+  const desktopHost = lines.some((l) => /^\S*Claude\.app\/Contents\/Helpers\/chrome-native-host(\s|$)/.test(l))
+  const desktopApp = lines.some((l) => /^\/Applications\/Claude\.app\/Contents\/MacOS\/Claude(\s|$)/.test(l))
+  return { ok: codeHost, chrome, codeHost, desktopHost, desktopApp }
+}

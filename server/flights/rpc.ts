@@ -2,7 +2,7 @@ import type { FlightMonitor, ImportPreview, LocationRef, MonitorConfig, MonitorS
 import { fmtMinutes, formatMoney } from '../../shared/flights'
 import { broadcast } from '../events'
 import { draftFromText, insights, structureImportText } from './ai'
-import { buildPreview, cancelAssisted, startSkyscanner, trackedView, validatePicks } from './assisted'
+import { buildPreview, cancelAssisted, chromeStatus, startSkyscanner, trackedView, validatePicks } from './assisted'
 import { promosFor } from './promos'
 import { todayLocal } from './dates'
 import { fingerprint } from './evaluate'
@@ -156,6 +156,7 @@ export function registerFlightRpc(handle: Handle): void {
   })
   // ── Skyscanner via Claude + Chrome (sob demanda, usuário presente) ──
   handle('flightMon:skyscanner', (_, id: number, picks: SkyPick[] | number) => startSkyscanner(Number(id), Array.isArray(picks) ? picks : Number(picks) || 4))
+  handle('flightMon:chromeStatus', () => chromeStatus())
   handle('flightMon:skyscannerPreview', async (_, id: number) => buildPreview(await mustGet(id)))
   handle('flightMon:tracked', async (_, id: number, days?: number) => trackedView(await mustGet(id), Math.max(7, Math.min(365, Number(days) || 60))))
   handle('flightMon:track', async (_, id: number, picks: SkyPick[]) => repo.addTracked(Number(id), validatePicks(await mustGet(id), picks)))

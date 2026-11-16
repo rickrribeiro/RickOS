@@ -321,3 +321,20 @@ describe('validação de configuração e importação', () => {
     assert.equal(r.errors.length, 1)
   })
 })
+
+describe('checagem do Chrome', () => {
+  it('reconhece o conector do Claude Code, o do app desktop órfão e o Chrome fechado', async () => {
+    const { parseChromeStatus } = await import('../assisted')
+    const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    const desktopHost = '/Applications/Claude.app/Contents/Helpers/chrome-native-host chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/'
+    const codeHost = '/Users/x/.local/bin/claude --chrome-native-host'
+    assert.deepEqual(parseChromeStatus([chrome, desktopHost].join('\n')), { ok: false, chrome: true, codeHost: false, desktopHost: true, desktopApp: false })
+    assert.equal(parseChromeStatus([chrome, codeHost].join('\n')).ok, true)
+    assert.deepEqual(parseChromeStatus('/usr/bin/zsh\n'), { ok: false, chrome: false, codeHost: false, desktopHost: false, desktopApp: false })
+    // um shell cujo texto MENCIONA o conector não é o conector
+    assert.equal(parseChromeStatus(`/bin/zsh -c grep -- --chrome-native-host x\n${chrome}`).codeHost, false)
+    assert.equal(parseChromeStatus('/bin/sh /Users/x/.claude/chrome/chrome-native-host chrome-extension://abc/').codeHost, true)
+    // helpers do Chrome não contam como o Chrome aberto
+    assert.equal(parseChromeStatus('/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=renderer').chrome, false)
+  })
+})
