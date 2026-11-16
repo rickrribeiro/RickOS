@@ -77183,14 +77183,20 @@ async function suggestContacts(chatId) {
 }
 async function contactChats(contactId) {
   const ctx = await summaryCtx();
-  return (await allSummaries(ctx)).filter((s2) => s2.contactId === contactId).sort((a, b2) => (b2.lastActivity ?? "").localeCompare(a.lastActivity ?? "")).map((s2) => ({ chatId: s2.id, network: s2.network, title: s2.title, lastActivity: s2.lastActivity, replyState: s2.replyState, unreadCount: s2.unreadCount }));
+  return (await allSummaries(ctx)).filter((s2) => s2.contactId === contactId).sort((a, b2) => (b2.lastActivity ?? "").localeCompare(a.lastActivity ?? "")).map((s2) => ({ chatId: s2.id, network: s2.network, title: s2.title, lastActivity: s2.lastActivity, replyState: s2.replyState, unreadCount: s2.unreadCount, handle: s2.type === "single" ? s2.peerHandle : null }));
 }
 async function contactNetworks() {
   const ctx = await summaryCtx();
   const out = {};
   for (const s2 of await allSummaries(ctx)) {
     if (!s2.contactId) continue;
-    (out[s2.contactId] ??= []).push({ network: s2.network, chatId: s2.id, pending: s2.replyState === "needs_reply" });
+    (out[s2.contactId] ??= []).push({
+      network: s2.network,
+      chatId: s2.id,
+      pending: s2.replyState === "needs_reply",
+      title: s2.title,
+      handle: s2.type === "single" ? s2.peerHandle : null
+    });
   }
   return out;
 }
