@@ -1,6 +1,6 @@
 import { invoke, subscribe, downloadUrl, onReconnect } from './transport'
 import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBase64, saveFolder } from './files'
-import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload } from '../types'
+import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload, TodoListFilters } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
@@ -191,6 +191,7 @@ export function createApi() {
     },
     todos: {
       getAll: (status?: string) => invoke('todos:getAll', status),
+      list: (filters: TodoListFilters) => invoke('todos:list', filters),
       create: (
         title: string,
         notes: string | null,

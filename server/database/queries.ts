@@ -480,6 +480,65 @@ export async function getTodos(status?: string): Promise<DbTodo[]> {
   return getAll<DbTodo>(db, 'SELECT * FROM todos ORDER BY priority DESC, createdAt DESC')
 }
 
+export interface TodoListFilters {
+  search?: string
+  /** 'all' | 'todo' | 'doing' | 'done' */
+  status?: string
+  projectId?: number | null
+  type?: string
+  /** Quantas concluídas devolver (paginação "ver mais"). */
+  doneLimit?: number
+}
+
+export interface TodoListResult {
+  open: DbTodo[]
+  done: DbTodo[]
+  doneTotal: number
+}
+
+/** Página TODO: filtros, ordenação e paginação das concluídas, tudo no SQL (o Inbox fica de fora). */
+export async function listTodos(f: TodoListFilters = {}): Promise<TodoListResult> {
+  const db = await getDb()
+  const where: string[] = ["status != 'inbox'"]
+  const params: (string | number)[] = []
+  if (f.status && f.status !== 'all') {
+    where.push('status = ?')
+    params.push(f.status)
+  }
+  if (f.projectId != null) {
+    where.push('projectId = ?')
+    params.push(f.projectId)
+  }
+  if (f.type && f.type !== 'all') {
+    where.push("COALESCE(type, 'projeto') = ?")
+    params.push(f.type)
+  }
+  const q = (f.search ?? '').trim().toLowerCase()
+  if (q) {
+    // escapa os curingas do LIKE para buscar o texto literal
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    where.push("(ulower(title) LIKE ? ESCAPE '\\' OR ulower(COALESCE(notes, '')) LIKE ? ESCAPE '\\')")
+    params.push(like, like)
+  }
+  const base = where.join(' AND ')
+  const open = getAll<DbTodo>(
+    db,
+    `SELECT * FROM todos WHERE ${base} AND status != 'done'
+     ORDER BY priority DESC, dueDate IS NULL, dueDate ASC, createdAt DESC`,
+    params
+  )
+  const limit = Math.max(0, Math.floor(f.doneLimit ?? 15))
+  const done = getAll<DbTodo>(
+    db,
+    `SELECT * FROM todos WHERE ${base} AND status = 'done'
+     ORDER BY COALESCE(doneAt, createdAt) DESC, id DESC LIMIT ?`,
+    [...params, limit]
+  )
+  const doneTotal =
+    getOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status = 'done'`, params)?.n ?? 0
+  return { open, done, doneTotal }
+}
+
 export async function createTodo(
   title: string,
   notes: string | null,

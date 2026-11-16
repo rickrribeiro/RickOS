@@ -406,6 +406,7 @@ async function openDb(): Promise<Database> {
   const fresh = fs.existsSync(dbPath) ? new SQL.Database(fs.readFileSync(dbPath)) : new SQL.Database()
 
   fresh.run('PRAGMA foreign_keys = ON;')
+  registerFunctions(fresh)
   fresh.run(SCHEMA)
   runMigrations(fresh)
   seedAiLibrary(fresh)
@@ -427,9 +428,19 @@ export function replaceDbFile(bytes: Buffer): void {
   fs.writeFileSync(dbFilePath(), bytes)
 }
 
+/**
+ * Funções SQL próprias. O db.export() do sql.js fecha e reabre a conexão e descarta as funções
+ * registradas, então isto roda na abertura e depois de cada export.
+ */
+function registerFunctions(database: Database): void {
+  // lower() do SQLite só trata ASCII: buscas com acento ("Ação") usam esta
+  database.create_function('ulower', (s: unknown) => (s == null ? null : String(s).toLowerCase()))
+}
+
 export function saveDb(): void {
   if (!db || !dbPath) return
   const data = db.export()
+  registerFunctions(db)
   fs.writeFileSync(dbPath, Buffer.from(data))
 }
 

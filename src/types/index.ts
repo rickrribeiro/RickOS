@@ -77,6 +77,24 @@ export interface Todo {
   doneAt?: string | null
 }
 
+/** Filtros da página TODO, aplicados no servidor (`todos:list`). */
+export interface TodoListFilters {
+  search?: string
+  /** 'all' | 'todo' | 'doing' | 'done' */
+  status?: string
+  projectId?: number | null
+  type?: string
+  /** Quantas concluídas devolver (paginação "ver mais"). */
+  doneLimit?: number
+}
+
+export interface TodoListResult {
+  open: Todo[]
+  done: Todo[]
+  /** Total de concluídas que batem com os filtros (para o "ver mais"). */
+  doneTotal: number
+}
+
 /** Uma execução do Claude CLI com o uso de tokens reportado pelo próprio CLI. */
 /** Item da central de notificações (sino da sidebar). */
 export interface AppNotification {
@@ -799,6 +817,7 @@ declare global {
       }
       todos: {
         getAll: (status?: string) => Promise<Todo[]>
+        list: (filters: TodoListFilters) => Promise<TodoListResult>
         create: (
           title: string,
           notes: string | null,

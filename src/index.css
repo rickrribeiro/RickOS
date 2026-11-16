@@ -2942,3 +2942,8 @@ button.todo-divider:hover {
 .module-tab-icon {
   font-size: 13px;
 }
+
+.todo-more {
+  align-self: center;
+  margin: 6px auto 0;
+}

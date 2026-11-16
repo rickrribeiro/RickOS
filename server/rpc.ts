@@ -21,6 +21,7 @@ import {
   getTagStats,
   updateDayConfig,
   getTodos,
+  listTodos,
   createTodo,
   updateTodo,
   deleteTodo,
@@ -185,7 +186,7 @@ import {
   deleteNotification,
   clearNotifications
 } from './database/queries'
-import type { NotificationInput, NotificationScope } from './database/queries'
+import type { NotificationInput, NotificationScope, TodoListFilters } from './database/queries'
 import type { DbTransaction, DbSkill, DbAgent, StudyBundle, DbStayFavorite, DbStayWatch, DbStayPricePoint } from './database/queries'
 import { syncGithubIssues, createIssueViaClaude } from './services/github'
 import { runClaude } from './services/claude'
@@ -380,6 +381,7 @@ ipcMain.handle('dayConfig:update', (_, date: string, isWorkDay: number) =>
 // ── IPC: Todos (Inbox + TODO) ───────────────────────────────────────────────
 
 ipcMain.handle('todos:getAll', (_, status?: string) => getTodos(status))
+ipcMain.handle('todos:list', (_, filters?: TodoListFilters) => listTodos(filters ?? {}))
 
 ipcMain.handle(
   'todos:create',

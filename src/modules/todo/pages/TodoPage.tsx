@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Todo } from '../../../types'
-import { useTodoStore } from '../store/todoStore'
+import { useTodoStore, DONE_PAGE } from '../store/todoStore'
 import { useProjectStore } from '../../projects/store/projectStore'
 import { TodoEditor } from '../components/TodoEditor'
 import { PRIORITIES, STATUSES, STATUS_LABELS, TODO_TYPES, priorityDef, dueMeta, todoTypeDef } from '../constants'
@@ -9,7 +9,7 @@ import { localDateStr, timeAgo } from '../../../utils/dates'
 type StatusFilter = 'all' | 'todo' | 'doing' | 'done'
 
 export function TodoPage(): React.ReactElement {
-  const { todos, refresh, create, setStatus, update, remove } = useTodoStore()
+  const { list, listLoading, loadList, loadMoreDone, closeList, create, setStatus, update, remove } = useTodoStore()
   const { projects, refresh: refreshProjects } = useProjectStore()
   const [text, setText] = useState('')
   const [search, setSearch] = useState('')
@@ -28,37 +28,36 @@ export function TodoPage(): React.ReactElement {
     })
   }
 
+  // busca com debounce; os outros filtros consultam na hora
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   useEffect(() => {
-    refresh()
+    const h = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(h)
+  }, [search])
+
+  useEffect(() => {
     refreshProjects()
+    return () => closeList()
   }, [])
+
+  // filtros, busca, ordenação e paginação das concluídas ficam no servidor (todos:list)
+  useEffect(() => {
+    loadList({
+      search: debouncedSearch,
+      status: statusFilter,
+      type: typeFilter,
+      projectId: projectFilter === 'all' ? null : projectFilter
+    })
+  }, [debouncedSearch, statusFilter, typeFilter, projectFilter])
 
   const projectName = (id: number | null): string | null =>
     id === null ? null : projects.find((p) => p.id === id)?.name ?? null
 
-  const items = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return todos
-      .filter((t) => t.status !== 'inbox')
-      .filter((t) => statusFilter === 'all' || t.status === statusFilter)
-      .filter((t) => projectFilter === 'all' || t.projectId === projectFilter)
-      .filter((t) => typeFilter === 'all' || (t.type ?? 'projeto') === typeFilter)
-      .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.notes ?? '').toLowerCase().includes(q))
-      .sort((a, b) => {
-        const doneA = a.status === 'done' ? 1 : 0
-        const doneB = b.status === 'done' ? 1 : 0
-        if (doneA !== doneB) return doneA - doneB // done last
-        if (b.priority !== a.priority) return b.priority - a.priority // higher priority first
-        // due date asc, nulls last
-        if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
-        if (a.dueDate) return -1
-        if (b.dueDate) return 1
-        return b.createdAt.localeCompare(a.createdAt)
-      })
-  }, [todos, search, statusFilter, projectFilter, typeFilter])
-
-  const openItems = items.filter((t) => t.status !== 'done')
-  const doneItems = items.filter((t) => t.status === 'done')
+  const openItems = list.open
+  const doneItems = list.done
+  const doneRemaining = list.doneTotal - doneItems.length
+  // o que está visível na lista (para a navegação por teclado)
+  const items = doneCollapsed ? openItems : [...openItems, ...doneItems]
 
   async function handleAdd(): Promise<void> {
     const v = text.trim()
@@ -118,7 +117,7 @@ export function TodoPage(): React.ReactElement {
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>✅ TODO</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {openItems.length} em aberto · {doneItems.length} feitas
+            {openItems.length} em aberto · {list.doneTotal} feitas
             <span style={{ color: 'var(--text-muted)', marginLeft: 10 }}>
               ↑↓ navegar · espaço concluir · p adiar · e editar
             </span>
@@ -184,15 +183,22 @@ export function TodoPage(): React.ReactElement {
       </div>
 
       <div className="list-stack">
-        {items.length === 0 && <div className="empty-hint">Nenhuma tarefa encontrada.</div>}
+        {openItems.length === 0 && list.doneTotal === 0 && !listLoading && (
+          <div className="empty-hint">Nenhuma tarefa encontrada.</div>
+        )}
         {openItems.map((t) => renderRow(t))}
-        {doneItems.length > 0 && (
+        {list.doneTotal > 0 && (
           <button className="todo-divider" onClick={toggleDone} title={doneCollapsed ? 'Mostrar concluídas' : 'Ocultar concluídas'}>
             <span className={`nav-group-chevron ${doneCollapsed ? 'collapsed' : ''}`}>▾</span>
-            <span>Concluídas ({doneItems.length})</span>
+            <span>Concluídas ({list.doneTotal})</span>
           </button>
         )}
         {!doneCollapsed && doneItems.map((t) => renderRow(t))}
+        {!doneCollapsed && doneRemaining > 0 && (
+          <button className="btn btn-secondary btn-sm todo-more" onClick={loadMoreDone} disabled={listLoading}>
+            {listLoading ? 'Carregando…' : `Ver mais (${Math.min(DONE_PAGE, doneRemaining)} de ${doneRemaining})`}
+          </button>
+        )}
       </div>
 
       {editing && <TodoEditor todo={editing} onClose={() => setEditing(null)} />}
