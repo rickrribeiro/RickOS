@@ -129,8 +129,23 @@ export function rememberTab(g: NavGroup, page: Page): void {
 }
 
 /** Grupo rotulado (módulo) que contém a página — no modo abas, ele vira a barra de abas. */
-export function tabGroupOf(page: Page): NavGroup | undefined {
-  return NAV_GROUPS.find((g) => g.label && g.items.some((i) => i.id === page))
+export function tabGroupOf(page: Page, groups: NavGroup[] = NAV_GROUPS): NavGroup | undefined {
+  return groups.find((g) => g.label && g.items.some((i) => i.id === page))
+}
+
+/**
+ * Sidebar sem o que foi ocultado em Configurações → Módulos. `hidden` mistura chaves de
+ * módulo (`groupKey`) e ids de página (submódulos); módulo sem nenhuma página visível some.
+ */
+export function visibleNavGroups(hidden: string[]): NavGroup[] {
+  const out: NavGroup[] = []
+  for (const g of NAV_GROUPS) {
+    if (hidden.includes(groupKey(g))) continue
+    const items = g.items.filter((i) => i.id === 'settings' || !hidden.includes(i.id))
+    if (!items.length) continue
+    out.push(items.length === g.items.length ? g : { ...g, items })
+  }
+  return out
 }
 
 /** Configurações nunca some (senão não dá para reativar nada). */

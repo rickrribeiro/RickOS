@@ -52,7 +52,7 @@ import { JarvisPage } from './modules/jarvis/pages/JarvisPage'
 import { Page } from './types'
 import { AuthGate } from './components/AuthGate'
 import { NotificationBell, UnreadDot } from './components/NotificationBell'
-import { NAV_GROUPS, groupKey, lastTab, rememberTab, tabGroupOf } from './navigation'
+import { lastTab, rememberTab, tabGroupOf, visibleNavGroups } from './navigation'
 import { useModuleStore } from './store/moduleStore'
 import { useNavStyleStore } from './store/navStyleStore'
 
@@ -109,7 +109,7 @@ export default function App(): React.ReactElement {
   const { currentPage, setPage, selectedProjectId } = useUIStore()
   const [exportOpen, setExportOpen] = useState(false)
   const hiddenModules = useModuleStore((st) => st.hidden)
-  const navGroups = NAV_GROUPS.filter((g) => !hiddenModules.includes(groupKey(g)))
+  const navGroups = React.useMemo(() => visibleNavGroups(hiddenModules), [hiddenModules])
   const flightId = useFlightStore((st) => st.selectedId)
   const { refreshActive, stopActiveTask, activeTask } = useTaskStore()
   const { refreshTags } = useTagStore()
@@ -152,7 +152,7 @@ export default function App(): React.ReactElement {
 
   const tabsMode = useNavStyleStore((st) => st.navStyle) === 'tabs'
   const labeledGroups = navGroups.filter((g) => g.label).map((g) => g.label)
-  const tabGroup = tabsMode ? tabGroupOf(currentPage) : undefined
+  const tabGroup = tabsMode ? tabGroupOf(currentPage, navGroups) : undefined
   useEffect(() => {
     if (tabGroup) rememberTab(tabGroup, currentPage)
     // celular: traz a aba ativa para a área visível da barra rolável
