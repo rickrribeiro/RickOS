@@ -29,6 +29,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const initSqlJs = require("sql.js");
+const node_child_process = require("node:child_process");
 const child_process = require("child_process");
 const http = require("http");
 const url = require("url");
@@ -1326,6 +1327,16 @@ const MIGRATIONS = [
           st.free();
         } catch {
         }
+      }
+    }
+  },
+  {
+    version: 23,
+    label: 'Notificações: "Execução de IA concluída/falhou" vão para a aba Claude',
+    run: (db2) => {
+      try {
+        db2.run("UPDATE notifications SET source = 'claude' WHERE source = 'ia' AND title LIKE '%Execução de IA%';");
+      } catch {
       }
     }
   }
@@ -70215,9 +70226,9 @@ async function fetchJson(url2, init, signal) {
   const detail = typeof body === "object" && body ? JSON.stringify(body).slice(0, 240) : String(text).slice(0, 240);
   const retryAfter = Number(res.headers.get("retry-after"));
   const reset = res.headers.get("ratelimit-reset");
-  const wait = retryAfter > 0 ? retryAfter * 1e3 : reset ? Math.max(1e3, Date.parse(reset) - Date.now()) || 6e4 : 6e4;
+  const wait2 = retryAfter > 0 ? retryAfter * 1e3 : reset ? Math.max(1e3, Date.parse(reset) - Date.now()) || 6e4 : 6e4;
   if (res.status === 401 || res.status === 403) throw new ProviderError("auth", `Não autorizado (${res.status}). Verifique a credencial. ${detail}`);
-  if (res.status === 429) throw new ProviderError("rate_limit", "Limite de requisições do provedor atingido.", wait);
+  if (res.status === 429) throw new ProviderError("rate_limit", "Limite de requisições do provedor atingido.", wait2);
   if (res.status === 402) throw new ProviderError("quota", `Cota/pagamento exigido (${res.status}). ${detail}`);
   if (res.status >= 500) throw new ProviderError("upstream", `Provedor indisponível (${res.status}).`);
   throw new ProviderError("bad_request", `Requisição recusada (${res.status}). ${detail}`);
@@ -70908,6 +70919,9 @@ async function getRun(id) {
 async function activeRun(monitorId) {
   return read$1((db2) => one$2(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
 }
+async function lastAssistedRun(monitorId) {
+  return read$1((db2) => one$2(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND trigger = 'assisted' AND status != 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
+}
 async function listRuns(monitorId, limit = 15) {
   return read$1((db2) => all$2(db2, "SELECT * FROM flight_runs WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
 }
@@ -71251,7 +71265,7 @@ async function coverage(m) {
 }
 async function summarize$3(m, fx) {
   const today = todayLocal();
-  const [{ scored, rows }, run2, cov] = await Promise.all([scoredOffers(m, fx), activeRun(m.id), coverage(m)]);
+  const [{ scored, rows }, run2, cov, lastAssisted] = await Promise.all([scoredOffers(m, fx), activeRun(m.id), coverage(m), lastAssistedRun(m.id)]);
   const live2 = scored.filter((s2) => rows.get(s2.offer).available);
   const eligible = live2.filter((s2) => s2.ev.status === "eligible");
   const pending2 = live2.filter((s2) => s2.ev.status === "pending");
@@ -71274,7 +71288,8 @@ async function summarize$3(m, fx) {
     offerCount: live2.length,
     trend: await trend(m),
     coverage: cov,
-    activeRun: run2
+    activeRun: run2,
+    lastAssisted
   };
 }
 async function trend(m) {
@@ -71701,7 +71716,7 @@ async function startSkyscanner(monitorId, picks) {
         if (stopping) return;
         const j = firstJson$2(raw);
         const status2 = String(j.status ?? "error");
-        if (status2 === "no_browser" && !settled.size) throw new Error("Chrome não conectado: abra o Chrome com a extensão Claude in Chrome ativa (e logada) e tente de novo.");
+        if (status2 === "no_browser" && !settled.size) throw new Error("Chrome não conectado ao Claude Code: feche o Chrome (⌘Q) e abra de novo, com a extensão Claude in Chrome ativa e logada. Se continuar, rode `claude --chrome` no terminal e use /chrome para reconectar.");
         const results = Array.isArray(j.results) ? j.results : [];
         for (const [k, c] of chunk.entries()) {
           const i = start + k;
@@ -71815,6 +71830,25 @@ async function trackedView(m, days2 = 60) {
   combos.sort((a, b2) => Number(a.past) - Number(b2.past) || (a.latest?.amountMinor ?? Infinity) - (b2.latest?.amountMinor ?? Infinity) || a.depart.localeCompare(b2.depart));
   const dayset = [...new Set(combos.flatMap((c) => c.points.map((x) => x.day)))].sort().slice(-10);
   return { currency: cur, days: dayset, combos };
+}
+function chromeStatus() {
+  return new Promise((resolve) => {
+    node_child_process.execFile("ps", ["-Ao", "command"], { maxBuffer: 16 * 1024 * 1024, timeout: 5e3 }, (err, out) => {
+      if (err) return resolve({ ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true });
+      resolve(parseChromeStatus(String(out)));
+    });
+  });
+}
+function parseChromeStatus(ps) {
+  const lines = ps.split("\n").map((l) => l.trim()).filter(Boolean);
+  const exe = (l) => (l.split(/\s+/)[0] ?? "").split("/").pop() ?? "";
+  const chrome = lines.some((l) => /^\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome(\s|$)/.test(l) || /^(google-chrome|chrome|chromium)$/.test(exe(l)) && !/--type=/.test(l));
+  const codeHost = lines.some(
+    (l) => /^(claude|node)$/.test(exe(l)) && /\s--chrome-native-host(\s|$)/.test(l) || /^(sh|bash|zsh)$/.test(exe(l)) && /^\S+\s+\S*\/\.claude\/chrome\/chrome-native-host(\s|$)/.test(l)
+  );
+  const desktopHost = lines.some((l) => /^\S*Claude\.app\/Contents\/Helpers\/chrome-native-host(\s|$)/.test(l));
+  const desktopApp = lines.some((l) => /^\/Applications\/Claude\.app\/Contents\/MacOS\/Claude(\s|$)/.test(l));
+  return { ok: codeHost, chrome, codeHost, desktopHost, desktopApp };
 }
 async function notify(input) {
   try {
@@ -73581,8 +73615,8 @@ async function osrm(from, to) {
   const key = `osrm:${from.lat.toFixed(3)},${from.lon.toFixed(3)};${to.lat.toFixed(3)},${to.lon.toFixed(3)}`;
   const hit = await cacheGet(key);
   if (hit) return hit === "none" ? null : hit;
-  const wait = lastOsrmCall + 1100 - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  const wait2 = lastOsrmCall + 1100 - Date.now();
+  if (wait2 > 0) await new Promise((r) => setTimeout(r, wait2));
   lastOsrmCall = Date.now();
   try {
     const ctl = new AbortController();
@@ -74466,8 +74500,8 @@ async function execute(runId, monitorId, providers, trigger, opts) {
             const attempts = t.attempts + 1;
             if (pe.fatal) disabled.set(p.id, pe.message);
             if (pe.retryable && attempts < MAX_ATTEMPTS && !ctl.signal.aborted) {
-              const wait = pe.retryAfterMs ?? 2 ** attempts * 6e4;
-              await finishTask(t.id, { status: "pending", error: pe.message, retryAt: new Date(Date.now() + wait).toISOString() });
+              const wait2 = pe.retryAfterMs ?? 2 ** attempts * 6e4;
+              await finishTask(t.id, { status: "pending", error: pe.message, retryAt: new Date(Date.now() + wait2).toISOString() });
               retrying++;
             } else if (ctl.signal.aborted) {
               await finishTask(t.id, { status: "pending", error: "Interrompida (cancelamento/tempo)." });
@@ -74736,6 +74770,7 @@ function registerFlightRpc(handle) {
     return insights(m, rows);
   });
   handle("flightMon:skyscanner", (_, id, picks) => startSkyscanner(Number(id), Array.isArray(picks) ? picks : Number(picks) || 4));
+  handle("flightMon:chromeStatus", () => chromeStatus());
   handle("flightMon:skyscannerPreview", async (_, id) => buildPreview(await mustGet(id)));
   handle("flightMon:tracked", async (_, id, days2) => trackedView(await mustGet(id), Math.max(7, Math.min(365, Number(days2) || 60))));
   handle("flightMon:track", async (_, id, picks) => addTracked(Number(id), validatePicks(await mustGet(id), picks)));
@@ -78493,14 +78528,35 @@ function runUsage(configDir) {
     });
   });
 }
+const lastGood = /* @__PURE__ */ new Map();
+const RETRIES = 2;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function fetchAccount(configDir) {
   const label = configLabel(configDir);
   try {
-    const out = await runUsage(configDir);
-    const limits = parseUsageOutput(out);
-    return { provider: "claude", configDir, label, limits, raw: limits.length ? null : out.trim().slice(0, 600) || null, error: null };
+    let out = "";
+    let limits = [];
+    for (let i = 0; i <= RETRIES; i++) {
+      if (i) await wait(1500);
+      out = await runUsage(configDir);
+      limits = parseUsageOutput(out);
+      if (limits.length) break;
+    }
+    if (limits.length) {
+      lastGood.set(configDir, { limits, at: (/* @__PURE__ */ new Date()).toISOString() });
+      return { provider: "claude", configDir, label, limits, raw: null, error: null };
+    }
+    if (/subscription/i.test(out)) {
+      const prev = lastGood.get(configDir);
+      if (prev) return { provider: "claude", configDir, label, limits: prev.limits, raw: null, error: null, staleAt: prev.at };
+      return { provider: "claude", configDir, label, limits: [], raw: null, error: null, unavailable: true };
+    }
+    return { provider: "claude", configDir, label, limits, raw: out.trim().slice(0, 600) || null, error: null };
   } catch (e) {
-    return { provider: "claude", configDir, label, limits: [], raw: null, error: e instanceof Error ? e.message : String(e) };
+    const prev = lastGood.get(configDir);
+    const error = e instanceof Error ? e.message : String(e);
+    if (prev) return { provider: "claude", configDir, label, limits: prev.limits, raw: null, error: null, staleAt: prev.at };
+    return { provider: "claude", configDir, label, limits: [], raw: null, error };
   }
 }
 function codexLimits(res) {
@@ -80980,7 +81036,7 @@ ipcMain.handle("ai:start", async (_, params) => {
   const startedAt = Date.now();
   const notifyIfLong = (title, body) => {
     if (Date.now() - startedAt < 60 * 1e3) return;
-    void notify({ title, body, source: "ia", page: params.save !== false ? "ai-history" : null });
+    void notify({ title, body, source: "claude", page: params.save !== false ? "ai-history" : null });
   };
   const promptPreview = (params.userPrompt || params.prompt).replace(/\s+/g, " ").trim().slice(0, 120);
   const command = await resolveClaudeCommand(params.projectId ?? void 0);
