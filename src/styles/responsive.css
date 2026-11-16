@@ -253,6 +253,20 @@
     font-size: 20px;
     min-width: 0;
   }
+  /* gráficos de evolução (12 barras): valor e mês menores para caber em 390px */
+  .evo-bars {
+    gap: 2px;
+  }
+  .evo-bar {
+    width: 75%;
+  }
+  .evo-bar-value {
+    font-size: 8.5px;
+    letter-spacing: -0.2px;
+  }
+  .evo-bar-label {
+    font-size: 10px;
+  }
 }
 
 /* abas do módulo no celular — rolagem horizontal, alvo de toque maior */

@@ -32,6 +32,17 @@ export function formatMoney(amount: number, currency = 'BRL'): string {
   return `${sym}${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/** Valor curto para rótulos de gráfico: 850, 1,2k, 15k, 1,3M (respeita o modo privacidade). */
+export function formatMoneyCompact(amount: number): string {
+  if (moneyHidden) return '••'
+  const abs = Math.abs(amount)
+  const sign = amount < 0 ? '-' : ''
+  const fmt = (v: number): string => v.toLocaleString('pt-BR', { maximumFractionDigits: v < 10 ? 1 : 0 })
+  if (abs >= 1_000_000) return `${sign}${fmt(abs / 1_000_000)}M`
+  if (abs >= 1_000) return `${sign}${fmt(abs / 1_000)}k`
+  return `${sign}${Math.round(abs)}`
+}
+
 /** Sum by currency for any items carrying a currency + amount. */
 export function sumByCurrency(items: { currency: string; amount: number }[]): Record<string, number> {
   const out: Record<string, number> = {}

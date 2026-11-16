@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
-import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, iofInBase } from '../util'
+import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, iofInBase, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
   const { accounts, transactions, allTransactions, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
@@ -29,9 +29,9 @@ export function FinanceDashboardPage(): React.ReactElement {
     .slice(0, 5)
   const topMax = topCats[0]?.amt ?? 1
 
-  // last 6 months net (expense) evolution
+  // last 12 months net (expense) evolution
   const months: string[] = []
-  for (let i = 5; i >= 0; i--) months.push(shiftMonth(month, -i))
+  for (let i = 11; i >= 0; i--) months.push(shiftMonth(month, -i))
   const evolution = months.map((m) => {
     const exp = allTransactions
       .filter((t) => t.type === 'expense' && t.date.slice(0, 7) === m)
@@ -145,36 +145,52 @@ export function FinanceDashboardPage(): React.ReactElement {
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Evolução de gastos (6 meses)</div>
+        <div className="chart-title">Evolução de gastos (12 meses)</div>
         <div className="evo-bars">
           {evolution.map((e) => (
-            <div key={e.m} className="evo-bar-col">
-              <div className="evo-bar" style={{ height: `${(e.exp / evoMax) * 100}%` }} title={formatMoney(e.exp)} />
-              <span className="evo-bar-label">{monthLabel(e.m).slice(0, 3)}</span>
-            </div>
+            <EvoBar key={e.m} month={e.m} value={e.exp} max={evoMax} title={formatMoney(e.exp)} />
           ))}
         </div>
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Evolução de investimentos (6 meses) · {base}</div>
+        <div className="chart-title">Evolução de investimentos (12 meses) · {base}</div>
         {portfolioNow === 0 && portMax === 1 ? (
           <div className="empty-hint">Sem investimentos registrados. Adicione em 📈 Investimentos.</div>
         ) : (
           <div className="evo-bars">
             {portfolio.map((p) => (
-              <div key={p.m} className="evo-bar-col">
-                <div
-                  className="evo-bar"
-                  style={{ height: `${(p.total / portMax) * 100}%`, background: 'var(--success)' }}
-                  title={formatMoney(p.total, base)}
-                />
-                <span className="evo-bar-label">{monthLabel(p.m).slice(0, 3)}</span>
-              </div>
+              <EvoBar
+                key={p.m}
+                month={p.m}
+                value={p.total}
+                max={portMax}
+                title={formatMoney(p.total, base)}
+                color="var(--success)"
+              />
             ))}
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function EvoBar({ month, value, max, title, color }: {
+  month: string
+  value: number
+  max: number
+  title: string
+  color?: string
+}): React.ReactElement {
+  const label = monthLabel(month)
+  return (
+    <div className="evo-bar-col" title={`${label}: ${title}`}>
+      <div className="evo-bar-track">
+        <span className="evo-bar-value">{value > 0 ? formatMoneyCompact(value) : ''}</span>
+        <div className="evo-bar" style={{ height: `${(value / max) * 100}%`, background: color }} />
+      </div>
+      <span className="evo-bar-label">{label.slice(0, 3)}</span>
     </div>
   )
 }
