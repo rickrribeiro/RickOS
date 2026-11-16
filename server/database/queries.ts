@@ -488,6 +488,10 @@ export interface TodoListFilters {
   type?: string
   /** 'all' | 'yes' (só recorrentes) | 'no' (sem recorrência) */
   recurring?: string
+  /** Mostra as recorrentes em aberto cuja data ainda não chegou (padrão: esconde). */
+  showUpcomingRecurring?: boolean
+  /** Data local do cliente (YYYY-MM-DD), referência para "ainda não chegou". */
+  today?: string
   /** Quantas concluídas devolver (paginação "ver mais"). */
   doneLimit?: number
 }
@@ -498,6 +502,8 @@ export interface TodoListResult {
   doneTotal: number
   /** Quantas das concluídas são recorrentes (aparecem primeiro na lista). */
   doneRecurring: number
+  /** Recorrentes em aberto com data futura que ficaram fora de `open`. */
+  upcomingRecurring: number
 }
 
 /** Página TODO: filtros, ordenação e paginação das concluídas, tudo no SQL (o Inbox fica de fora). */
@@ -527,11 +533,19 @@ export async function listTodos(f: TodoListFilters = {}): Promise<TodoListResult
     params.push(like, like)
   }
   const base = where.join(' AND ')
+  // recorrente concluída só volta para a lista quando chega a data da próxima vez
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(f.today ?? '') ? f.today! : new Date().toISOString().slice(0, 10)
+  const upcoming = "(recurrence IS NOT NULL AND recurrence != '' AND dueDate IS NOT NULL AND dueDate > ?)"
+  const upcomingRecurring =
+    getOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status != 'done' AND ${upcoming}`, [
+      ...params,
+      today
+    ])?.n ?? 0
   const open = getAll<DbTodo>(
     db,
-    `SELECT * FROM todos WHERE ${base} AND status != 'done'
+    `SELECT * FROM todos WHERE ${base} AND status != 'done'${f.showUpcomingRecurring ? '' : ` AND NOT ${upcoming}`}
      ORDER BY priority DESC, dueDate IS NULL, dueDate ASC, createdAt DESC`,
-    params
+    f.showUpcomingRecurring ? params : [...params, today]
   )
   const limit = Math.max(0, Math.floor(f.doneLimit ?? 15))
   const done = getAll<DbTodo>(
@@ -548,7 +562,7 @@ export async function listTodos(f: TodoListFilters = {}): Promise<TodoListResult
       `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status = 'done' AND recurrence IS NOT NULL AND recurrence != ''`,
       params
     )?.n ?? 0
-  return { open, done, doneTotal, doneRecurring }
+  return { open, done, doneTotal, doneRecurring, upcomingRecurring }
 }
 
 export async function createTodo(

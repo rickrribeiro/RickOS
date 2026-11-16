@@ -86,6 +86,10 @@ export interface TodoListFilters {
   type?: string
   /** 'all' | 'yes' (só recorrentes) | 'no' (sem recorrência) */
   recurring?: string
+  /** Mostra as recorrentes em aberto cuja data ainda não chegou (padrão: esconde). */
+  showUpcomingRecurring?: boolean
+  /** Data local do cliente (YYYY-MM-DD), referência para "ainda não chegou". */
+  today?: string
   /** Quantas concluídas devolver (paginação "ver mais"). */
   doneLimit?: number
 }
@@ -97,6 +101,8 @@ export interface TodoListResult {
   doneTotal: number
   /** Quantas das concluídas são recorrentes (vêm primeiro em `done`). */
   doneRecurring: number
+  /** Recorrentes em aberto com data futura que ficaram fora de `open`. */
+  upcomingRecurring: number
 }
 
 /** Uma execução do Claude CLI com o uso de tokens reportado pelo próprio CLI. */

@@ -20,6 +20,21 @@ export function TodoPage(): React.ReactElement {
   const [newType, setNewType] = useState<string>('projeto')
   const [editing, setEditing] = useState<Todo | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [showUpcoming, setShowUpcoming] = useState(() => {
+    try {
+      return localStorage.getItem('rickos:todoShowUpcomingRecurring') === '1'
+    } catch {
+      return false
+    }
+  })
+  function toggleUpcoming(v: boolean): void {
+    setShowUpcoming(v)
+    try {
+      localStorage.setItem('rickos:todoShowUpcomingRecurring', v ? '1' : '0')
+    } catch {
+      /* sem storage: vale só nesta sessão */
+    }
+  }
   const [doneCollapsed, setDoneCollapsed] = useState(() => localStorage.getItem('rickos:todoDoneCollapsed') === '1')
 
   function toggleDone(): void {
@@ -48,9 +63,11 @@ export function TodoPage(): React.ReactElement {
       status: statusFilter,
       type: typeFilter,
       recurring: recurringFilter,
+      showUpcomingRecurring: showUpcoming,
+      today: localDateStr(new Date()),
       projectId: projectFilter === 'all' ? null : projectFilter
     })
-  }, [debouncedSearch, statusFilter, typeFilter, recurringFilter, projectFilter])
+  }, [debouncedSearch, statusFilter, typeFilter, recurringFilter, showUpcoming, projectFilter])
 
   const projectName = (id: number | null): string | null =>
     id === null ? null : projects.find((p) => p.id === id)?.name ?? null
@@ -153,7 +170,7 @@ export function TodoPage(): React.ReactElement {
           placeholder="🔍 Buscar…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 120 }}
+          style={{ flex: '1 1 110px', minWidth: 100 }}
         />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
           <option value="all">Todos os status</option>
@@ -187,6 +204,16 @@ export function TodoPage(): React.ReactElement {
             </option>
           ))}
         </select>
+        <label
+          className="todo-toolbar-check"
+          title="Recorrentes concluídas voltam para a lista só quando chega a data da próxima vez"
+        >
+          <input type="checkbox" checked={showUpcoming} onChange={(e) => toggleUpcoming(e.target.checked)} />
+          Mostrar recorrentes
+          {!showUpcoming && list.upcomingRecurring > 0 && (
+            <span style={{ color: 'var(--text-muted)' }}>({list.upcomingRecurring})</span>
+          )}
+        </label>
       </div>
 
       <div className="list-stack">
