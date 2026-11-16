@@ -114,6 +114,7 @@ export function ContactEditor({
   const [interests, setInterests] = useState(contact?.interests ?? '')
   const [context, setContext] = useState(contact?.context ?? '')
   const [nextFollowUp, setNextFollowUp] = useState(contact?.nextFollowUp ?? '')
+  const [pickingDate, setPickingDate] = useState(false)
   const [priority, setPriority] = useState<'alta' | 'normal' | 'baixa'>(contact?.priority ?? 'normal')
   const [vip, setVip] = useState(!!contact?.vip)
   const [tagIds, setTagIds] = useState<Set<number>>(() => new Set(currentTags.map((t) => t.id)))
@@ -202,20 +203,34 @@ export function ContactEditor({
           </div>
           <div className="editor-field">
             <label>Próximo follow-up</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="date"
-                value={nextFollowUp}
-                onChange={(e) => setNextFollowUp(e.target.value)}
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              {nextFollowUp && (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNextFollowUp('')} title="Remover o follow-up">
-                  Limpar
+            {/* vazio = sem data. O Safari mostra a data de hoje num <input type="date"> vazio,
+                então o campo só aparece quando há data ou quando o usuário pede para definir. */}
+            {nextFollowUp || pickingDate ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="date"
+                  value={nextFollowUp}
+                  autoFocus={pickingDate && !nextFollowUp}
+                  onChange={(e) => setNextFollowUp(e.target.value)}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setNextFollowUp('')
+                    setPickingDate(false)
+                  }}
+                  title="Remover o follow-up"
+                >
+                  {nextFollowUp ? 'Limpar' : 'Cancelar'}
                 </button>
-              )}
-            </div>
-            {!nextFollowUp && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sem follow-up</span>}
+              </div>
+            ) : (
+              <button type="button" className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setPickingDate(true)}>
+                Sem follow-up · ＋ Definir data
+              </button>
+            )}
           </div>
         </div>
         <div className="editor-row">
