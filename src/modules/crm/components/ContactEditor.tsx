@@ -2,7 +2,8 @@ import React, { useRef, useState } from 'react'
 import { Contact } from '../../../types'
 import { useContactStore } from '../store/contactStore'
 import { COUNTRIES, BRAZIL_STATES, BRAZIL, norm } from '../geo'
-import type { ChatLabel } from '../../../../shared/chats'
+import type { ChatLabel, PersonNetwork } from '../../../../shared/chats'
+import { PersonNetworks } from '../../chats/components/PersonNetworks'
 import { TagChip } from './TagsModal'
 
 /** Campo de país com busca por texto (sem acentos): digita, filtra a lista e escolhe. */
@@ -97,12 +98,15 @@ export function ContactEditor({
   labels = [],
   currentTags = [],
   onManageTags,
+  networks = [],
   onClose
 }: {
   contact: Contact | null
   labels?: ChatLabel[]
   currentTags?: ChatLabel[]
   onManageTags?: () => void
+  /** Conversas vinculadas a esta pessoa na Central de Mensagens. */
+  networks?: PersonNetwork[]
   onClose: () => void
 }): React.ReactElement {
   const { create, update } = useContactStore()
@@ -167,6 +171,12 @@ export function ContactEditor({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 420, maxWidth: 560 }}>
         <h2>{contact ? 'Editar contato' : 'Nova pessoa'}</h2>
+        {networks.length > 0 && (
+          <div className="editor-field">
+            <label>Redes</label>
+            <PersonNetworks items={networks} variant="rows" onNavigate={onClose} />
+          </div>
+        )}
         <div className="editor-row">
           <div className="editor-field">
             <label>Nome</label>

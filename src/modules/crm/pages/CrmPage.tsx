@@ -5,10 +5,10 @@ import { ContactEditor } from '../components/ContactEditor'
 import { BRAZIL, BRAZIL_STATES } from '../geo'
 import { timeAgo, localDateStr } from '../../../utils/dates'
 import { networkInfo } from '../../../../shared/chats'
-import type { ChatLabel } from '../../../../shared/chats'
+import type { ChatLabel, PersonNetwork } from '../../../../shared/chats'
+import { PersonNetworks } from '../../chats/components/PersonNetworks'
 import { TagsModal, TagChip } from '../components/TagsModal'
 import { parseQuery, matches, QUERY_HELP, QUERY_FIELDS, type FieldValues } from '../query'
-import { openChat } from '../../chats/store/chatsStore'
 
 /** Days until the next occurrence of a MM-DD / YYYY-MM-DD birthday, or null. */
 function daysToBirthday(bday: string | null): number | null {
@@ -78,7 +78,7 @@ export function CrmPage(): React.ReactElement {
   const [stateFilter, setStateFilter] = useState('')
 
   // conversas vinculadas (Central de Mensagens): redes por pessoa e pendências
-  const [nets, setNets] = useState<Record<number, { network: string; chatId: number; pending: boolean }[]>>({})
+  const [nets, setNets] = useState<Record<number, PersonNetwork[]>>({})
   // tags das pessoas (catálogo compartilhado com a Central de Mensagens)
   const [labels, setLabels] = useState<ChatLabel[]>([])
   const [tagMap, setTagMap] = useState<Record<number, ChatLabel[]>>({})
@@ -133,7 +133,8 @@ export function CrmPage(): React.ReactElement {
       followup: [c.nextFollowUp ?? ''],
       prioridade: [c.priority ?? 'normal'],
       vip: c.vip ? ['sim'] : [],
-      rede: (nets[c.id] ?? []).map((n) => networkInfo(n.network).label),
+      // rede=instagram, rede=@usuario ou rede=+5511… (o identificador da pessoa na rede)
+      rede: (nets[c.id] ?? []).flatMap((n) => [networkInfo(n.network).label, n.handle ?? '', n.handle ? `@${n.handle.replace(/^@/, '')}` : '']).filter(Boolean),
       conversa: c.lastContactAt ? [c.lastContactAt.slice(0, 10)] : []
     }
   }
@@ -274,17 +275,7 @@ export function CrmPage(): React.ReactElement {
                     <TagChip key={t.id} tag={t} />
                   ))}
                   {c.priority === 'alta' && <span className="due-badge due-overdue">prioridade alta</span>}
-                  {(nets[c.id] ?? []).map((n) => (
-                    <button
-                      key={n.chatId}
-                      className="project-chip"
-                      style={{ cursor: 'pointer', border: n.pending ? '1px solid var(--danger)' : undefined }}
-                      title={n.pending ? `${networkInfo(n.network).label}: esperando resposta` : `Abrir conversa no ${networkInfo(n.network).label}`}
-                      onClick={() => openChat(n.chatId)}
-                    >
-                      {networkInfo(n.network).icon} {networkInfo(n.network).label}{n.pending ? ' ✍️' : ''}
-                    </button>
-                  ))}
+                  <PersonNetworks items={nets[c.id] ?? []} />
                   {c.location && <span className="project-chip">📍 {c.location}</span>}
                   {c.country && <span className="project-chip">🌎 {c.country}{c.state ? ` / ${c.state}` : ''}</span>}
                   {bd !== null && bd <= 7 && <span className="due-badge due-today">🎂 {bd === 0 ? 'hoje!' : `em ${bd}d`}</span>}
@@ -313,6 +304,7 @@ export function CrmPage(): React.ReactElement {
           labels={labels}
           currentTags={editing ? tagMap[editing.id] ?? [] : []}
           onManageTags={() => setManagingTags(true)}
+          networks={editing ? nets[editing.id] ?? [] : []}
           onClose={() => {
             setCreating(false)
             setEditing(null)

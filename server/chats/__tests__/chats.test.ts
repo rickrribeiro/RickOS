@@ -202,6 +202,18 @@ describe('mapeamento Beeper', () => {
     assert.equal(svc.verifyAsset(t1.slice(0, -2) + 'xx'), null)
   })
 
+  it('redes da pessoa: rótulo e link para abrir no app da rede', async () => {
+    const { peerLink } = await import('../../../shared/chats')
+    assert.deepEqual(peerLink('whatsapp', '+5511990000001', 'João Silva'), { label: 'João Silva · +5511990000001', url: 'https://wa.me/5511990000001', urlLabel: 'Abrir no WhatsApp' })
+    assert.equal(peerLink('whatsapp', '+5511990000001', '+55 11 99000-0001').label, '+5511990000001')
+    assert.equal(peerLink('instagram', 'rickrribeiro', 'Rick').label, '@rickrribeiro')
+    assert.equal(peerLink('instagram', 'rickrribeiro', 'Rick').url, 'https://ig.me/m/rickrribeiro')
+    assert.equal(peerLink('instagram', '1234567890', 'Ana').url, null, 'id numérico não vira link')
+    assert.equal(peerLink('instagram', 'x/../y', 'Ana').url, null)
+    assert.equal(peerLink('linkedin', 'ACoAAB-x_9', 'Bia').url, 'https://www.linkedin.com/in/ACoAAB-x_9')
+    assert.equal(peerLink('whatsapp', null, 'Grupo').url, null)
+  })
+
   it('leitura local de fotos: só imagens dentro da pasta do Beeper', async () => {
     const la = await import('../providers/localAsset')
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'beeper-')))

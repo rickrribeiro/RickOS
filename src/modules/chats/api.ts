@@ -18,6 +18,7 @@ import type {
   ContactSuggestion,
   ManualReplyState,
   MessagePage,
+  PersonNetwork,
   RadarView
 } from '../../../shared/chats'
 
@@ -83,7 +84,7 @@ export interface ChatsApi {
   link: (ids: number[], contactId: number | null) => Promise<void>
   createContact: (id: number, name: string) => Promise<{ contactId: number }>
   contactChats: (contactId: number) => Promise<ContactChatLink[]>
-  contactNetworks: () => Promise<Record<number, { network: string; chatId: number; pending: boolean }[]>>
+  contactNetworks: () => Promise<Record<number, PersonNetwork[]>>
   contacts: () => Promise<ContactLite[]>
   setContactPriority: (contactId: number, priority: ChatPriority, vip: boolean) => Promise<void>
   labels: () => Promise<ChatLabel[]>

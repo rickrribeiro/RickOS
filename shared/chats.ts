@@ -30,6 +30,50 @@ export function networkInfo(n: string): { label: string; icon: string; color: st
   return NETWORK_LABELS[n] ?? { label: n ? n[0].toUpperCase() + n.slice(1) : 'Outra', icon: '💭', color: '#888888' }
 }
 
+/** Uma rede de uma pessoa do CRM (conversa vinculada). */
+export interface PersonNetwork {
+  network: string
+  chatId: number
+  pending: boolean
+  /** Nome da conversa (no WhatsApp, o contato como está salvo no celular). */
+  title: string
+  /** Telefone, @usuário ou id da pessoa naquela rede (só conversas individuais). */
+  handle: string | null
+}
+
+/**
+ * Como mostrar a pessoa numa rede e o link para abrir a conversa direto no app/site da rede.
+ * Só monta link quando o identificador tem o formato esperado; senão, url = null.
+ */
+export function peerLink(network: string, handle: string | null, title: string): { label: string; url: string | null; urlLabel: string | null } {
+  const h = (handle ?? '').trim()
+  const name = title.trim()
+  switch (normalizeNetwork(network)) {
+    case 'whatsapp': {
+      const digits = h.replace(/\D/g, '')
+      if (digits.length < 8) return { label: name || h, url: null, urlLabel: null }
+      const sameAsNumber = !name || name.replace(/\D/g, '') === digits
+      return { label: sameAsNumber ? h : `${name} · ${h}`, url: `https://wa.me/${digits}`, urlLabel: 'Abrir no WhatsApp' }
+    }
+    case 'instagram': {
+      const user = h.replace(/^@/, '')
+      if (!/^[A-Za-z0-9._]{1,30}$/.test(user) || /^\d+$/.test(user)) return { label: name || h, url: null, urlLabel: null }
+      return { label: `@${user}`, url: `https://ig.me/m/${user}`, urlLabel: 'Abrir no Instagram' }
+    }
+    case 'linkedin':
+      // o Beeper devolve o id do membro (ACoAA…), que o LinkedIn redireciona para o perfil
+      if (!/^[A-Za-z0-9_-]{6,100}$/.test(h)) return { label: name || h, url: null, urlLabel: null }
+      return { label: name || 'perfil', url: `https://www.linkedin.com/in/${h}`, urlLabel: 'Abrir perfil no LinkedIn' }
+    case 'telegram': {
+      const user = h.replace(/^@/, '')
+      if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(user)) return { label: name || h, url: null, urlLabel: null }
+      return { label: `@${user}`, url: `https://t.me/${user}`, urlLabel: 'Abrir no Telegram' }
+    }
+    default:
+      return { label: name || h, url: null, urlLabel: null }
+  }
+}
+
 /** Normaliza o nome/identificador de rede de qualquer provedor. */
 export function normalizeNetwork(raw: string | null | undefined): ChatNetwork {
   const s = (raw ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -303,6 +347,7 @@ export interface ContactChatLink {
   lastActivity: string | null
   replyState: ReplyState
   unreadCount: number | null
+  handle: string | null
 }
 
 export type AiStyle = 'natural' | 'curto' | 'descontraido' | 'profissional' | 'elaborado'

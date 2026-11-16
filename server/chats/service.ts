@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import type {
   ChatCounts,
+  PersonNetwork,
   ChatFilter,
   ChatLabel,
   ChatListPage,
@@ -707,16 +708,22 @@ export async function contactChats(contactId: number): Promise<ContactChatLink[]
   return (await allSummaries(ctx))
     .filter((s) => s.contactId === contactId)
     .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''))
-    .map((s) => ({ chatId: s.id, network: s.network, title: s.title, lastActivity: s.lastActivity, replyState: s.replyState, unreadCount: s.unreadCount }))
+    .map((s) => ({ chatId: s.id, network: s.network, title: s.title, lastActivity: s.lastActivity, replyState: s.replyState, unreadCount: s.unreadCount, handle: s.type === 'single' ? s.peerHandle : null }))
 }
 
 /** Todas as redes por pessoa (para a lista do CRM). */
-export async function contactNetworks(): Promise<Record<number, { network: string; chatId: number; pending: boolean }[]>> {
+export async function contactNetworks(): Promise<Record<number, PersonNetwork[]>> {
   const ctx = await summaryCtx()
-  const out: Record<number, { network: string; chatId: number; pending: boolean }[]> = {}
+  const out: Record<number, PersonNetwork[]> = {}
   for (const s of await allSummaries(ctx)) {
     if (!s.contactId) continue
-    ;(out[s.contactId] ??= []).push({ network: s.network, chatId: s.id, pending: s.replyState === 'needs_reply' })
+    ;(out[s.contactId] ??= []).push({
+      network: s.network,
+      chatId: s.id,
+      pending: s.replyState === 'needs_reply',
+      title: s.title,
+      handle: s.type === 'single' ? s.peerHandle : null
+    })
   }
   return out
 }
