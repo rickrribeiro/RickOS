@@ -79810,7 +79810,7 @@ async function checkProjectRadar(force = false) {
   const dow = (/* @__PURE__ */ new Date()).getDay();
   const lastReview = await getSetting("projects_last_review");
   if ((dow === 0 || dow === 1) && (!lastReview || Date.now() - new Date(lastReview).getTime() > 7 * DAY)) {
-    await notify({ title: "🗓️ Revisão semanal dos projetos", body: "Decida: continuar, pausar, retomar ou encerrar.", source: "projetos", page: "weekly-review" });
+    await notify({ title: "🗓️ Revisão semanal dos projetos", body: "Gere a revisão no Dashboard e decida: continuar, pausar, retomar ou encerrar.", source: "projetos", page: "home" });
     sent++;
   }
   return sent;
