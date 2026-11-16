@@ -184,6 +184,23 @@ describe('mapeamento Beeper', () => {
     assert.equal(m.mentions, null)
     assert.equal(m.isUnread, null)
   })
+
+  it('foto: caminho local vira file://, individual usa a foto da outra pessoa, nada além de refs internas', () => {
+    assert.equal(beeper.avatarRef('/Users/x/Library/Application Support/BeeperTexts/media/a'), 'file:///Users/x/Library/Application Support/BeeperTexts/media/a')
+    assert.equal(beeper.avatarRef('localmxc://srv/abc'), 'localmxc://srv/abc')
+    assert.equal(beeper.avatarRef('https://evil.example/x.png'), null)
+    assert.equal(beeper.avatarRef(null), null)
+    const base = { id: '!y', accountID: 'a', network: 'WhatsApp', title: 'Ana', unreadCount: 0 }
+    const single = beeper.mapChat({ ...base, type: 'single', participants: { items: [{ id: '@me', isSelf: true, imgURL: 'file:///me.jpg' }, { id: '@ana', imgURL: 'file:///ana.jpg' }] } })
+    assert.equal(single.imgUrl, 'file:///ana.jpg')
+    const group = beeper.mapChat({ ...base, type: 'group', participants: { items: [{ id: '@me', isSelf: true }, { id: '@ana', imgURL: 'file:///ana.jpg' }] } })
+    assert.equal(group.imgUrl, null)
+    // link assinado estável (cache do navegador) e não falsificável
+    const t1 = svc.signAsset(1, 'file:///ana.jpg', true)
+    assert.equal(svc.signAsset(1, 'file:///ana.jpg', true), t1)
+    assert.deepEqual(svc.verifyAsset(t1), { chatId: 1, ref: 'file:///ana.jpg' })
+    assert.equal(svc.verifyAsset(t1.slice(0, -2) + 'xx'), null)
+  })
 })
 
 // ── Integração com o provedor mock ────────────────────────────────────────────

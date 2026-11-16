@@ -136,7 +136,7 @@ export function summarize(r: FullChatRow, ctx: SummaryCtx): ChatSummary {
     network: r.network,
     title: r.title,
     type: r.type,
-    imgUrl: r.imgUrl,
+    imgUrl: r.imgUrl && r.providerId === ctx.activeProviderId ? `/api/chats/asset?t=${encodeURIComponent(signAsset(r.id, r.imgUrl, true))}` : null,
     participantCount: r.participantCount,
     unreadCount: r.unreadCount,
     unreadMentions: r.unreadMentions,
@@ -336,8 +336,11 @@ async function selfInfo(accountKey: string): Promise<{ ids: Set<string>; names: 
 
 // Assinatura dos anexos: o front nunca recebe a URL interna (mxc://…) crua.
 const assetKey = crypto.randomBytes(32)
-export function signAsset(chatId: number, ref: string): string {
-  const payload = Buffer.from(JSON.stringify([chatId, ref, Date.now() + 6 * 3600_000])).toString('base64url')
+export function signAsset(chatId: number, ref: string, stable = false): string {
+  // stable: mesma URL dentro de uma janela de 6 h, para o navegador reaproveitar o cache (fotos)
+  const win = 6 * 3600_000
+  const exp = stable ? (Math.floor(Date.now() / win) + 2) * win : Date.now() + win
+  const payload = Buffer.from(JSON.stringify([chatId, ref, exp])).toString('base64url')
   const sig = crypto.createHmac('sha256', assetKey).update(payload).digest('base64url')
   return `${payload}.${sig}`
 }

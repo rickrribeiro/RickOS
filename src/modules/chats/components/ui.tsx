@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { ChatLabel, ChatPriority, ChatSummary, ReplyState } from '../../../../shared/chats'
 import { networkInfo, REPLY_STATE_LABELS } from '../../../../shared/chats'
+import { authedUrl } from '../../../api/transport'
 
 export function initials(name: string): string {
   const parts = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/)
@@ -13,11 +14,13 @@ function hue(s: string): number {
   return h
 }
 
-export function Avatar({ chat, size = 38 }: { chat: Pick<ChatSummary, 'title' | 'network' | 'type'>; size?: number }): React.ReactElement {
+export function Avatar({ chat, size = 38 }: { chat: Pick<ChatSummary, 'title' | 'network' | 'type'> & { imgUrl?: string | null }; size?: number }): React.ReactElement {
   const n = networkInfo(chat.network)
+  const [broken, setBroken] = useState<string | null>(null)
+  const src = chat.imgUrl && broken !== chat.imgUrl ? authedUrl(chat.imgUrl) : null
   return (
     <div className="chats-avatar" style={{ width: size, height: size, background: `hsl(${hue(chat.title)} 45% 42%)` }} aria-hidden>
-      {chat.type === 'group' ? '👥' : initials(chat.title)}
+      {src ? <img src={src} alt="" loading="lazy" decoding="async" onError={() => setBroken(chat.imgUrl ?? null)} /> : chat.type === 'group' ? '👥' : initials(chat.title)}
       <span className="net" title={n.label}>{n.icon}</span>
     </div>
   )

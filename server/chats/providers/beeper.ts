@@ -27,6 +27,7 @@ interface BUser {
   phoneNumber?: string
   email?: string
   isSelf?: boolean
+  imgURL?: string | null
 }
 interface BAttachment {
   type?: string
@@ -136,6 +137,16 @@ export function mapMessage(m: BMessage): RemoteMessage {
 }
 
 /** Escala de capacidade do Beeper: 1 (parcial) e 2 (total) contam como suportado. */
+/**
+ * Foto da conversa como referência interna do Beeper (nunca vai crua para o front: o servidor
+ * assina e serve por /api/chats/asset). Caminho local vira file://, que /v1/assets/serve aceita.
+ */
+export function avatarRef(u: string | null | undefined): string | null {
+  if (!u) return null
+  if (u.startsWith('/')) return `file://${u}`
+  return /^(mxc|localmxc|file):\/\//.test(u) ? u : null
+}
+
 const capOk = (v: unknown): boolean => typeof v === 'number' ? v >= 1 : v === true
 
 export function mapChat(c: BChat): RemoteChat {
@@ -149,7 +160,7 @@ export function mapChat(c: BChat): RemoteChat {
     network: c.network,
     title: c.title || (others[0] ? userName(others[0]) : ''),
     type: c.type === 'group' ? 'group' : 'single',
-    imgUrl: null, // imgURL costuma ser mxc:// ou file:// local; não é exibível no navegador
+    imgUrl: avatarRef(c.imgURL) ?? (c.type !== 'group' && others.length === 1 ? avatarRef(others[0].imgURL) : null),
     participantCount: c.participants?.total ?? (items.length || null),
     participants,
     peerHandle: c.type === 'single' && others.length === 1 ? handleOf(others[0]) : null,
@@ -293,7 +304,7 @@ export function createBeeperProvider(transport: BeeperTransport, opts: { onAgent
     },
 
     async fetchAttachment(ref) {
-      if (!/^(mxc|localmxc):\/\//.test(ref)) throw new Error('Anexo inválido.')
+      if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error('Anexo inválido.')
       const r = await transport.request({ method: 'GET', path: '/v1/assets/serve', query: { url: ref }, binary: true })
       if (r.status < 200 || r.status >= 300 || !r.buffer) throw new Error(`Anexo indisponível (${r.status}).`)
       return { contentType: r.contentType || 'application/octet-stream', body: r.buffer }

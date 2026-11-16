@@ -76,6 +76,7 @@
 .chats-item.stale { opacity: 0.7; }
 .chats-check { margin-top: 10px; flex-shrink: 0; }
 .chats-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff; position: relative; }
+.chats-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .chats-avatar .net { position: absolute; right: -4px; bottom: -3px; font-size: 12px; line-height: 1; background: var(--bg-secondary); border-radius: 50%; padding: 1px; }
 .chats-item-main { flex: 1; min-width: 0; }
 .chats-item-top { display: flex; align-items: baseline; gap: 6px; }
