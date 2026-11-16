@@ -61,8 +61,11 @@ export function HomePage(): React.ReactElement {
     })
   }, [])
 
+  // recorrente já feita fica com a data da próxima vez: só conta quando essa data chegar (igual à página TODO)
+  const today = localDateStr(new Date())
   const openTodos = todos
     .filter((t) => t.status !== 'done' && t.status !== 'inbox')
+    .filter((t) => !(t.recurrence && t.dueDate && t.dueDate.slice(0, 10) > today))
     .sort((a, b) => b.priority - a.priority)
   const inboxCount = todos.filter((t) => t.status === 'inbox').length
   const pendingHabits = habits.filter((h) => !isDone(h.id))
