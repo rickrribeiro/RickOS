@@ -1,6 +1,9 @@
 import type { AirportInfo, ChromeStatus, FlightMonitor, Money, NormalizedOffer, RunInfo, SkyCombo, SkyPick, SkyPlace, SkyPreview, TrackedCombo, TrackedView } from '../../shared/flights'
 import { skyKey } from '../../shared/flights'
 import { execFile } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import { dataDir } from '../config'
 import { getSetting, recordAiUsage } from '../database/queries'
 import { broadcast } from '../events'
 import { runClaude } from '../services/claude'
@@ -200,11 +203,57 @@ export function buildPrompt(m: FlightMonitor, combos: Combo[]): string {
   ].join('\n')
 }
 
-function firstJson(text: string): Record<string, unknown> {
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('O Claude não devolveu JSON.')
-  return JSON.parse(text.slice(start, end + 1))
+/** Todos os objetos JSON de primeiro nível no texto (com chaves balanceadas, respeitando strings). */
+export function jsonObjects(text: string): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  let i = text.indexOf('{')
+  while (i >= 0 && i < text.length) {
+    let depth = 0
+    let inStr = false
+    let esc = false
+    let end = -1
+    for (let k = i; k < text.length; k++) {
+      const ch = text[k]
+      if (inStr) {
+        if (esc) esc = false
+        else if (ch === '\\') esc = true
+        else if (ch === '"') inStr = false
+      } else if (ch === '"') inStr = true
+      else if (ch === '{') depth++
+      else if (ch === '}' && --depth === 0) {
+        end = k
+        break
+      }
+    }
+    if (end < 0) break
+    try {
+      const j: unknown = JSON.parse(text.slice(i, end + 1))
+      if (j && typeof j === 'object' && !Array.isArray(j)) {
+        out.push(j as Record<string, unknown>)
+        i = text.indexOf('{', end + 1)
+        continue
+      }
+    } catch {
+      // não era JSON a partir daqui: tenta a próxima chave
+    }
+    i = text.indexOf('{', i + 1)
+  }
+  return out
+}
+
+/**
+ * Resposta final de uma sessão: o último objeto com "results"/"status" (o Claude às vezes
+ * repete linhas RESULT, escreve texto ou manda mais de um JSON). Os results soltos (linhas
+ * RESULT e objetos com "combo") completam o que faltar. Nada legível → null.
+ */
+export function sessionAnswer(text: string): { status: string; message: string | null; results: Record<string, unknown>[] } | null {
+  const objs = jsonObjects(text)
+  const final = [...objs].reverse().find((o) => Array.isArray(o.results) || (typeof o.status === 'string' && !('combo' in o)))
+  const loose = objs.filter((o) => 'combo' in o && Number.isInteger(Number(o.combo)))
+  if (!final && !loose.length) return null
+  const results = [...(Array.isArray(final?.results) ? (final.results as Record<string, unknown>[]) : [])]
+  for (const r of loose) if (!results.some((x) => Number(x.combo) === Number(r.combo))) results.push(r)
+  return { status: String(final?.status ?? (loose.length ? 'ok' : 'error')), message: final?.message ? String(final.message) : null, results }
 }
 
 /** Converte "Qatar Airways" → "QR" só quando o nome já veio como código; senão guarda o nome em `carrier` do resumo. */
@@ -358,8 +407,11 @@ export async function startSkyscanner(monitorId: number, picks: SkyPick[] | numb
     let session = 0
     const progress = (): string => `Claude está pesquisando no seu Chrome… (sessão ${session} de ${sessions} · ${settled.size}/${combos.length} combinações lidas)`
     try {
-      const command = (await getSetting('claude_command')) || 'claude'
+      // flights_chrome_config_dir: CLAUDE_CONFIG_DIR só para as buscas no Chrome (outra conta, onde a extensão está logada)
+      const configDir = (await getSetting('flights_chrome_config_dir'))?.trim() || undefined
+      const command = configDir ? 'claude' : (await getSetting('claude_command')) || 'claude'
       const model = ((await getSetting('flights_chrome_model')) ?? 'sonnet').trim()
+      let badSessions = 0
       for (let start = 0; start < combos.length; start += PER_SESSION) {
         if (busy?.cancelled) {
           cancelled = true
@@ -394,6 +446,7 @@ export async function startSkyscanner(monitorId: number, picks: SkyPick[] | numb
           raw = await runClaude(buildPrompt(m, chunk), command, {
             model,
             streamJson: true,
+            configDir,
             extraArgs: ['--chrome', '--allowedTools', 'mcp__claude-in-chrome'],
             timeoutMs: (4 + 2 * chunk.length) * 60_000,
             registerChild: (kill) => busy && (busy.kill = kill),
@@ -413,18 +466,32 @@ export async function startSkyscanner(monitorId: number, picks: SkyPick[] | numb
           await queue
         }
         if (stopping) return
-        const j = firstJson(raw)
-        const status = String(j.status ?? 'error')
+        saveRaw(runId, session, raw)
+        const ans = sessionAnswer(raw)
+        const status = ans?.status ?? 'error'
         if (status === 'no_browser' && !settled.size) throw new Error('Chrome não conectado ao Claude Code: feche o Chrome (⌘Q) e abra de novo, com a extensão Claude in Chrome ativa e logada. Se continuar, rode `claude --chrome` no terminal e use /chrome para reconectar.')
-        const results = Array.isArray(j.results) ? (j.results as Record<string, unknown>[]) : []
-        // o JSON final completa o que não veio nas linhas RESULT
+        const results = ans?.results ?? []
+        // o JSON final completa o que não veio nas linhas RESULT; sem resposta legível, as não lidas voltam para a fila e a próxima sessão segue
+        const unread: number[] = []
         for (const [k, c] of chunk.entries()) {
           const i = start + k
           if (settled.has(i)) continue
+          const r = results.find((x) => Number(x.combo) === k)
+          if (!r && !ans) {
+            unread.push(i)
+            continue
+          }
           settled.add(i)
-          await applyOne(m, runId, c, taskIds[i], results.find((x) => Number(x.combo) === k), status === 'blocked' ? 'blocked' : 'error', started, tot)
+          await applyOne(m, runId, c, taskIds[i], r, status === 'blocked' ? 'blocked' : 'error', started, tot)
         }
-        if (j.message) lastMsg = String(j.message).slice(0, 200)
+        if (!ans) {
+          badSessions++
+          lastMsg = `Sessão ${session}: resposta do Claude ilegível (${unread.length} combinação(ões) voltaram para a fila).`
+          if (badSessions >= 2) throw new Error('Duas sessões seguidas sem resposta legível do Claude — parei para não gastar à toa.')
+        } else {
+          badSessions = 0
+          if (ans.message) lastMsg = ans.message.slice(0, 200)
+        }
         if (status === 'blocked' || tot.blocked) {
           tot.blocked = true
           break
@@ -544,7 +611,9 @@ export type { RunInfo }
  * Claude Code. Sem o conector, o `claude --chrome` responde "no_browser" depois de gastar uma
  * sessão — melhor avisar antes. Ver docs/passagens.md.
  */
-export function chromeStatus(): Promise<ChromeStatus> {
+export async function chromeStatus(): Promise<ChromeStatus> {
+  // Com outro comando/conta configurado, a checagem por processos não diz nada: não bloqueia.
+  if ((await getSetting('flights_chrome_config_dir'))?.trim()) return { ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true }
   return new Promise((resolve) => {
     execFile('ps', ['-Ao', 'command'], { maxBuffer: 16 * 1024 * 1024, timeout: 5000 }, (err, out) => {
       if (err) return resolve({ ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true })
@@ -564,4 +633,17 @@ export function parseChromeStatus(ps: string): ChromeStatus {
   const desktopHost = lines.some((l) => /^\S*Claude\.app\/Contents\/Helpers\/chrome-native-host(\s|$)/.test(l))
   const desktopApp = lines.some((l) => /^\/Applications\/Claude\.app\/Contents\/MacOS\/Claude(\s|$)/.test(l))
   return { ok: codeHost, chrome, codeHost, desktopHost, desktopApp }
+}
+
+/** Guarda a resposta bruta de cada sessão (diagnóstico; só as 40 mais recentes). */
+function saveRaw(runId: number, session: number, raw: string): void {
+  try {
+    const dir = path.join(dataDir(), 'logs', 'passagens-chrome')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, `run${runId}-s${session}.txt`), raw)
+    const files = fs.readdirSync(dir).map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((x, y) => y.t - x.t)
+    for (const { f } of files.slice(40)) fs.rmSync(path.join(dir, f), { force: true })
+  } catch {
+    // diagnóstico não pode derrubar a busca
+  }
 }

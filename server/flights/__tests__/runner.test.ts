@@ -384,6 +384,27 @@ describe('Skyscanner via Chrome', () => {
     assert.equal(r.rest, 'RESULT {"combo":1')
   })
 
+  it('resposta final da sessão: tolera linhas RESULT, texto extra e mais de um JSON', async () => {
+    const sky = await import('../assisted')
+    // o caso real que quebrou: RESULT repetidos + JSON final + texto depois
+    const raw = [
+      'RESULT {"combo":0,"status":"ok","offers":[{"price":1,"carrier":"a {b}"}]}',
+      'RESULT {"combo":1,"status":"empty","offers":[]}',
+      '{"status":"ok","message":"As 5 carregaram","results":[{"combo":0,"status":"ok","offers":[]},{"combo":2,"status":"ok","offers":[]}]}',
+      'Pronto, fechei a aba.'
+    ].join('\n')
+    const a = sky.sessionAnswer(raw)!
+    assert.equal(a.status, 'ok')
+    assert.equal(a.message, 'As 5 carregaram')
+    assert.deepEqual(a.results.map((x) => Number(x.combo)).sort(), [0, 1, 2])
+    // só linhas RESULT, sem JSON final
+    assert.deepEqual(sky.sessionAnswer('RESULT {"combo":3,"status":"ok","offers":[]}\nacabou')!.results.map((x) => x.combo), [3])
+    assert.equal(sky.sessionAnswer('{"status":"no_browser"}')!.status, 'no_browser')
+    assert.equal(sky.sessionAnswer('nada aqui {quebrado'), null)
+    // string com chave e aspas escapadas não confunde o balanceamento
+    assert.equal(sky.jsonObjects('x {"a":"}\\"{"} y {"b":1}').length, 2)
+  })
+
   it('grava cada combinação ao vivo, antes de a sessão terminar (claude falso)', async () => {
     const sky = await import('../assisted')
     const q = await import('../../database/queries')

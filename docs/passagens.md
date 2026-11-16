@@ -210,6 +210,13 @@ app pesquisa o Skyscanner **no seu Chrome**, sob demanda e com você acompanhand
        próxima abertura, filtrada pelo que ainda vale (rota do monitor, data no intervalo).
      - Se a última busca no Chrome falhou ou ficou pela metade (últimas 24 h), a página do
        monitor mostra a causa (`lastAssisted` no resumo) com "Tentar de novo".
+     - **Outra conta:** a extensão só atende o Claude Code logado na mesma conta. Se ela estiver
+       em outra conta, `flights_chrome_config_dir` (ex.: `~/.claude-trabalho`) roda só as buscas
+       no Chrome com esse `CLAUDE_CONFIG_DIR` (e desliga a checagem por processos).
+     - **Resposta de cada sessão:** lida com tolerância (`sessionAnswer`: último JSON com
+       "results"/"status" + linhas RESULT soltas). Sessão ilegível devolve as não lidas para a
+       fila e a próxima segue; duas seguidas param a busca. A resposta bruta fica em
+       `<dados>/logs/passagens-chrome/run<id>-s<n>.txt` (as 40 mais recentes).
      - Até 30 combinações por execução. O servidor revalida cada escolha contra os pares e
        datas do monitor e remonta as URLs (`validatePicks`).
   2. Ao confirmar, roda sessões do Claude de até 5 combinações, uma após a outra (sessões

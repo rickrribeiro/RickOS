@@ -37,6 +37,8 @@ export interface RunOptions {
   streamJson?: boolean
   /** Working directory to run the CLI in (e.g. a project's local path). */
   cwd?: string
+  /** CLAUDE_CONFIG_DIR para esta execução (outra conta do Claude Code). `~/` é expandido. */
+  configDir?: string
   /**
    * Agentic mode: bidirectional stream-json (stdin open) with `--permission-mode default`,
    * so the CLI actually EXECUTES tools (Bash/Edit/…) and completes the task, streaming
@@ -124,7 +126,8 @@ function attempt(bin: string, prompt: string, viaShell: boolean, opts: RunOption
   return new Promise((resolve, reject) => {
     // RICKOS_CLAUDE_RUN marca execuções do próprio rickOS: o hook SessionEnd ignora
     // essas sessões (senão o resumo do "onde parei" dispararia outro resumo, em loop).
-    const env = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: '1' }
+    const env: NodeJS.ProcessEnv = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: '1' }
+    if (opts.configDir?.trim()) env.CLAUDE_CONFIG_DIR = opts.configDir.trim().replace(/^~(?=\/|$)/, os.homedir())
     const model = opts.model?.trim()
     const extra = opts.extraArgs ?? []
     const agentic = !!opts.agentic
