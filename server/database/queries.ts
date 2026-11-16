@@ -494,6 +494,8 @@ export interface TodoListResult {
   open: DbTodo[]
   done: DbTodo[]
   doneTotal: number
+  /** Quantas das concluídas são recorrentes (aparecem primeiro na lista). */
+  doneRecurring: number
 }
 
 /** Página TODO: filtros, ordenação e paginação das concluídas, tudo no SQL (o Inbox fica de fora). */
@@ -531,12 +533,18 @@ export async function listTodos(f: TodoListFilters = {}): Promise<TodoListResult
   const done = getAll<DbTodo>(
     db,
     `SELECT * FROM todos WHERE ${base} AND status = 'done'
-     ORDER BY COALESCE(doneAt, createdAt) DESC, id DESC LIMIT ?`,
+     ORDER BY (recurrence IS NULL OR recurrence = ''), COALESCE(doneAt, createdAt) DESC, id DESC LIMIT ?`,
     [...params, limit]
   )
   const doneTotal =
     getOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status = 'done'`, params)?.n ?? 0
-  return { open, done, doneTotal }
+  const doneRecurring =
+    getOne<{ n: number }>(
+      db,
+      `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status = 'done' AND recurrence IS NOT NULL AND recurrence != ''`,
+      params
+    )?.n ?? 0
+  return { open, done, doneTotal, doneRecurring }
 }
 
 export async function createTodo(

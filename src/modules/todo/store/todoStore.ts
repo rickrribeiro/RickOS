@@ -25,7 +25,7 @@ interface TodoState {
   active: () => Todo[]
 }
 
-const EMPTY_LIST: TodoListResult = { open: [], done: [], doneTotal: 0 }
+const EMPTY_LIST: TodoListResult = { open: [], done: [], doneTotal: 0, doneRecurring: 0 }
 // descarta respostas atrasadas quando os filtros mudam rápido (busca digitando)
 let listSeq = 0
 

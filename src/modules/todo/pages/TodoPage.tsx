@@ -117,7 +117,7 @@ export function TodoPage(): React.ReactElement {
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>✅ TODO</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {openItems.length} em aberto · {list.doneTotal} feitas
+            {openItems.length} em aberto · {list.doneTotal} feitas · {list.doneRecurring} recorrentes
             <span style={{ color: 'var(--text-muted)', marginLeft: 10 }}>
               ↑↓ navegar · espaço concluir · p adiar · e editar
             </span>

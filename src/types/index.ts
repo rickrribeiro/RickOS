@@ -93,6 +93,8 @@ export interface TodoListResult {
   done: Todo[]
   /** Total de concluídas que batem com os filtros (para o "ver mais"). */
   doneTotal: number
+  /** Quantas das concluídas são recorrentes (vêm primeiro em `done`). */
+  doneRecurring: number
 }
 
 /** Uma execução do Claude CLI com o uso de tokens reportado pelo próprio CLI. */
