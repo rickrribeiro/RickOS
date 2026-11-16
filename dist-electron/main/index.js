@@ -31,6 +31,7 @@ const os = require("os");
 const initSqlJs = require("sql.js");
 const child_process = require("child_process");
 const http = require("http");
+const url = require("url");
 function defaultDataDir() {
   const home = os.homedir();
   if (process.platform === "darwin") return path.join(home, "Library", "Application Support", "time-tracker");
@@ -2013,9 +2014,9 @@ async function createLocalIssue(repo, title, body) {
   );
   return getOne(db2, "SELECT * FROM github_issues WHERE id = ?", [id]);
 }
-async function markIssueOnGithub(id, url, number) {
+async function markIssueOnGithub(id, url2, number) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE github_issues SET url = ?, number = ? WHERE id = ?", [url, number, id]);
+  run$2(db2, "UPDATE github_issues SET url = ?, number = ? WHERE id = ?", [url2, number, id]);
 }
 async function deleteGithubIssue(id) {
   const db2 = await getDb();
@@ -2396,19 +2397,19 @@ async function getLinks() {
   const db2 = await getDb();
   return getAll(db2, "SELECT * FROM links ORDER BY id ASC");
 }
-async function createLink(title, url, tags = "[]") {
+async function createLink(title, url2, tags = "[]") {
   const db2 = await getDb();
   run$2(db2, "INSERT INTO links (title, url, checked, tags, createdAt) VALUES (?, ?, 0, ?, ?)", [
     title,
-    url,
+    url2,
     tags,
     (/* @__PURE__ */ new Date()).toISOString()
   ]);
   return getOne(db2, "SELECT * FROM links WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateLink(id, title, url, tags = "[]") {
+async function updateLink(id, title, url2, tags = "[]") {
   const db2 = await getDb();
-  run$2(db2, "UPDATE links SET title = ?, url = ?, tags = ? WHERE id = ?", [title, url, tags, id]);
+  run$2(db2, "UPDATE links SET title = ?, url = ?, tags = ? WHERE id = ?", [title, url2, tags, id]);
 }
 async function setLinkChecked(id, checked) {
   const db2 = await getDb();
@@ -70188,14 +70189,14 @@ function isoDurationMin(s2) {
   if (!m) return null;
   return Number(m[1] ?? 0) * 1440 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) + Math.round(Number(m[4] ?? 0) / 60);
 }
-async function fetchJson(url, init, signal) {
+async function fetchJson(url2, init, signal) {
   const ctl = new AbortController();
   const onAbort = () => ctl.abort();
   signal.addEventListener("abort", onAbort);
   const timer2 = setTimeout(() => ctl.abort(), init.timeoutMs ?? 25e3);
   let res;
   try {
-    res = await fetch(url, { ...init, signal: ctl.signal });
+    res = await fetch(url2, { ...init, signal: ctl.signal });
   } catch (e) {
     if (ctl.signal.aborted) throw new ProviderError(signal.aborted ? "timeout" : "timeout", signal.aborted ? "Execução cancelada/estourou o tempo." : "Tempo de resposta esgotado.");
     throw new ProviderError("network", `Falha de rede: ${e instanceof Error ? e.message : String(e)}`);
@@ -72998,17 +72999,17 @@ async function fetchIssuesViaToken(query) {
     "User-Agent": "RickOS"
   };
   const data2 = [];
-  let url = `${GITHUB_API}/${query}`;
+  let url2 = `${GITHUB_API}/${query}`;
   let pages = 0;
-  while (url && pages < MAX_PAGES) {
-    const res = await fetch(url, { headers });
+  while (url2 && pages < MAX_PAGES) {
+    const res = await fetch(url2, { headers });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       if (res.status === 401) throw new Error("Token inválido ou expirado (401).");
       throw new Error(`GitHub API falhou (${res.status}). ${body.slice(0, 140)}`);
     }
     data2.push(...await res.json());
-    url = parseNextLink(res.headers.get("link"));
+    url2 = parseNextLink(res.headers.get("link"));
     pages++;
   }
   return data2;
@@ -73043,9 +73044,9 @@ async function syncGithubIssues(forceFull = false) {
   await setSetting("github_last_sync", (/* @__PURE__ */ new Date()).toISOString());
   return issues.length;
 }
-function repoFromUrl$1(url) {
-  if (!url) return null;
-  const m = url.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
+function repoFromUrl$1(url2) {
+  if (!url2) return null;
+  const m = url2.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
   return m ? m[1] : null;
 }
 async function claudeCommandForRepo(repo) {
@@ -73228,12 +73229,12 @@ async function beginGoogleConnect(publicUrl) {
     redirectUri = `${publicUrl}/api/google/callback`;
   } else {
     const server = http.createServer(async (req, res) => {
-      const url = new URL(req.url || "", "http://127.0.0.1");
-      if (!url.searchParams.get("code") && !url.searchParams.get("error")) {
+      const url2 = new URL(req.url || "", "http://127.0.0.1");
+      if (!url2.searchParams.get("code") && !url2.searchParams.get("error")) {
         res.end("OK");
         return;
       }
-      const html = await finishGoogleConnect(url.searchParams);
+      const html = await finishGoogleConnect(url2.searchParams);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
     });
@@ -73328,14 +73329,14 @@ async function fetchPrimaryEmail(token2) {
   }
 }
 async function fetchEventsFor(token2, timeMin, timeMax) {
-  const url = `${CALENDAR_API}/calendars/primary/events?` + new URLSearchParams({
+  const url2 = `${CALENDAR_API}/calendars/primary/events?` + new URLSearchParams({
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
     singleEvents: "true",
     orderBy: "startTime",
     maxResults: "50"
   }).toString();
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token2}` } });
+  const res = await fetch(url2, { headers: { Authorization: `Bearer ${token2}` } });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Google Calendar falhou (${res.status}). ${body.slice(0, 120)}`);
@@ -73809,8 +73810,8 @@ async function feedUrls() {
   if (raw == null || !raw.trim()) return DEFAULT_FEEDS;
   return raw.split(/\s+/).map((x) => x.trim()).filter((x) => /^https?:\/\//.test(x)).slice(0, 15);
 }
-async function fetchFeed(url, force = false) {
-  const key = `rss:${url}`;
+async function fetchFeed(url2, force = false) {
+  const key = `rss:${url2}`;
   if (!force) {
     const hit = await cacheGet(key);
     if (hit) return hit;
@@ -73820,7 +73821,7 @@ async function fetchFeed(url, force = false) {
     const ctl = new AbortController();
     const timer2 = setTimeout(() => ctl.abort(), 15e3);
     try {
-      return await fetch(url, { headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml, text/xml" }, signal: ctl.signal });
+      return await fetch(url2, { headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml, text/xml" }, signal: ctl.signal });
     } finally {
       clearTimeout(timer2);
     }
@@ -73831,7 +73832,7 @@ async function fetchFeed(url, force = false) {
       return get2();
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const items = parseRss(await res.text(), new URL(url).hostname);
+    const items = parseRss(await res.text(), new URL(url2).hostname);
     out = { items, fetchedAt: (/* @__PURE__ */ new Date()).toISOString(), error: items.length ? null : "Feed sem itens (formato não reconhecido?)" };
   } catch (e) {
     out = { items: [], fetchedAt: (/* @__PURE__ */ new Date()).toISOString(), error: e instanceof Error ? e.message : String(e) };
@@ -73890,7 +73891,7 @@ function matchPosts(m, items, now = Date.now()) {
 }
 async function promosFor(m, force = false) {
   const urls = await feedUrls();
-  const feeds = await Promise.all(urls.map(async (url) => ({ url, data: await fetchFeed(url, force) })));
+  const feeds = await Promise.all(urls.map(async (url2) => ({ url: url2, data: await fetchFeed(url2, force) })));
   const seen2 = /* @__PURE__ */ new Set();
   const items = feeds.flatMap((f) => f.data.items).filter((i) => !seen2.has(i.link) && seen2.add(i.link));
   const kws = keywordsFor(m);
@@ -74925,10 +74926,10 @@ function directTransport(baseUrl, token2) {
     async request(req) {
       if (!v.ok) throw new ProviderUnavailableError(`Endpoint do Beeper inválido: ${v.error}`);
       if (!token2) throw new ProviderAuthError("Token do Beeper não configurado.");
-      const url = `${v.url}${req.path}${buildQuery(req.query)}`;
+      const url2 = `${v.url}${req.path}${buildQuery(req.query)}`;
       let res;
       try {
-        res = await fetch(url, {
+        res = await fetch(url2, {
           method: req.method,
           headers: {
             Authorization: `Bearer ${token2}`,
@@ -75839,6 +75840,54 @@ function suggestedPriority(score) {
   if (score <= 10) return "baixa";
   return "normal";
 }
+const MAX_BYTES = 5 * 1024 * 1024;
+function beeperRoots() {
+  const home = os.homedir();
+  const list = [
+    path.join(home, "Library", "Application Support", "BeeperTexts"),
+    path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "BeeperTexts"),
+    process.env.APPDATA ? path.join(process.env.APPDATA, "BeeperTexts") : ""
+  ];
+  const out = [];
+  for (const r of list) {
+    if (!r) continue;
+    try {
+      out.push(fs.realpathSync(r));
+    } catch {
+    }
+  }
+  return out;
+}
+function sniffImage(b2) {
+  if (b2.length >= 3 && b2[0] === 255 && b2[1] === 216 && b2[2] === 255) return "image/jpeg";
+  if (b2.length >= 8 && b2.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "image/png";
+  if (b2.length >= 6 && /^GIF8[79]a$/.test(b2.subarray(0, 6).toString("latin1"))) return "image/gif";
+  if (b2.length >= 12 && b2.subarray(0, 4).toString("latin1") === "RIFF" && b2.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return null;
+}
+function resolveBeeperFile(ref, roots = beeperRoots()) {
+  if (!ref.startsWith("file://")) return null;
+  let p;
+  try {
+    p = fs.realpathSync(url.fileURLToPath(new URL(ref)));
+  } catch {
+    return null;
+  }
+  return roots.some((r) => p.startsWith(r + path.sep)) ? p : null;
+}
+function readBeeperImage(ref, roots) {
+  const p = resolveBeeperFile(ref, roots);
+  if (!p) return null;
+  try {
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size > MAX_BYTES) return null;
+    const body = fs.readFileSync(p);
+    const contentType = sniffImage(body);
+    return contentType ? { contentType, body } : null;
+  } catch {
+    return null;
+  }
+}
 function ensureOk(r, what) {
   if (r.status >= 200 && r.status < 300) return r.json;
   const msg = r.json?.message ?? r.json?.error;
@@ -75915,6 +75964,8 @@ function mapChat(c) {
     }
   };
 }
+const failedAssets = /* @__PURE__ */ new Map();
+const FAIL_TTL_MS = 30 * 6e4;
 function createBeeperProvider(transport, opts = {}) {
   const call = async (req, what) => ensureOk(await transport.request(req), what);
   let version = null;
@@ -76018,9 +76069,23 @@ function createBeeperProvider(transport, opts = {}) {
     },
     async fetchAttachment(ref) {
       if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error("Anexo inválido.");
-      const r = await transport.request({ method: "GET", path: "/v1/assets/serve", query: { url: ref }, binary: true });
-      if (r.status < 200 || r.status >= 300 || !r.buffer) throw new Error(`Anexo indisponível (${r.status}).`);
-      return { contentType: r.contentType || "application/octet-stream", body: r.buffer };
+      const failedAt = failedAssets.get(ref);
+      if (failedAt && Date.now() - failedAt < FAIL_TTL_MS) throw new Error("Anexo indisponível.");
+      let r = null;
+      try {
+        r = await transport.request({ method: "GET", path: "/v1/assets/serve", query: { url: ref }, binary: true });
+      } catch {
+      }
+      if (r && r.status >= 200 && r.status < 300 && r.buffer) {
+        failedAssets.delete(ref);
+        const generic = !r.contentType || /octet-stream/.test(r.contentType);
+        return { contentType: generic && sniffImage(r.buffer) || r.contentType || "application/octet-stream", body: r.buffer };
+      }
+      const local = opts.localFiles && ref.startsWith("file://") ? readBeeperImage(ref) : null;
+      if (local) return local;
+      failedAssets.set(ref, Date.now());
+      if (failedAssets.size > 5e3) failedAssets.delete(failedAssets.keys().next().value);
+      throw new Error("Anexo indisponível.");
     },
     subscribe(onEvent2, onState) {
       if (transport.mode === "agent") {
@@ -76032,8 +76097,8 @@ function createBeeperProvider(transport, opts = {}) {
         };
       }
       const WS = globalThis.WebSocket;
-      const url = transport.wsUrl();
-      if (!WS || !url) {
+      const url2 = transport.wsUrl();
+      if (!WS || !url2) {
         onState("off", "WebSocket indisponível neste runtime: usando polling.");
         return () => void 0;
       }
@@ -76045,7 +76110,7 @@ function createBeeperProvider(transport, opts = {}) {
         if (stopped) return;
         onState("connecting");
         try {
-          ws = new WS(url, { headers: transport.authHeader() });
+          ws = new WS(url2, { headers: transport.authHeader() });
         } catch (e) {
           onState("off", e instanceof Error ? e.message : String(e));
           schedule2();
@@ -76552,6 +76617,14 @@ function createMockProvider(control = createMockControl()) {
   };
 }
 let cached = null;
+function isLoopbackUrl(raw) {
+  try {
+    const h = new URL(raw).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return h === "localhost" || h === "::1" || /^127\./.test(h);
+  } catch {
+    return false;
+  }
+}
 async function activeProvider(cfg) {
   const c = cfg ?? await loadConfig();
   if (!c.enabled) return null;
@@ -76560,7 +76633,7 @@ async function activeProvider(cfg) {
   let provider;
   if (c.providerId === "mock") provider = createMockProvider();
   else if (c.beeperMode === "agent") provider = createBeeperProvider(agentTransport(), { onAgentEvents: setAgentEventSink });
-  else provider = createBeeperProvider(directTransport(c.beeperUrl, c.beeperToken));
+  else provider = createBeeperProvider(directTransport(c.beeperUrl, c.beeperToken), { localFiles: isLoopbackUrl(c.beeperUrl) });
   cached = { sig, provider };
   return provider;
 }
@@ -78881,16 +78954,16 @@ function originUrl(dir) {
   const m = cfg.match(/\[remote "origin"\][^[]*?url\s*=\s*(\S+)/);
   return m ? normalizeRepoUrl(m[1]) : null;
 }
-function normalizeRepoUrl(url) {
-  let u = url.trim();
+function normalizeRepoUrl(url2) {
+  let u = url2.trim();
   const ssh = u.match(/^[\w.-]+@([^:/]+):(?!\/)(.+)$/);
   if (ssh) u = `https://${ssh[1]}/${ssh[2]}`;
   u = u.replace(/^ssh:\/\/git@/, "https://").replace(/^git:\/\//, "https://");
   u = u.replace(/\/\/[^/@]+@/, "//");
   return u.replace(/\.git$/, "").replace(/\/+$/, "");
 }
-function repoKey(url) {
-  return url ? normalizeRepoUrl(url).toLowerCase().replace(/^https?:\/\/(www\.)?/, "") : null;
+function repoKey(url2) {
+  return url2 ? normalizeRepoUrl(url2).toLowerCase().replace(/^https?:\/\/(www\.)?/, "") : null;
 }
 function readmeSummary(file) {
   const txt = readText(file, 16 * 1024);
@@ -79165,8 +79238,8 @@ async function discoverRepos() {
   }
   for (const c of byPath.values()) {
     if (c.projectId != null) continue;
-    const url = (await gitOk(c.path, ["remote", "get-url", "origin"]))?.trim();
-    const slug = repoSlug(url ?? null);
+    const url2 = (await gitOk(c.path, ["remote", "get-url", "origin"]))?.trim();
+    const slug = repoSlug(url2 ?? null);
     const p = slug ? projects.find((x) => repoSlug(x.githubRepoUrl) === slug) : void 0;
     if (p) {
       c.projectId = p.id;
@@ -79175,9 +79248,9 @@ async function discoverRepos() {
   }
   return [...byPath.values()];
 }
-function repoSlug(url) {
-  if (!url) return null;
-  const m = url.trim().match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
+function repoSlug(url2) {
+  if (!url2) return null;
+  const m = url2.trim().match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
   return m ? m[1].toLowerCase() : null;
 }
 function parseWorktrees(porcelain) {
@@ -79451,8 +79524,8 @@ async function createPullRequest(repoPath, branch) {
   }
   const out = await run("gh", ["pr", "create", "--fill", "--base", baseBranch, "--head", branch], repoPath, 6e4);
   prCache.delete(repoPath);
-  const url = out.trim().split("\n").pop() || "";
-  return { url };
+  const url2 = out.trim().split("\n").pop() || "";
+  return { url: url2 };
 }
 async function openPath(target, app) {
   const scan = lastScan ?? await scanGit({ prs: false });
@@ -79467,9 +79540,9 @@ const ROADMAP_FILE = "ROADMAP_RICKOS.md";
 function expandHome$2(p) {
   return p.startsWith("~") ? path.join(os.homedir(), p.slice(1)) : p;
 }
-function repoFromUrl(url) {
-  if (!url) return null;
-  const m = url.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
+function repoFromUrl(url2) {
+  if (!url2) return null;
+  const m = url2.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
   return m ? m[1] : null;
 }
 function todayStr() {
@@ -80734,8 +80807,8 @@ ipcMain.handle(
 );
 ipcMain.handle("executions:delete", (_, id) => deleteExecution(id));
 ipcMain.handle("links:getAll", () => getLinks());
-ipcMain.handle("links:create", (_, title, url, tags) => createLink(title, url, tags));
-ipcMain.handle("links:update", (_, id, title, url, tags) => updateLink(id, title, url, tags));
+ipcMain.handle("links:create", (_, title, url2, tags) => createLink(title, url2, tags));
+ipcMain.handle("links:update", (_, id, title, url2, tags) => updateLink(id, title, url2, tags));
 ipcMain.handle("links:setChecked", (_, id, checked) => setLinkChecked(id, checked));
 ipcMain.handle("links:markOpened", (_, id) => setLinkOpened(id));
 ipcMain.handle("links:delete", (_, id) => deleteLink(id));
@@ -80858,9 +80931,9 @@ async function resolveAllowedToolsArgs() {
   const tools = (await getSetting("claude_allowed_tools") || DEFAULT_ALLOWED_TOOLS).trim();
   return tools ? ["--allowedTools", tools] : [];
 }
-function parseRepoSlug(url) {
-  if (!url) return null;
-  const m = url.trim().match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
+function parseRepoSlug(url2) {
+  if (!url2) return null;
+  const m = url2.trim().match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
   return m ? m[1] : null;
 }
 async function buildProjectContext(projectId) {
@@ -81151,10 +81224,10 @@ data: ${JSON.stringify({ channel, payload })}
   }
   startScheduler();
   await app.listen({ port: cfg.port, host: cfg.host });
-  const url = `http://${cfg.host === "0.0.0.0" ? "127.0.0.1" : cfg.host}:${cfg.port}`;
+  const url2 = `http://${cfg.host === "0.0.0.0" ? "127.0.0.1" : cfg.host}:${cfg.port}`;
   return {
     app,
-    url,
+    url: url2,
     close: async () => {
       stopAssisted();
       await stopAllRuns().catch(() => void 0);
@@ -81169,9 +81242,9 @@ const PORT = Number(process.env.RICKOS_PORT || 4318);
 let serverUrl = process.env.RICKOS_SERVER_URL?.replace(/\/+$/, "") || "";
 const serverToken = process.env.RICKOS_TOKEN || "";
 let embedded = null;
-async function isRickosServer(url) {
+async function isRickosServer(url2) {
   try {
-    const r = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(1500) });
+    const r = await fetch(`${url2}/api/health`, { signal: AbortSignal.timeout(1500) });
     const j = await r.json();
     return !!j.ok && typeof j.channels === "number";
   } catch {
@@ -81220,8 +81293,8 @@ electron.ipcMain.on("desktop:notify", (_e, title, body) => {
   } catch {
   }
 });
-electron.ipcMain.on("desktop:openExternal", (_e, url) => {
-  if (/^https?:\/\//i.test(url) || url.startsWith("mailto:")) void electron.shell.openExternal(url);
+electron.ipcMain.on("desktop:openExternal", (_e, url2) => {
+  if (/^https?:\/\//i.test(url2) || url2.startsWith("mailto:")) void electron.shell.openExternal(url2);
 });
 function createWindow() {
   const win = new electron.BrowserWindow({
@@ -81238,8 +81311,8 @@ function createWindow() {
     }
   });
   win.on("ready-to-show", () => win.show());
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    void electron.shell.openExternal(url);
+  win.webContents.setWindowOpenHandler(({ url: url2 }) => {
+    void electron.shell.openExternal(url2);
     return { action: "deny" };
   });
   if (process.env["ELECTRON_RENDERER_URL"]) {
