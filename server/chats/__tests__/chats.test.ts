@@ -201,6 +201,26 @@ describe('mapeamento Beeper', () => {
     assert.deepEqual(svc.verifyAsset(t1), { chatId: 1, ref: 'file:///ana.jpg' })
     assert.equal(svc.verifyAsset(t1.slice(0, -2) + 'xx'), null)
   })
+
+  it('leitura local de fotos: só imagens dentro da pasta do Beeper', async () => {
+    const la = await import('../providers/localAsset')
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'beeper-')))
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+    fs.mkdirSync(path.join(root, 'local instagram'))
+    fs.writeFileSync(path.join(root, 'local instagram', 'a'), png)
+    fs.writeFileSync(path.join(root, 'notes.txt'), 'segredo')
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'fora-'))
+    fs.writeFileSync(path.join(outside, 'x.png'), png)
+    fs.symlinkSync(path.join(outside, 'x.png'), path.join(root, 'link.png'))
+    const url = (p: string): string => `file://${p}`
+    assert.equal(la.readBeeperImage(url(path.join(root, 'local instagram', 'a')), [root])?.contentType, 'image/png')
+    assert.equal(la.readBeeperImage(url(path.join(root, 'local%20instagram', 'a')), [root])?.contentType, 'image/png')
+    assert.equal(la.readBeeperImage(url(path.join(root, 'notes.txt')), [root]), null, 'não é imagem')
+    assert.equal(la.readBeeperImage(url(path.join(outside, 'x.png')), [root]), null, 'fora da pasta')
+    assert.equal(la.readBeeperImage(url(path.join(root, 'link.png')), [root]), null, 'symlink para fora')
+    assert.equal(la.readBeeperImage(url(path.join(root, '..', path.basename(outside), 'x.png')), [root]), null, '..')
+    assert.equal(la.readBeeperImage('localmxc://x/y', [root]), null)
+  })
 })
 
 // ── Integração com o provedor mock ────────────────────────────────────────────

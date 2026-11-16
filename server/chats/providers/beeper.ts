@@ -2,6 +2,7 @@ import type { ChatProviderCapabilities } from '../../../shared/chats'
 import type { BeeperTransport, TransportRequest, TransportResponse } from '../transport'
 import type { ChatProvider, Page, ProviderEvent, RealtimeState, RemoteAccount, RemoteAttachment, RemoteChat, RemoteMessage, RemoteParticipant } from './types'
 import { ProviderUnavailableError } from './types'
+import { readBeeperImage, sniffImage } from './localAsset'
 
 /**
  * Provedor Beeper Desktop API (v1, validado contra o SDK oficial @beeper/desktop-api 6.0.0).
@@ -189,7 +190,18 @@ interface WsLike {
   close(): void
 }
 
-export function createBeeperProvider(transport: BeeperTransport, opts: { onAgentEvents?: (fn: ((e: ProviderEvent) => void) | null) => void } = {}): ChatProvider {
+// Fotos/anexos que falharam: não insiste por 30 min (o Beeper pode levar ~20 s para desistir)
+const failedAssets = new Map<string, number>()
+const FAIL_TTL_MS = 30 * 60_000
+
+export function createBeeperProvider(
+  transport: BeeperTransport,
+  opts: {
+    onAgentEvents?: (fn: ((e: ProviderEvent) => void) | null) => void
+    /** Beeper no mesmo computador (modo direto em loopback): permite ler fotos da pasta dele. */
+    localFiles?: boolean
+  } = {}
+): ChatProvider {
   const call = async (req: TransportRequest, what: string): Promise<unknown> => ensureOk(await transport.request(req), what)
   let version: string | null = null
 
@@ -305,9 +317,24 @@ export function createBeeperProvider(transport: BeeperTransport, opts: { onAgent
 
     async fetchAttachment(ref) {
       if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error('Anexo inválido.')
-      const r = await transport.request({ method: 'GET', path: '/v1/assets/serve', query: { url: ref }, binary: true })
-      if (r.status < 200 || r.status >= 300 || !r.buffer) throw new Error(`Anexo indisponível (${r.status}).`)
-      return { contentType: r.contentType || 'application/octet-stream', body: r.buffer }
+      const failedAt = failedAssets.get(ref)
+      if (failedAt && Date.now() - failedAt < FAIL_TTL_MS) throw new Error('Anexo indisponível.')
+      let r: TransportResponse | null = null
+      try {
+        r = await transport.request({ method: 'GET', path: '/v1/assets/serve', query: { url: ref }, binary: true })
+      } catch {
+        // 403 (pasta não permitida pela API), timeout etc.: tenta a leitura local abaixo
+      }
+      if (r && r.status >= 200 && r.status < 300 && r.buffer) {
+        failedAssets.delete(ref)
+        const generic = !r.contentType || /octet-stream/.test(r.contentType)
+        return { contentType: (generic && sniffImage(r.buffer)) || r.contentType || 'application/octet-stream', body: r.buffer }
+      }
+      const local = opts.localFiles && ref.startsWith('file://') ? readBeeperImage(ref) : null
+      if (local) return local
+      failedAssets.set(ref, Date.now())
+      if (failedAssets.size > 5000) failedAssets.delete(failedAssets.keys().next().value as string)
+      throw new Error('Anexo indisponível.')
     },
 
     subscribe(onEvent, onState) {

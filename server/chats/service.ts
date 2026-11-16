@@ -38,6 +38,16 @@ export function setProviderOverride(p: ChatProvider | null): void {
   cached = null
 }
 
+/** Beeper neste mesmo computador (só então o servidor pode ler fotos da pasta dele). */
+function isLoopbackUrl(raw: string): boolean {
+  try {
+    const h = new URL(raw).hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    return h === 'localhost' || h === '::1' || /^127\./.test(h)
+  } catch {
+    return false
+  }
+}
+
 export async function activeProvider(cfg?: ServerChatsConfig): Promise<ChatProvider | null> {
   if (override) return override
   const c = cfg ?? (await loadConfig())
@@ -47,7 +57,7 @@ export async function activeProvider(cfg?: ServerChatsConfig): Promise<ChatProvi
   let provider: ChatProvider
   if (c.providerId === 'mock') provider = createMockProvider()
   else if (c.beeperMode === 'agent') provider = createBeeperProvider(agentTransport(), { onAgentEvents: setAgentEventSink })
-  else provider = createBeeperProvider(directTransport(c.beeperUrl, c.beeperToken))
+  else provider = createBeeperProvider(directTransport(c.beeperUrl, c.beeperToken), { localFiles: isLoopbackUrl(c.beeperUrl) })
   cached = { sig, provider }
   return provider
 }
