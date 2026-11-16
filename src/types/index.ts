@@ -84,6 +84,8 @@ export interface TodoListFilters {
   status?: string
   projectId?: number | null
   type?: string
+  /** 'all' | 'yes' (só recorrentes) | 'no' (sem recorrência) */
+  recurring?: string
   /** Quantas concluídas devolver (paginação "ver mais"). */
   doneLimit?: number
 }

@@ -16,6 +16,7 @@ export function TodoPage(): React.ReactElement {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [projectFilter, setProjectFilter] = useState<number | 'all'>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [recurringFilter, setRecurringFilter] = useState<'all' | 'yes' | 'no'>('all')
   const [newType, setNewType] = useState<string>('projeto')
   const [editing, setEditing] = useState<Todo | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -46,9 +47,10 @@ export function TodoPage(): React.ReactElement {
       search: debouncedSearch,
       status: statusFilter,
       type: typeFilter,
+      recurring: recurringFilter,
       projectId: projectFilter === 'all' ? null : projectFilter
     })
-  }, [debouncedSearch, statusFilter, typeFilter, projectFilter])
+  }, [debouncedSearch, statusFilter, typeFilter, recurringFilter, projectFilter])
 
   const projectName = (id: number | null): string | null =>
     id === null ? null : projects.find((p) => p.id === id)?.name ?? null
@@ -168,6 +170,11 @@ export function TodoPage(): React.ReactElement {
               {t.icon} {t.label}
             </option>
           ))}
+        </select>
+        <select value={recurringFilter} onChange={(e) => setRecurringFilter(e.target.value as 'all' | 'yes' | 'no')}>
+          <option value="all">Recorrência: todas</option>
+          <option value="yes">🔁 Recorrentes</option>
+          <option value="no">Não recorrentes</option>
         </select>
         <select
           value={projectFilter}

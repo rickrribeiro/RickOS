@@ -486,6 +486,8 @@ export interface TodoListFilters {
   status?: string
   projectId?: number | null
   type?: string
+  /** 'all' | 'yes' (só recorrentes) | 'no' (sem recorrência) */
+  recurring?: string
   /** Quantas concluídas devolver (paginação "ver mais"). */
   doneLimit?: number
 }
@@ -515,6 +517,8 @@ export async function listTodos(f: TodoListFilters = {}): Promise<TodoListResult
     where.push("COALESCE(type, 'projeto') = ?")
     params.push(f.type)
   }
+  if (f.recurring === 'yes') where.push("(recurrence IS NOT NULL AND recurrence != '')")
+  else if (f.recurring === 'no') where.push("(recurrence IS NULL OR recurrence = '')")
   const q = (f.search ?? '').trim().toLowerCase()
   if (q) {
     // escapa os curingas do LIKE para buscar o texto literal
