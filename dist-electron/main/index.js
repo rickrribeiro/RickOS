@@ -1302,6 +1302,31 @@ const MIGRATIONS = [
         }
       }
     }
+  },
+  {
+    version: 22,
+    label: "Pessoas: tags padrão (só uma vez; apagar uma não a recria)",
+    run: (db2) => {
+      const defaults = [
+        ["Familia", "#ef4444"],
+        ["Profissional", "#6366f1"],
+        ["Amigo", "#22c55e"],
+        ["Das antigas", "#64748b"],
+        ["Squad Busters", "#f59e0b"],
+        ["Jogos", "#a855f7"],
+        ["Facul", "#06b6d4"],
+        ["Viagem", "#ec4899"]
+      ];
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      for (const [name, color] of defaults) {
+        try {
+          const st = db2.prepare("INSERT OR IGNORE INTO labels (name, color, createdAt) VALUES (?, ?, ?)");
+          st.run([name, color, now]);
+          st.free();
+        } catch {
+        }
+      }
+    }
   }
 ];
 function getUserVersion(database) {
@@ -70818,6 +70843,13 @@ async function deleteMonitor(id) {
   await tx$1((db2) => {
     exec$2(db2, "DELETE FROM flight_price_observations WHERE monitorId = ?", [id]);
     for (const t of ["flight_offers", "flight_search_tasks", "flight_runs", "flight_alert_events"]) exec$2(db2, `DELETE FROM ${t} WHERE monitorId = ?`, [id]);
+    const legacy = one$2(db2, "SELECT legacyWatchId FROM flight_monitors WHERE id = ?", [id]);
+    if (legacy?.legacyWatchId != null) {
+      try {
+        exec$2(db2, "DELETE FROM flight_watches WHERE id = ?", [legacy.legacyWatchId]);
+      } catch {
+      }
+    }
     exec$2(db2, "DELETE FROM flight_monitors WHERE id = ?", [id]);
   });
 }
@@ -75524,7 +75556,9 @@ async function listLabels() {
   return read(
     (db2) => all(
       db2,
-      `SELECT l.id, l.name, l.color, (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'chat') AS chatCount
+      `SELECT l.id, l.name, l.color,
+         (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'chat') AS chatCount,
+         (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'contact') AS contactCount
        FROM labels l ORDER BY l.name COLLATE NOCASE`
     )
   );
@@ -75845,6 +75879,11 @@ function mapMessage(m) {
     isUnread: typeof m.isUnread === "boolean" ? m.isUnread : null
   };
 }
+function avatarRef(u) {
+  if (!u) return null;
+  if (u.startsWith("/")) return `file://${u}`;
+  return /^(mxc|localmxc|file):\/\//.test(u) ? u : null;
+}
 const capOk = (v) => typeof v === "number" ? v >= 1 : v === true;
 function mapChat(c) {
   const items = c.participants?.items ?? [];
@@ -75857,8 +75896,7 @@ function mapChat(c) {
     network: c.network,
     title: c.title || (others[0] ? userName(others[0]) : ""),
     type: c.type === "group" ? "group" : "single",
-    imgUrl: null,
-    // imgURL costuma ser mxc:// ou file:// local; não é exibível no navegador
+    imgUrl: avatarRef(c.imgURL) ?? (c.type !== "group" && others.length === 1 ? avatarRef(others[0].imgURL) : null),
     participantCount: c.participants?.total ?? (items.length || null),
     participants,
     peerHandle: c.type === "single" && others.length === 1 ? handleOf(others[0]) : null,
@@ -75979,7 +76017,7 @@ function createBeeperProvider(transport, opts = {}) {
       return (body?.items ?? []).map(mapMessage);
     },
     async fetchAttachment(ref) {
-      if (!/^(mxc|localmxc):\/\//.test(ref)) throw new Error("Anexo inválido.");
+      if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error("Anexo inválido.");
       const r = await transport.request({ method: "GET", path: "/v1/assets/serve", query: { url: ref }, binary: true });
       if (r.status < 200 || r.status >= 300 || !r.buffer) throw new Error(`Anexo indisponível (${r.status}).`);
       return { contentType: r.contentType || "application/octet-stream", body: r.buffer };
@@ -76594,7 +76632,7 @@ function summarize$2(r, ctx) {
     network: r.network,
     title: r.title,
     type: r.type,
-    imgUrl: r.imgUrl,
+    imgUrl: r.imgUrl && r.providerId === ctx.activeProviderId ? `/api/chats/asset?t=${encodeURIComponent(signAsset(r.id, r.imgUrl, true))}` : null,
     participantCount: r.participantCount,
     unreadCount: r.unreadCount,
     unreadMentions: r.unreadMentions,
@@ -76774,8 +76812,10 @@ async function selfInfo(accountKey2) {
   return { ids: new Set([acc?.selfId].filter((x) => !!x)), names };
 }
 const assetKey = crypto.randomBytes(32);
-function signAsset(chatId, ref) {
-  const payload = Buffer.from(JSON.stringify([chatId, ref, Date.now() + 6 * 36e5])).toString("base64url");
+function signAsset(chatId, ref, stable = false) {
+  const win = 6 * 36e5;
+  const exp = stable ? (Math.floor(Date.now() / win) + 2) * win : Date.now() + win;
+  const payload = Buffer.from(JSON.stringify([chatId, ref, exp])).toString("base64url");
   const sig = crypto.createHmac("sha256", assetKey).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
@@ -77811,6 +77851,7 @@ function registerChatRpc(handle) {
     changed$1(entity === "chat" ? ids(entityIds) : []);
   });
   handle("chats:contactLabels", async (_e, contactId) => (await labelMap("contact")).get(Number(contactId)) ?? []);
+  handle("chats:contactLabelMap", async () => Object.fromEntries(await labelMap("contact")));
   handle("chats:createTodo", async (_e, id, title, dueDate, messageId) => {
     const chat = await fullRow(Number(id));
     if (!chat) throw new Error("Conversa não encontrada.");
