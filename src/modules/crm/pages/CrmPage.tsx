@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Contact } from '../../../types'
 import { useContactStore } from '../store/contactStore'
 import { ContactEditor } from '../components/ContactEditor'
-import { BRAZIL, BRAZIL_STATES, norm } from '../geo'
+import { BRAZIL, BRAZIL_STATES } from '../geo'
 import { timeAgo, localDateStr } from '../../../utils/dates'
 import { networkInfo } from '../../../../shared/chats'
 import type { ChatLabel } from '../../../../shared/chats'
 import { TagsModal, TagChip } from '../components/TagsModal'
+import { parseQuery, matches, QUERY_HELP, QUERY_FIELDS, type FieldValues } from '../query'
 import { openChat } from '../../chats/store/chatsStore'
 
 /** Days until the next occurrence of a MM-DD / YYYY-MM-DD birthday, or null. */
@@ -83,6 +84,13 @@ export function CrmPage(): React.ReactElement {
   const [tagMap, setTagMap] = useState<Record<number, ChatLabel[]>>({})
   const [tagFilter, setTagFilter] = useState<number | ''>('')
   const [managingTags, setManagingTags] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  useEffect(() => {
+    if (!showHelp) return
+    const close = (): void => setShowHelp(false)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [showHelp])
   async function loadTags(): Promise<void> {
     const [ls, map] = await Promise.all([window.api.chats.labels(), window.api.chats.contactLabelMap()])
     setLabels(ls)
@@ -110,18 +118,27 @@ export function CrmPage(): React.ReactElement {
   // busca por palavras-chave: cada palavra precisa aparecer em algum campo
   // (nome, cidade, estado/UF, país, interesses, contexto), sem diferenciar acentos
   const nameQuery = nameFilter.trim()
-  const terms = norm(nameQuery).split(/\s+/).filter(Boolean)
-  const haystack = (c: Contact): string =>
-    norm(
-      [c.name, c.location, c.state, c.state ? ufLabel(c.state) : null, c.country, c.interests, c.context, ...(tagMap[c.id] ?? []).map((t) => t.name)]
-        .filter(Boolean)
-        .join(' ')
-    )
-  const filtered = contacts.filter((c) => {
-    if (terms.length) {
-      const h = haystack(c)
-      if (!terms.every((t) => h.includes(t))) return false
+  const parsed = parseQuery(nameQuery)
+  const fieldValues = (c: Contact): FieldValues => {
+    const md = /(\d{2}-\d{2})$/.exec(c.birthday?.trim() ?? '')
+    return {
+      nome: [c.name],
+      cidade: [c.location ?? ''],
+      pais: [c.country ?? ''],
+      estado: c.state ? [c.state, ufLabel(c.state)] : [],
+      aniversario: c.birthday ? [md ? md[1] : c.birthday] : [],
+      interesses: [c.interests ?? ''],
+      contexto: [c.context ?? ''],
+      tag: (tagMap[c.id] ?? []).map((t) => t.name),
+      followup: [c.nextFollowUp ?? ''],
+      prioridade: [c.priority ?? 'normal'],
+      vip: c.vip ? ['sim'] : [],
+      rede: (nets[c.id] ?? []).map((n) => networkInfo(n.network).label),
+      conversa: c.lastContactAt ? [c.lastContactAt.slice(0, 10)] : []
     }
+  }
+  const filtered = contacts.filter((c) => {
+    if (parsed.terms.length && !matches(parsed, fieldValues(c))) return false
     if (countryFilter && c.country !== countryFilter) return false
     if (countryFilter === BRAZIL && stateFilter && c.state !== stateFilter) return false
     if (tagFilter && !(tagMap[c.id] ?? []).some((t) => t.id === tagFilter)) return false
@@ -158,15 +175,61 @@ export function CrmPage(): React.ReactElement {
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             {isFiltering ? `${filtered.length} de ${contacts.length} contatos` : `${contacts.length} contatos`} · {attentionCount} precisam de atenção
           </p>
+          {parsed.unknown.length > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--warning)' }}>
+              Campo desconhecido: {parsed.unknown.join(', ')} (ignorado). Veja o ⓘ.
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <input
-            value={nameFilter}
-            onChange={(e) => setNameFilter(e.target.value)}
-            placeholder="🔍 Buscar por nome, cidade, interesse…"
-            title="Palavras-chave: nome, cidade, estado, país, interesses ou contexto"
-            style={{ minWidth: 180 }}
-          />
+          <div className="crm-search">
+            <input
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              placeholder="🔍 Buscar ou cidade=null…"
+              title="Texto livre ou expressões (campo=valor). Veja o ⓘ."
+              style={{ minWidth: 180, flex: 1 }}
+            />
+            <button
+              type="button"
+              className="crm-help-btn"
+              aria-label="Ajuda das expressões de busca"
+              aria-expanded={showHelp}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowHelp((v) => !v)
+              }}
+            >
+              i
+            </button>
+            {showHelp && (
+              <div className="crm-help-pop" onClick={(e) => e.stopPropagation()}>
+                <strong>Busca por expressões</strong>
+                <p>
+                  Palavras soltas procuram em nome, cidade, país, estado, interesses, contexto e tags. Termos separados por espaço
+                  precisam valer todos. Clique num exemplo para usar.
+                </p>
+                <div className="crm-help-list">
+                  {QUERY_HELP.map((h) => (
+                    <button
+                      key={h.expr}
+                      type="button"
+                      onClick={() => {
+                        setNameFilter((q) => (q.trim() ? `${q.trim()} ${h.expr}` : h.expr))
+                        setShowHelp(false)
+                      }}
+                    >
+                      <code>{h.expr}</code>
+                      <span>{h.desc}</span>
+                    </button>
+                  ))}
+                </div>
+                <p>
+                  <code>=</code> contém · <code>!=</code> não contém · <code>null</code> vazio. Campos: {QUERY_FIELDS}.
+                </p>
+              </div>
+            )}
+          </div>
           {countries.length > 0 && (
             <select value={countryFilter} onChange={(e) => onCountryFilterChange(e.target.value)} title="Filtrar por país">
               <option value="">🌎 Todos os países</option>
