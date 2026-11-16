@@ -92,25 +92,42 @@ export function GoalsPage(): React.ReactElement {
           <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>＋ Meta</button>
         ) : (
           <div className="chart-section">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Meta (ex: terminar roadmap de K8s)" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} style={{ flex: 1, minWidth: 200 }} />
-              <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'], refId: null })}>
-                <option value="free">Livre</option>
-                <option value="project">Projeto</option>
-                <option value="study">Estudo</option>
-              </select>
-              {draft.kind !== 'free' && (
-                <select value={draft.refId ?? ''} onChange={(e) => setDraft({ ...draft, refId: e.target.value ? Number(e.target.value) : null })}>
-                  <option value="">Vincular…</option>
-                  {(draft.kind === 'project' ? projects.map((p) => ({ id: p.id, name: p.name })) : topics.map((t) => ({ id: t.id, name: t.name }))).map((o) => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
-                  ))}
+            <div className="goal-form">
+              <label className="goal-field" style={{ flex: 1, minWidth: 200 }}>
+                <span>Meta</span>
+                <input placeholder="ex: terminar roadmap de K8s" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+              </label>
+              <label className="goal-field">
+                <span>Tipo</span>
+                <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'], refId: null })}>
+                  <option value="free">Livre</option>
+                  <option value="project">Projeto</option>
+                  <option value="study">Estudo</option>
                 </select>
+              </label>
+              {draft.kind !== 'free' && (
+                <label className="goal-field">
+                  <span>{draft.kind === 'project' ? 'Projeto' : 'Tópico de estudo'}</span>
+                  <select value={draft.refId ?? ''} onChange={(e) => setDraft({ ...draft, refId: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">Vincular…</option>
+                    {(draft.kind === 'project' ? projects.map((p) => ({ id: p.id, name: p.name })) : topics.map((t) => ({ id: t.id, name: t.name }))).map((o) => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                </label>
               )}
-              <input type="number" min={1} value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value })} style={{ width: 80 }} title="Meta (quantidade)" />
-              <input placeholder="unid." value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} style={{ width: 80 }} title="Unidade (ex: cards, h, itens)" />
-              <button className="btn btn-primary btn-sm" onClick={addGoal}>Adicionar</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setDraft(EMPTY) }}>Cancelar</button>
+              <label className="goal-field" style={{ width: 90 }}>
+                <span>Quantidade</span>
+                <input type="number" min={1} value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value })} title="Quanto precisa atingir no mês" />
+              </label>
+              <label className="goal-field" style={{ width: 90 }}>
+                <span>Unidade</span>
+                <input placeholder="cards, h…" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} title="Unidade (ex: cards, h, itens)" />
+              </label>
+              <div className="goal-form-actions">
+                <button className="btn btn-primary btn-sm" onClick={addGoal}>Adicionar</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setDraft(EMPTY) }}>Cancelar</button>
+              </div>
             </div>
           </div>
         )}

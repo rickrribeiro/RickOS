@@ -2947,3 +2947,29 @@ button.todo-divider:hover {
   align-self: center;
   margin: 6px auto 0;
 }
+
+/* ── Metas: formulário com rótulo em cada campo ── */
+.goal-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.goal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.goal-field > span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.goal-field > input,
+.goal-field > select {
+  width: 100%;
+}
+.goal-form-actions {
+  display: flex;
+  gap: 6px;
+}
