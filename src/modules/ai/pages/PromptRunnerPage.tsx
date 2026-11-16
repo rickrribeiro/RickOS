@@ -564,6 +564,24 @@ export function PromptRunnerPage(): React.ReactElement {
                     <span>{timeAgo(c.updatedAt)}</span>
                     {ctxPct > 0 && <span className={ctxPct >= 85 ? 'cv-hot' : ''}>{ctxPct}% ctx</span>}
                     {!!c.queued?.length && <span>+{c.queued.length} na fila</span>}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="cv-pin cv-archive"
+                      title={c.archived ? 'Desarquivar' : 'Arquivar'}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        store.update(c.id, { archived: !c.archived })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        store.update(c.id, { archived: !c.archived })
+                      }}
+                    >
+                      {c.archived ? '📤' : '🗄️'}
+                    </span>
                   </div>
                 </button>
               )
