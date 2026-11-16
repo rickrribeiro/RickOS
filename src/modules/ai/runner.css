@@ -18,6 +18,11 @@
 .cv-item.active { background: var(--accent-dim); border-color: var(--accent); }
 .cv-item-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; min-width: 0; }
 .cv-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.cv-pin { flex-shrink: 0; font-size: 12px; line-height: 1; padding: 2px 3px; border-radius: 4px; cursor: pointer; opacity: 0; filter: grayscale(1); transition: opacity .12s; }
+.cv-pin:hover, .cv-pin:focus-visible { background: var(--bg-hover); opacity: 1 !important; filter: none; }
+.cv-item:hover .cv-pin, .cv-pin:focus-visible { opacity: .45; }
+.cv-pin.on { opacity: 1; filter: none; }
+@media (hover: none) { .cv-pin { opacity: .35; padding: 4px 6px; } .cv-pin.on { opacity: 1; } }
 .cv-item-meta { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; }
 .cv-hot { color: var(--danger); font-weight: 600; }
 .cv-badge-attn { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 9px; background: var(--warning); color: #111; flex-shrink: 0; }

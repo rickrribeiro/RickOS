@@ -534,10 +534,29 @@ export function PromptRunnerPage(): React.ReactElement {
                   <div className="cv-item-title">
                     {c.running && <span className="active-task-dot" style={{ width: 7, height: 7, flexShrink: 0 }} />}
                     {fresh && <span className="cv-unseen-dot" />}
-                    {c.pinned && <span title="Fixada">📌</span>}
                     <span className="cv-item-name">{c.title || 'Nova conversa'}</span>
                     {!!c.pendingPrompts && <span className="cv-badge-attn" title="Esperando sua resposta">🤚 {c.pendingPrompts}</span>}
                     {fresh && !c.pendingPrompts && <span className="cv-badge-new">nova resposta</span>}
+                    {!showArchived && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={`cv-pin ${c.pinned ? 'on' : ''}`}
+                        title={c.pinned ? 'Desafixar' : 'Fixar no topo'}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          store.update(c.id, { pinned: !c.pinned })
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          store.update(c.id, { pinned: !c.pinned })
+                        }}
+                      >
+                        📌
+                      </span>
+                    )}
                   </div>
                   <div className="cv-item-meta">
                     {c.origin === 'terminal' && <span title="Veio do terminal">⌨️</span>}
