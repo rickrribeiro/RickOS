@@ -3,7 +3,8 @@ import { Todo } from '../../../types'
 import { useTodoStore, DONE_PAGE } from '../store/todoStore'
 import { useProjectStore } from '../../projects/store/projectStore'
 import { TodoEditor } from '../components/TodoEditor'
-import { PRIORITIES, STATUSES, STATUS_LABELS, TODO_TYPES, priorityDef, dueMeta, todoTypeDef } from '../constants'
+import { TodoBoard } from '../components/TodoBoard'
+import { PRIORITIES, STATUSES, STATUS_LABELS, TodoStatus, TODO_TYPES, priorityDef, dueMeta, todoTypeDef } from '../constants'
 import { localDateStr, timeAgo } from '../../../utils/dates'
 
 type StatusFilter = 'all' | 'todo' | 'doing' | 'done'
@@ -20,6 +21,21 @@ export function TodoPage(): React.ReactElement {
   const [newType, setNewType] = useState<string>('projeto')
   const [editing, setEditing] = useState<Todo | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [view, setView] = useState<'list' | 'board'>(() => {
+    try {
+      return localStorage.getItem('rickos:todoView') === 'board' ? 'board' : 'list'
+    } catch {
+      return 'list'
+    }
+  })
+  function changeView(v: 'list' | 'board'): void {
+    setView(v)
+    try {
+      localStorage.setItem('rickos:todoView', v)
+    } catch {
+      /* sem storage: vale só nesta sessão */
+    }
+  }
   const [showUpcoming, setShowUpcoming] = useState(() => {
     try {
       return localStorage.getItem('rickos:todoShowUpcomingRecurring') === '1'
@@ -76,7 +92,7 @@ export function TodoPage(): React.ReactElement {
   const doneItems = list.done
   const doneRemaining = list.doneTotal - doneItems.length
   // o que está visível na lista (para a navegação por teclado)
-  const items = doneCollapsed ? openItems : [...openItems, ...doneItems]
+  const items = doneCollapsed && view === 'list' ? openItems : [...openItems, ...doneItems]
 
   async function handleAdd(): Promise<void> {
     const v = text.trim()
@@ -141,6 +157,14 @@ export function TodoPage(): React.ReactElement {
               ↑↓ navegar · espaço concluir · p adiar · e editar
             </span>
           </p>
+        </div>
+        <div className="seg-toggle">
+          <button className={`seg-btn ${view === 'list' ? 'active' : ''}`} onClick={() => changeView('list')}>
+            ☰ Lista
+          </button>
+          <button className={`seg-btn ${view === 'board' ? 'active' : ''}`} onClick={() => changeView('board')}>
+            ▦ Quadro
+          </button>
         </div>
       </div>
 
@@ -216,6 +240,25 @@ export function TodoPage(): React.ReactElement {
         </label>
       </div>
 
+      {view === 'board' && (
+        <TodoBoard
+          open={openItems}
+          done={doneItems}
+          doneTotal={list.doneTotal}
+          doneRemaining={doneRemaining}
+          donePage={DONE_PAGE}
+          loading={listLoading}
+          selectedId={selectedId}
+          projectName={projectName}
+          onMove={(id, st: TodoStatus) => void setStatus(id, st)}
+          onEdit={setEditing}
+          onSelect={setSelectedId}
+          onCyclePriority={cyclePriority}
+          onLoadMoreDone={loadMoreDone}
+        />
+      )}
+
+      {view === 'list' && (
       <div className="list-stack">
         {openItems.length === 0 && list.doneTotal === 0 && !listLoading && (
           <div className="empty-hint">Nenhuma tarefa encontrada.</div>
@@ -234,6 +277,7 @@ export function TodoPage(): React.ReactElement {
           </button>
         )}
       </div>
+      )}
 
       {editing && <TodoEditor todo={editing} onClose={() => setEditing(null)} />}
     </div>
