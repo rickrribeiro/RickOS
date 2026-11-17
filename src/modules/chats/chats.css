@@ -271,3 +271,11 @@
 /* Fixar no topo */
 .chats-pin { font-size: 10px; margin-right: 4px; opacity: .85; }
 .chats-pin-btn.on { border-color: var(--accent); color: var(--accent); }
+
+/* Imagem para enviar (colar/arrastar/escolher) */
+.chats-composer.drop { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.chats-outimg { display: flex; gap: 10px; align-items: center; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); }
+.chats-outimg img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+.chats-outimg-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.chats-outimg-info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chats-outimg-info span { color: var(--text-muted); }

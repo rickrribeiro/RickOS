@@ -217,7 +217,8 @@ export function createBeeperProvider(
     reactions: false, // leitura sim; reagir pelo rickOS ainda não
     replyTo: true,
     editMessages: true,
-    deleteMessages: true
+    deleteMessages: true,
+    sendImages: true
   }
 
   return {
@@ -283,9 +284,23 @@ export function createBeeperProvider(
       return { items: (body?.items ?? []).map(mapMessage), hasMore: !!body?.hasMore, olderCursor: body?.hasMore ? body.oldestCursor ?? null : null }
     },
 
-    async sendMessage(remoteChatId, text, replyToId) {
+    async sendMessage(remoteChatId, text, replyToId, image) {
+      let attachment: { uploadID: string; mimeType: string; fileName: string; type: 'image' | 'gif' } | null = null
+      if (image) {
+        // upload temporário no Beeper (fica na máquina dele) → referenciado pelo envio
+        const up = (await call(
+          { method: 'POST', path: '/v1/assets/upload/base64', body: { content: image.data.toString('base64'), fileName: image.fileName, mimeType: image.mimeType } },
+          'Enviar imagem'
+        )) as { uploadID?: string; error?: string }
+        if (!up?.uploadID) throw new Error(`Enviar imagem: ${up?.error || 'o Beeper não aceitou o arquivo.'}`)
+        attachment = { uploadID: up.uploadID, mimeType: image.mimeType, fileName: image.fileName, type: image.mimeType === 'image/gif' ? 'gif' : 'image' }
+      }
       const body = (await call(
-        { method: 'POST', path: `/v1/chats/${encodeURIComponent(remoteChatId)}/messages`, body: { text, ...(replyToId ? { replyToMessageID: replyToId } : {}) } },
+        {
+          method: 'POST',
+          path: `/v1/chats/${encodeURIComponent(remoteChatId)}/messages`,
+          body: { ...(text ? { text } : {}), ...(replyToId ? { replyToMessageID: replyToId } : {}), ...(attachment ? { attachment } : {}) }
+        },
         'Enviar'
       )) as { pendingMessageID?: string }
       return { pendingId: body?.pendingMessageID ?? null }

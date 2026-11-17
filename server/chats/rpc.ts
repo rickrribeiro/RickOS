@@ -1,4 +1,4 @@
-import type { AiSuggestRequest, AiSuggestResult, ChatFilter, ChatPreset, ChatPriority, ManualReplyState } from '../../shared/chats'
+import type { AiSuggestRequest, AiSuggestResult, ChatFilter, ChatPreset, ChatPriority, ManualReplyState, OutgoingImageInput } from '../../shared/chats'
 import { networkInfo } from '../../shared/chats'
 import { broadcast } from '../events'
 import { getSetting, setSetting } from '../database/queries'
@@ -102,7 +102,7 @@ export function registerChatRpc(handle: Handle): void {
     const page = await svc.getMessages(Number(id), cursor ?? null)
     return page
   })
-  handle('chats:send', (_e, id: number, text: string, replyToId?: string | null) => svc.sendMessage(Number(id), String(text ?? ''), replyToId ?? null))
+  handle('chats:send', (_e, id: number, text: string, replyToId?: string | null, image?: OutgoingImageInput | null) => svc.sendMessage(Number(id), String(text ?? ''), replyToId ?? null, image ?? null))
   handle('chats:editMessage', (_e, id: number, messageId: string, text: string) => svc.editMessage(Number(id), String(messageId ?? ''), String(text ?? '')))
   handle('chats:deleteMessage', (_e, id: number, messageId: string, forEveryone?: boolean) => svc.deleteMessage(Number(id), String(messageId ?? ''), forEveryone !== false))
   handle('chats:markRead', (_e, id: number, read: boolean) => svc.markRead(Number(id), read !== false))

@@ -18,6 +18,7 @@ import type {
   ContactSuggestion,
   ManualReplyState,
   MessagePage,
+  OutgoingImageInput,
   PersonNetwork,
   RadarView
 } from '../../../shared/chats'
@@ -69,7 +70,7 @@ export interface ChatsApi {
   radar: () => Promise<RadarView>
   networks: () => Promise<{ id: string; label: string; icon: string; color: string; chats: number; unread: number }[]>
   messages: (id: number, cursor?: string | null) => Promise<MessagePage>
-  send: (id: number, text: string, replyToId?: string | null) => Promise<{ ok: true; pendingId: string | null }>
+  send: (id: number, text: string, replyToId?: string | null, image?: OutgoingImageInput | null) => Promise<{ ok: true; pendingId: string | null }>
   editMessage: (id: number, messageId: string, text: string) => Promise<{ ok: true }>
   deleteMessage: (id: number, messageId: string, forEveryone: boolean) => Promise<{ ok: true }>
   markRead: (id: number, read: boolean) => Promise<void>

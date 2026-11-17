@@ -434,6 +434,27 @@ describe('central de mensagens (mock)', () => {
     assert.notEqual(after.replyState, 'needs_reply')
   })
 
+  it('enviar imagem: confere o conteúdo, aceita sem legenda e recusa o que não é imagem', async () => {
+    await call('chats:syncNow', true)
+    const joao = await byRemote('wa-joao')
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4f00000000049454e44ae426082', 'hex')
+    // tipo informado errado: vale o detectado pelos bytes; nome é saneado
+    await call('chats:send', joao.id, '', null, { base64: png.toString('base64'), mimeType: 'image/jpeg', fileName: '../../etc/pass wd.jpg' })
+    const sent = provider.control.sent.at(-1)!
+    assert.equal(sent.text, '')
+    assert.deepEqual(sent.image, { mimeType: 'image/png', fileName: 'etcpass wd.png', bytes: png.length })
+    assert.equal((await call<ChatSummary>('chats:get', joao.id)).lastMessageFromMe, true)
+    // com legenda
+    await call('chats:send', joao.id, 'olha isso', null, { base64: `data:image/png;base64,${png.toString('base64')}`, mimeType: 'image/png', fileName: null })
+    assert.equal(provider.control.sent.at(-1)!.text, 'olha isso')
+    assert.equal(provider.control.sent.at(-1)!.image?.fileName, 'imagem.png')
+    const n = provider.control.sent.length
+    await assert.rejects(call('chats:send', joao.id, 'x', null, { base64: Buffer.from('<svg onload=alert(1)>').toString('base64'), mimeType: 'image/png', fileName: 'a.png' }), /Formato não suportado/)
+    await assert.rejects(call('chats:send', joao.id, '', null, null), /vazia/)
+    await assert.rejects(call('chats:send', joao.id, '', null, { base64: 'A'.repeat(21 * 1024 * 1024), mimeType: 'image/png', fileName: 'a.png' }), /grande demais/)
+    assert.equal(provider.control.sent.length, n)
+  })
+
   it('editar e apagar só mensagens suas, com reclassificação', async () => {
     await call('chats:syncNow', true)
     const joao = await byRemote('wa-joao')

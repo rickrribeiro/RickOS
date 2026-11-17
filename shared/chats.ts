@@ -109,6 +109,8 @@ export interface ChatProviderCapabilities {
   editMessages: boolean
   /** Apagar uma mensagem enviada por você (para todos ou só para você, se a rede permitir). */
   deleteMessages: boolean
+  /** Enviar imagem (colar, arrastar ou escolher arquivo). */
+  sendImages: boolean
 }
 
 export type ProviderState = 'disabled' | 'idle' | 'syncing' | 'connected' | 'offline' | 'error' | 'unconfigured'
@@ -471,5 +473,14 @@ export const NO_CAPABILITIES: ChatProviderCapabilities = {
   reactions: false,
   replyTo: false,
   editMessages: false,
-  deleteMessages: false
+  deleteMessages: false,
+  sendImages: false
 }
+
+/** Imagem enviada pelo composer (base64 sem prefixo data:). Limite do rickOS: 15 MB. */
+export interface OutgoingImageInput {
+  base64: string
+  mimeType: string
+  fileName: string | null
+}
+export const MAX_SEND_IMAGE_BYTES = 15 * 1024 * 1024

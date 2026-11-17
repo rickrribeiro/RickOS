@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChatMessage, ChatSummary, ChatTemplate, MessagePage } from '../../../../shared/chats'
-import { networkInfo } from '../../../../shared/chats'
+import type { ChatMessage, ChatSummary, ChatTemplate, MessagePage, OutgoingImageInput } from '../../../../shared/chats'
+import { MAX_SEND_IMAGE_BYTES, networkInfo } from '../../../../shared/chats'
+import { pickFile } from '../../../api/files'
 import { authedUrl } from '../../../api/transport'
 import { useChatsStore } from '../store/chatsStore'
 import { PinButton, SnoozeMenu, StateMenu } from './actions'
@@ -8,6 +9,26 @@ import { AiPanel } from './AiPanel'
 import { Avatar, Popover } from './ui'
 
 let cfgCache: { markReadOnOpen: boolean } | null = null
+
+type PendingImage = OutgoingImageInput & { url: string; size: number }
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+
+/** Lê a imagem colada/arrastada/escolhida. Nada sai do navegador até você clicar em Enviar. */
+async function readImage(f: File): Promise<PendingImage> {
+  if (!IMAGE_TYPES.includes(f.type)) throw new Error('Formato não suportado: envie JPEG, PNG, GIF ou WebP.')
+  if (f.size > MAX_SEND_IMAGE_BYTES) throw new Error('Imagem grande demais (máx. 15 MB).')
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result))
+    r.onerror = () => reject(new Error('Não foi possível ler a imagem.'))
+    r.readAsDataURL(f)
+  })
+  const name = f.name && f.name !== 'image.png' ? f.name : `imagem-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
+  return { base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: f.type, fileName: name, url: URL.createObjectURL(f), size: f.size }
+}
+
+const kb = (n: number): string => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
 function dayLabel(iso: string): string {
   const d = new Date(iso)
@@ -131,6 +152,8 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
   const [text, setText] = useState('')
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [sending, setSending] = useState(false)
+  const [image, setImageState] = useState<PendingImage | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const [sendErr, setSendErr] = useState<string | null>(null)
   const [ai, setAi] = useState<'suggest' | 'summary' | null>(null)
   const [todoFor, setTodoFor] = useState<ChatMessage | null | undefined>(undefined)
@@ -145,6 +168,7 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
 
   const offline = status?.state === 'offline' || status?.state === 'error' || status?.state === 'disabled'
   const canSend = !chat.stale && !offline && !!status?.capabilities.sendMessages
+  const canImage = canSend && !!status?.capabilities.sendImages
   const canEdit = !chat.stale && !offline && !!status?.capabilities.editMessages
   const canDelete = !chat.stale && !offline && !!status?.capabilities.deleteMessages
 
@@ -187,6 +211,7 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
     setReplyTo(null)
     setAi(null)
     setText('')
+    setImage(null)
     setSendErr(null)
     setEditing(null)
     setDeleting(null)
@@ -257,11 +282,34 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
     setPicking(true)
   }
 
-  async function send(body: string, reply: ChatMessage | null): Promise<boolean> {
+  function setImage(next: PendingImage | null): void {
+    setImageState((old) => {
+      if (old && old.url !== next?.url) URL.revokeObjectURL(old.url)
+      return next
+    })
+  }
+
+  async function attach(f: File | null | undefined): Promise<void> {
+    if (!f) return
+    setSendErr(null)
+    try {
+      setImage(await readImage(f))
+    } catch (e) {
+      setSendErr(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  function imageFrom(dt: DataTransfer | null): File | null {
+    if (!dt) return null
+    for (const it of Array.from(dt.items ?? [])) if (it.kind === 'file' && it.type.startsWith('image/')) return it.getAsFile()
+    return Array.from(dt.files ?? []).find((f) => f.type.startsWith('image/')) ?? null
+  }
+
+  async function send(body: string, reply: ChatMessage | null, img: PendingImage | null = null): Promise<boolean> {
     setSending(true)
     setSendErr(null)
     try {
-      await window.api.chats.send(chat.id, body, reply?.id ?? null)
+      await window.api.chats.send(chat.id, body, reply?.id ?? null, img ? { base64: img.base64, mimeType: img.mimeType, fileName: img.fileName } : null)
       stick.current = true
       await load()
       void refreshActive()
@@ -296,9 +344,10 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
   }
 
   async function sendComposer(): Promise<void> {
-    if (!text.trim() || !canSend) return
-    if (await send(text, replyTo)) {
+    if ((!text.trim() && !image) || !canSend) return
+    if (await send(text, replyTo, image)) {
       setText('')
+      setImage(null)
       setReplyTo(null)
     }
   }
@@ -463,7 +512,34 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
         />
       )}
 
-      <div className="chats-composer">
+      <div
+        className={`chats-composer${dragOver ? ' drop' : ''}`}
+        onDragOver={(e) => {
+          if (!canImage || !Array.from(e.dataTransfer.types).includes('Files')) return
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          setDragOver(false)
+          if (!canImage) return
+          const f = imageFrom(e.dataTransfer)
+          if (f) {
+            e.preventDefault()
+            void attach(f)
+          }
+        }}
+      >
+        {image && (
+          <div className="chats-outimg">
+            <img src={image.url} alt="Imagem para enviar" />
+            <div className="chats-outimg-info">
+              <b>{image.fileName}</b>
+              <span>{kb(image.size)} · {text.trim() ? 'o texto vai como legenda' : 'sem legenda'} · só sai quando você clicar em Enviar</span>
+            </div>
+            <button className="chats-x" onClick={() => setImage(null)} title="Remover imagem" aria-label="Remover imagem">✕</button>
+          </div>
+        )}
         {replyTo && (
           <div className="chats-replying">
             ↩ Respondendo a {replyTo.isMine ? 'você' : replyTo.senderName}: <i>{replyTo.text.slice(0, 60)}</i>
@@ -475,7 +551,15 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={canSend ? 'Escreva uma resposta… (Ctrl/⌘+Enter envia)' : 'Envio indisponível agora (provedor offline ou conversa inativa)'}
+            onPaste={(e) => {
+              if (!canImage) return
+              const f = imageFrom(e.clipboardData)
+              if (f) {
+                e.preventDefault()
+                void attach(f)
+              }
+            }}
+            placeholder={canSend ? (image ? 'Legenda (opcional)… (Ctrl/⌘+Enter envia)' : `Escreva uma resposta… (Ctrl/⌘+Enter envia${canImage ? '; cole uma imagem com Ctrl/⌘+V' : ''})`) : 'Envio indisponível agora (provedor offline ou conversa inativa)'}
             rows={2}
             disabled={!canSend}
             onKeyDown={(e) => {
@@ -485,7 +569,7 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
               }
             }}
           />
-          <button className="btn btn-primary" disabled={!canSend || !text.trim() || sending} onClick={() => void sendComposer()}>{sending ? '…' : 'Enviar'}</button>
+          <button className="btn btn-primary" disabled={!canSend || (!text.trim() && !image) || sending} onClick={() => void sendComposer()}>{sending ? '…' : 'Enviar'}</button>
         </div>
         <div className="chats-composer-tools">
           <Popover label="⚡ Respostas rápidas" className="btn btn-secondary btn-sm" align="left" up>
@@ -502,6 +586,9 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
           </Popover>
           <button className="btn btn-secondary btn-sm" onClick={pickSinceMyLast} title="Seleciona as mensagens recebidas desde sua última resposta">✨ Sugerir resposta</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setTodoFor(null)}>☑ Tarefa</button>
+          {canImage && (
+            <button className="btn btn-secondary btn-sm" onClick={() => void pickFile(IMAGE_TYPES.join(',')).then(attach)} title="Escolher imagem (ou cole com Ctrl/⌘+V, ou arraste para cá)">📎 Imagem</button>
+          )}
         </div>
       </div>
 

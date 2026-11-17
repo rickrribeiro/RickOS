@@ -43,6 +43,13 @@ export interface RemoteMessage {
   isUnread: boolean | null
 }
 
+/** Imagem já validada pelo serviço (bytes conferidos, tipo detectado pelo conteúdo). */
+export interface OutgoingImage {
+  data: Buffer
+  mimeType: string
+  fileName: string
+}
+
 export interface RemoteAttachment {
   type: 'image' | 'video' | 'audio' | 'file' | 'sticker' | 'unknown'
   fileName: string | null
@@ -107,7 +114,8 @@ export interface ChatProvider {
   getChat(remoteId: string): Promise<RemoteChat | null>
   /** Mensagens (a ordem do retorno é livre; o serviço ordena por sortKey). */
   listMessages(remoteChatId: string, opts: { cursor?: string | null }): Promise<Page<RemoteMessage>>
-  sendMessage(remoteChatId: string, text: string, replyToId?: string | null): Promise<{ pendingId: string | null }>
+  /** `text` pode ser vazio quando há imagem (vira legenda quando não). */
+  sendMessage(remoteChatId: string, text: string, replyToId?: string | null, image?: OutgoingImage | null): Promise<{ pendingId: string | null }>
   /** Edita o texto de uma mensagem SUA (sem anexos). */
   editMessage?(remoteChatId: string, messageId: string, text: string): Promise<void>
   /** Apaga uma mensagem SUA; `forEveryone=false` = só para você, quando a rede permite. */

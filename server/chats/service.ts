@@ -14,7 +14,8 @@ import type {
   RadarItem,
   RadarView
 } from '../../shared/chats'
-import { networkInfo, NO_CAPABILITIES } from '../../shared/chats'
+import { MAX_SEND_IMAGE_BYTES, networkInfo, NO_CAPABILITIES } from '../../shared/chats'
+import type { OutgoingImageInput } from '../../shared/chats'
 import { broadcast } from '../events'
 import { computeReplyState, messageFlags, priorityScore, suggestedPriority, textMentions } from './classify'
 import type { ServerChatsConfig } from './config'
@@ -24,7 +25,8 @@ import type { FullChatRow, ScanResult } from './repo'
 import { agentOnline, agentTransport, setAgentEventSink } from './agentRelay'
 import { createBeeperProvider } from './providers/beeper'
 import { createMockProvider } from './providers/mock'
-import type { ChatProvider, RemoteMessage } from './providers/types'
+import type { ChatProvider, OutgoingImage, RemoteMessage } from './providers/types'
+import { sniffImage } from './providers/localAsset'
 import { ProviderUnavailableError } from './providers/types'
 import { directTransport } from './transport'
 
@@ -549,16 +551,39 @@ async function requireProviderFor(chatId: number): Promise<{ provider: ChatProvi
 }
 
 /** Envia texto. Só é chamado por ação explícita do usuário (nunca automaticamente). */
-export async function sendMessage(chatId: number, text: string, replyToId: string | null): Promise<{ ok: true; pendingId: string | null }> {
+/** Confere a imagem pelo conteúdo (não confia no tipo informado pelo navegador): só JPEG/PNG/GIF/WebP até 15 MB. */
+export function parseOutgoingImage(input: OutgoingImageInput | null | undefined): OutgoingImage | null {
+  if (!input) return null
+  const b64 = String(input.base64 ?? '').replace(/^data:[^,]*,/, '')
+  if (!b64 || b64.length > Math.ceil((MAX_SEND_IMAGE_BYTES * 4) / 3) + 8) throw new Error('Imagem grande demais (máx. 15 MB).')
+  const data = Buffer.from(b64, 'base64')
+  if (!data.length) throw new Error('Imagem vazia.')
+  if (data.length > MAX_SEND_IMAGE_BYTES) throw new Error('Imagem grande demais (máx. 15 MB).')
+  const mimeType = sniffImage(data)
+  if (!mimeType) throw new Error('Formato não suportado: envie JPEG, PNG, GIF ou WebP.')
+  const ext = mimeType.split('/')[1].replace('jpeg', 'jpg')
+  const base = String(input.fileName ?? '')
+    .replace(/\.[^.]*$/, '')
+    .replace(/[^\p{L}\p{N} ._-]/gu, '')
+    .replace(/^[.\s]+/, '')
+    .trim()
+    .slice(0, 80)
+  return { data, mimeType, fileName: `${base || 'imagem'}.${ext}` }
+}
+
+export async function sendMessage(chatId: number, text: string, replyToId: string | null, imageInput?: OutgoingImageInput | null): Promise<{ ok: true; pendingId: string | null }> {
   const body = text.trim()
-  if (!body) throw new Error('Mensagem vazia.')
+  const image = parseOutgoingImage(imageInput)
+  if (!body && !image) throw new Error('Mensagem vazia.')
   if (body.length > 10_000) throw new Error('Mensagem longa demais.')
   const { provider, chat } = await requireProviderFor(chatId)
   if (!provider.capabilities().sendMessages) throw new Error('Este provedor não envia mensagens.')
-  const r = await provider.sendMessage(chat.remoteId, body, replyToId)
+  if (image && !provider.capabilities().sendImages) throw new Error('Este provedor não envia imagens.')
+  const r = await provider.sendMessage(chat.remoteId, body, replyToId, image)
   const now = new Date().toISOString()
   const cfg = await loadConfig()
-  await repo.recordOutbound(chatId, now, messageFlags(body).question, repo.previewOf(body, cfg.storePreviews))
+  const preview = image ? (body ? `📷 ${body}` : '📷 Imagem') : body
+  await repo.recordOutbound(chatId, now, messageFlags(body).question, repo.previewOf(preview, cfg.storePreviews))
   // responder encerra o adiamento/lembrete e a marcação "preciso responder"
   const org = await repo.getOrg(chatId)
   if (org && (org.snoozeUntil || org.manualState === 'needs_reply')) {

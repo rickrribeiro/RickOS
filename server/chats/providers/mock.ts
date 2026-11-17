@@ -16,7 +16,7 @@ export interface MockControl {
   pageSize: number
   /** Provedor sem dado de menções (testa estimativa). */
   noMentions: boolean
-  sent: { chatId: string; text: string; replyTo: string | null }[]
+  sent: { chatId: string; text: string; replyTo: string | null; image?: { mimeType: string; fileName: string; bytes: number } }[]
   edited: { chatId: string; messageId: string; text: string }[]
   deleted: { chatId: string; messageId: string; forEveryone: boolean }[]
   /** Contas que o provedor "esqueceu" (desconectadas). */
@@ -178,7 +178,8 @@ export function createMockProvider(control: MockControl = createMockControl()): 
     reactions: false,
     replyTo: true,
     editMessages: true,
-    deleteMessages: true
+    deleteMessages: true,
+    sendImages: true
   }
 
   return {
@@ -223,7 +224,7 @@ export function createMockProvider(control: MockControl = createMockControl()): 
       const start = Math.max(0, end - 20)
       return { items: all.slice(start, end), hasMore: start > 0, olderCursor: start > 0 ? String(start) : null }
     },
-    async sendMessage(remoteChatId, text, replyToId) {
+    async sendMessage(remoteChatId, text, replyToId, image) {
       guard()
       const list = store.get(remoteChatId)
       const c = chats.find((x) => x.id === remoteChatId)
@@ -238,8 +239,8 @@ export function createMockProvider(control: MockControl = createMockControl()): 
         timestamp: new Date(ts).toISOString(),
         sortKey: String(ts).padStart(16, '0'),
         text,
-        type: 'TEXT',
-        attachments: [],
+        type: image ? 'IMAGE' : 'TEXT',
+        attachments: image ? [{ type: 'image', fileName: image.fileName, mimeType: image.mimeType, size: image.data.length, ref: null, width: null, height: null }] : [],
         mentions: [],
         replyToId: replyToId ?? null,
         edited: false,
@@ -250,7 +251,7 @@ export function createMockProvider(control: MockControl = createMockControl()): 
       list.push(msg)
       c.unread = 0
       c.mentions = c.mentions === null ? null : 0
-      control.sent.push({ chatId: remoteChatId, text, replyTo: replyToId ?? null })
+      control.sent.push({ chatId: remoteChatId, text, replyTo: replyToId ?? null, ...(image ? { image: { mimeType: image.mimeType, fileName: image.fileName, bytes: image.data.length } } : {}) })
       control.emit?.({ type: 'message.upserted', chatId: remoteChatId, messageIds: [msg.id] })
       return { pendingId: msg.id }
     },
