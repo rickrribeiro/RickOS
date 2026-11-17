@@ -98,3 +98,6 @@ dist-server/
 
 # Prints gerados por `npm run screenshots` (contêm dados pessoais)
 docs/screenshots/
+
+# demo pública (artifact): build local, fora do git
+demo/
