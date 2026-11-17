@@ -364,6 +364,13 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE projects ADD COLUMN nextActionTodoId INTEGER;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 25,
+    label: 'Central de Mensagens: fixar conversa no topo',
+    run: (db) => {
+      try { db.run('ALTER TABLE chat_org ADD COLUMN pinnedAt TEXT;') } catch { /* exists ou tabela ausente */ }
+    }
   }
 ]
 

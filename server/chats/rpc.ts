@@ -146,6 +146,11 @@ export function registerChatRpc(handle: Handle): void {
     await repo.patchOrg(list, { priority })
     svc.changed(list)
   })
+  handle('chats:pin', async (_e, chatIds: number[], pinned: boolean) => {
+    const list = ids(chatIds)
+    await repo.patchOrg(list, { pinnedAt: pinned === false ? null : new Date().toISOString() })
+    svc.changed(list)
+  })
   handle('chats:setNotes', async (_e, id: number, notes: string | null) => {
     await repo.patchOrg([Number(id)], { notes: notes?.trim() ? notes.slice(0, 5000) : null })
     svc.changed([Number(id)])

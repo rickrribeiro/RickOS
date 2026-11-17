@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import type { ChatSummary } from '../../../../shared/chats'
 import { useChatsStore } from '../store/chatsStore'
-import { LabelMenu, PriorityMenu, SnoozeMenu, StateMenu } from './actions'
+import { LabelMenu, PinButton, PriorityMenu, SnoozeMenu, StateMenu } from './actions'
 import { BatchAiModal } from './BatchAiModal'
 import { agoDays, Avatar, LabelChips, PrioMark, shortTime, StatePill } from './ui'
 
@@ -37,7 +37,10 @@ export function ChatItem({ c, active, selected, selecting, onOpen, onToggle }: {
       <div className="chats-item-main">
         <div className="chats-item-top">
           <span className="chats-item-title">{c.contactName && c.contactName !== c.title ? `${c.contactName}` : c.title}</span>
-          <span className="chats-item-time">{shortTime(c.lastActivity)}</span>
+          <span className="chats-item-time">
+            {c.pinnedAt && <span className="chats-pin" title="Fixada no topo">📌</span>}
+            {shortTime(c.lastActivity)}
+          </span>
         </div>
         <div className="chats-item-preview">{preview(c)}</div>
         <div className="chats-item-meta">
@@ -88,6 +91,7 @@ export function ChatList(): React.ReactElement {
               <StateMenu ids={selected} label="Estado" />
               <SnoozeMenu ids={selected} label="⏰ Lembrar" />
               <PriorityMenu ids={selected} label="Prioridade" />
+              <PinButton ids={selected} pinned={selected.every((id) => !!items.find((i) => i.id === id)?.pinnedAt)} />
               <LabelMenu ids={selected} label="🏷 Tags" />
               <button className="btn btn-secondary btn-sm" onClick={() => void window.api.chats.reviewMentions(selected)} title="Marcar menções como revisadas">@✓</button>
               <button className="btn btn-primary btn-sm" onClick={() => setBatch(true)} title="Uma sugestão por conversa, revisando antes o que vai para a IA">✨ Sugestões IA</button>

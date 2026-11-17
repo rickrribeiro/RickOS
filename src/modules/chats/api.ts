@@ -78,6 +78,7 @@ export interface ChatsApi {
   setState: (ids: number[], state: ManualReplyState | 'auto') => Promise<void>
   snooze: (ids: number[], until: string | null, note?: string | null, reopenOnMessage?: boolean) => Promise<void>
   setPriority: (ids: number[], priority: ChatPriority | null) => Promise<void>
+  pin: (ids: number[], pinned: boolean) => Promise<void>
   setNotes: (id: number, notes: string | null) => Promise<void>
   reviewMentions: (ids: number[]) => Promise<void>
   suggestContacts: (id: number) => Promise<ContactSuggestion[]>
@@ -110,7 +111,7 @@ export interface ChatsApi {
 export const CHATS_METHODS: (keyof ChatsApi)[] = [
   'status', 'config', 'saveConfig', 'test', 'agentKey', 'agentStatus', 'syncNow', 'accounts', 'setAccountSync', 'clearCache', 'disconnect',
   'list', 'counts', 'get', 'radar', 'networks', 'messages', 'send', 'editMessage', 'deleteMessage', 'markRead', 'search', 'pendingMessages', 'setState', 'snooze',
-  'setPriority', 'setNotes', 'reviewMentions', 'suggestContacts', 'link', 'createContact', 'contactChats', 'contactNetworks', 'contacts',
+  'setPriority', 'pin', 'setNotes', 'reviewMentions', 'suggestContacts', 'link', 'createContact', 'contactChats', 'contactNetworks', 'contacts',
   'setContactPriority', 'labels', 'saveLabel', 'deleteLabel', 'setLabels', 'contactLabels', 'contactLabelMap', 'createTodo', 'todos', 'presets', 'savePreset',
   'deletePreset', 'templates', 'saveTemplate', 'deleteTemplate', 'aiSuggest', 'aiBatch', 'aiSummarize'
 ]

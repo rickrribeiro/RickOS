@@ -499,6 +499,25 @@ describe('central de mensagens (mock)', () => {
     assert.equal((await list()).total, before)
   })
 
+  it('fixar no topo: fica em primeiro em qualquer ordenação, a mais recente fixada antes', async () => {
+    await call('chats:syncNow', true)
+    const a = await byRemote('wa-maria')
+    const b = await byRemote('li-recruiter')
+    await call('chats:pin', [a.id], true)
+    await new Promise((r) => setTimeout(r, 5))
+    await call('chats:pin', [b.id], true)
+    for (const sort of ['recent', 'priority', 'oldest_pending']) {
+      const ids = (await list({ sort })).items.map((c) => c.id)
+      assert.deepEqual(ids.slice(0, 2), [b.id, a.id], sort)
+    }
+    // filtros continuam valendo: fixada fora do filtro não aparece
+    assert.ok(!(await list({ networks: ['instagram'] })).items.some((c) => c.id === a.id))
+    await call('chats:pin', [b.id], false)
+    const after = await call<ChatSummary>('chats:get', b.id)
+    assert.equal(after.pinnedAt, null)
+    assert.equal((await list({ sort: 'recent' })).items[0].id, a.id)
+  })
+
   it('TODO vinculado à conversa', async () => {
     await call('chats:syncNow', true)
     const r = await byRemote('li-recruiter')

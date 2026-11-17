@@ -691,6 +691,7 @@ export const SCHEMA = `
     reminderNotifiedAt TEXT,
     notes TEXT,
     mentionsReviewedCount INTEGER,
+    pinnedAt TEXT,                          -- fixada no topo da lista (só no rickOS)
     updatedAt TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_chat_org_contact ON chat_org(contactId);

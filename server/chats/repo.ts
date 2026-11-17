@@ -161,6 +161,7 @@ export interface OrgRow {
   reminderNotifiedAt: string | null
   notes: string | null
   mentionsReviewedCount: number | null
+  pinnedAt: string | null
   updatedAt: string | null
 }
 
@@ -179,6 +180,7 @@ export interface FullChatRow extends ChatRow {
   reminderNote: string | null
   notes: string | null
   mentionsReviewedCount: number | null
+  pinnedAt: string | null
   accountSync: number | null
   accountStatus: string | null
   todoCount: number
@@ -318,7 +320,7 @@ export async function applyScans(scans: { id: number; scan: ScanResult }[]): Pro
 const FULL_SELECT = `
   SELECT c.*, o.contactId, ct.name AS contactName, ct.priority AS contactPriority, ct.vip AS contactVip,
          o.priority, o.manualState, o.manualAt, o.snoozeUntil, o.snoozedAt, o.reopenOnMessage, o.reminderNote, o.notes,
-         o.mentionsReviewedCount, a.syncEnabled AS accountSync, a.status AS accountStatus,
+         o.mentionsReviewedCount, o.pinnedAt, a.syncEnabled AS accountSync, a.status AS accountStatus,
          (SELECT COUNT(*) FROM chat_todos t JOIN todos td ON td.id = t.todoId WHERE t.chatId = c.id AND td.status != 'done') AS todoCount
   FROM chats c
   LEFT JOIN chat_org o ON o.chatId = c.id
@@ -400,7 +402,7 @@ function hasOrgData(db: Database, chatId: number): boolean {
   const todos = one<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?', [chatId])?.n ?? 0
   if (labels || todos) return true
   if (!o) return false
-  return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes)
+  return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes || o.pinnedAt)
 }
 
 /**
@@ -435,7 +437,7 @@ export async function clearPreviews(): Promise<void> {
 
 export type OrgPatch = Partial<Omit<OrgRow, 'chatId' | 'updatedAt'>>
 
-const ORG_COLS = ['contactId', 'priority', 'manualState', 'manualAt', 'snoozeUntil', 'snoozedAt', 'reopenOnMessage', 'reminderNote', 'reminderNotifiedAt', 'notes', 'mentionsReviewedCount'] as const
+const ORG_COLS = ['contactId', 'priority', 'manualState', 'manualAt', 'snoozeUntil', 'snoozedAt', 'reopenOnMessage', 'reminderNote', 'reminderNotifiedAt', 'notes', 'mentionsReviewedCount', 'pinnedAt'] as const
 
 function patchOrgDb(db: Database, chatId: number, patch: OrgPatch): void {
   exec(db, 'INSERT OR IGNORE INTO chat_org (chatId, updatedAt) VALUES (?, ?)', [chatId, nowIso()])

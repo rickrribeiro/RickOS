@@ -267,3 +267,7 @@
 .person-nets.rows .person-net-main { padding: 6px 10px; font-size: 13px; }
 .person-net-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--text-secondary); }
 .person-net-ext { padding: 2px 9px; border-left: 1px solid var(--border) !important; color: var(--accent) !important; font-weight: 700; }
+
+/* Fixar no topo */
+.chats-pin { font-size: 10px; margin-right: 4px; opacity: .85; }
+.chats-pin-btn.on { border-color: var(--accent); color: var(--accent); }

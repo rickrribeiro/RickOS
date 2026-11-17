@@ -3,7 +3,7 @@ import type { ChatMessage, ChatSummary, ChatTemplate, MessagePage } from '../../
 import { networkInfo } from '../../../../shared/chats'
 import { authedUrl } from '../../../api/transport'
 import { useChatsStore } from '../store/chatsStore'
-import { SnoozeMenu, StateMenu } from './actions'
+import { PinButton, SnoozeMenu, StateMenu } from './actions'
 import { AiPanel } from './AiPanel'
 import { Avatar, Popover } from './ui'
 
@@ -330,6 +330,7 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
           {status?.capabilities.markAsUnread && (chat.unreadCount ?? 0) === 0 && (
             <button className="btn btn-secondary btn-sm" disabled={offline || chat.stale} onClick={() => void window.api.chats.markRead(chat.id, false).then(refreshActive)}>● Não lida</button>
           )}
+          <PinButton ids={[chat.id]} pinned={!!chat.pinnedAt} compact />
           <StateMenu ids={[chat.id]} label="Estado" />
           <SnoozeMenu ids={[chat.id]} current={chat.snoozeUntil} />
           <button className="btn btn-secondary btn-sm" onClick={() => (picking ? (setPicking(false), setPicked([])) : setPicking(true))}>{picking ? 'Cancelar seleção' : '☑ Selecionar'}</button>

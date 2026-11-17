@@ -177,6 +177,7 @@ export function summarize(r: FullChatRow, ctx: SummaryCtx): ChatSummary {
     reminderDue,
     reopened: reply.reopened,
     notes: r.notes,
+    pinnedAt: r.pinnedAt ?? null,
     labels,
     score,
     suggestedPriority: suggestedPriority(score),
@@ -193,7 +194,7 @@ const norm = (s: string | null | undefined): string =>
 /** Visíveis: provedor ativo + contas sincronizadas; de outros provedores só se tiverem organização. */
 function visible(s: ChatSummary, r: FullChatRow, ctx: SummaryCtx): boolean {
   if (r.providerId === ctx.activeProviderId && r.accountSync !== 0 && r.accountStatus !== 'removed') return true
-  return !!(r.contactId || r.priority || r.manualState || r.snoozeUntil || r.notes || s.labels.length)
+  return !!(r.contactId || r.priority || r.manualState || r.snoozeUntil || r.notes || r.pinnedAt || s.labels.length)
 }
 
 export function matches(s: ChatSummary, f: ChatFilter, ctx: SummaryCtx): boolean {
@@ -254,11 +255,20 @@ export function matches(s: ChatSummary, f: ChatFilter, ctx: SummaryCtx): boolean
   return true
 }
 
-function sortList(list: ChatSummary[], sort: ChatFilter['sort']): void {
+/** Fixadas sempre no topo (a fixada mais recente primeiro); o resto segue a ordenação escolhida. */
+export function sortList(list: ChatSummary[], sort: ChatFilter['sort']): void {
   const t = (s: string | null): number => (s ? Date.parse(s) || 0 : 0)
-  if (sort === 'recent') list.sort((a, b) => t(b.lastActivity) - t(a.lastActivity))
-  else if (sort === 'oldest_pending') list.sort((a, b) => (t(a.pendingSince) || Infinity) - (t(b.pendingSince) || Infinity))
-  else list.sort((a, b) => b.score - a.score || t(b.lastActivity) - t(a.lastActivity))
+  const by =
+    sort === 'recent'
+      ? (a: ChatSummary, b: ChatSummary): number => t(b.lastActivity) - t(a.lastActivity)
+      : sort === 'oldest_pending'
+        ? (a: ChatSummary, b: ChatSummary): number => (t(a.pendingSince) || Infinity) - (t(b.pendingSince) || Infinity)
+        : (a: ChatSummary, b: ChatSummary): number => b.score - a.score || t(b.lastActivity) - t(a.lastActivity)
+  list.sort((a, b) => {
+    if (!!a.pinnedAt !== !!b.pinnedAt) return a.pinnedAt ? -1 : 1
+    if (a.pinnedAt && b.pinnedAt) return t(b.pinnedAt) - t(a.pinnedAt) || by(a, b)
+    return by(a, b)
+  })
 }
 
 export async function allSummaries(ctx?: SummaryCtx): Promise<ChatSummary[]> {

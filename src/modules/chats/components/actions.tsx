@@ -48,6 +48,22 @@ export function SnoozeMenu({ ids, label = '⏰ Lembrar', className, current }: {
   )
 }
 
+/** Fixa/desafixa no topo da lista (só no rickOS). Com várias, desafixa só se todas já estiverem fixadas. */
+export function PinButton({ ids, pinned, compact }: { ids: number[]; pinned: boolean; compact?: boolean }): React.ReactElement {
+  const label = pinned ? 'Desafixar' : 'Fixar'
+  return (
+    <button
+      className={`btn btn-secondary btn-sm chats-pin-btn${pinned ? ' on' : ''}`}
+      disabled={!ids.length}
+      onClick={() => void window.api.chats.pin(ids, !pinned).then(after)}
+      title={pinned ? 'Desafixar do topo da lista' : 'Fixar no topo da lista (só no rickOS)'}
+      aria-pressed={pinned}
+    >
+      📌{compact ? '' : ` ${label}`}
+    </button>
+  )
+}
+
 const STATES: (Exclude<ManualReplyState, null>)[] = ['needs_reply', 'waiting', 'none', 'resolved']
 
 export function StateMenu({ ids, label = 'Estado', className }: { ids: number[]; label?: string; className?: string }): React.ReactElement {

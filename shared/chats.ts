@@ -211,6 +211,8 @@ export interface ChatSummary {
   /** Conversa adiada que recebeu mensagem nova (reabrir/destacar). */
   reopened: boolean
   notes: string | null
+  /** Fixada no topo da lista (organização local; não muda nada na rede). */
+  pinnedAt: string | null
   labels: ChatLabel[]
   score: number
   suggestedPriority: ChatPriority
