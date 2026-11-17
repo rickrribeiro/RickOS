@@ -30,6 +30,8 @@ const fs = require("fs");
 const os = require("os");
 const initSqlJs = require("sql.js");
 const node_child_process = require("node:child_process");
+const fs$1 = require("node:fs");
+const path$1 = require("node:path");
 const child_process = require("child_process");
 const http = require("http");
 const url = require("url");
@@ -153,6 +155,18 @@ const SCHEMA = `
     pinned INTEGER NOT NULL DEFAULT 0,
     createdAt TEXT NOT NULL
   );
+
+  -- Repositórios de um projeto "workspace" (pasta raiz com vários repos: front, back, infra…).
+  -- path é relativo ao localPath do projeto. Projeto sem linhas aqui = 1 repo (o próprio localPath).
+  CREATE TABLE IF NOT EXISTS project_repos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projectId INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    githubRepoUrl TEXT,
+    sortOrder INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_project_repos_project ON project_repos(projectId, sortOrder);
 
   -- Próximas ações delegadas ao Claude (rodam num worktree isolado, voltam para revisão)
   CREATE TABLE IF NOT EXISTS project_delegations (
@@ -753,6 +767,7 @@ const SCHEMA = `
     reminderNotifiedAt TEXT,
     notes TEXT,
     mentionsReviewedCount INTEGER,
+    pinnedAt TEXT,                          -- fixada no topo da lista (só no rickOS)
     updatedAt TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_chat_org_contact ON chat_org(contactId);
@@ -1339,6 +1354,26 @@ const MIGRATIONS = [
       } catch {
       }
     }
+  },
+  {
+    version: 24,
+    label: "Projetos: próxima ação vinculada a uma tarefa",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE projects ADD COLUMN nextActionTodoId INTEGER;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 25,
+    label: "Central de Mensagens: fixar conversa no topo",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE chat_org ADD COLUMN pinnedAt TEXT;");
+      } catch {
+      }
+    }
   }
 ];
 function getUserVersion(database) {
@@ -1374,6 +1409,7 @@ async function openDb() {
   });
   const fresh = fs.existsSync(dbPath) ? new SQL.Database(fs.readFileSync(dbPath)) : new SQL.Database();
   fresh.run("PRAGMA foreign_keys = ON;");
+  registerFunctions(fresh);
   fresh.run(SCHEMA);
   runMigrations(fresh);
   seedAiLibrary(fresh);
@@ -1388,9 +1424,13 @@ function replaceDbFile(bytes) {
   closeDb();
   fs.writeFileSync(dbFilePath(), bytes);
 }
+function registerFunctions(database) {
+  database.create_function("ulower", (s2) => s2 == null ? null : String(s2).toLowerCase());
+}
 function saveDb() {
   if (!db || !dbPath) return;
   const data2 = db.export();
+  registerFunctions(db);
   fs.writeFileSync(dbPath, Buffer.from(data2));
 }
 function closeDb() {
@@ -1798,6 +1838,58 @@ async function getTodos(status2) {
   }
   return getAll(db2, "SELECT * FROM todos ORDER BY priority DESC, createdAt DESC");
 }
+async function listTodos(f = {}) {
+  const db2 = await getDb();
+  const where = ["status != 'inbox'"];
+  const params = [];
+  if (f.status && f.status !== "all") {
+    where.push("status = ?");
+    params.push(f.status);
+  }
+  if (f.projectId != null) {
+    where.push("projectId = ?");
+    params.push(f.projectId);
+  }
+  if (f.type && f.type !== "all") {
+    where.push("COALESCE(type, 'projeto') = ?");
+    params.push(f.type);
+  }
+  if (f.recurring === "yes") where.push("(recurrence IS NOT NULL AND recurrence != '')");
+  else if (f.recurring === "no") where.push("(recurrence IS NULL OR recurrence = '')");
+  const q = (f.search ?? "").trim().toLowerCase();
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    where.push("(ulower(title) LIKE ? ESCAPE '\\' OR ulower(COALESCE(notes, '')) LIKE ? ESCAPE '\\')");
+    params.push(like, like);
+  }
+  const base = where.join(" AND ");
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(f.today ?? "") ? f.today : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const upcoming = "(recurrence IS NOT NULL AND recurrence != '' AND dueDate IS NOT NULL AND dueDate > ?)";
+  const upcomingRecurring = getOne(db2, `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status != 'done' AND ${upcoming}`, [
+    ...params,
+    today
+  ])?.n ?? 0;
+  const open = getAll(
+    db2,
+    `SELECT * FROM todos WHERE ${base} AND status != 'done'${f.showUpcomingRecurring ? "" : ` AND NOT ${upcoming}`}
+     ORDER BY priority DESC, dueDate IS NULL, dueDate ASC, createdAt DESC`,
+    f.showUpcomingRecurring ? params : [...params, today]
+  );
+  const limit = Math.max(0, Math.floor(f.doneLimit ?? 15));
+  const done = getAll(
+    db2,
+    `SELECT * FROM todos WHERE ${base} AND status = 'done'
+     ORDER BY (recurrence IS NULL OR recurrence = ''), COALESCE(doneAt, createdAt) DESC, id DESC LIMIT ?`,
+    [...params, limit]
+  );
+  const doneTotal = getOne(db2, `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status = 'done'`, params)?.n ?? 0;
+  const doneRecurring = getOne(
+    db2,
+    `SELECT COUNT(*) AS n FROM todos WHERE ${base} AND status = 'done' AND recurrence IS NOT NULL AND recurrence != ''`,
+    params
+  )?.n ?? 0;
+  return { open, done, doneTotal, doneRecurring, upcomingRecurring };
+}
 async function createTodo(title, notes, status2, source, priority = 0, dueDate = null, projectId = null, aiGenerated = 0, recurrence = null, type = "projeto") {
   const db2 = await getDb();
   const createdAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -1901,6 +1993,24 @@ async function updateProject(id, name, description, githubRepoUrl, color, archiv
   );
   return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
 }
+async function getProjectRepos(projectId) {
+  const db2 = await getDb();
+  return projectId == null ? getAll(db2, "SELECT * FROM project_repos ORDER BY projectId, sortOrder, id") : getAll(db2, "SELECT * FROM project_repos WHERE projectId = ? ORDER BY sortOrder, id", [projectId]);
+}
+async function setProjectRepos(projectId, repos) {
+  const db2 = await getDb();
+  run$2(db2, "DELETE FROM project_repos WHERE projectId = ?", [projectId]);
+  repos.forEach((r, i) => {
+    run$2(db2, "INSERT INTO project_repos (projectId, name, path, githubRepoUrl, sortOrder) VALUES (?, ?, ?, ?, ?)", [
+      projectId,
+      r.name,
+      r.path,
+      r.githubRepoUrl,
+      i
+    ]);
+  });
+  return getProjectRepos(projectId);
+}
 async function setProjectStage(id, stage) {
   const db2 = await getDb();
   run$2(db2, "UPDATE projects SET stage = ? WHERE id = ?", [stage, id]);
@@ -1924,6 +2034,7 @@ async function deleteProjectMilestone(id) {
 }
 async function deleteProject(id) {
   const db2 = await getDb();
+  run$2(db2, "DELETE FROM project_repos WHERE projectId = ?", [id]);
   run$2(db2, "DELETE FROM projects WHERE id = ?", [id]);
 }
 async function getHabits() {
@@ -3012,7 +3123,7 @@ const PROJECT_PATCHABLE = /* @__PURE__ */ new Set([
   "workTagId",
   "workTagId2"
 ]);
-async function patchProject(id, fields) {
+async function patchProject(id, fields, opts = {}) {
   const db2 = await getDb();
   const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
   if (!prev) throw new Error("Projeto não encontrado");
@@ -3024,7 +3135,16 @@ async function patchProject(id, fields) {
     cols.push(`${k} = ?`);
     params.push(typeof v === "string" ? v.trim() === "" ? null : v.trim() : v);
   }
-  if ("nextAction" in fields) cols.push(`nextActionAt = '${now}'`);
+  if ("nextAction" in fields) {
+    cols.push(`nextActionAt = '${now}'`);
+    const text = typeof fields.nextAction === "string" ? fields.nextAction.trim() : "";
+    if (!text) cols.push("nextActionTodoId = NULL");
+    else if (opts.linkTodo) {
+      const wanted = typeof fields.nextActionTodoId === "number" ? fields.nextActionTodoId : null;
+      cols.push("nextActionTodoId = ?");
+      params.push(ensureNextActionTodo(db2, id, text, wanted));
+    } else if (text !== prev.nextAction) cols.push("nextActionTodoId = NULL");
+  }
   if ("whereLeftOff" in fields) cols.push(`whereLeftOffAt = '${now}'`);
   if (!cols.length) return prev;
   params.push(id);
@@ -3063,8 +3183,8 @@ async function setProjectStatus(id, status2, payload = {}) {
     sets.push("closedAt = NULL");
   }
   if (payload.nextAction) {
-    sets.push("nextAction = ?", "nextActionAt = ?");
-    params.push(payload.nextAction, now);
+    sets.push("nextAction = ?", "nextActionAt = ?", "nextActionTodoId = ?");
+    params.push(payload.nextAction, now, ensureNextActionTodo(db2, id, payload.nextAction, null));
   }
   params.push(id);
   run$2(db2, `UPDATE projects SET ${sets.join(", ")} WHERE id = ?`, params);
@@ -3082,16 +3202,50 @@ async function setProjectStatus(id, status2, payload = {}) {
   }
   return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
 }
-async function completeNextAction(id, next, size = null) {
+function findNextActionTodo(db2, projectId, text, todoId) {
+  if (todoId != null) {
+    const t = getOne(db2, "SELECT * FROM todos WHERE id = ? AND status != 'done'", [todoId]);
+    if (t) return t.id;
+  }
+  const byTitle = getOne(
+    db2,
+    "SELECT * FROM todos WHERE projectId = ? AND status != 'done' AND lower(trim(title)) = lower(?) ORDER BY id LIMIT 1",
+    [projectId, text.trim()]
+  );
+  return byTitle?.id ?? null;
+}
+function ensureNextActionTodo(db2, projectId, text, todoId) {
+  const found = findNextActionTodo(db2, projectId, text, todoId);
+  if (found != null) return found;
+  run$2(
+    db2,
+    "INSERT INTO todos (title, notes, status, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [text.trim(), null, "todo", 0, null, projectId, "projeto", 0, null, "projeto", (/* @__PURE__ */ new Date()).toISOString()]
+  );
+  return lastInsertId(db2);
+}
+async function completeNextAction(id, next, size = null, nextTodoId = null) {
   const db2 = await getDb();
   const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
   if (!prev) throw new Error("Projeto não encontrado");
   const now = (/* @__PURE__ */ new Date()).toISOString();
   if (prev.nextAction) {
     run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "acao_concluida", prev.nextAction, now]);
+    const doneId = findNextActionTodo(db2, id, prev.nextAction, prev.nextActionTodoId);
+    if (doneId != null) {
+      run$2(db2, "UPDATE todos SET status = 'done', doneAt = ? WHERE id = ?", [now, doneId]);
+      spawnRecurrenceIfNeeded(db2, doneId);
+    }
   }
   const n = next && next.trim() ? next.trim() : null;
-  run$2(db2, "UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ? WHERE id = ?", [n, now, n ? size : null, id]);
+  const todoId = n ? ensureNextActionTodo(db2, id, n, nextTodoId) : null;
+  run$2(db2, "UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ?, nextActionTodoId = ? WHERE id = ?", [
+    n,
+    now,
+    n ? size : null,
+    todoId,
+    id
+  ]);
   if (n) run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", n, now]);
   return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
 }
@@ -3358,6 +3512,7 @@ function shquote(s2) {
 function attempt(bin, prompt, viaShell, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, PATH: buildPath(), RICKOS_CLAUDE_RUN: "1" };
+    if (opts.configDir?.trim()) env.CLAUDE_CONFIG_DIR = opts.configDir.trim().replace(/^~(?=\/|$)/, os.homedir());
     const model2 = opts.model?.trim();
     const extra = opts.extraArgs ?? [];
     const agentic = !!opts.agentic;
@@ -71541,11 +71696,49 @@ function buildPrompt(m, combos) {
     '{"status":"ok|blocked|no_browser|error","message":"curto","results":[{"combo":0,"status":"ok|empty|blocked|error","offers":[{"depart":"YYYY-MM-DDTHH:MM","arrive":"YYYY-MM-DDTHH:MM","price":1234.56,"currency":"BRL","stops":1,"via":["DOH"],"carrier":"nome ou IATA","self_transfer":false,"checked_bags":null,"label":"mais barato|melhor|mais rápido|null"}]}]}'
   ].join("\n");
 }
-function firstJson$2(text) {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("O Claude não devolveu JSON.");
-  return JSON.parse(text.slice(start, end + 1));
+function jsonObjects(text) {
+  const out = [];
+  let i = text.indexOf("{");
+  while (i >= 0 && i < text.length) {
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let k = i; k < text.length; k++) {
+      const ch = text[k];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) {
+        end = k;
+        break;
+      }
+    }
+    if (end < 0) break;
+    try {
+      const j = JSON.parse(text.slice(i, end + 1));
+      if (j && typeof j === "object" && !Array.isArray(j)) {
+        out.push(j);
+        i = text.indexOf("{", end + 1);
+        continue;
+      }
+    } catch {
+    }
+    i = text.indexOf("{", i + 1);
+  }
+  return out;
+}
+function sessionAnswer(text) {
+  const objs = jsonObjects(text);
+  const final = [...objs].reverse().find((o) => Array.isArray(o.results) || typeof o.status === "string" && !("combo" in o));
+  const loose = objs.filter((o) => "combo" in o && Number.isInteger(Number(o.combo)));
+  if (!final && !loose.length) return null;
+  const results = [...Array.isArray(final?.results) ? final.results : []];
+  for (const r of loose) if (!results.some((x) => Number(x.combo) === Number(r.combo))) results.push(r);
+  return { status: String(final?.status ?? (loose.length ? "ok" : "error")), message: final?.message ? String(final.message) : null, results };
 }
 function carrierCode(c) {
   const s2 = String(c ?? "").trim();
@@ -71663,8 +71856,10 @@ async function startSkyscanner(monitorId, picks) {
     let session = 0;
     const progress = () => `Claude está pesquisando no seu Chrome… (sessão ${session} de ${sessions} · ${settled.size}/${combos.length} combinações lidas)`;
     try {
-      const command = await getSetting("claude_command") || "claude";
+      const configDir = (await getSetting("flights_chrome_config_dir"))?.trim() || void 0;
+      const command = configDir ? "claude" : await getSetting("claude_command") || "claude";
       const model2 = (await getSetting("flights_chrome_model") ?? "sonnet").trim();
+      let badSessions = 0;
       for (let start = 0; start < combos.length; start += PER_SESSION) {
         if (busy?.cancelled) {
           cancelled = true;
@@ -71695,6 +71890,7 @@ async function startSkyscanner(monitorId, picks) {
           raw = await runClaude(buildPrompt(m, chunk), command, {
             model: model2,
             streamJson: true,
+            configDir,
             extraArgs: ["--chrome", "--allowedTools", "mcp__claude-in-chrome"],
             timeoutMs: (4 + 2 * chunk.length) * 6e4,
             registerChild: (kill) => busy && (busy.kill = kill),
@@ -71714,17 +71910,31 @@ async function startSkyscanner(monitorId, picks) {
           await queue2;
         }
         if (stopping) return;
-        const j = firstJson$2(raw);
-        const status2 = String(j.status ?? "error");
+        saveRaw(runId, session, raw);
+        const ans = sessionAnswer(raw);
+        const status2 = ans?.status ?? "error";
         if (status2 === "no_browser" && !settled.size) throw new Error("Chrome não conectado ao Claude Code: feche o Chrome (⌘Q) e abra de novo, com a extensão Claude in Chrome ativa e logada. Se continuar, rode `claude --chrome` no terminal e use /chrome para reconectar.");
-        const results = Array.isArray(j.results) ? j.results : [];
+        const results = ans?.results ?? [];
+        const unread = [];
         for (const [k, c] of chunk.entries()) {
           const i = start + k;
           if (settled.has(i)) continue;
+          const r = results.find((x) => Number(x.combo) === k);
+          if (!r && !ans) {
+            unread.push(i);
+            continue;
+          }
           settled.add(i);
-          await applyOne(m, runId, c, taskIds[i], results.find((x) => Number(x.combo) === k), status2 === "blocked" ? "blocked" : "error", started2, tot);
+          await applyOne(m, runId, c, taskIds[i], r, status2 === "blocked" ? "blocked" : "error", started2, tot);
         }
-        if (j.message) lastMsg = String(j.message).slice(0, 200);
+        if (!ans) {
+          badSessions++;
+          lastMsg = `Sessão ${session}: resposta do Claude ilegível (${unread.length} combinação(ões) voltaram para a fila).`;
+          if (badSessions >= 2) throw new Error("Duas sessões seguidas sem resposta legível do Claude — parei para não gastar à toa.");
+        } else {
+          badSessions = 0;
+          if (ans.message) lastMsg = ans.message.slice(0, 200);
+        }
         if (status2 === "blocked" || tot.blocked) {
           tot.blocked = true;
           break;
@@ -71831,7 +72041,8 @@ async function trackedView(m, days2 = 60) {
   const dayset = [...new Set(combos.flatMap((c) => c.points.map((x) => x.day)))].sort().slice(-10);
   return { currency: cur, days: dayset, combos };
 }
-function chromeStatus() {
+async function chromeStatus() {
+  if ((await getSetting("flights_chrome_config_dir"))?.trim()) return { ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true };
   return new Promise((resolve) => {
     node_child_process.execFile("ps", ["-Ao", "command"], { maxBuffer: 16 * 1024 * 1024, timeout: 5e3 }, (err, out) => {
       if (err) return resolve({ ok: true, chrome: false, codeHost: false, desktopHost: false, desktopApp: false, unknown: true });
@@ -71849,6 +72060,16 @@ function parseChromeStatus(ps) {
   const desktopHost = lines.some((l) => /^\S*Claude\.app\/Contents\/Helpers\/chrome-native-host(\s|$)/.test(l));
   const desktopApp = lines.some((l) => /^\/Applications\/Claude\.app\/Contents\/MacOS\/Claude(\s|$)/.test(l));
   return { ok: codeHost, chrome, codeHost, desktopHost, desktopApp };
+}
+function saveRaw(runId, session, raw) {
+  try {
+    const dir = path$1.join(dataDir(), "logs", "passagens-chrome");
+    fs$1.mkdirSync(dir, { recursive: true });
+    fs$1.writeFileSync(path$1.join(dir, `run${runId}-s${session}.txt`), raw);
+    const files = fs$1.readdirSync(dir).map((f) => ({ f, t: fs$1.statSync(path$1.join(dir, f)).mtimeMs })).sort((x, y) => y.t - x.t);
+    for (const { f } of files.slice(40)) fs$1.rmSync(path$1.join(dir, f), { force: true });
+  } catch {
+  }
 }
 async function notify(input) {
   try {
@@ -71919,7 +72140,127 @@ async function createWorktree(projectDir, title) {
   const cwd = rel && !rel.startsWith("..") ? path.join(wtDir, rel) : wtDir;
   return { cwd: fs.existsSync(cwd) ? cwd : wtDir, repoPath: top, branch, baseRef };
 }
+const WORKSPACE_MANIFEST = ".rickos-workspace.json";
+function readWorkspaceManifest(wsDir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(wsDir, WORKSPACE_MANIFEST), "utf8"));
+  } catch {
+    return null;
+  }
+}
+function mirrorRoot(src, dst, repoRels, prefix, links) {
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name;
+    if (repoRels.includes(rel)) continue;
+    if (e.isDirectory() && repoRels.some((r) => r.startsWith(rel + "/"))) {
+      fs.mkdirSync(path.join(dst, e.name), { recursive: true });
+      mirrorRoot(path.join(src, e.name), path.join(dst, e.name), repoRels, rel, links);
+      continue;
+    }
+    fs.symlinkSync(path.join(src, e.name), path.join(dst, e.name));
+    links.push(rel);
+  }
+}
+async function createWorkspaceWorktree(rootDir, repos, title) {
+  const root = path.resolve(rootDir);
+  const name = `rickos-${slugify$1(title)}-${stamp$1()}`;
+  const branch = `claude/${name}`;
+  const wsDir = path.join(path.dirname(root), ".worktrees", `${path.basename(root)}-${name}`);
+  const rels = repos.map((r) => r.rel.replace(/\\/g, "/").replace(/^\.\/|\/$/g, ""));
+  const created = [];
+  const manifest = { root, branch, repos: [], links: [] };
+  fs.mkdirSync(wsDir, { recursive: true });
+  try {
+    for (let i = 0; i < repos.length; i++) {
+      const top = await repoTop(repos[i].dir);
+      if (!top) throw new Error(`"${repos[i].name}" (${repos[i].rel}) não é um repositório git.`);
+      const baseRef = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
+      const wt = path.join(wsDir, rels[i]);
+      fs.mkdirSync(path.dirname(wt), { recursive: true });
+      await git$1(top, ["worktree", "add", "-b", branch, wt, "HEAD"], 6e4);
+      created.push({ repoPath: top, wt });
+      manifest.repos.push({ name: repos[i].name, rel: rels[i], repoPath: top, baseRef });
+    }
+    mirrorRoot(root, wsDir, rels, "", manifest.links);
+    fs.writeFileSync(path.join(wsDir, WORKSPACE_MANIFEST), JSON.stringify(manifest, null, 2));
+  } catch (e) {
+    for (const c of created) {
+      await gitOk$1(c.repoPath, ["worktree", "remove", "--force", c.wt]);
+      await gitOk$1(c.repoPath, ["branch", "-D", branch]);
+    }
+    cleanupWorkspaceDir(wsDir);
+    throw e;
+  }
+  return { cwd: wsDir, repoPath: root, branch, baseRef: null };
+}
+function cleanupWorkspaceDir(wsDir) {
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const abs = path.join(dir, e.name);
+      if (e.isSymbolicLink() || dir === wsDir && e.name === WORKSPACE_MANIFEST) fs.rmSync(abs, { force: true });
+      else if (e.isDirectory() && !fs.existsSync(path.join(abs, ".git"))) walk(abs);
+    }
+    try {
+      fs.rmdirSync(dir);
+    } catch {
+    }
+  };
+  walk(wsDir);
+}
+function childRepos(dir) {
+  const out = [];
+  const skip = (e) => !e.isDirectory() || e.name.startsWith(".") || e.name === "node_modules";
+  const has = (d) => fs.existsSync(path.join(d, ".git"));
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (skip(e)) continue;
+    const sub = path.join(dir, e.name);
+    if (has(sub)) {
+      out.push({ name: e.name, rel: e.name, dir: sub });
+      continue;
+    }
+    try {
+      for (const e2 of fs.readdirSync(sub, { withFileTypes: true })) {
+        if (!skip(e2) && has(path.join(sub, e2.name))) out.push({ name: e2.name, rel: `${e.name}/${e2.name}`, dir: path.join(sub, e2.name) });
+      }
+    } catch {
+    }
+  }
+  return out.sort((a, b2) => a.rel.localeCompare(b2.rel));
+}
+function resolveRepoDir(dir, repoRel) {
+  if (!repoRel) return dir;
+  const hit = childRepos(dir).find((r) => r.rel === repoRel);
+  if (!hit) throw new Error(`Repositório "${repoRel}" não encontrado nesta pasta.`);
+  return hit.dir;
+}
+function workspaceBaseRef(wsDir, repoRel) {
+  return readWorkspaceManifest(wsDir)?.repos.find((r) => r.rel === repoRel)?.baseRef ?? null;
+}
+async function removeWorkspaceWorktree(wsDir) {
+  const m = readWorkspaceManifest(wsDir);
+  if (!m) throw new Error("Manifesto do workspace não encontrado.");
+  for (const r of m.repos) {
+    const wt = path.join(wsDir, r.rel);
+    if (fs.existsSync(wt)) await gitOk$1(r.repoPath, ["worktree", "remove", "--force", wt]);
+    await gitOk$1(r.repoPath, ["worktree", "prune"]);
+    await gitOk$1(r.repoPath, ["branch", "-D", m.branch]);
+  }
+  cleanupWorkspaceDir(wsDir);
+}
 async function removeWorktree(repoPath, worktreeDir, branch) {
+  if (readWorkspaceManifest(worktreeDir)) return removeWorkspaceWorktree(worktreeDir);
   const top = await repoTop(worktreeDir) ?? worktreeDir;
   if (fs.existsSync(top)) await gitOk$1(repoPath, ["worktree", "remove", "--force", top]);
   await gitOk$1(repoPath, ["worktree", "prune"]);
@@ -71942,7 +72283,13 @@ async function statusEntries(top) {
 }
 async function getChanges(dir, baseRef) {
   const top = await repoTop(dir);
-  if (!top) return { isRepo: false, branch: null, baseRef, files: [], unpushed: 0, hasRemote: false };
+  if (!top) {
+    const kids = childRepos(dir);
+    const repos = await Promise.all(
+      kids.map(async (k) => ({ name: k.name, rel: k.rel, changes: await getChanges(k.dir, workspaceBaseRef(dir, k.rel)) }))
+    );
+    return { isRepo: false, branch: null, baseRef, files: [], unpushed: 0, hasRemote: false, repos: repos.filter((r) => r.changes.isRepo) };
+  }
   const [branchRaw, entries, numstatRaw, remotes] = await Promise.all([
     gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]),
     statusEntries(top),
@@ -72617,9 +72964,13 @@ async function startTurn(conversationId, message) {
         if (!projectDir || !fs.existsSync(projectDir)) throw new Error("O worktree isolado precisa de um projeto com pasta local.");
         turn.blocks.push({ type: "notice", text: "🌿 Criando worktree isolado…" });
         emitTurn(run2, true);
-        const wt = await createWorktree(projectDir, conv.title || prompt);
+        const wsRepos = await deps.projectWorkspaceRepos(conv.projectId);
+        const wt = wsRepos?.length ? await createWorkspaceWorktree(projectDir, wsRepos, conv.title || prompt) : await createWorktree(projectDir, conv.title || prompt);
         turn.blocks = turn.blocks.filter((b2) => b2.type !== "notice");
-        turn.blocks.push({ type: "notice", text: `🌿 Worktree isolado na branch ${wt.branch}` });
+        turn.blocks.push({
+          type: "notice",
+          text: wsRepos?.length ? `🌿 Workspace isolado (${wsRepos.map((r) => r.name).join(", ")}) na branch ${wt.branch}` : `🌿 Worktree isolado na branch ${wt.branch}`
+        });
         cwd = wt.cwd;
         await setConversationRuntime(conversationId, { cwd, repoPath: wt.repoPath, worktreeBranch: wt.branch, baseRef: wt.baseRef });
       } else {
@@ -72961,6 +73312,82 @@ async function legacySecrets() {
   }
   return out;
 }
+function expandHome$5(p) {
+  return p.startsWith("~") ? path.join(os.homedir(), p.slice(1)) : p;
+}
+function githubSlug(url2) {
+  if (!url2) return null;
+  const m = url2.trim().match(/github\.com[:/]([^/\s]+\/[^/\s#?]+?)(?:\.git)?\/?$/i);
+  return m ? m[1].toLowerCase() : null;
+}
+function repoTargetsFrom(p, repos) {
+  const root = p.localPath?.trim() ? expandHome$5(p.localPath.trim()) : null;
+  const mine = repos.filter((r) => r.projectId === p.id);
+  if (mine.length) {
+    return mine.map((r) => {
+      const rel = r.path.trim() || ".";
+      const dir = path.isAbsolute(expandHome$5(rel)) ? expandHome$5(rel) : root ? path.join(root, rel) : null;
+      return dir ? { name: r.name, rel, dir, githubRepoUrl: r.githubRepoUrl || null, slug: githubSlug(r.githubRepoUrl) } : null;
+    }).filter((x) => !!x);
+  }
+  if (!root && !p.githubRepoUrl) return [];
+  return [{ name: p.name, rel: ".", dir: root ?? "", githubRepoUrl: p.githubRepoUrl || null, slug: githubSlug(p.githubRepoUrl) }];
+}
+async function repoTargets(p) {
+  return repoTargetsFrom(p, await getProjectRepos(p.id));
+}
+function localTargets(targets) {
+  return targets.filter((t) => t.dir && fs.existsSync(t.dir));
+}
+function isWorkspace(targets) {
+  return targets.length > 1 || targets.length === 1 && targets[0].rel !== ".";
+}
+function isGitDir(d) {
+  return fs.existsSync(path.join(d, ".git"));
+}
+function originUrl$1(dir) {
+  return new Promise((resolve) => {
+    child_process.execFile(
+      "git",
+      ["remote", "get-url", "origin"],
+      { cwd: dir, timeout: 5e3, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } },
+      (err, out) => resolve(err ? null : out.trim() || null)
+    );
+  });
+}
+function httpsUrl(remote) {
+  const slug = remote?.match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i)?.[1];
+  return slug ? `https://github.com/${slug}` : remote;
+}
+async function detectChildRepos(localPath) {
+  const root = expandHome$5(localPath.trim());
+  if (!root || !fs.existsSync(root)) throw new Error("Pasta não encontrada");
+  const found = [];
+  const skip = (n) => n.startsWith(".") || n === "node_modules";
+  for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!e.isDirectory() || skip(e.name)) continue;
+    const sub = path.join(root, e.name);
+    if (isGitDir(sub)) {
+      found.push(e.name);
+      continue;
+    }
+    try {
+      for (const e2 of fs.readdirSync(sub, { withFileTypes: true })) {
+        if (e2.isDirectory() && !skip(e2.name) && isGitDir(path.join(sub, e2.name))) found.push(path.join(e.name, e2.name));
+      }
+    } catch {
+    }
+  }
+  const repos = await Promise.all(
+    found.sort().map(async (rel) => ({ name: path.basename(rel), path: rel, githubRepoUrl: httpsUrl(await originUrl$1(path.join(root, rel))) }))
+  );
+  return { rootIsRepo: isGitDir(root), repos };
+}
+async function projectForGithubRepo(repo) {
+  const slug = repo.trim().toLowerCase();
+  const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()]);
+  return projects.find((p) => repoTargetsFrom(p, rows).some((t) => t.slug === slug)) ?? null;
+}
 const GITHUB_API = "https://api.github.com";
 function ghPath() {
   const home = os.homedir();
@@ -73078,14 +73505,8 @@ async function syncGithubIssues(forceFull = false) {
   await setSetting("github_last_sync", (/* @__PURE__ */ new Date()).toISOString());
   return issues.length;
 }
-function repoFromUrl$1(url2) {
-  if (!url2) return null;
-  const m = url2.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
-  return m ? m[1] : null;
-}
 async function claudeCommandForRepo(repo) {
-  const projects = await getProjects();
-  const match = projects.find((p) => repoFromUrl$1(p.githubRepoUrl)?.toLowerCase() === repo.toLowerCase());
+  const match = await projectForGithubRepo(repo);
   if (match?.claudeCommand && match.claudeCommand.trim()) return match.claudeCommand.trim();
   return await getSetting("claude_command") || "claude";
 }
@@ -73094,7 +73515,7 @@ async function createIssueViaClaude(id) {
   if (!issue) throw new Error("Issue não encontrada.");
   if (issue.url) throw new Error("Essa issue já está no GitHub.");
   const command = await claudeCommandForRepo(issue.repo);
-  const project = (await getProjects()).find((p) => repoFromUrl$1(p.githubRepoUrl)?.toLowerCase() === issue.repo.toLowerCase());
+  const project = await projectForGithubRepo(issue.repo);
   const body = (issue.body ?? "").replace(/`/g, "'");
   const prompt = `Crie uma issue no GitHub no repositório ${issue.repo} usando o gh CLI (gh issue create --repo ${issue.repo} --title <título> --body <corpo>). Título: "${issue.title}". Corpo: "${body || issue.title}". Ao final, imprima APENAS a URL da issue criada (ex.: https://github.com/${issue.repo}/issues/N).`;
   const out = await runClaude(prompt, command, {
@@ -74883,8 +75304,10 @@ const NO_CAPABILITIES = {
   reactions: false,
   replyTo: false,
   editMessages: false,
-  deleteMessages: false
+  deleteMessages: false,
+  sendImages: false
 };
+const MAX_SEND_IMAGE_BYTES = 15 * 1024 * 1024;
 class ProviderUnavailableError extends Error {
   constructor(message) {
     super(message);
@@ -75437,7 +75860,7 @@ async function applyScans(scans) {
 const FULL_SELECT = `
   SELECT c.*, o.contactId, ct.name AS contactName, ct.priority AS contactPriority, ct.vip AS contactVip,
          o.priority, o.manualState, o.manualAt, o.snoozeUntil, o.snoozedAt, o.reopenOnMessage, o.reminderNote, o.notes,
-         o.mentionsReviewedCount, a.syncEnabled AS accountSync, a.status AS accountStatus,
+         o.mentionsReviewedCount, o.pinnedAt, a.syncEnabled AS accountSync, a.status AS accountStatus,
          (SELECT COUNT(*) FROM chat_todos t JOIN todos td ON td.id = t.todoId WHERE t.chatId = c.id AND td.status != 'done') AS todoCount
   FROM chats c
   LEFT JOIN chat_org o ON o.chatId = c.id
@@ -75502,7 +75925,7 @@ function hasOrgData(db2, chatId) {
   const todos = one(db2, "SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?", [chatId])?.n ?? 0;
   if (labels || todos) return true;
   if (!o) return false;
-  return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes);
+  return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes || o.pinnedAt);
 }
 async function clearCache(opts = {}) {
   return tx((db2) => {
@@ -75523,7 +75946,7 @@ async function clearCache(opts = {}) {
     return { removed, kept };
   });
 }
-const ORG_COLS = ["contactId", "priority", "manualState", "manualAt", "snoozeUntil", "snoozedAt", "reopenOnMessage", "reminderNote", "reminderNotifiedAt", "notes", "mentionsReviewedCount"];
+const ORG_COLS = ["contactId", "priority", "manualState", "manualAt", "snoozeUntil", "snoozedAt", "reopenOnMessage", "reminderNote", "reminderNotifiedAt", "notes", "mentionsReviewedCount", "pinnedAt"];
 function patchOrgDb(db2, chatId, patch) {
   exec(db2, "INSERT OR IGNORE INTO chat_org (chatId, updatedAt) VALUES (?, ?)", [chatId, nowIso()]);
   const sets = [];
@@ -76017,7 +76440,8 @@ function createBeeperProvider(transport, opts = {}) {
     // leitura sim; reagir pelo rickOS ainda não
     replyTo: true,
     editMessages: true,
-    deleteMessages: true
+    deleteMessages: true,
+    sendImages: true
   };
   return {
     id: "beeper",
@@ -76076,9 +76500,22 @@ function createBeeperProvider(transport, opts = {}) {
       );
       return { items: (body?.items ?? []).map(mapMessage), hasMore: !!body?.hasMore, olderCursor: body?.hasMore ? body.oldestCursor ?? null : null };
     },
-    async sendMessage(remoteChatId, text, replyToId) {
+    async sendMessage(remoteChatId, text, replyToId, image) {
+      let attachment = null;
+      if (image) {
+        const up = await call(
+          { method: "POST", path: "/v1/assets/upload/base64", body: { content: image.data.toString("base64"), fileName: image.fileName, mimeType: image.mimeType } },
+          "Enviar imagem"
+        );
+        if (!up?.uploadID) throw new Error(`Enviar imagem: ${up?.error || "o Beeper não aceitou o arquivo."}`);
+        attachment = { uploadID: up.uploadID, mimeType: image.mimeType, fileName: image.fileName, type: image.mimeType === "image/gif" ? "gif" : "image" };
+      }
       const body = await call(
-        { method: "POST", path: `/v1/chats/${encodeURIComponent(remoteChatId)}/messages`, body: { text, ...replyToId ? { replyToMessageID: replyToId } : {} } },
+        {
+          method: "POST",
+          path: `/v1/chats/${encodeURIComponent(remoteChatId)}/messages`,
+          body: { ...text ? { text } : {}, ...replyToId ? { replyToMessageID: replyToId } : {}, ...attachment ? { attachment } : {} }
+        },
         "Enviar"
       );
       return { pendingId: body?.pendingMessageID ?? null };
@@ -76489,7 +76926,8 @@ function createMockProvider(control = createMockControl()) {
     reactions: false,
     replyTo: true,
     editMessages: true,
-    deleteMessages: true
+    deleteMessages: true,
+    sendImages: true
   };
   return {
     id: "mock",
@@ -76533,7 +76971,7 @@ function createMockProvider(control = createMockControl()) {
       const start = Math.max(0, end - 20);
       return { items: all2.slice(start, end), hasMore: start > 0, olderCursor: start > 0 ? String(start) : null };
     },
-    async sendMessage(remoteChatId, text, replyToId) {
+    async sendMessage(remoteChatId, text, replyToId, image) {
       guard();
       const list = store.get(remoteChatId);
       const c = chats.find((x) => x.id === remoteChatId);
@@ -76548,8 +76986,8 @@ function createMockProvider(control = createMockControl()) {
         timestamp: new Date(ts2).toISOString(),
         sortKey: String(ts2).padStart(16, "0"),
         text,
-        type: "TEXT",
-        attachments: [],
+        type: image ? "IMAGE" : "TEXT",
+        attachments: image ? [{ type: "image", fileName: image.fileName, mimeType: image.mimeType, size: image.data.length, ref: null, width: null, height: null }] : [],
         mentions: [],
         replyToId: replyToId ?? null,
         edited: false,
@@ -76560,7 +76998,7 @@ function createMockProvider(control = createMockControl()) {
       list.push(msg);
       c.unread = 0;
       c.mentions = c.mentions === null ? null : 0;
-      control.sent.push({ chatId: remoteChatId, text, replyTo: replyToId ?? null });
+      control.sent.push({ chatId: remoteChatId, text, replyTo: replyToId ?? null, ...image ? { image: { mimeType: image.mimeType, fileName: image.fileName, bytes: image.data.length } } : {} });
       control.emit?.({ type: "message.upserted", chatId: remoteChatId, messageIds: [msg.id] });
       return { pendingId: msg.id };
     },
@@ -76770,6 +77208,7 @@ function summarize$2(r, ctx) {
     reminderDue,
     reopened: reply.reopened,
     notes: r.notes,
+    pinnedAt: r.pinnedAt ?? null,
     labels,
     score,
     suggestedPriority: suggestedPriority(score),
@@ -76779,7 +77218,7 @@ function summarize$2(r, ctx) {
 const norm$1 = (s2) => (s2 ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 function visible(s2, r, ctx) {
   if (r.providerId === ctx.activeProviderId && r.accountSync !== 0 && r.accountStatus !== "removed") return true;
-  return !!(r.contactId || r.priority || r.manualState || r.snoozeUntil || r.notes || s2.labels.length);
+  return !!(r.contactId || r.priority || r.manualState || r.snoozeUntil || r.notes || r.pinnedAt || s2.labels.length);
 }
 function matches(s2, f, ctx) {
   if (f.networks?.length && !f.networks.includes(s2.network)) return false;
@@ -76840,9 +77279,12 @@ function matches(s2, f, ctx) {
 }
 function sortList(list, sort) {
   const t = (s2) => s2 ? Date.parse(s2) || 0 : 0;
-  if (sort === "recent") list.sort((a, b2) => t(b2.lastActivity) - t(a.lastActivity));
-  else if (sort === "oldest_pending") list.sort((a, b2) => (t(a.pendingSince) || Infinity) - (t(b2.pendingSince) || Infinity));
-  else list.sort((a, b2) => b2.score - a.score || t(b2.lastActivity) - t(a.lastActivity));
+  const by = sort === "recent" ? (a, b2) => t(b2.lastActivity) - t(a.lastActivity) : sort === "oldest_pending" ? (a, b2) => (t(a.pendingSince) || Infinity) - (t(b2.pendingSince) || Infinity) : (a, b2) => b2.score - a.score || t(b2.lastActivity) - t(a.lastActivity);
+  list.sort((a, b2) => {
+    if (!!a.pinnedAt !== !!b2.pinnedAt) return a.pinnedAt ? -1 : 1;
+    if (a.pinnedAt && b2.pinnedAt) return t(b2.pinnedAt) - t(a.pinnedAt) || by(a, b2);
+    return by(a, b2);
+  });
 }
 async function allSummaries(ctx) {
   const c = ctx ?? await summaryCtx();
@@ -77072,16 +77514,32 @@ async function requireProviderFor(chatId) {
   if (provider.id !== chat.providerId) throw new ProviderUnavailableError("Esta conversa é de um provedor que não está ativo: envio bloqueado.");
   return { provider, chat };
 }
-async function sendMessage(chatId, text, replyToId) {
+function parseOutgoingImage(input) {
+  if (!input) return null;
+  const b64 = String(input.base64 ?? "").replace(/^data:[^,]*,/, "");
+  if (!b64 || b64.length > Math.ceil(MAX_SEND_IMAGE_BYTES * 4 / 3) + 8) throw new Error("Imagem grande demais (máx. 15 MB).");
+  const data2 = Buffer.from(b64, "base64");
+  if (!data2.length) throw new Error("Imagem vazia.");
+  if (data2.length > MAX_SEND_IMAGE_BYTES) throw new Error("Imagem grande demais (máx. 15 MB).");
+  const mimeType = sniffImage(data2);
+  if (!mimeType) throw new Error("Formato não suportado: envie JPEG, PNG, GIF ou WebP.");
+  const ext = mimeType.split("/")[1].replace("jpeg", "jpg");
+  const base = String(input.fileName ?? "").replace(/\.[^.]*$/, "").replace(/[^\p{L}\p{N} ._-]/gu, "").replace(/^[.\s]+/, "").trim().slice(0, 80);
+  return { data: data2, mimeType, fileName: `${base || "imagem"}.${ext}` };
+}
+async function sendMessage(chatId, text, replyToId, imageInput) {
   const body = text.trim();
-  if (!body) throw new Error("Mensagem vazia.");
+  const image = parseOutgoingImage(imageInput);
+  if (!body && !image) throw new Error("Mensagem vazia.");
   if (body.length > 1e4) throw new Error("Mensagem longa demais.");
   const { provider, chat } = await requireProviderFor(chatId);
   if (!provider.capabilities().sendMessages) throw new Error("Este provedor não envia mensagens.");
-  const r = await provider.sendMessage(chat.remoteId, body, replyToId);
+  if (image && !provider.capabilities().sendImages) throw new Error("Este provedor não envia imagens.");
+  const r = await provider.sendMessage(chat.remoteId, body, replyToId, image);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const cfg = await loadConfig();
-  await recordOutbound(chatId, now, messageFlags(body).question, previewOf(body, cfg.storePreviews));
+  const preview = image ? body ? `📷 ${body}` : "📷 Imagem" : body;
+  await recordOutbound(chatId, now, messageFlags(body).question, previewOf(preview, cfg.storePreviews));
   const org = await getOrg(chatId);
   if (org && (org.snoozeUntil || org.manualState === "needs_reply")) {
     await patchOrg([chatId], { snoozeUntil: null, snoozedAt: null, reminderNote: null, ...org.manualState === "needs_reply" ? { manualState: null, manualAt: null } : {} });
@@ -77862,7 +78320,7 @@ function registerChatRpc(handle) {
     const page = await getMessages(Number(id), cursor ?? null);
     return page;
   });
-  handle("chats:send", (_e, id, text, replyToId) => sendMessage(Number(id), String(text ?? ""), replyToId ?? null));
+  handle("chats:send", (_e, id, text, replyToId, image) => sendMessage(Number(id), String(text ?? ""), replyToId ?? null, image ?? null));
   handle("chats:editMessage", (_e, id, messageId, text) => editMessage(Number(id), String(messageId ?? ""), String(text ?? "")));
   handle("chats:deleteMessage", (_e, id, messageId, forEveryone) => deleteMessage(Number(id), String(messageId ?? ""), forEveryone !== false));
   handle("chats:markRead", (_e, id, read2) => markRead(Number(id), read2 !== false));
@@ -77901,6 +78359,11 @@ function registerChatRpc(handle) {
     if (!PRIOS.includes(priority)) throw new Error("Prioridade inválida.");
     const list = ids(chatIds);
     await patchOrg(list, { priority });
+    changed$1(list);
+  });
+  handle("chats:pin", async (_e, chatIds, pinned) => {
+    const list = ids(chatIds);
+    await patchOrg(list, { pinnedAt: pinned === false ? null : (/* @__PURE__ */ new Date()).toISOString() });
     changed$1(list);
   });
   handle("chats:setNotes", async (_e, id, notes) => {
@@ -78381,6 +78844,12 @@ function listClaudeSkills(projects, fresh = false) {
     if (seen2.has(root) || !fs.existsSync(root)) continue;
     seen2.add(root);
     items.push(...scanRoot(root, { scope: "project", source: p.name, configDir: null, projectId: p.id }));
+    for (const r of p.repos ?? []) {
+      const sub = path.join(r.dir, ".claude");
+      if (seen2.has(sub) || !fs.existsSync(sub)) continue;
+      seen2.add(sub);
+      items.push(...scanRoot(sub, { scope: "project", source: `${p.name} · ${r.name}`, configDir: null, projectId: p.id }));
+    }
   }
   items.sort((a, b2) => a.source.localeCompare(b2.source) || a.name.localeCompare(b2.name));
   cache$1 = { at: Date.now(), items };
@@ -78794,12 +79263,14 @@ function registerAiConvRpc(handle, deps2) {
     await emitConv(f.id);
     return withLive(await getConversation(f.id));
   });
-  const convDir = async (id) => {
+  const convDir = async (id, repoRel) => {
     const c = await getConversation(id);
     if (!c) throw new Error("Conversa não encontrada.");
-    const dir = c.cwd || await deps2.resolveProjectCwd(c.projectId);
-    if (!dir) throw new Error("Esta conversa não tem pasta de trabalho.");
-    return { dir, baseRef: c.baseRef };
+    const root = c.cwd || await deps2.resolveProjectCwd(c.projectId);
+    if (!root) throw new Error("Esta conversa não tem pasta de trabalho.");
+    if (!repoRel) return { dir: root, baseRef: c.baseRef };
+    const rel = String(repoRel);
+    return { dir: resolveRepoDir(root, rel), baseRef: workspaceBaseRef(root, rel) };
   };
   handle("conv:changes", async (_e, id) => {
     const c = await getConversation(id);
@@ -78807,27 +79278,27 @@ function registerAiConvRpc(handle, deps2) {
     if (!c || !dir) return { isRepo: false, branch: null, baseRef: null, files: [], unpushed: 0, hasRemote: false };
     return getChanges(dir, c.baseRef);
   });
-  handle("conv:fileDiff", async (_e, id, filePath) => {
-    const { dir } = await convDir(id);
+  handle("conv:fileDiff", async (_e, id, filePath, repoRel) => {
+    const { dir } = await convDir(id, repoRel);
     return fileDiff(dir, String(filePath));
   });
-  handle("conv:commit", async (_e, id, message, paths) => {
-    const { dir } = await convDir(id);
+  handle("conv:commit", async (_e, id, message, paths, repoRel) => {
+    const { dir } = await convDir(id, repoRel);
     return commit(dir, String(message ?? ""), Array.isArray(paths) ? paths.map(String) : null);
   });
-  handle("conv:discard", async (_e, id, filePath) => {
+  handle("conv:discard", async (_e, id, filePath, repoRel) => {
     if (isRunning(id)) throw new Error("Espere a execução terminar.");
-    const { dir } = await convDir(id);
+    const { dir } = await convDir(id, repoRel);
     await discard(dir, String(filePath));
     return true;
   });
-  handle("conv:pr", async (_e, id) => {
-    const { dir, baseRef } = await convDir(id);
+  handle("conv:pr", async (_e, id, repoRel) => {
+    const { dir, baseRef } = await convDir(id, repoRel);
     return openPullRequest(dir, baseRef);
   });
-  handle("conv:suggestCommit", async (_e, id) => {
+  handle("conv:suggestCommit", async (_e, id, repoRel) => {
     const c = await getConversation(id);
-    const { dir } = await convDir(id);
+    const { dir } = await convDir(id, repoRel);
     const ctx = await commitContext(dir);
     if (!ctx.trim()) throw new Error("Nada para descrever.");
     const out = await runClaude(
@@ -79136,7 +79607,10 @@ async function suggestProjects() {
   if (!rootExists) return { root: rootSetting, rootExists, items: [], ignoredCount: 0 };
   const projects = await getProjects();
   const registeredPaths = projects.map((p) => p.localPath?.trim()).filter((p) => !!p).map((p) => realpath(expandHome$4(p)));
-  const registeredRepos = new Set(projects.map((p) => repoKey(p.githubRepoUrl)).filter((k) => !!k));
+  const repoRows = await getProjectRepos();
+  const registeredRepos = new Set(
+    [...projects.map((p) => p.githubRepoUrl), ...repoRows.map((r) => r.githubRepoUrl)].map((u) => repoKey(u)).filter((k) => !!k)
+  );
   const isRegistered = (dir, repo) => {
     const real = realpath(dir);
     if (registeredPaths.some((r) => r === real || real.startsWith(r + path.sep))) return true;
@@ -79285,12 +79759,14 @@ function findReposUnder(root) {
 }
 async function discoverRepos() {
   const byPath = /* @__PURE__ */ new Map();
-  const projects = await getProjects();
-  for (const p of projects) {
-    const lp = p.localPath?.trim();
-    if (!lp || !fs.existsSync(expandHome$3(lp))) continue;
-    const main = await mainRepoOf(expandHome$3(lp));
-    if (main && !byPath.has(main)) byPath.set(main, { path: main, projectId: p.id, projectName: p.name });
+  const [projects, repoRows] = await Promise.all([getProjects(), getProjectRepos()]);
+  const targets = projects.map((p) => ({ p, list: repoTargetsFrom(p, repoRows) }));
+  for (const { p, list } of targets) {
+    for (const t of list) {
+      if (!t.dir || !fs.existsSync(t.dir)) continue;
+      const main = await mainRepoOf(t.dir);
+      if (main && !byPath.has(main)) byPath.set(main, { path: main, projectId: p.id, projectName: p.name });
+    }
   }
   for (const root of await getScanRoots()) {
     for (const dir of findReposUnder(root)) {
@@ -79302,7 +79778,7 @@ async function discoverRepos() {
     if (c.projectId != null) continue;
     const url2 = (await gitOk(c.path, ["remote", "get-url", "origin"]))?.trim();
     const slug = repoSlug(url2 ?? null);
-    const p = slug ? projects.find((x) => repoSlug(x.githubRepoUrl) === slug) : void 0;
+    const p = slug ? targets.find((x) => x.list.some((t) => t.slug === slug))?.p : void 0;
     if (p) {
       c.projectId = p.id;
       c.projectName = p.name;
@@ -79602,19 +80078,22 @@ const ROADMAP_FILE = "ROADMAP_RICKOS.md";
 function expandHome$2(p) {
   return p.startsWith("~") ? path.join(os.homedir(), p.slice(1)) : p;
 }
-function repoFromUrl(url2) {
-  if (!url2) return null;
-  const m = url2.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
-  return m ? m[1] : null;
-}
 function todayStr() {
   const d = /* @__PURE__ */ new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 const gitCache = /* @__PURE__ */ new Map();
-async function gitPulse(localPath) {
-  if (!localPath) return { lastCommitAt: null, commits7d: 0 };
-  const dir = expandHome$2(localPath);
+async function gitPulse(targets) {
+  const all2 = await Promise.all(localTargets(targets).map((t) => gitPulseDir(t.dir)));
+  return all2.reduce(
+    (acc, g) => ({
+      lastCommitAt: g.lastCommitAt && (!acc.lastCommitAt || new Date(g.lastCommitAt) > new Date(acc.lastCommitAt)) ? g.lastCommitAt : acc.lastCommitAt,
+      commits7d: acc.commits7d + g.commits7d
+    }),
+    { lastCommitAt: null, commits7d: 0 }
+  );
+}
+async function gitPulseDir(dir) {
   const hit = gitCache.get(dir);
   if (hit && Date.now() - hit.at < 10 * 60 * 1e3) return hit;
   if (!fs.existsSync(path.join(dir, ".git")) && !fs.existsSync(dir)) return { lastCommitAt: null, commits7d: 0 };
@@ -79628,13 +80107,19 @@ async function gitPulse(localPath) {
 }
 async function projectCommits(projectId, limit = 30) {
   const p = await getProject(projectId);
-  if (!p?.localPath) return [];
-  const out = await gitQuiet(expandHome$2(p.localPath), ["log", "--all", `-${limit}`, "--format=%h%x1f%s%x1f%an%x1f%aI%x1f%D"]);
-  if (!out) return [];
-  return out.split("\n").filter(Boolean).map((line) => {
-    const [hash2, subject, author, date, refs] = line.split("");
-    return { hash: hash2, subject, author, date, refs: refs ?? "" };
-  });
+  if (!p) return [];
+  const targets = await repoTargets(p);
+  const multi = isWorkspace(targets);
+  const lists = await Promise.all(
+    localTargets(targets).map(async (t) => {
+      const out = await gitQuiet(t.dir, ["log", "--all", `-${limit}`, "--format=%h%x1f%s%x1f%an%x1f%aI%x1f%D"]);
+      return (out ?? "").split("\n").filter(Boolean).map((line) => {
+        const [hash2, subject, author, date, refs] = line.split("");
+        return { hash: hash2, subject, author, date, refs: refs ?? "", repo: multi ? t.name : null };
+      });
+    })
+  );
+  return lists.flat().sort((a, b2) => new Date(b2.date).getTime() - new Date(a.date).getTime()).slice(0, limit);
 }
 function roadmapPath(p) {
   if (!p.localPath) return null;
@@ -79694,23 +80179,25 @@ function pulseOf(idleDays) {
   return "parado";
 }
 async function projectsOverview() {
-  const [projects, numbers, milestones, cycles, issues, todos] = await Promise.all([
+  const [projects, numbers, milestones, cycles, issues, todos, repoRows] = await Promise.all([
     getProjects(),
     getProjectNumbers(),
     getProjectMilestones(),
     getProjectCycles(null),
     getGithubIssues(),
-    getTodos()
+    getTodos(),
+    getProjectRepos()
   ]);
+  const targetsOf = new Map(projects.map((p) => [p.id, repoTargetsFrom(p, repoRows)]));
   const today = todayStr();
   const focusLimit = Number(await getSetting("projects_focus_limit") || 3) || 3;
   const inFocus = projects.filter((p) => p.status === "foco").length;
-  const gits = await Promise.all(projects.map((p) => p.status === "concluido" || p.status === "encerrado" ? Promise.resolve({ lastCommitAt: null, commits7d: 0 }) : gitPulse(p.localPath)));
+  const gits = await Promise.all(projects.map((p) => p.status === "concluido" || p.status === "encerrado" ? Promise.resolve({ lastCommitAt: null, commits7d: 0 }) : gitPulse(targetsOf.get(p.id) ?? [])));
   return projects.map((p, i) => {
     const n = numbers.find((x) => x.projectId === p.id);
     const ms = milestones.filter((m) => m.projectId === p.id);
-    const repo = repoFromUrl(p.githubRepoUrl);
-    const projIssues = repo ? issues.filter((x) => x.repo.toLowerCase() === repo.toLowerCase()) : [];
+    const slugs = new Set((targetsOf.get(p.id) ?? []).map((t) => t.slug).filter(Boolean));
+    const projIssues = slugs.size ? issues.filter((x) => slugs.has(x.repo.toLowerCase())) : [];
     const openIssues = projIssues.filter((x) => x.state === "open").length;
     const lastIssueAt = projIssues.reduce((max, x) => x.updatedAt && (!max || x.updatedAt > max) ? x.updatedAt : max, null);
     const g = gits[i];
@@ -79826,13 +80313,20 @@ async function cycleCommits(cycleId) {
   const c = await getProjectCycle(cycleId);
   if (!c) throw new Error("Ciclo não encontrado");
   const p = await getProject(c.projectId);
-  if (!p?.localPath) return [];
+  if (!p) return [];
   const until = c.closedAt ?? (/* @__PURE__ */ new Date()).toISOString();
-  const out = await gitQuiet(expandHome$2(p.localPath), ["log", "--no-merges", `--since=${c.startDate}T00:00:00`, `--until=${until}`, "--format=%h%x1f%s%x1f%aI"]);
-  return (out ?? "").split("\n").filter(Boolean).map((l) => {
-    const [hash2, subject, date] = l.split("");
-    return { hash: hash2, subject, date };
-  });
+  const targets = await repoTargets(p);
+  const multi = isWorkspace(targets);
+  const lists = await Promise.all(
+    localTargets(targets).map(async (t) => {
+      const out = await gitQuiet(t.dir, ["log", "--no-merges", `--since=${c.startDate}T00:00:00`, `--until=${until}`, "--format=%h%x1f%s%x1f%aI"]);
+      return (out ?? "").split("\n").filter(Boolean).map((l) => {
+        const [hash2, subject, date] = l.split("");
+        return multi ? { hash: hash2, subject, date, repo: t.name } : { hash: hash2, subject, date };
+      });
+    })
+  );
+  return lists.flat().sort((a, b2) => new Date(b2.date).getTime() - new Date(a.date).getTime());
 }
 function groupedChangelog(name, commits) {
   if (!commits.length) return `## ${name}
@@ -79844,7 +80338,7 @@ _Nenhum commit no período do ciclo._`;
     const title = g?.title ?? "📦 Outros";
     const text = g ? c.subject.replace(g.re, "").trim() : c.subject;
     if (!buckets.has(title)) buckets.set(title, []);
-    buckets.get(title).push(`- ${text.charAt(0).toUpperCase()}${text.slice(1)} (${c.hash})`);
+    buckets.get(title).push(`- ${text.charAt(0).toUpperCase()}${text.slice(1)} (${c.repo ? `${c.repo}@` : ""}${c.hash})`);
   }
   const order = [...GROUPS.map((g) => g.title), "📦 Outros"];
   return [`## ${name}`, "", ...order.filter((t) => buckets.has(t)).flatMap((t) => [`### ${t}`, ...buckets.get(t), ""])].join("\n").trim();
@@ -79863,7 +80357,7 @@ async function generateCycleChangelog(cycleId, useAi) {
 Markdown, em português, voltado a quem USA o produto: comece com "## ${c.name}" e 1 frase de destaque; depois seções curtas (✨ Novidades, ⚡ Melhorias, 🐛 Correções) com bullets claros. Junte commits repetidos, ignore ruído (merges, builds, "wip", atualizações de dist). Não invente nada. Responda só o Markdown.
 
 Commits (${commits.length}):
-${commits.map((x) => `- ${x.date.slice(0, 10)} ${x.subject}`).join("\n")}`,
+${commits.map((x) => `- ${x.date.slice(0, 10)} ${x.repo ? `[${x.repo}] ` : ""}${x.subject}`).join("\n")}`,
         command,
         { model: (await getSetting("claude_model") || "").trim(), timeoutMs: 18e4, usage: { source: "changelog", projectId: c.projectId } }
       );
@@ -80135,20 +80629,40 @@ async function delegateNextAction(projectId, action, instructions) {
   if (!task) throw new Error("Defina a próxima ação antes de delegar.");
   if (!p.localPath) throw new Error("Defina o caminho local do projeto (repositório git).");
   const repo = path.resolve(expandHome(p.localPath));
-  const top = (await gitQuiet(repo, ["rev-parse", "--show-toplevel"]))?.trim();
-  if (!top) throw new Error("O caminho local não é um repositório git.");
-  const base = (await gitQuiet(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
-  const name = `rickos-${slugify(task)}-${stamp()}`;
-  const branch = `claude/${name}`;
-  const wtDir = path.join(path.dirname(top), ".worktrees", `${path.basename(top)}-${name}`);
-  fs.mkdirSync(path.dirname(wtDir), { recursive: true });
-  const added = await gitQuiet(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"]);
-  if (added == null || !fs.existsSync(wtDir)) throw new Error("Não consegui criar o worktree (git worktree add falhou).");
-  const d = await createDelegation({ projectId, action: task, instructions: instructions?.trim() || null, repoPath: top, branch, worktreePath: wtDir, baseRef: base });
+  const targets = await repoTargets(p);
+  const workspace = isWorkspace(targets);
+  let top;
+  let base;
+  let branch;
+  let wtDir;
+  if (workspace) {
+    const repos = localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }));
+    if (!repos.length) throw new Error("Nenhum repositório do projeto foi encontrado na pasta local.");
+    const ws = await createWorkspaceWorktree(repo, repos, task);
+    top = ws.repoPath;
+    base = "HEAD";
+    branch = ws.branch;
+    wtDir = ws.cwd;
+  } else {
+    const t = (await gitQuiet(repo, ["rev-parse", "--show-toplevel"]))?.trim();
+    if (!t) throw new Error("O caminho local não é um repositório git.");
+    top = t;
+    base = (await gitQuiet(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
+    const name = `rickos-${slugify(task)}-${stamp()}`;
+    branch = `claude/${name}`;
+    wtDir = path.join(path.dirname(top), ".worktrees", `${path.basename(top)}-${name}`);
+    fs.mkdirSync(path.dirname(wtDir), { recursive: true });
+    const added = await gitQuiet(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"]);
+    if (added == null || !fs.existsSync(wtDir)) throw new Error("Não consegui criar o worktree (git worktree add falhou).");
+  }
+  const wsRepos = workspace ? readWorkspaceManifest(wtDir)?.repos ?? [] : [];
+  const d = await createDelegation({ projectId, action: task, instructions: instructions?.trim() || null, repoPath: top, branch, worktreePath: wtDir, baseRef: workspace ? null : base });
   await addProjectEvent(projectId, "delegacao", `🤖 Delegada ao Claude: ${task} (${branch})`);
   changed(projectId);
   const prompt = `[rickos:delegacao] Você é um engenheiro trabalhando sozinho no projeto "${p.name}".
-Você está num git worktree ISOLADO, na branch "${branch}" (criada a partir de "${base}"). Pode editar à vontade aqui.
+${workspace ? `Você está numa cópia ISOLADA do workspace do projeto. A pasta raiz NÃO é um repositório; cada subpasta abaixo é um git worktree na branch "${branch}":
+${wsRepos.map((r) => `- ${r.name}: ./${r.rel} (criada a partir de "${r.baseRef}")`).join("\n")}
+Pode editar à vontade nesses repositórios. Para git, entre no repo certo (cd <pasta> && git …).` : `Você está num git worktree ISOLADO, na branch "${branch}" (criada a partir de "${base}"). Pode editar à vontade aqui.`}
 
 TAREFA (a próxima ação do projeto):
 ${task}
@@ -80163,15 +80677,15 @@ ${p.description ? `- Descrição: ${p.description}
 ` : ""}${p.whereLeftOff ? `- Onde parei: ${p.whereLeftOff}
 ` : ""}
 Regras:
-- Leia o CLAUDE.md / README do repositório antes de mudar algo e siga as convenções.
+- Leia o CLAUDE.md / README ${workspace ? "da raiz e dos repositórios" : "do repositório"} antes de mudar algo e siga as convenções.
 - Faça a menor mudança que conclua a tarefa. Rode o typecheck/testes se existirem.
-- Faça commits pequenos com mensagens claras NESTA branch. NÃO faça push, NÃO abra PR, NÃO mexa fora deste diretório.
+- Faça commits pequenos com mensagens claras NESTA branch${workspace ? " (em cada repositório que mudar)" : ""}. NÃO faça push, NÃO abra PR, NÃO mexa fora deste diretório.
 - Se a tarefa for ambígua ou grande demais, faça a parte segura e explique o resto.
 
 No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O que falta / dúvidas**.`;
   const command = p.claudeCommand?.trim() || await getSetting("claude_command") || "claude";
   const model2 = (await getSetting("claude_model") || "").trim();
-  const allowed = ["Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git add:*)", "Bash(git commit:*)", "Bash(npm run:*)", "Bash(npx tsc:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(grep:*)", "Bash(rg:*)", "Bash(find:*)"];
+  const allowed = ["Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git add:*)", "Bash(git commit:*)", "Bash(npm run:*)", "Bash(npx tsc:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(grep:*)", "Bash(rg:*)", "Bash(find:*)", ...workspace ? ["Bash(cd:*)"] : []];
   runClaude(prompt, command, {
     model: model2,
     cwd: wtDir,
@@ -80254,6 +80768,29 @@ async function cancelDelegation(id) {
 async function reviewDelegation(id) {
   const d = await getDelegation(id);
   if (!d) throw new Error("Delegação não encontrada");
+  const ws = readWorkspaceManifest(d.worktreePath);
+  if (ws) {
+    const out = { commits: [], diffStat: "", uncommitted: [], worktreeExists: true };
+    const stats = [];
+    for (const r of ws.repos) {
+      const range2 = r.baseRef && r.baseRef !== "HEAD" ? `${r.baseRef}..${d.branch}` : `${d.branch}~20..${d.branch}`;
+      const log22 = await gitQuiet(r.repoPath, ["log", "--format=%h%x1f%s", range2]) ?? "";
+      for (const l of log22.split("\n").filter(Boolean)) {
+        const [hash2, subject] = l.split("");
+        out.commits.push({ hash: hash2, subject: `[${r.name}] ${subject}` });
+      }
+      if (r.baseRef && r.baseRef !== "HEAD") {
+        const stat2 = (await gitQuiet(r.repoPath, ["diff", "--stat", `${r.baseRef}...${d.branch}`]) ?? "").trim();
+        if (stat2) stats.push(`## ${r.name}
+${stat2}`);
+      }
+      const wt = path.join(d.worktreePath, r.rel);
+      const st2 = fs.existsSync(wt) ? await gitQuiet(wt, ["status", "--short"]) ?? "" : "";
+      out.uncommitted.push(...st2.split("\n").filter(Boolean).map((x) => `${r.name}: ${x}`));
+    }
+    out.diffStat = stats.join("\n\n");
+    return out;
+  }
   const exists = fs.existsSync(d.worktreePath);
   const base = d.baseRef && d.baseRef !== "HEAD" ? d.baseRef : null;
   const range = base ? `${base}..${d.branch}` : `${d.branch}~20..${d.branch}`;
@@ -80274,7 +80811,8 @@ async function discardDelegation(id) {
   const d = await getDelegation(id);
   if (!d) return;
   if (d.status === "rodando") throw new Error("Cancele a execução antes de descartar.");
-  if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ["worktree", "remove", "--force", d.worktreePath]);
+  if (readWorkspaceManifest(d.worktreePath)) await removeWorkspaceWorktree(d.worktreePath);
+  else if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ["worktree", "remove", "--force", d.worktreePath]);
   await gitQuiet(d.repoPath, ["worktree", "prune"]);
   await gitQuiet(d.repoPath, ["branch", "-D", d.branch]);
   await updateDelegation(id, { status: "descartada" });
@@ -80292,6 +80830,21 @@ async function prDelegation(id) {
   const d = await getDelegation(id);
   if (!d) throw new Error("Delegação não encontrada");
   await scanGit({});
+  const ws = readWorkspaceManifest(d.worktreePath);
+  if (ws) {
+    const urls = [];
+    for (const r2 of ws.repos) {
+      const ahead = r2.baseRef && r2.baseRef !== "HEAD" ? Number((await gitQuiet(r2.repoPath, ["rev-list", "--count", `${r2.baseRef}..${d.branch}`]))?.trim() ?? 0) : 1;
+      if (!ahead) continue;
+      const pr = await createPullRequest(r2.repoPath, d.branch);
+      urls.push(pr.url);
+      await addProjectEvent(d.projectId, "delegacao", `🔀 PR aberto (${r2.name}): ${pr.url}`);
+    }
+    if (!urls.length) throw new Error("Nenhum repositório tem commits nesta branch.");
+    await updateDelegation(id, { prUrl: urls[0] });
+    changed(d.projectId);
+    return { url: urls[0] };
+  }
   const r = await createPullRequest(d.repoPath, d.branch);
   await updateDelegation(id, { prUrl: r.url });
   await addProjectEvent(d.projectId, "delegacao", `🔀 PR aberto: ${r.url}`);
@@ -80410,6 +80963,7 @@ ipcMain.handle(
   (_, date, isWorkDay) => updateDayConfig(date, isWorkDay)
 );
 ipcMain.handle("todos:getAll", (_, status2) => getTodos(status2));
+ipcMain.handle("todos:list", (_, filters) => listTodos(filters ?? {}));
 ipcMain.handle(
   "todos:create",
   (_, title, notes, status2, source, priority, dueDate, projectId, aiGenerated, recurrence, type) => createTodo(title, notes, status2, source, priority, dueDate, projectId, aiGenerated ?? 0, recurrence ?? null, type ?? "projeto")
@@ -80642,6 +81196,15 @@ ipcMain.handle("projects:delete", (_, id) => deleteProject(id));
 ipcMain.handle("projects:suggestions", () => suggestProjects());
 ipcMain.handle("projects:ignoreSuggestion", (_, dir) => ignoreProjectSuggestion(dir));
 ipcMain.handle("projects:restoreSuggestions", () => restoreProjectSuggestions());
+ipcMain.handle("projects:repos", (_, projectId) => getProjectRepos(projectId));
+ipcMain.handle(
+  "projects:setRepos",
+  (_, projectId, repos) => setProjectRepos(
+    projectId,
+    (repos ?? []).map((r) => ({ name: String(r.name ?? "").trim(), path: String(r.path ?? "").trim(), githubRepoUrl: r.githubRepoUrl?.trim() || null })).filter((r) => r.path).map((r) => ({ ...r, name: r.name || r.path.split("/").pop() || r.path }))
+  )
+);
+ipcMain.handle("projects:detectRepos", (_, localPath) => detectChildRepos(localPath));
 ipcMain.handle("milestones:getAll", () => getProjectMilestones());
 ipcMain.handle("milestones:create", (_, projectId, title, targetDate) => createProjectMilestone(projectId, title, targetDate));
 ipcMain.handle("milestones:toggle", (_, id, done) => toggleProjectMilestone(id, done));
@@ -80653,7 +81216,7 @@ ipcMain.handle(
 const projectsChanged = (id) => broadcast("projects:updated", { id: id ?? null });
 ipcMain.handle("projects:get", (_, id) => getProject(id));
 ipcMain.handle("projects:patch", async (_, id, fields) => {
-  const p = await patchProject(id, fields);
+  const p = await patchProject(id, fields, { linkTodo: true });
   projectsChanged(id);
   return p;
 });
@@ -80662,8 +81225,8 @@ ipcMain.handle("projects:setStatus", async (_, id, status2, payload) => {
   projectsChanged(id);
   return p;
 });
-ipcMain.handle("projects:completeNextAction", async (_, id, next, size) => {
-  const p = await completeNextAction(id, next, size ?? null);
+ipcMain.handle("projects:completeNextAction", async (_, id, next, size, todoId) => {
+  const p = await completeNextAction(id, next, size ?? null, todoId ?? null);
   projectsChanged(id);
   return p;
 });
@@ -80988,6 +81551,14 @@ async function resolveProjectCwd(projectId) {
   const p = (await getProjects()).find((x) => x.id === projectId);
   return p?.localPath && p.localPath.trim() ? p.localPath.trim() : void 0;
 }
+async function workspaceRepoDirs(projectId) {
+  if (projectId == null) return null;
+  const p = (await getProjects()).find((x) => x.id === projectId);
+  if (!p) return null;
+  const targets = await repoTargets(p);
+  if (!isWorkspace(targets)) return null;
+  return localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }));
+}
 const DEFAULT_ALLOWED_TOOLS = "Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep";
 async function resolveAllowedToolsArgs() {
   const tools = (await getSetting("claude_allowed_tools") || DEFAULT_ALLOWED_TOOLS).trim();
@@ -81006,6 +81577,16 @@ async function buildProjectContext(projectId) {
   const hasLocal = !!(p.localPath && p.localPath.trim() && fs.existsSync(p.localPath.trim()));
   const lines = ["### CONTEXTO DO PROJETO", `Projeto: ${p.name}`];
   if (p.description) lines.push(`Descrição: ${p.description}`);
+  const targets = await repoTargets(p);
+  if (isWorkspace(targets)) {
+    lines.push(
+      hasLocal ? `Diretório de trabalho: ${p.localPath.trim()} (pasta raiz do workspace; você já está rodando DENTRO dela).` : "Projeto com vários repositórios (sem pasta local configurada).",
+      "Esta pasta raiz não é um repositório git. Repositórios do projeto:",
+      ...targets.map((t) => `- ${t.name}: ./${t.rel}${t.slug ? ` (GitHub ${t.slug})` : ""}`),
+      "Rode git dentro da subpasta do repositório certo (git -C <pasta> …) e, no gh, sempre use --repo <owner/name> do repositório afetado."
+    );
+    return lines.join("\n") + "\n\n";
+  }
   if (p.githubRepoUrl) lines.push(`Repositório GitHub: ${p.githubRepoUrl}`);
   if (hasLocal) {
     lines.push(
@@ -81112,6 +81693,7 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   resolveCommand: async (c) => c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? void 0),
   resolveModel: (c) => resolveModel(c.model),
   resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
+  projectWorkspaceRepos: (projectId) => workspaceRepoDirs(projectId),
   allowedToolsArgs: () => resolveAllowedToolsArgs(),
   systemPrompt: async (c) => {
     const parts = [];
@@ -81132,7 +81714,18 @@ ${sk.content.trim()}`);
     }
     return parts.join("\n\n");
   },
-  projectPaths: async () => (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath.trim(), name: p.name }))
+  projectPaths: async () => {
+    const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()]);
+    return projects.filter((p) => p.localPath && p.localPath.trim()).map((p) => {
+      const targets = repoTargetsFrom(p, rows);
+      return {
+        id: p.id,
+        localPath: p.localPath.trim(),
+        name: p.name,
+        repos: isWorkspace(targets) ? targets.map((t) => ({ name: t.name, dir: t.dir })) : void 0
+      };
+    });
+  }
 });
 ipcMain.handle("ai:cancel", (_, runId) => {
   const r = aiRuns.get(runId);
