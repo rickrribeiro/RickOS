@@ -31,7 +31,7 @@ interface ProjectState {
   update: (project: Project) => Promise<void>
   patch: (id: number, fields: ProjectPatch) => Promise<Project>
   setStatus: (id: number, status: ProjectStatus, payload?: ProjectStatusPayload) => Promise<void>
-  completeNextAction: (id: number, next: string | null, size?: NextActionSize | null) => Promise<void>
+  completeNextAction: (id: number, next: string | null, size?: NextActionSize | null, todoId?: number | null) => Promise<void>
   setStage: (id: number, stage: string) => Promise<void>
   remove: (id: number) => Promise<void>
   /** "Trabalhar nisso": inicia o timer vinculado ao projeto. */
@@ -135,8 +135,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     void get().refreshOverview()
   },
 
-  completeNextAction: async (id, next, size) => {
-    const p = await window.api.projects.completeNextAction(id, next, size ?? null)
+  completeNextAction: async (id, next, size, todoId) => {
+    const p = await window.api.projects.completeNextAction(id, next, size ?? null, todoId ?? null)
     set({ projects: get().projects.map((x) => (x.id === id ? p : x)) })
     void get().refreshOverview()
   },

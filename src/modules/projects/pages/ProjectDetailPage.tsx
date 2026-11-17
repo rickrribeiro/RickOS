@@ -75,7 +75,7 @@ export function ProjectDetailPage(): React.ReactElement {
   const [aiError, setAiError] = useState('')
   const [cycleMode, setCycleMode] = useState<'new' | 'extend' | 'close' | null>(null)
   const [changelogCycle, setChangelogCycle] = useState<ProjectCycle | null>(null)
-  const [delegating, setDelegating] = useState(false)
+  const [delegating, setDelegating] = useState<string | null>(null) // texto da tarefa a delegar
   const [msTitle, setMsTitle] = useState('')
   const [msDate, setMsDate] = useState('')
   const [newTodo, setNewTodo] = useState('')
@@ -349,7 +349,7 @@ ${ctx}`
                 {project.nextAction && !isClosed(project) && (
                   <button
                     className="btn btn-secondary btn-sm"
-                    onClick={() => setDelegating(true)}
+                    onClick={() => setDelegating(project.nextAction ?? '')}
                     title="O Claude analisa a próxima ação e monta um prompt no Prompt Runner para você revisar e enviar"
                   >
                     🤖 Delegar
@@ -603,8 +603,9 @@ ${ctx}`
                     {ms.map((m) => <option key={m.id} value={m.id}>🎯 {m.title}</option>)}
                   </select>
                 )}
-                <button className="btn btn-secondary btn-sm" title="Trabalhar nesta tarefa" onClick={() => startWorking(project, t.title)}>▶</button>
-                <button className="btn btn-secondary btn-sm" title="Tornar a próxima ação" onClick={() => save({ nextAction: t.title })}>👉</button>
+                <button className="btn btn-secondary btn-sm" title="Trabalhar nesta tarefa" onClick={() => startWorking(project, t.title)}>Start</button>
+                <button className="btn btn-secondary btn-sm" title="O Claude analisa esta tarefa e monta um prompt no Prompt Runner para você revisar e enviar" onClick={() => setDelegating(t.title)}>Delegar</button>
+                <button className="btn btn-secondary btn-sm" title="Tornar a próxima ação" onClick={() => save({ nextAction: t.title, nextActionTodoId: t.id })}>Next up</button>
               </div>
             ))}
           </div>
@@ -789,7 +790,16 @@ ${ctx}`
       )}
 
       {statusTo && <StatusChangeModal project={project} to={statusTo} onClose={() => setStatusTo(null)} />}
-      {actionMode && <NextActionModal project={project} mode={actionMode} onClose={() => setActionMode(null)} />}
+      {actionMode && (
+        <NextActionModal
+          project={project}
+          mode={actionMode}
+          onClose={() => {
+            setActionMode(null)
+            void loadExtras()
+          }}
+        />
+      )}
       {editing && <ProjectForm project={project} onClose={() => setEditing(false)} />}
       {cycleMode && (
         <CycleModal
@@ -806,7 +816,7 @@ ${ctx}`
         />
       )}
       {changelogCycle && <ChangelogModal cycle={changelogCycle} onClose={() => setChangelogCycle(null)} />}
-      {delegating && <DelegateModal project={project} onClose={() => setDelegating(false)} />}
+      {delegating != null && <DelegateModal project={project} task={delegating} onClose={() => setDelegating(null)} />}
     </div>
   )
 }

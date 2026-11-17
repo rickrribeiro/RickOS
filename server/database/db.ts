@@ -357,6 +357,13 @@ const MIGRATIONS: Migration[] = [
         db.run("UPDATE notifications SET source = 'claude' WHERE source = 'ia' AND title LIKE '%Execução de IA%';")
       } catch { /* tabela ausente */ }
     }
+  },
+  {
+    version: 24,
+    label: 'Projetos: próxima ação vinculada a uma tarefa',
+    run: (db) => {
+      try { db.run('ALTER TABLE projects ADD COLUMN nextActionTodoId INTEGER;') } catch { /* exists */ }
+    }
   }
 ]
 

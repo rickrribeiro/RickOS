@@ -204,6 +204,7 @@ export interface Project {
   lastReviewedAt: string | null
   createdAt: string | null
   nextActionSize: NextActionSize | null
+  nextActionTodoId: number | null
   workDays: string | null // JSON [2,4] (0=dom … 6=sáb)
   workStart: string | null // HH:MM
   workMinutes: number | null
@@ -252,7 +253,7 @@ export type ProjectPatch = Partial<
     | 'name' | 'description' | 'githubRepoUrl' | 'color' | 'claudeCommand' | 'localPath' | 'stage' | 'businessModel' | 'pricing' | 'audience'
     | 'area' | 'priority' | 'finishLine' | 'scope' | 'futureIdeas' | 'nextAction' | 'whereLeftOff' | 'blocker' | 'blockerNeed'
     | 'pauseReason' | 'resumeAt' | 'resumeCondition' | 'closeReason' | 'retrospective' | 'continuous' | 'triagedAt' | 'lastReviewedAt'
-    | 'nextActionSize' | 'workTagId' | 'workTagId2'
+    | 'nextActionSize' | 'workTagId' | 'workTagId2' | 'nextActionTodoId'
   >
 >
 export interface ProjectStatusPayload {
@@ -889,7 +890,7 @@ declare global {
         get: (id: number) => Promise<Project | null>
         patch: (id: number, fields: ProjectPatch) => Promise<Project>
         setStatus: (id: number, status: ProjectStatus, payload?: ProjectStatusPayload) => Promise<Project>
-        completeNextAction: (id: number, next: string | null, size?: NextActionSize | null) => Promise<Project>
+        completeNextAction: (id: number, next: string | null, size?: NextActionSize | null, todoId?: number | null) => Promise<Project>
         setSchedule: (projectId: number, days: number[], start: string | null, minutes: number | null, syncCalendar: boolean) => Promise<{ eventLink: string | null }>
         hookStatus: () => Promise<ClaudeHookStatus>
         hookInstall: () => Promise<ClaudeHookStatus>

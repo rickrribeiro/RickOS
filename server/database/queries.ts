@@ -415,6 +415,7 @@ export interface DbProject {
   lastReviewedAt: string | null
   createdAt: string | null
   nextActionSize: string | null
+  nextActionTodoId: number | null
   workDays: string | null
   workStart: string | null
   workMinutes: number | null
@@ -2548,7 +2549,11 @@ const PROJECT_PATCHABLE = new Set([
 ])
 
 /** Atualiza só os campos enviados. Mudanças em próxima ação / onde parei / bloqueio entram no histórico. */
-export async function patchProject(id: number, fields: Record<string, string | number | null>): Promise<DbProject> {
+export async function patchProject(
+  id: number,
+  fields: Record<string, string | number | null>,
+  opts: { linkTodo?: boolean } = {}
+): Promise<DbProject> {
   const db = await getDb()
   const prev = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])
   if (!prev) throw new Error('Projeto não encontrado')
@@ -2560,7 +2565,17 @@ export async function patchProject(id: number, fields: Record<string, string | n
     cols.push(`${k} = ?`)
     params.push(typeof v === 'string' ? (v.trim() === '' ? null : v.trim()) : v)
   }
-  if ('nextAction' in fields) cols.push(`nextActionAt = '${now}'`)
+  if ('nextAction' in fields) {
+    cols.push(`nextActionAt = '${now}'`)
+    // Vindo do usuário, a próxima ação vira (ou aponta para) uma tarefa do projeto.
+    const text = typeof fields.nextAction === 'string' ? fields.nextAction.trim() : ''
+    if (!text) cols.push('nextActionTodoId = NULL')
+    else if (opts.linkTodo) {
+      const wanted = typeof fields.nextActionTodoId === 'number' ? fields.nextActionTodoId : null
+      cols.push('nextActionTodoId = ?')
+      params.push(ensureNextActionTodo(db, id, text, wanted))
+    } else if (text !== prev.nextAction) cols.push('nextActionTodoId = NULL') // texto novo sem vínculo: não aponta para a tarefa antiga
+  }
   if ('whereLeftOff' in fields) cols.push(`whereLeftOffAt = '${now}'`)
   if (!cols.length) return prev
   params.push(id)
@@ -2611,8 +2626,8 @@ export async function setProjectStatus(id: number, status: string, payload: Proj
     sets.push('closedAt = NULL')
   }
   if (payload.nextAction) {
-    sets.push('nextAction = ?', 'nextActionAt = ?')
-    params.push(payload.nextAction, now)
+    sets.push('nextAction = ?', 'nextActionAt = ?', 'nextActionTodoId = ?')
+    params.push(payload.nextAction, now, ensureNextActionTodo(db, id, payload.nextAction, null))
   }
   params.push(id)
   run(db, `UPDATE projects SET ${sets.join(', ')} WHERE id = ?`, params)
@@ -2628,17 +2643,59 @@ export async function setProjectStatus(id: number, status: string, payload: Proj
   return getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])!
 }
 
+type Db = Awaited<ReturnType<typeof getDb>>
+
+/** Tarefa aberta do projeto que corresponde à próxima ação: a vinculada ou, sem vínculo, a de mesmo título. */
+function findNextActionTodo(db: Db, projectId: number, text: string, todoId: number | null): number | null {
+  if (todoId != null) {
+    const t = getOne<DbTodo>(db, "SELECT * FROM todos WHERE id = ? AND status != 'done'", [todoId])
+    if (t) return t.id
+  }
+  const byTitle = getOne<DbTodo>(
+    db,
+    "SELECT * FROM todos WHERE projectId = ? AND status != 'done' AND lower(trim(title)) = lower(?) ORDER BY id LIMIT 1",
+    [projectId, text.trim()]
+  )
+  return byTitle?.id ?? null
+}
+
+/** Garante uma tarefa aberta para a próxima ação: usa a escolhida, uma de mesmo título ou cria uma nova no projeto. */
+function ensureNextActionTodo(db: Db, projectId: number, text: string, todoId: number | null): number {
+  const found = findNextActionTodo(db, projectId, text, todoId)
+  if (found != null) return found
+  run(
+    db,
+    'INSERT INTO todos (title, notes, status, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [text.trim(), null, 'todo', 0, null, projectId, 'projeto', 0, null, 'projeto', new Date().toISOString()]
+  )
+  return lastInsertId(db)
+}
+
 /** Conclui a próxima ação (fica no histórico) e já define a seguinte, se informada. */
-export async function completeNextAction(id: number, next: string | null, size: string | null = null): Promise<DbProject> {
+export async function completeNextAction(
+  id: number,
+  next: string | null,
+  size: string | null = null,
+  nextTodoId: number | null = null
+): Promise<DbProject> {
   const db = await getDb()
   const prev = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])
   if (!prev) throw new Error('Projeto não encontrado')
   const now = new Date().toISOString()
   if (prev.nextAction) {
     run(db, 'INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)', [id, 'acao_concluida', prev.nextAction, now])
+    // A tarefa da ação concluída também fecha.
+    const doneId = findNextActionTodo(db, id, prev.nextAction, prev.nextActionTodoId)
+    if (doneId != null) {
+      run(db, "UPDATE todos SET status = 'done', doneAt = ? WHERE id = ?", [now, doneId])
+      spawnRecurrenceIfNeeded(db, doneId)
+    }
   }
   const n = next && next.trim() ? next.trim() : null
-  run(db, 'UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ? WHERE id = ?', [n, now, n ? size : null, id])
+  const todoId = n ? ensureNextActionTodo(db, id, n, nextTodoId) : null
+  run(db, 'UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ?, nextActionTodoId = ? WHERE id = ?', [
+    n, now, n ? size : null, todoId, id
+  ])
   if (n) run(db, 'INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)', [id, 'proxima_acao', n, now])
   return getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])!
 }

@@ -244,7 +244,8 @@ export function createApi() {
       get: (id: number) => invoke('projects:get', id),
       patch: (id: number, fields: ProjectPatch) => invoke('projects:patch', id, fields),
       setStatus: (id: number, status: ProjectStatus, payload?: ProjectStatusPayload) => invoke('projects:setStatus', id, status, payload ?? {}),
-      completeNextAction: (id: number, next: string | null, size?: NextActionSize | null) => invoke('projects:completeNextAction', id, next, size ?? null),
+      completeNextAction: (id: number, next: string | null, size?: NextActionSize | null, todoId?: number | null) =>
+        invoke('projects:completeNextAction', id, next, size ?? null, todoId ?? null),
       setSchedule: (projectId: number, days: number[], start: string | null, minutes: number | null, syncCalendar: boolean) =>
         invoke('projects:setSchedule', projectId, days, start, minutes, syncCalendar),
       hookStatus: () => invoke('projects:hookStatus'),

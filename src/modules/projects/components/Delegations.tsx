@@ -17,14 +17,14 @@ export const DELEGATION_STATUS: Record<ProjectDelegation['status'], { label: str
 }
 
 /**
- * Delegar a próxima ação ao Claude. Padrão: o Claude analisa a tarefa e o repositório e
+ * Delegar ao Claude a próxima ação (ou a tarefa passada em `task`). Padrão: o Claude analisa a tarefa e o repositório e
  * monta um prompt, que abre no Prompt Runner (projeto + worktree isolado) para você
  * revisar, editar e enviar. "Executar direto" mantém o fluxo antigo (roda sozinho).
  */
-export function DelegateModal({ project, onClose }: { project: Project; onClose: () => void }): React.ReactElement {
+export function DelegateModal({ project, task, onClose }: { project: Project; task?: string; onClose: () => void }): React.ReactElement {
   const { refreshDelegations } = useProjectStore()
   const { setPage } = useUIStore()
-  const [action, setAction] = useState(project.nextAction ?? '')
+  const [action, setAction] = useState(task ?? project.nextAction ?? '')
   const [instructions, setInstructions] = useState('')
   const [busy, setBusy] = useState<'draft' | 'run' | null>(null)
   const [error, setError] = useState('')

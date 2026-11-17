@@ -704,7 +704,7 @@ ipcMain.handle('milestones:update', (_, id: number, title: string, targetDate: s
 const projectsChanged = (id?: number): void => broadcast('projects:updated', { id: id ?? null })
 ipcMain.handle('projects:get', (_, id: number) => getProject(id))
 ipcMain.handle('projects:patch', async (_, id: number, fields: Record<string, string | number | null>) => {
-  const p = await patchProject(id, fields)
+  const p = await patchProject(id, fields, { linkTodo: true })
   projectsChanged(id)
   return p
 })
@@ -713,8 +713,8 @@ ipcMain.handle('projects:setStatus', async (_, id: number, status: string, paylo
   projectsChanged(id)
   return p
 })
-ipcMain.handle('projects:completeNextAction', async (_, id: number, next: string | null, size?: string | null) => {
-  const p = await completeNextAction(id, next, size ?? null)
+ipcMain.handle('projects:completeNextAction', async (_, id: number, next: string | null, size?: string | null, todoId?: number | null) => {
+  const p = await completeNextAction(id, next, size ?? null, todoId ?? null)
   projectsChanged(id)
   return p
 })
