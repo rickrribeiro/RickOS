@@ -110,6 +110,9 @@ export const useChatsStore = create<ChatsState>((set, get) => ({
     if (hashId) {
       set({ pendingOpen: null, tab: 'inbox' })
       await get().open(hashId)
+    } else if (get().activeId) {
+      // entrar na Central começa sem conversa aberta (só link direto abre uma)
+      await get().open(null)
     }
     let timer: ReturnType<typeof setTimeout> | null = null
     const offU = window.api.chats.onUpdated(({ chatIds }) => {

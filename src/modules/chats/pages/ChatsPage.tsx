@@ -22,6 +22,25 @@ export function ChatsPage(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Esc fecha a conversa aberta. Antes disso, Esc fecha o que estiver por cima (menu, modal, IA,
+  // seleção) e, num campo de texto, só tira o foco dele.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return
+      const st = useChatsStore.getState()
+      if (st.tab !== 'inbox' || !st.activeId) return
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.isContentEditable)) {
+        el.blur()
+        return
+      }
+      if (document.querySelector('.modal-overlay, .chats-pop-menu, .notif-panel, .chats-ai, .chats-selbar')) return
+      void st.open(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   if (s.ready && status && !status.enabled) {
     return (
       <div className="module-page">
