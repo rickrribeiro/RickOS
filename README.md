@@ -12,17 +12,20 @@ Um "sistema operacional pessoal" de mesa, **local-first**: começou como time tr
 
 | Grupo | O que faz |
 |-------|-----------|
-| **🏠 Dashboard** | Visão do dia: tarefa ativa, top tarefas, hábitos, horas da semana, próxima viagem, e o botão **🧠 Despejar minha cabeça** (brain dump → IA vira tarefas/projetos/agenda). |
-| **⏱ Time Tracker** | Timeline contínua 00:00–23:59 com blocos arrastáveis/redimensionáveis, tarefa ativa com timer, tags (com produtividade), calendário mensal com heatmap, estatísticas, e **modo Pomodoro** que cria a task na timeline. |
-| **🗂 Organização** | Inbox (captura rápida, atalho global), TODO (prioridade/prazo/projeto, notas), Brain Dump, Hábitos (grade mensal + insights, navegação por dia), Base de Conhecimento. |
+| **🏠 Dashboard** | Visão do dia: tarefa ativa, top tarefas (recorrentes só aparecem na data), hábitos, horas da semana, próxima viagem, daily standup, card de **revisão semanal** (relatório salvo) e o botão **🧠 Despejar minha cabeça** (brain dump → IA sugere tarefas/projetos/agenda). |
+| **⏱ Time Tracker** | Timeline contínua 00:00–23:59 com blocos arrastáveis/redimensionáveis, tarefa ativa com timer, tags (com produtividade e vínculo a projeto), calendário mensal com heatmap, eventos do Google Calendar e aniversários, estatísticas, e **modo Pomodoro** que cria a task na timeline. |
+| **🗂 Organização** | **Inbox** (captura rápida, atalho global) · **TODO** (prioridade/prazo/projeto/notas, recorrentes que voltam na data, filtros, concluídas paginadas, visualização em **quadro** com arrastar cards) · **Brain Dump** · **Metas** mensais (livres ou ligadas a projeto/tópico de estudo, com quantidade e unidade) · **Hábitos** (grade mensal + insights) · **Automações** (regras de aviso: sem foco produtivo, estouro de orçamento, trabalho esquecido em branches, flashcards acumulando; e prompts agendados que a IA roda num horário) · **Base de Conhecimento** (o que a IA e as recomendações devem saber sobre você). |
 | **🎓 Estudos (Learning OS)** | Tópicos → roadmap em árvore (drag-and-drop) → anotações em Markdown (editor + preview) → flashcards (manuais ou gerados por IA) → revisão espaçada **SM-2** → quiz automático → busca → export (caderno `.md`, JSON, pasta Obsidian). |
-| **💰 Finanças** | Contas, transações (import CSV), orçamento, investimentos com **histórico mensal e gráfico de evolução**, relatórios, câmbio manual, modo privacidade (ocultar valores), e Open Finance via **Pluggy**. |
-| **✈️ Viagens** | Viagens, monitoramento inteligente de passagens (origens/destinos flexíveis, restrições, ranking, histórico e alertas — ver `docs/passagens.md`), destinos, documentos e recomendações. |
-| **👥 Social** | Pessoas (CRM: follow-ups, aniversários, prioridade/VIP) e **Chats**, a Central de Mensagens: WhatsApp, Instagram, LinkedIn… via Beeper numa inbox só, com não lido × não respondido, menções em grupos, triagem em lote, lembretes, radar de pessoas esquecidas e sugestões de resposta com IA (só das mensagens que você selecionar). Ver `docs/mensagens.md`. |
-| **📌 Projetos** | Projetos + Issues (Kanban) sincronizados com o **GitHub** (token ou SSH), criação de issues via Claude local. |
+| **💰 Finanças** | Contas, transações (import CSV), orçamento, investimentos com **histórico mensal, variação (valor e %) e gráfico de evolução**, evolução de gastos em 12 meses, card de IOF, relatórios, câmbio manual, modo privacidade (ocultar valores), e Open Finance via **Pluggy**. |
+| **👥 Social** | **Pessoas** (CRM: follow-ups, aniversários, prioridade/VIP, tags, redes com link para abrir a conversa, busca por expressões como `cidade=null`, `tag=`, `rede=`) e **Chats**, a Central de Mensagens: WhatsApp, Instagram, LinkedIn… via Beeper numa inbox só, com fotos, não lido × não respondido, menções em grupos, triagem em lote, lembretes, radar de pessoas esquecidas e sugestões de resposta com IA (só das mensagens que você selecionar). Ver `docs/mensagens.md`. |
+| **📁 Projetos** | **Central de Projetos**: situação (incubadora, fila, foco, pausado, concluído, encerrado) × estágio, limite de projetos em foco, próxima ação, ciclos com prazo, cockpit e página de cada projeto, roadmap lido do `ROADMAP_RICKOS.md` do repositório (ver `docs/ROADMAP_RICKOS.md`), radar diário de projetos parados, "onde parei" automático a partir das sessões do Claude Code, **delegação** de tarefas ao Claude (worktree + PR), changelog, ritual de fechamento e sugestão de projetos novos achados em `~/Projects`. **Issues (Kanban)** sincronizadas com o **GitHub** (token ou SSH), com criação via Claude local. |
 | **🌿 Worktrees & Branches** | Estado de todas as branches/worktrees locais (projetos + pastas escaneadas): 🔴 em risco, 🟠 esquecida, 👻 órfã, 🟡 em andamento, 🟢 pode limpar. Detalhes (commits/arquivos/diff), criar PR, continuar no Prompt Runner, limpar mergeadas, prune; card na Home e regra de aviso em Automações. |
-| **🤖 IA** | Assistente, biblioteca de **Skills** e **Agentes**, **Prompt Runner** (abas paralelas, executa via Claude local com streaming), e Histórico de execuções. |
-| **⚙️ Configurações / 🔗 Links** | Integrações (GitHub, Google Calendar multi-conta, Pluggy, comando/ferramentas do Claude) e uma lista de links com tags/filtros e "abrir marcados/por tag". |
+| **✈️ Viagens** | Viagens com destinos, documentos e recomendações; monitoramento inteligente de **passagens** (origens/destinos flexíveis, restrições, países proibidos para conexão, ranking, histórico, alertas e busca no Skyscanner via Chrome — ver `docs/passagens.md`). **Hospedagens** (busca ranqueada por custo-benefício, ainda com dados de demonstração) e **Roteiro** (em breve: pontos, rotas e horários montados pela IA) estão em desenvolvimento. |
+| **🤖 IA** | **Assistente**, biblioteca de **Skills** e **Agentes**, **Prompt Runner** e **Histórico** de execuções. O Prompt Runner conversa com o Claude CLI em abas paralelas com streaming: continua (`--resume`) e ramifica conversas, aprova permissões e responde perguntas pela UI, fila de prompts, imagens, worktree por conversa com mudanças/commit/PR, importa sessões do terminal, usa as skills/comandos do Claude Code, fixa/arquiva sessões e mostra os limites de uso (5 h e semanal) do Claude e do Codex. |
+| **🧞 Jarvis** | Assistente pessoal (em desenvolvimento). |
+| **⚙️ Configurações / 🔗 Links** | Integrações (GitHub, Google Calendar multi-conta, Pluggy, Beeper, comando/ferramentas do Claude), **Módulos** (ocultar grupos inteiros ou páginas individuais da sidebar), skins (`classic`, `devlytics`) e tema claro/escuro; e uma lista de links com tags/filtros e "abrir marcados/por tag". |
+
+> **Princípio:** o app e a IA **sugerem**; você aprova cada criação, agrupamento ou vínculo.
 
 ---
 
@@ -83,7 +86,7 @@ Abra `http://<ip-do-mac>:4318` no celular, cole o token e use "Adicionar à tela
 
 ## 🤖 Integração com IA (Claude Code local)
 
-Os recursos de IA (Assistente, Prompt Runner, Brain Dump, geração de flashcards, IA-tutor, quiz) executam o **Claude Code CLI** na sua máquina via `child_process` (`services/claude.ts`) — nada é enviado a APIs pagas diretamente pelo app.
+Os recursos de IA (Assistente, Prompt Runner, Brain Dump, geração de flashcards, IA-tutor, quiz, delegação de projetos, sugestões de resposta) executam o **Claude Code CLI** na sua máquina via `child_process` (`services/claude.ts`) — nada é enviado a APIs pagas diretamente pelo app.
 
 - Execuções rodam em **background no processo principal** (sobrevivem à navegação) com **streaming** ao vivo (texto, pensamento e uso de ferramentas).
 - Configurável em **Configurações → IA**: o comando (`claude` por padrão, ou um alias) e as **ferramentas permitidas** (ex.: `Bash(gh:*) Bash(git:*) Read Write Edit`).
