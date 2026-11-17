@@ -4,7 +4,6 @@ import {
   replaceGithubIssues,
   upsertGithubIssues,
   getGithubIssues,
-  getProjects,
   markIssueOnGithub,
   DbGithubIssue
 } from '../database/queries'
@@ -13,6 +12,7 @@ import os from 'os'
 import path from 'path'
 import { decodeSecret } from './secrets'
 import { runClaude } from './claude'
+import { projectForGithubRepo } from './projectRepos'
 
 const GITHUB_API = 'https://api.github.com'
 
@@ -184,17 +184,9 @@ export async function syncGithubIssues(forceFull = false): Promise<number> {
   return issues.length
 }
 
-/** Extract "owner/name" from a GitHub repo URL. */
-function repoFromUrl(url: string | null): string | null {
-  if (!url) return null
-  const m = url.match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i)
-  return m ? m[1] : null
-}
-
 /** Claude command for a repo: the matching project's override → global → 'claude'. */
 async function claudeCommandForRepo(repo: string): Promise<string> {
-  const projects = await getProjects()
-  const match = projects.find((p) => repoFromUrl(p.githubRepoUrl)?.toLowerCase() === repo.toLowerCase())
+  const match = await projectForGithubRepo(repo)
   if (match?.claudeCommand && match.claudeCommand.trim()) return match.claudeCommand.trim()
   return (await getSetting('claude_command')) || 'claude'
 }
@@ -210,7 +202,7 @@ export async function createIssueViaClaude(id: number): Promise<DbGithubIssue> {
   if (issue.url) throw new Error('Essa issue já está no GitHub.')
 
   const command = await claudeCommandForRepo(issue.repo)
-  const project = (await getProjects()).find((p) => repoFromUrl(p.githubRepoUrl)?.toLowerCase() === issue.repo.toLowerCase())
+  const project = await projectForGithubRepo(issue.repo)
   const body = (issue.body ?? '').replace(/`/g, "'")
   const prompt =
     `Crie uma issue no GitHub no repositório ${issue.repo} usando o gh CLI ` +

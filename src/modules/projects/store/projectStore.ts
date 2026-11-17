@@ -1,10 +1,14 @@
 import { create } from 'zustand'
-import { NextActionSize, Project, ProjectCycle, ProjectDelegation, ProjectMilestone, ProjectOverview, ProjectPatch, ProjectStatus, ProjectStatusPayload, Tag } from '../../../types'
+import { NextActionSize, Project, ProjectCycle, ProjectDelegation, ProjectMilestone, ProjectOverview, ProjectPatch, ProjectRepo, ProjectRepoInput, ProjectStatus, ProjectStatusPayload, Tag } from '../../../types'
 import { useTaskStore } from '../../timetracker/store/taskStore'
 import { useTagStore } from '../../timetracker/store/tagStore'
 
 interface ProjectState {
   projects: Project[]
+  /** Repositórios dos projetos workspace (pasta raiz com vários repos). */
+  repos: ProjectRepo[]
+  /** Substitui a lista de repositórios do projeto (vazia = projeto de 1 repo). */
+  setRepos: (projectId: number, repos: ProjectRepoInput[]) => Promise<void>
   overview: Record<number, ProjectOverview>
   milestones: ProjectMilestone[]
   cycles: ProjectCycle[]
@@ -62,8 +66,14 @@ export function workTagsFor(project: Project, tags: Tag[]): { primary: Tag | nul
   return { primary: named, secondary: byId(project.workTagId2), auto: true }
 }
 
+/** Repositórios cadastrados de um projeto (vazio = projeto simples, de 1 repo). */
+export function reposOf(projectId: number, repos: ProjectRepo[]): ProjectRepo[] {
+  return repos.filter((r) => r.projectId === projectId)
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
+  repos: [],
   overview: {},
   milestones: [],
   cycles: [],
@@ -72,8 +82,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   refreshDelegations: async () => set({ delegations: await window.api.delegations.getAll() }),
 
   refresh: async () => {
-    const projects = await window.api.projects.getAll()
-    set({ projects })
+    const [projects, repos] = await Promise.all([window.api.projects.getAll(), window.api.projects.repos()])
+    set({ projects, repos })
+  },
+
+  setRepos: async (projectId, list) => {
+    const saved = await window.api.projects.setRepos(projectId, list)
+    set({ repos: [...get().repos.filter((r) => r.projectId !== projectId), ...saved] })
+    void get().refreshOverview()
   },
 
   refreshAll: async () => {

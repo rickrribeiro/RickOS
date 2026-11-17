@@ -304,3 +304,14 @@
     padding: 2px 6px 2px 0;
   }
 }
+
+/* Projeto workspace: no celular cada repositório vira nome+subpasta numa linha e o GitHub embaixo */
+@media (max-width: 640px) {
+  .ph-repo-row {
+    grid-template-columns: 1fr 1fr auto;
+  }
+  .ph-repo-row input:nth-child(3) {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+}

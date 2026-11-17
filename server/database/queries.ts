@@ -731,6 +731,42 @@ export async function updateProject(
   return getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])!
 }
 
+// ── Project repos (projeto workspace com vários repositórios) ──
+export interface DbProjectRepo {
+  id: number
+  projectId: number
+  name: string
+  path: string
+  githubRepoUrl: string | null
+  sortOrder: number
+}
+
+export async function getProjectRepos(projectId?: number): Promise<DbProjectRepo[]> {
+  const db = await getDb()
+  return projectId == null
+    ? getAll<DbProjectRepo>(db, 'SELECT * FROM project_repos ORDER BY projectId, sortOrder, id')
+    : getAll<DbProjectRepo>(db, 'SELECT * FROM project_repos WHERE projectId = ? ORDER BY sortOrder, id', [projectId])
+}
+
+/** Substitui a lista de repositórios do projeto (lista vazia = projeto de 1 repo). */
+export async function setProjectRepos(
+  projectId: number,
+  repos: { name: string; path: string; githubRepoUrl: string | null }[]
+): Promise<DbProjectRepo[]> {
+  const db = await getDb()
+  run(db, 'DELETE FROM project_repos WHERE projectId = ?', [projectId])
+  repos.forEach((r, i) => {
+    run(db, 'INSERT INTO project_repos (projectId, name, path, githubRepoUrl, sortOrder) VALUES (?, ?, ?, ?, ?)', [
+      projectId,
+      r.name,
+      r.path,
+      r.githubRepoUrl,
+      i
+    ])
+  })
+  return getProjectRepos(projectId)
+}
+
 /** Move a project between pipeline stages (drag-and-drop). */
 export async function setProjectStage(id: number, stage: string): Promise<void> {
   const db = await getDb()
@@ -758,6 +794,8 @@ export async function deleteProjectMilestone(id: number): Promise<void> {
 
 export async function deleteProject(id: number): Promise<void> {
   const db = await getDb()
+  // o export do sql.js desliga o PRAGMA foreign_keys: o CASCADE não é confiável
+  run(db, 'DELETE FROM project_repos WHERE projectId = ?', [id])
   run(db, 'DELETE FROM projects WHERE id = ?', [id])
 }
 

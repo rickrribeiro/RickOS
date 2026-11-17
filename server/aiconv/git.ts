@@ -88,8 +88,180 @@ export async function createWorktree(projectDir: string, title: string): Promise
   return { cwd: fs.existsSync(cwd) ? cwd : wtDir, repoPath: top, branch, baseRef }
 }
 
+// ── Workspace espelhado (projeto com vários repositórios) ─────────────────────
+/**
+ * Projeto "workspace": a pasta raiz (CLAUDE.md, .claude/…) não é um repo e contém
+ * vários repos (front, back, infra). Para isolar uma conversa, criamos uma pasta-espelho
+ * `<pai>/.worktrees/<raiz>-<nome>/` com um worktree de CADA repo (mesma branch) e
+ * symlinks para todo o resto da raiz — o Claude enxerga a mesma estrutura.
+ * O manifesto abaixo guarda de onde veio cada worktree (para PR e remoção).
+ */
+export const WORKSPACE_MANIFEST = '.rickos-workspace.json'
+
+export interface WorkspaceRepoInput {
+  name: string
+  /** Caminho relativo à raiz (ex.: "front" ou "apps/front"). */
+  rel: string
+  /** Caminho absoluto do repositório original. */
+  dir: string
+}
+
+interface WorkspaceManifest {
+  root: string
+  branch: string
+  repos: { name: string; rel: string; repoPath: string; baseRef: string }[]
+  links: string[]
+}
+
+export function readWorkspaceManifest(wsDir: string): WorkspaceManifest | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(wsDir, WORKSPACE_MANIFEST), 'utf8')) as WorkspaceManifest
+  } catch {
+    return null
+  }
+}
+
+/** Espelha `src` em `dst`: symlink de tudo que não é repo; desce nas pastas que contêm repos. */
+function mirrorRoot(src: string, dst: string, repoRels: string[], prefix: string, links: string[]): void {
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name
+    if (repoRels.includes(rel)) continue // vira worktree
+    if (e.isDirectory() && repoRels.some((r) => r.startsWith(rel + '/'))) {
+      fs.mkdirSync(path.join(dst, e.name), { recursive: true })
+      mirrorRoot(path.join(src, e.name), path.join(dst, e.name), repoRels, rel, links)
+      continue
+    }
+    fs.symlinkSync(path.join(src, e.name), path.join(dst, e.name))
+    links.push(rel)
+  }
+}
+
+export async function createWorkspaceWorktree(
+  rootDir: string,
+  repos: WorkspaceRepoInput[],
+  title: string
+): Promise<{ cwd: string; repoPath: string; branch: string; baseRef: string | null }> {
+  const root = path.resolve(rootDir)
+  const name = `rickos-${slugify(title)}-${stamp()}`
+  const branch = `claude/${name}`
+  const wsDir = path.join(path.dirname(root), '.worktrees', `${path.basename(root)}-${name}`)
+  const rels = repos.map((r) => r.rel.replace(/\\/g, '/').replace(/^\.\/|\/$/g, ''))
+  const created: { repoPath: string; wt: string }[] = []
+  const manifest: WorkspaceManifest = { root, branch, repos: [], links: [] }
+  fs.mkdirSync(wsDir, { recursive: true })
+  try {
+    for (let i = 0; i < repos.length; i++) {
+      const top = await repoTop(repos[i].dir)
+      if (!top) throw new Error(`"${repos[i].name}" (${repos[i].rel}) não é um repositório git.`)
+      const baseRef = (await gitOk(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() || 'HEAD'
+      const wt = path.join(wsDir, rels[i])
+      fs.mkdirSync(path.dirname(wt), { recursive: true })
+      await git(top, ['worktree', 'add', '-b', branch, wt, 'HEAD'], 60_000)
+      created.push({ repoPath: top, wt })
+      manifest.repos.push({ name: repos[i].name, rel: rels[i], repoPath: top, baseRef })
+    }
+    mirrorRoot(root, wsDir, rels, '', manifest.links)
+    fs.writeFileSync(path.join(wsDir, WORKSPACE_MANIFEST), JSON.stringify(manifest, null, 2))
+  } catch (e) {
+    // desfaz o que já foi criado
+    for (const c of created) {
+      await gitOk(c.repoPath, ['worktree', 'remove', '--force', c.wt])
+      await gitOk(c.repoPath, ['branch', '-D', branch])
+    }
+    cleanupWorkspaceDir(wsDir)
+    throw e
+  }
+  return { cwd: wsDir, repoPath: root, branch, baseRef: null }
+}
+
+/** Apaga só o que criamos: symlinks, o manifesto e pastas vazias. Nunca segue symlinks. */
+function cleanupWorkspaceDir(wsDir: string): void {
+  const walk = (dir: string): void => {
+    let entries: fs.Dirent[] = []
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const abs = path.join(dir, e.name)
+      if (e.isSymbolicLink() || (dir === wsDir && e.name === WORKSPACE_MANIFEST)) fs.rmSync(abs, { force: true })
+      // nunca entra num worktree/repo que ficou para trás (git worktree remove falhou)
+      else if (e.isDirectory() && !fs.existsSync(path.join(abs, '.git'))) walk(abs)
+    }
+    try {
+      fs.rmdirSync(dir) // só sai se ficou vazia
+    } catch {
+      // sobrou algo que não é nosso: mantém
+    }
+  }
+  walk(wsDir)
+}
+
+/**
+ * Repositórios dentro de uma pasta que não é repo (workspace): filhos e netos com `.git`
+ * (pasta ou arquivo — worktrees têm `.git` arquivo). Ignora o que é symlink.
+ */
+export function childRepos(dir: string): { name: string; rel: string; dir: string }[] {
+  const out: { name: string; rel: string; dir: string }[] = []
+  const skip = (e: fs.Dirent): boolean => !e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules'
+  const has = (d: string): boolean => fs.existsSync(path.join(d, '.git'))
+  let entries: fs.Dirent[] = []
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const e of entries) {
+    if (skip(e)) continue
+    const sub = path.join(dir, e.name)
+    if (has(sub)) {
+      out.push({ name: e.name, rel: e.name, dir: sub })
+      continue
+    }
+    try {
+      for (const e2 of fs.readdirSync(sub, { withFileTypes: true })) {
+        if (!skip(e2) && has(path.join(sub, e2.name))) out.push({ name: e2.name, rel: `${e.name}/${e2.name}`, dir: path.join(sub, e2.name) })
+      }
+    } catch {
+      // ilegível
+    }
+  }
+  return out.sort((a, b) => a.rel.localeCompare(b.rel))
+}
+
+/**
+ * Pasta git em que uma operação deve rodar. Sem `repo`: a própria pasta da conversa.
+ * Com `repo` (workspace): o repo filho, conferido contra a lista real (nada arbitrário).
+ */
+export function resolveRepoDir(dir: string, repoRel?: string | null): string {
+  if (!repoRel) return dir
+  const hit = childRepos(dir).find((r) => r.rel === repoRel)
+  if (!hit) throw new Error(`Repositório "${repoRel}" não encontrado nesta pasta.`)
+  return hit.dir
+}
+
+/** Branch base de um repo do workspace (manifesto) — destino do PR. */
+export function workspaceBaseRef(wsDir: string, repoRel: string): string | null {
+  return readWorkspaceManifest(wsDir)?.repos.find((r) => r.rel === repoRel)?.baseRef ?? null
+}
+
+/** Remove os worktrees de todos os repos do workspace, as branches e a pasta-espelho. */
+export async function removeWorkspaceWorktree(wsDir: string): Promise<void> {
+  const m = readWorkspaceManifest(wsDir)
+  if (!m) throw new Error('Manifesto do workspace não encontrado.')
+  for (const r of m.repos) {
+    const wt = path.join(wsDir, r.rel)
+    if (fs.existsSync(wt)) await gitOk(r.repoPath, ['worktree', 'remove', '--force', wt])
+    await gitOk(r.repoPath, ['worktree', 'prune'])
+    await gitOk(r.repoPath, ['branch', '-D', m.branch])
+  }
+  cleanupWorkspaceDir(wsDir)
+}
+
 /** Remove o worktree e apaga a branch (descarta o trabalho não mesclado). */
 export async function removeWorktree(repoPath: string, worktreeDir: string, branch: string | null): Promise<void> {
+  if (readWorkspaceManifest(worktreeDir)) return removeWorkspaceWorktree(worktreeDir)
   const top = (await repoTop(worktreeDir)) ?? worktreeDir
   if (fs.existsSync(top)) await gitOk(repoPath, ['worktree', 'remove', '--force', top])
   await gitOk(repoPath, ['worktree', 'prune'])
@@ -120,7 +292,14 @@ async function statusEntries(top: string): Promise<StatusEntry[]> {
 
 export async function getChanges(dir: string, baseRef: string | null): Promise<ConvChanges> {
   const top = await repoTop(dir)
-  if (!top) return { isRepo: false, branch: null, baseRef, files: [], unpushed: 0, hasRemote: false }
+  if (!top) {
+    // workspace: a raiz não é repo → mudanças de cada repo filho
+    const kids = childRepos(dir)
+    const repos = await Promise.all(
+      kids.map(async (k) => ({ name: k.name, rel: k.rel, changes: await getChanges(k.dir, workspaceBaseRef(dir, k.rel)) }))
+    )
+    return { isRepo: false, branch: null, baseRef, files: [], unpushed: 0, hasRemote: false, repos: repos.filter((r) => r.changes.isRepo) }
+  }
   const [branchRaw, entries, numstatRaw, remotes] = await Promise.all([
     gitOk(top, ['rev-parse', '--abbrev-ref', 'HEAD']),
     statusEntries(top),

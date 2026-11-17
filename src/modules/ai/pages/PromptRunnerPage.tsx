@@ -205,7 +205,13 @@ export function PromptRunnerPage(): React.ReactElement {
     let alive = true
     window.api.conv
       .changes(selectedId)
-      .then((c) => alive && setChangeCount(c.isRepo ? c.files.length : null))
+      .then(
+        (c) =>
+          alive &&
+          setChangeCount(
+            c.isRepo ? c.files.length : c.repos?.length ? c.repos.reduce((n, r) => n + r.changes.files.length, 0) : null // workspace: soma os repos
+          )
+      )
       .catch(() => alive && setChangeCount(null))
     return () => {
       alive = false

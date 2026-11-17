@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ProjectCycle, GitBranch, GithubIssue, ProjectCommit, ProjectEvent, ProjectNote, ProjectStatus, TaskWithTag, Todo } from '../../../types'
 import { useUIStore } from '../../../store/uiStore'
-import { useProjectStore, workTagsFor } from '../store/projectStore'
+import { reposOf, useProjectStore, workTagsFor } from '../store/projectStore'
 import { useTagStore } from '../../timetracker/store/tagStore'
 import { StatusChangeModal } from '../components/StatusChangeModal'
 import { NextActionModal } from '../components/NextActionModal'
@@ -56,6 +56,7 @@ interface AiPlan {
 export function ProjectDetailPage(): React.ReactElement {
   const { selectedProjectId, setPage } = useUIStore()
   const { projects, overview, milestones, cycles, refreshAll, refreshMilestones, refreshCycles, patch, startWorking } = useProjectStore()
+  const allRepos = useProjectStore((s) => s.repos)
   const p = projects.find((x) => x.id === selectedProjectId) ?? null
   const allTags = useTagStore((s) => s.tags)
   const ov = p ? overview[p.id] : undefined
@@ -214,11 +215,17 @@ ${ctx}`
 
   // ── Tarefas + issues (sem duplicar) ──
   const projTodos = todos.filter((t) => t.projectId === project.id)
-  const repo = repoFromUrl(project.githubRepoUrl)
+  // projeto workspace: issues de todos os repositórios; senão, do único repo
+  const wsRepos = reposOf(project.id, allRepos)
+  const repoSlugs = new Set(
+    (wsRepos.length ? wsRepos.map((r) => r.githubRepoUrl) : [project.githubRepoUrl])
+      .map((u) => repoFromUrl(u ?? null)?.toLowerCase())
+      .filter((x): x is string => !!x)
+  )
   const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim()
   const todoKeys = new Set(projTodos.map((t) => norm(t.title)))
-  const projIssues = repo
-    ? issues.filter((i) => i.repo.toLowerCase() === repo.toLowerCase() && !todoKeys.has(norm(i.title)) && !projTodos.some((t) => i.url && t.notes?.includes(i.url)))
+  const projIssues = repoSlugs.size
+    ? issues.filter((i) => repoSlugs.has(i.repo.toLowerCase()) && !todoKeys.has(norm(i.title)) && !projTodos.some((t) => i.url && t.notes?.includes(i.url)))
     : []
   async function addTodo(): Promise<void> {
     if (!newTodo.trim()) return
@@ -290,7 +297,7 @@ ${ctx}`
             </button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>✏️ Editar</button>
-          {project.githubRepoUrl && (
+          {!wsRepos.length && project.githubRepoUrl && (
             <button className="btn btn-secondary btn-sm" onClick={() => window.api.app.openExternal(project.githubRepoUrl!)}>GitHub ↗</button>
           )}
         </div>
@@ -609,14 +616,18 @@ ${ctx}`
               </div>
             ))}
           </div>
-          {repo && (
+          {repoSlugs.size > 0 && (
             <>
-              <h3 className="ph-section-title">Issues do GitHub ({repo}) <span className="kanban-count">{projIssues.filter((i) => i.state === 'open').length}</span></h3>
+              <h3 className="ph-section-title">
+                Issues do GitHub ({repoSlugs.size > 1 ? `${repoSlugs.size} repos` : [...repoSlugs][0]}) <span className="kanban-count">{projIssues.filter((i) => i.state === 'open').length}</span>
+              </h3>
               <div className="list-stack">
                 {projIssues.length === 0 && <div className="empty-hint">Nenhuma issue (sincronize em Issues).</div>}
                 {projIssues.filter((i) => i.state === 'open').map((i) => (
                   <div key={i.id} className="list-row">
-                    <span className="list-row-title">#{i.number > 0 ? i.number : '—'} {i.title}</span>
+                    <span className="list-row-title">
+                      {repoSlugs.size > 1 && <span className="ph-repo-badge">{i.repo.split('/').pop()}</span>}#{i.number > 0 ? i.number : '—'} {i.title}
+                    </span>
                     {i.url && <button className="btn btn-secondary btn-sm" onClick={() => window.api.app.openExternal(i.url!)}>↗</button>}
                     <button
                       className="btn btn-secondary btn-sm"
@@ -672,6 +683,25 @@ ${ctx}`
                   🌿 Gerenciar branches
                 </button>
               </div>
+              {wsRepos.length > 0 && (
+                <>
+                  <h3 className="ph-section-title">Repositórios <span className="kanban-count">{wsRepos.length}</span></h3>
+                  <div className="list-stack">
+                    {wsRepos.map((r) => (
+                      <div key={r.id} className="list-row">
+                        <span className="list-row-title">
+                          📦 {r.name} <code className="ph-muted">./{r.path}</code>
+                        </span>
+                        {r.githubRepoUrl && (
+                          <button className="ph-linkbtn" onClick={() => window.api.app.openExternal(r.githubRepoUrl!)}>
+                            GitHub ↗
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
               <h3 className="ph-section-title">Branches e worktrees <span className="kanban-count">{branches.length}</span></h3>
               <div className="list-stack">
                 {branches.length === 0 && <div className="empty-hint">Nenhuma branch encontrada no último scan.</div>}
@@ -679,6 +709,7 @@ ${ctx}`
                   <div key={b.id} className="list-row">
                     <span className="list-row-title">
                       {b.isBase ? '🏠 ' : b.worktreePath ? '🌳 ' : '⎇ '}
+                      {wsRepos.length > 0 && <span className="ph-repo-badge">{b.repoName}</span>}
                       {b.branch ?? '(detached)'}
                       {b.worktreePath && !b.isBase && <span className="ph-muted"> · worktree</span>}
                       {b.ahead > 0 && <span className="ph-muted"> · +{b.ahead}</span>}
@@ -692,9 +723,12 @@ ${ctx}`
               <div className="ph-commits">
                 {commits.length === 0 && <div className="empty-hint">Sem commits (ou não é um repositório git).</div>}
                 {commits.map((c) => (
-                  <div key={c.hash} className="ph-commit">
+                  <div key={`${c.repo ?? ''}:${c.hash}`} className="ph-commit">
                     <code>{c.hash}</code>
-                    <span className="ph-commit-subject">{c.subject}</span>
+                    <span className="ph-commit-subject">
+                      {c.repo && <span className="ph-repo-badge">{c.repo}</span>}
+                      {c.subject}
+                    </span>
                     {c.refs && <span className="ph-tag">{c.refs.replace('HEAD -> ', '')}</span>}
                     <span className="ph-muted">{timeAgo(c.date)}</span>
                   </div>

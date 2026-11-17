@@ -224,6 +224,12 @@
 .cv-ch-diff { margin: 4px 0 8px; max-height: 360px; }
 .cv-ch-nodiff { font-size: 11.5px; color: var(--text-muted); padding: 4px 8px; }
 .cv-diff-hunk { color: var(--accent-hover); background: var(--bg-tertiary); }
+/* workspace (vários repos): uma seção por repo, o painel inteiro rola */
+.cv-changes-multi { overflow-y: auto; }
+.cv-changes-multi .cv-ch-files { flex: none; overflow: visible; }
+.cv-ch-repo { border-top: 1px solid var(--border); }
+.cv-ch-repo-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px 4px; font-size: 13px; }
+.cv-ch-repo-count { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
 .cv-ch-commit { border-top: 1px solid var(--border); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
 .cv-ch-commit textarea { width: 100%; resize: vertical; font-size: 12.5px; }
 .cv-wt-chip { margin-left: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

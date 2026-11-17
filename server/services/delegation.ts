@@ -15,6 +15,8 @@ import { runClaude } from './claude'
 import { gitQuiet, scanGit, createPullRequest } from './gitscan'
 import { notify } from './notifications'
 import { broadcast } from '../events'
+import { repoTargets, localTargets, isWorkspace } from './projectRepos'
+import { createWorkspaceWorktree, readWorkspaceManifest, removeWorkspaceWorktree } from '../aiconv/git'
 
 /**
  * "🤖 Delegar": a próxima ação do projeto é executada pelo Claude num worktree
@@ -65,23 +67,48 @@ export async function delegateNextAction(projectId: number, action: string | nul
   if (!task) throw new Error('Defina a próxima ação antes de delegar.')
   if (!p.localPath) throw new Error('Defina o caminho local do projeto (repositório git).')
   const repo = path.resolve(expandHome(p.localPath))
-  const top = (await gitQuiet(repo, ['rev-parse', '--show-toplevel']))?.trim()
-  if (!top) throw new Error('O caminho local não é um repositório git.')
+  const targets = await repoTargets(p)
+  const workspace = isWorkspace(targets)
 
-  const base = (await gitQuiet(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() || 'HEAD'
-  const name = `rickos-${slugify(task)}-${stamp()}`
-  const branch = `claude/${name}`
-  const wtDir = path.join(path.dirname(top), '.worktrees', `${path.basename(top)}-${name}`)
-  fs.mkdirSync(path.dirname(wtDir), { recursive: true })
-  const added = await gitQuiet(top, ['worktree', 'add', '-b', branch, wtDir, 'HEAD'])
-  if (added == null || !fs.existsSync(wtDir)) throw new Error('Não consegui criar o worktree (git worktree add falhou).')
+  let top: string
+  let base: string
+  let branch: string
+  let wtDir: string
+  if (workspace) {
+    // projeto com vários repos: pasta-espelho com um worktree de cada repo (mesma branch)
+    const repos = localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }))
+    if (!repos.length) throw new Error('Nenhum repositório do projeto foi encontrado na pasta local.')
+    const ws = await createWorkspaceWorktree(repo, repos, task)
+    top = ws.repoPath
+    base = 'HEAD'
+    branch = ws.branch
+    wtDir = ws.cwd
+  } else {
+    const t = (await gitQuiet(repo, ['rev-parse', '--show-toplevel']))?.trim()
+    if (!t) throw new Error('O caminho local não é um repositório git.')
+    top = t
+    base = (await gitQuiet(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() || 'HEAD'
+    const name = `rickos-${slugify(task)}-${stamp()}`
+    branch = `claude/${name}`
+    wtDir = path.join(path.dirname(top), '.worktrees', `${path.basename(top)}-${name}`)
+    fs.mkdirSync(path.dirname(wtDir), { recursive: true })
+    const added = await gitQuiet(top, ['worktree', 'add', '-b', branch, wtDir, 'HEAD'])
+    if (added == null || !fs.existsSync(wtDir)) throw new Error('Não consegui criar o worktree (git worktree add falhou).')
+  }
+  const wsRepos = workspace ? (readWorkspaceManifest(wtDir)?.repos ?? []) : []
 
-  const d = await createDelegation({ projectId, action: task, instructions: instructions?.trim() || null, repoPath: top, branch, worktreePath: wtDir, baseRef: base })
+  const d = await createDelegation({ projectId, action: task, instructions: instructions?.trim() || null, repoPath: top, branch, worktreePath: wtDir, baseRef: workspace ? null : base })
   await addProjectEvent(projectId, 'delegacao', `🤖 Delegada ao Claude: ${task} (${branch})`)
   changed(projectId)
 
   const prompt = `[rickos:delegacao] Você é um engenheiro trabalhando sozinho no projeto "${p.name}".
-Você está num git worktree ISOLADO, na branch "${branch}" (criada a partir de "${base}"). Pode editar à vontade aqui.
+${
+    workspace
+      ? `Você está numa cópia ISOLADA do workspace do projeto. A pasta raiz NÃO é um repositório; cada subpasta abaixo é um git worktree na branch "${branch}":
+${wsRepos.map((r) => `- ${r.name}: ./${r.rel} (criada a partir de "${r.baseRef}")`).join('\n')}
+Pode editar à vontade nesses repositórios. Para git, entre no repo certo (cd <pasta> && git …).`
+      : `Você está num git worktree ISOLADO, na branch "${branch}" (criada a partir de "${base}"). Pode editar à vontade aqui.`
+  }
 
 TAREFA (a próxima ação do projeto):
 ${task}
@@ -89,16 +116,16 @@ ${instructions?.trim() ? `\nInstruções adicionais:\n${instructions.trim()}\n` 
 Contexto do projeto:
 ${p.description ? `- Descrição: ${p.description}\n` : ''}${p.finishLine ? `- Linha de chegada: ${p.finishLine}\n` : ''}${p.scope ? `- Escopo atual: ${p.scope}\n` : ''}${p.whereLeftOff ? `- Onde parei: ${p.whereLeftOff}\n` : ''}
 Regras:
-- Leia o CLAUDE.md / README do repositório antes de mudar algo e siga as convenções.
+- Leia o CLAUDE.md / README ${workspace ? 'da raiz e dos repositórios' : 'do repositório'} antes de mudar algo e siga as convenções.
 - Faça a menor mudança que conclua a tarefa. Rode o typecheck/testes se existirem.
-- Faça commits pequenos com mensagens claras NESTA branch. NÃO faça push, NÃO abra PR, NÃO mexa fora deste diretório.
+- Faça commits pequenos com mensagens claras NESTA branch${workspace ? ' (em cada repositório que mudar)' : ''}. NÃO faça push, NÃO abra PR, NÃO mexa fora deste diretório.
 - Se a tarefa for ambígua ou grande demais, faça a parte segura e explique o resto.
 
 No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O que falta / dúvidas**.`
 
   const command = p.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
   const model = ((await getSetting('claude_model')) || '').trim()
-  const allowed = ['Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(npm run:*)', 'Bash(npx tsc:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(grep:*)', 'Bash(rg:*)', 'Bash(find:*)']
+  const allowed = ['Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(npm run:*)', 'Bash(npx tsc:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(grep:*)', 'Bash(rg:*)', 'Bash(find:*)', ...(workspace ? ['Bash(cd:*)'] : [])]
 
   runClaude(prompt, command, {
     model,
@@ -194,6 +221,29 @@ export interface DelegationReview {
 export async function reviewDelegation(id: number): Promise<DelegationReview> {
   const d = await getDelegation(id)
   if (!d) throw new Error('Delegação não encontrada')
+  const ws = readWorkspaceManifest(d.worktreePath)
+  if (ws) {
+    // workspace: junta commits/diff/pendências de cada repo, com o nome do repo na frente
+    const out: DelegationReview = { commits: [], diffStat: '', uncommitted: [], worktreeExists: true }
+    const stats: string[] = []
+    for (const r of ws.repos) {
+      const range = r.baseRef && r.baseRef !== 'HEAD' ? `${r.baseRef}..${d.branch}` : `${d.branch}~20..${d.branch}`
+      const log = (await gitQuiet(r.repoPath, ['log', '--format=%h%x1f%s', range])) ?? ''
+      for (const l of log.split('\n').filter(Boolean)) {
+        const [hash, subject] = l.split('\x1f')
+        out.commits.push({ hash, subject: `[${r.name}] ${subject}` })
+      }
+      if (r.baseRef && r.baseRef !== 'HEAD') {
+        const stat = ((await gitQuiet(r.repoPath, ['diff', '--stat', `${r.baseRef}...${d.branch}`])) ?? '').trim()
+        if (stat) stats.push(`## ${r.name}\n${stat}`)
+      }
+      const wt = path.join(d.worktreePath, r.rel)
+      const st = fs.existsSync(wt) ? ((await gitQuiet(wt, ['status', '--short'])) ?? '') : ''
+      out.uncommitted.push(...st.split('\n').filter(Boolean).map((x) => `${r.name}: ${x}`))
+    }
+    out.diffStat = stats.join('\n\n')
+    return out
+  }
   const exists = fs.existsSync(d.worktreePath)
   const base = d.baseRef && d.baseRef !== 'HEAD' ? d.baseRef : null
   const range = base ? `${base}..${d.branch}` : `${d.branch}~20..${d.branch}`
@@ -216,7 +266,8 @@ export async function discardDelegation(id: number): Promise<void> {
   const d = await getDelegation(id)
   if (!d) return
   if (d.status === 'rodando') throw new Error('Cancele a execução antes de descartar.')
-  if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ['worktree', 'remove', '--force', d.worktreePath])
+  if (readWorkspaceManifest(d.worktreePath)) await removeWorkspaceWorktree(d.worktreePath)
+  else if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ['worktree', 'remove', '--force', d.worktreePath])
   await gitQuiet(d.repoPath, ['worktree', 'prune'])
   await gitQuiet(d.repoPath, ['branch', '-D', d.branch])
   await updateDelegation(id, { status: 'descartada' })
@@ -237,6 +288,22 @@ export async function prDelegation(id: number): Promise<{ url: string }> {
   const d = await getDelegation(id)
   if (!d) throw new Error('Delegação não encontrada')
   await scanGit({}) // o PR exige que a branch esteja no último scan
+  const ws = readWorkspaceManifest(d.worktreePath)
+  if (ws) {
+    // workspace: um PR por repositório que tem commits na branch
+    const urls: string[] = []
+    for (const r of ws.repos) {
+      const ahead = r.baseRef && r.baseRef !== 'HEAD' ? Number((await gitQuiet(r.repoPath, ['rev-list', '--count', `${r.baseRef}..${d.branch}`]))?.trim() ?? 0) : 1
+      if (!ahead) continue
+      const pr = await createPullRequest(r.repoPath, d.branch)
+      urls.push(pr.url)
+      await addProjectEvent(d.projectId, 'delegacao', `🔀 PR aberto (${r.name}): ${pr.url}`)
+    }
+    if (!urls.length) throw new Error('Nenhum repositório tem commits nesta branch.')
+    await updateDelegation(id, { prUrl: urls[0] })
+    changed(d.projectId)
+    return { url: urls[0] }
+  }
   const r = await createPullRequest(d.repoPath, d.branch)
   await updateDelegation(id, { prUrl: r.url })
   await addProjectEvent(d.projectId, 'delegacao', `🔀 PR aberto: ${r.url}`)

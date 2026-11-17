@@ -92,6 +92,18 @@ export const SCHEMA = `
     createdAt TEXT NOT NULL
   );
 
+  -- Repositórios de um projeto "workspace" (pasta raiz com vários repos: front, back, infra…).
+  -- path é relativo ao localPath do projeto. Projeto sem linhas aqui = 1 repo (o próprio localPath).
+  CREATE TABLE IF NOT EXISTS project_repos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projectId INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    githubRepoUrl TEXT,
+    sortOrder INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_project_repos_project ON project_repos(projectId, sortOrder);
+
   -- Próximas ações delegadas ao Claude (rodam num worktree isolado, voltam para revisão)
   CREATE TABLE IF NOT EXISTS project_delegations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

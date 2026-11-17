@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { getProjects, getSetting, setSetting } from '../database/queries'
+import { getProjects, getProjectRepos, getSetting, setSetting } from '../database/queries'
 
 /**
  * Sugestões de projetos: lê a pasta de projetos do computador (padrão ~/Projects)
@@ -292,7 +292,10 @@ export async function suggestProjects(): Promise<ProjectSuggestionsResult> {
     .map((p) => p.localPath?.trim())
     .filter((p): p is string => !!p)
     .map((p) => realpath(expandHome(p)))
-  const registeredRepos = new Set(projects.map((p) => repoKey(p.githubRepoUrl)).filter((k): k is string => !!k))
+  const repoRows = await getProjectRepos()
+  const registeredRepos = new Set(
+    [...projects.map((p) => p.githubRepoUrl), ...repoRows.map((r) => r.githubRepoUrl)].map((u) => repoKey(u)).filter((k): k is string => !!k)
+  )
   const isRegistered = (dir: string, repo: string | null): boolean => {
     const real = realpath(dir)
     if (registeredPaths.some((r) => r === real || real.startsWith(r + path.sep))) return true

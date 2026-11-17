@@ -330,6 +330,23 @@ export interface ProjectCommit {
   author: string
   date: string
   refs: string
+  /** Repositório de origem (só em projeto com vários repos). */
+  repo: string | null
+}
+/** Repositório de um projeto workspace (pasta raiz com vários repos). */
+export interface ProjectRepo {
+  id: number
+  projectId: number
+  name: string
+  /** Relativo ao caminho local do projeto (ex.: "front"). */
+  path: string
+  githubRepoUrl: string | null
+  sortOrder: number
+}
+export interface ProjectRepoInput {
+  name: string
+  path: string
+  githubRepoUrl: string | null
 }
 export interface ProjectMilestone {
   id: number
@@ -887,6 +904,9 @@ declare global {
         suggestions: () => Promise<ProjectSuggestionsResult>
         ignoreSuggestion: (path: string) => Promise<void>
         restoreSuggestions: () => Promise<void>
+        repos: (projectId?: number) => Promise<ProjectRepo[]>
+        setRepos: (projectId: number, repos: ProjectRepoInput[]) => Promise<ProjectRepo[]>
+        detectRepos: (localPath: string) => Promise<{ rootIsRepo: boolean; repos: ProjectRepoInput[] }>
         get: (id: number) => Promise<Project | null>
         patch: (id: number, fields: ProjectPatch) => Promise<Project>
         setStatus: (id: number, status: ProjectStatus, payload?: ProjectStatusPayload) => Promise<Project>
@@ -1076,11 +1096,11 @@ declare global {
         send: (id: string, text: string, images?: AiImageInput[]) => Promise<boolean>
         fork: (id: string) => Promise<AiConversation>
         changes: (id: string) => Promise<ConvChanges>
-        fileDiff: (id: string, path: string) => Promise<ConvFileDiff>
-        commit: (id: string, message: string, paths?: string[] | null) => Promise<string>
-        discard: (id: string, path: string) => Promise<boolean>
-        pr: (id: string) => Promise<string>
-        suggestCommit: (id: string) => Promise<string>
+        fileDiff: (id: string, path: string, repo?: string | null) => Promise<ConvFileDiff>
+        commit: (id: string, message: string, paths?: string[] | null, repo?: string | null) => Promise<string>
+        discard: (id: string, path: string, repo?: string | null) => Promise<boolean>
+        pr: (id: string, repo?: string | null) => Promise<string>
+        suggestCommit: (id: string, repo?: string | null) => Promise<string>
         removeWorktree: (id: string) => Promise<boolean>
         cancel: (id: string) => Promise<boolean>
         markSeen: (id: string) => Promise<boolean>

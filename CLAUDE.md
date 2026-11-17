@@ -38,6 +38,7 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `server/database/db.ts` | carga/persistência do arquivo, `MIGRATIONS` (`PRAGMA user_version`), snapshots |
 | `server/database/queries.ts` | CRUD; helpers `getAll`/`getOne`/`run` |
 | `server/services/` | efeitos colaterais: `claude` (CLI), `github`/`gitscan` (`gh`/git), `google`, `pluggy`, `projectHub`, `secrets` |
+| `server/services/projectRepos.ts` | repositórios de um projeto: simples (`localPath` = repo) ou **workspace** (pasta raiz com vários repos em `project_repos`). Código que mexe com git itera `repoTargets()`, nunca `localPath`/`githubRepoUrl` direto |
 | `server/flights/` | monitoramento de passagens: geo, planejador, restrições/ranking, executor de jobs, provedores, IA (ver `docs/passagens.md`) |
 | `server/chats/` | Central de Mensagens: contrato `ChatProvider`, Beeper/demonstração, sincronização, classificação, IA, agente local (ver `docs/mensagens.md`) |
 | `server/aiconv/` | Prompt Runner: conversas com o Claude CLI (`--resume`, ramificação com `--fork-session`), permissões/perguntas via `--permission-prompt-tool stdio`, fila, imagens, worktree por conversa e mudanças/commit/PR (`git.ts`), importação de sessões do terminal (`~/.claude*/projects`), skills/comandos do Claude Code do usuário e dos projetos (`claudeSkills.ts`) |

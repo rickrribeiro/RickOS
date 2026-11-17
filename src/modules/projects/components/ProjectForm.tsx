@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import type { Project, ProjectArea } from '../../../types'
-import { useProjectStore, workTagsFor } from '../store/projectStore'
+import type { Project, ProjectArea, ProjectRepoInput } from '../../../types'
+import { reposOf, useProjectStore, workTagsFor } from '../store/projectStore'
 import { useTagStore } from '../../timetracker/store/tagStore'
 import { AREAS, PRESET_COLORS, STAGES } from '../lib/constants'
 
@@ -38,8 +38,15 @@ const fromProject = (p: Project | null): FormState => ({
 
 /** Criar (vai para a incubadora) ou editar os dados cadastrais de um projeto. */
 export function ProjectForm({ project, onClose, onCreated }: { project: Project | null; onClose: () => void; onCreated?: (p: Project) => void }): React.ReactElement {
-  const { create, patch } = useProjectStore()
+  const { create, patch, setRepos } = useProjectStore()
+  const storeRepos = useProjectStore((s) => s.repos)
   const [form, setForm] = useState<FormState>(fromProject(project))
+  const initialRepos = (): ProjectRepoInput[] =>
+    project ? reposOf(project.id, storeRepos).map((r) => ({ name: r.name, path: r.path, githubRepoUrl: r.githubRepoUrl })) : []
+  const [repos, setReposState] = useState<ProjectRepoInput[]>(initialRepos)
+  // sugestões da detecção (nada entra na lista sem você confirmar)
+  const [detected, setDetected] = useState<ProjectRepoInput[] | null>(null)
+  const [detectMsg, setDetectMsg] = useState('')
   const [advanced, setAdvanced] = useState(!!project)
   const set = <K extends keyof FormState>(k: K, v: FormState[K]): void => setForm({ ...form, [k]: v })
   const { tags, refreshTags } = useTagStore()
@@ -50,10 +57,37 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
   // o que o "Trabalhar nisso" usaria sem configuração (tag vinculada ou de mesmo nome)
   const autoTag = workTagsFor({ ...(project ?? ({} as Project)), id: project?.id ?? -1, name: form.name, workTagId: null, workTagId2: null }, tags).primary
 
+  const cleanRepos = (): ProjectRepoInput[] =>
+    repos
+      .map((r) => ({ name: r.name.trim(), path: r.path.trim(), githubRepoUrl: r.githubRepoUrl?.trim() || null }))
+      .filter((r) => r.path)
+  const reposChanged = (): boolean => JSON.stringify(cleanRepos()) !== JSON.stringify(initialRepos())
+
+  async function detect(): Promise<void> {
+    setDetectMsg('')
+    setDetected(null)
+    if (!form.localPath.trim()) {
+      setDetectMsg('Preencha o caminho local (a pasta raiz) primeiro.')
+      return
+    }
+    try {
+      const r = await window.api.projects.detectRepos(form.localPath.trim())
+      const fresh = r.repos.filter((d) => !repos.some((x) => x.path.trim() === d.path))
+      if (!r.repos.length) setDetectMsg(r.rootIsRepo ? 'Esta pasta já é um repositório: o projeto é de 1 repo, não precisa listar.' : 'Nenhum repositório encontrado nesta pasta.')
+      else if (!fresh.length) setDetectMsg('Todos os repositórios desta pasta já estão na lista.')
+      else setDetected(fresh)
+    } catch (e) {
+      setDetectMsg(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const setRepo = (i: number, k: keyof ProjectRepoInput, v: string): void => setReposState(repos.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
+
   async function submit(): Promise<void> {
     if (!form.name.trim()) return
     if (project) {
       await patch(project.id, { ...form, name: form.name.trim() })
+      if (reposChanged()) await setRepos(project.id, cleanRepos())
     } else {
       const p = await create(
         form.name.trim(),
@@ -72,6 +106,7 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
         ...(form.workTagId != null ? { workTagId: form.workTagId, workTagId2: form.workTagId2 } : {})
       }
       if (Object.keys(extra).length) await patch(p.id, extra)
+      if (cleanRepos().length) await setRepos(p.id, cleanRepos())
       onCreated?.(p)
     }
     onClose()
@@ -128,8 +163,65 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
           </button>
           {advanced && (
             <>
-              <input placeholder="GitHub repo URL" value={form.githubRepoUrl} onChange={(e) => set('githubRepoUrl', e.target.value)} />
-              <input placeholder="Caminho local (ex: ~/Projects/app) — commits, branches e ROADMAP_RICKOS.md" value={form.localPath} onChange={(e) => set('localPath', e.target.value)} />
+              {repos.length === 0 && (
+                <input placeholder="GitHub repo URL" value={form.githubRepoUrl} onChange={(e) => set('githubRepoUrl', e.target.value)} />
+              )}
+              <input
+                placeholder={
+                  repos.length
+                    ? 'Pasta raiz do workspace (ex: ~/work) — CLAUDE.md, skills e ROADMAP_RICKOS.md'
+                    : 'Caminho local (ex: ~/Projects/app) — commits, branches e ROADMAP_RICKOS.md'
+                }
+                value={form.localPath}
+                onChange={(e) => set('localPath', e.target.value)}
+              />
+              <div className="ph-repos">
+                <div className="ph-repos-head">
+                  <span className="ph-worktags-label" title="Pasta raiz com vários repositórios (front, back, infra…): o Claude roda na raiz e commits, branches, issues e mudanças juntam todos">
+                    📦 Repositórios {repos.length ? `(${repos.length})` : '— só se a pasta for um workspace com vários repos'}
+                  </span>
+                  <button className="ph-linkbtn" onClick={detect}>🔎 Detectar na pasta</button>
+                  <button className="ph-linkbtn" onClick={() => setReposState([...repos, { name: '', path: '', githubRepoUrl: '' }])}>＋ Adicionar</button>
+                </div>
+                {detectMsg && <div className="ph-repos-hint">{detectMsg}</div>}
+                {detected && (
+                  <div className="ph-repos-suggest">
+                    <span>Encontrei {detected.length} repositório(s):</span>
+                    {detected.map((d) => (
+                      <button
+                        key={d.path}
+                        className="ph-chip-btn"
+                        title={d.githubRepoUrl ?? 'sem remote do GitHub'}
+                        onClick={() => {
+                          setReposState([...repos, d])
+                          setDetected(detected.filter((x) => x.path !== d.path).length ? detected.filter((x) => x.path !== d.path) : null)
+                        }}
+                      >
+                        ＋ {d.path}
+                      </button>
+                    ))}
+                    <button
+                      className="ph-linkbtn"
+                      onClick={() => {
+                        setReposState([...repos, ...detected])
+                        setDetected(null)
+                      }}
+                    >
+                      Adicionar todos
+                    </button>
+                  </div>
+                )}
+                {repos.map((r, i) => (
+                  <div key={i} className="ph-repo-row">
+                    <input placeholder="Nome (front)" value={r.name} onChange={(e) => setRepo(i, 'name', e.target.value)} />
+                    <input placeholder="Subpasta (front)" value={r.path} onChange={(e) => setRepo(i, 'path', e.target.value)} />
+                    <input placeholder="GitHub repo URL" value={r.githubRepoUrl ?? ''} onChange={(e) => setRepo(i, 'githubRepoUrl', e.target.value)} />
+                    <button className="ph-linkbtn" aria-label={`Remover ${r.name || r.path}`} title="Remover da lista" onClick={() => setReposState(repos.filter((_, j) => j !== i))}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
               <input placeholder="Comando do Claude (opcional — padrão global)" value={form.claudeCommand} onChange={(e) => set('claudeCommand', e.target.value)} />
               <div className="ph-row">
                 <input placeholder="Modelo de receita" value={form.businessModel} onChange={(e) => set('businessModel', e.target.value)} />

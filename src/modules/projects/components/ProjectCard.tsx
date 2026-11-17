@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Project, ProjectOverview, ProjectStatus } from '../../../types'
 import { useUIStore } from '../../../store/uiStore'
-import { useProjectStore } from '../store/projectStore'
+import { reposOf, useProjectStore } from '../store/projectStore'
 import { PULSE, STATUSES, areaLabel, fmtDate, fmtMinutes, stageLabel, sizeDef, workDaysLabel, isProjectDay } from '../lib/constants'
 import { timeAgo } from '../../../utils/dates'
 
@@ -18,6 +18,7 @@ interface Props {
 export function ProjectCard({ project: p, ov, compact, onStatus, onCompleteAction, onSetAction }: Props): React.ReactElement {
   const { openProject } = useUIStore()
   const { startWorking, delegations } = useProjectStore()
+  const repoCount = useProjectStore((s) => reposOf(p.id, s.repos).length)
   const deleg = delegations.find((d) => d.projectId === p.id && (d.status === 'rodando' || d.status === 'pronta'))
   const size = sizeDef(p.nextActionSize)
   const today = isProjectDay(p)
@@ -95,7 +96,12 @@ export function ProjectCard({ project: p, ov, compact, onStatus, onCompleteActio
         <span className="ph-muted" title="Horas nos últimos 7 dias / total">
           ⏱ {fmtMinutes(ov?.minutes7d ?? 0)} <span className="ph-dim">/ {fmtMinutes(ov?.minutesTotal ?? 0)}</span>
         </span>
-        {ov && ov.commits7d > 0 && <span className="ph-muted">⎇ {ov.commits7d}</span>}
+        {ov && ov.commits7d > 0 && <span className="ph-muted" title="Commits nos últimos 7 dias">⎇ {ov.commits7d}</span>}
+        {repoCount > 0 && (
+          <span className="ph-muted" title="Projeto workspace: commits, branches e issues somam todos os repositórios">
+            📦 {repoCount} repos
+          </span>
+        )}
         <span style={{ flex: 1 }} />
         {(p.status === 'foco' || p.status === 'fila' || p.status === 'baixa') && (
           <button className="btn btn-primary btn-sm" onClick={() => startWorking(p)} title="Inicia o timer vinculado a este projeto">

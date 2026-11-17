@@ -11,7 +11,7 @@ interface Props {
 const STATUS_LABEL: Record<string, string> = { M: 'modificado', A: 'novo', D: 'apagado', R: 'renomeado', C: 'copiado', '??': 'novo', U: 'conflito' }
 
 /** Diff de um arquivo, carregado ao abrir (cada arquivo com o seu próprio limite). */
-function FileDiff({ convId, path, version }: { convId: string; path: string; version: number }): React.ReactElement {
+function FileDiff({ convId, path, version, repo }: { convId: string; path: string; version: number; repo: string | null }): React.ReactElement {
   const [d, setD] = useState<ConvFileDiff | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -19,13 +19,13 @@ function FileDiff({ convId, path, version }: { convId: string; path: string; ver
     setD(null)
     setError('')
     window.api.conv
-      .fileDiff(convId, path)
+      .fileDiff(convId, path, repo)
       .then((r) => alive && setD(r))
       .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)))
     return () => {
       alive = false
     }
-  }, [convId, path, version])
+  }, [convId, path, version, repo])
   if (error) return <div className="cv-ch-nodiff">{error}</div>
   if (!d) return <div className="cv-ch-nodiff">Carregando diff…</div>
   if (d.binary) return <div className="cv-ch-nodiff">(arquivo binário)</div>
@@ -53,17 +53,12 @@ function DiffView({ diff }: { diff: string }): React.ReactElement {
   )
 }
 
-/** Arquivos alterados na pasta da conversa: diff, descartar, commit e PR. */
+/** Arquivos alterados na pasta da conversa: diff, descartar, commit e PR (por repositório em workspace). */
 export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElement {
   const [data, setData] = useState<ConvChanges | null>(null)
   const [error, setError] = useState('')
-  const [open, setOpen] = useState<Set<string>>(new Set())
   // muda a cada recarga da lista: os diffs abertos são buscados de novo
   const [version, setVersion] = useState(0)
-  const [selected, setSelected] = useState<Set<string> | null>(null) // null = todos
-  const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState<string | null>(null)
-  const [info, setInfo] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -71,8 +66,7 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
       setData(d)
       setVersion((v) => v + 1)
       setError('')
-      onCount(d.files.length)
-      setSelected((sel) => (sel ? new Set([...sel].filter((p) => d.files.some((f) => f.path === p))) : null))
+      onCount(d.isRepo ? d.files.length : (d.repos ?? []).reduce((n, r) => n + r.changes.files.length, 0))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -82,15 +76,80 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
     load()
   }, [load, conv.running])
 
+  // workspace: mostra os repos com mudança, commits a enviar ou numa branch própria (worktree)
+  const repos = (data?.repos ?? []).filter(
+    (r) => r.changes.files.length > 0 || r.changes.unpushed > 0 || (!!r.changes.baseRef && r.changes.branch !== r.changes.baseRef)
+  )
+  return (
+    <aside className={`cv-changes${data && !data.isRepo && data.repos?.length ? ' cv-changes-multi' : ''}`}>
+      <div className="cv-ch-head">
+        <strong>📝 Mudanças</strong>
+        {data?.isRepo && data.branch && <span className="cv-chip">🌿 {data.branch}</span>}
+        {data && !data.isRepo && !!data.repos?.length && <span className="cv-chip">📦 {data.repos.length} repos</span>}
+        <button className="cv-link" onClick={load} title="Atualizar">
+          ↻
+        </button>
+        <button className="cv-link" style={{ marginLeft: 'auto', fontSize: 16 }} onClick={onClose} title="Fechar">
+          ✕
+        </button>
+      </div>
+      {error && <div className="cv-ch-error">{error}</div>}
+      {data && !data.isRepo && !data.repos?.length && (
+        <div className="empty-hint" style={{ padding: 16, fontSize: 12.5 }}>A pasta desta conversa não é um repositório git.</div>
+      )}
+      {data?.isRepo && <RepoChanges conv={conv} data={data} repo={null} version={version} reload={load} />}
+      {data && !data.isRepo && !!data.repos?.length && repos.length === 0 && (
+        <div className="empty-hint" style={{ padding: 16, fontSize: 12.5 }}>Nenhuma mudança pendente em {data.repos.map((r) => r.name).join(', ')}.</div>
+      )}
+      {repos.map((r) => (
+        <section key={r.rel} className="cv-ch-repo">
+          <div className="cv-ch-repo-head">
+            <strong>📦 {r.name}</strong>
+            {r.changes.branch && <span className="cv-chip">🌿 {r.changes.branch}</span>}
+            <span className="cv-ch-repo-count">{r.changes.files.length ? `${r.changes.files.length} arquivo(s)` : r.changes.unpushed ? `${r.changes.unpushed} a enviar` : ''}</span>
+          </div>
+          <RepoChanges conv={conv} data={r.changes} repo={r.rel} version={version} reload={load} />
+        </section>
+      ))}
+    </aside>
+  )
+}
+
+/** Lista de arquivos + commit + PR de UM repositório (`repo` = subpasta no workspace; null = a própria pasta). */
+function RepoChanges({
+  conv,
+  data,
+  repo,
+  version,
+  reload
+}: {
+  conv: AiConversation
+  data: ConvChanges
+  repo: string | null
+  version: number
+  reload: () => Promise<void>
+}): React.ReactElement {
+  const [error, setError] = useState('')
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<Set<string> | null>(null) // null = todos
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [info, setInfo] = useState('')
+
+  // arquivos que sumiram da lista saem da seleção
+  useEffect(() => {
+    setSelected((sel) => (sel ? new Set([...sel].filter((p) => data.files.some((f) => f.path === p))) : null))
+  }, [data])
+
   const isSel = (p: string): boolean => (selected ? selected.has(p) : true)
   const toggleSel = (p: string): void => {
-    const base = selected ?? new Set(data?.files.map((f) => f.path) ?? [])
+    const base = selected ?? new Set(data.files.map((f) => f.path))
     const next = new Set(base)
     if (next.has(p)) next.delete(p)
     else next.add(p)
     setSelected(next)
   }
-  const chosen = data?.files.filter((f) => isSel(f.path)).map((f) => f.path) ?? []
+  const chosen = data.files.filter((f) => isSel(f.path)).map((f) => f.path)
 
   async function act(label: string, fn: () => Promise<void>): Promise<void> {
     setBusy(label)
@@ -107,53 +166,46 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
 
   const suggest = (): Promise<void> =>
     act('suggest', async () => {
-      setMessage(await window.api.conv.suggestCommit(conv.id))
+      setMessage(await window.api.conv.suggestCommit(conv.id, repo))
     })
 
   const doCommit = (): Promise<void> =>
     act('commit', async () => {
-      const all = chosen.length === data?.files.length
-      const hash = await window.api.conv.commit(conv.id, message, all ? null : chosen)
+      const all = chosen.length === data.files.length
+      const hash = await window.api.conv.commit(conv.id, message, all ? null : chosen, repo)
       setMessage('')
       setSelected(null)
       setInfo(`✓ Commit ${hash}`)
-      await load()
+      await reload()
     })
 
   const discard = (p: string): Promise<void> =>
     act(`discard:${p}`, async () => {
-      if (!window.confirm(`Descartar as mudanças em ${p}? Não dá para desfazer.`)) return
-      await window.api.conv.discard(conv.id, p)
-      await load()
+      if (!window.confirm(`Descartar as mudanças em ${repo ? `${repo}/` : ''}${p}? Não dá para desfazer.`)) return
+      await window.api.conv.discard(conv.id, p, repo)
+      await reload()
     })
 
   const pr = (): Promise<void> =>
     act('pr', async () => {
-      const url = await window.api.conv.pr(conv.id)
+      const url = await window.api.conv.pr(conv.id, repo)
       setInfo(url ? `🔀 PR: ${url}` : 'PR aberto.')
       if (url) window.api.app.openExternal(url)
-      await load()
+      await reload()
     })
 
-  const files = data?.files ?? []
-  const canPr = !!data?.hasRemote && (conv.useWorktree || (!!data.branch && !!data.baseRef && data.branch !== data.baseRef))
+  const files = data.files
+  // no workspace, repo sem mudanças nem commits a enviar não tem o que virar PR
+  const canPr =
+    data.hasRemote &&
+    (conv.useWorktree || (!!data.branch && !!data.baseRef && data.branch !== data.baseRef)) &&
+    (!repo || files.length > 0 || data.unpushed > 0)
   return (
-    <aside className="cv-changes">
-      <div className="cv-ch-head">
-        <strong>📝 Mudanças</strong>
-        {data?.branch && <span className="cv-chip">🌿 {data.branch}</span>}
-        <button className="cv-link" onClick={load} title="Atualizar">
-          ↻
-        </button>
-        <button className="cv-link" style={{ marginLeft: 'auto', fontSize: 16 }} onClick={onClose} title="Fechar">
-          ✕
-        </button>
-      </div>
+    <>
       {error && <div className="cv-ch-error">{error}</div>}
       {info && <div className="cv-ch-info">{info}</div>}
-      {data && !data.isRepo && <div className="empty-hint" style={{ padding: 16, fontSize: 12.5 }}>A pasta desta conversa não é um repositório git.</div>}
-      {data?.isRepo && files.length === 0 && (
-        <div className="empty-hint" style={{ padding: 16, fontSize: 12.5 }}>
+      {files.length === 0 && (
+        <div className="empty-hint" style={{ padding: repo ? '6px 16px' : 16, fontSize: 12.5 }}>
           Nenhuma mudança pendente.
           {data.unpushed > 0 && <> {data.unpushed} commit(s) ainda não enviados.</>}
         </div>
@@ -185,15 +237,16 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
                 ↺
               </button>
             </div>
-            {open.has(f.path) && (f.binary ? <div className="cv-ch-nodiff">(arquivo binário)</div> : <FileDiff convId={conv.id} path={f.path} version={version} />)}
+            {open.has(f.path) &&
+              (f.binary ? <div className="cv-ch-nodiff">(arquivo binário)</div> : <FileDiff convId={conv.id} path={f.path} version={version} repo={repo} />)}
           </div>
         ))}
       </div>
-      {data?.isRepo && (files.length > 0 || canPr) && (
+      {(files.length > 0 || canPr) && (
         <div className="cv-ch-commit">
           {files.length > 0 && (
             <>
-              <textarea rows={3} placeholder="Mensagem do commit…" value={message} onChange={(e) => setMessage(e.target.value)} />
+              <textarea rows={3} placeholder={`Mensagem do commit${repo ? ` (${repo})` : ''}…`} value={message} onChange={(e) => setMessage(e.target.value)} />
               <div className="cv-actions">
                 <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={suggest} title="O Claude (Haiku) escreve a mensagem no estilo dos commits do repositório">
                   {busy === 'suggest' ? 'Gerando…' : '✨ Sugerir'}
@@ -211,6 +264,6 @@ export function ChangesPanel({ conv, onClose, onCount }: Props): React.ReactElem
           )}
         </div>
       )}
-    </aside>
+    </>
   )
 }

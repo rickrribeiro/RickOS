@@ -1,6 +1,6 @@
 import { invoke, subscribe, downloadUrl, onReconnect } from './transport'
 import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBase64, saveFolder } from './files'
-import type { NextActionSize, ProjectPatch, ProjectStatus, ProjectStatusPayload, TodoListFilters } from '../types'
+import type { NextActionSize, ProjectPatch, ProjectRepoInput, ProjectStatus, ProjectStatusPayload, TodoListFilters } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
@@ -223,6 +223,9 @@ export function createApi() {
       suggestions: () => invoke('projects:suggestions'),
       ignoreSuggestion: (path: string) => invoke('projects:ignoreSuggestion', path),
       restoreSuggestions: () => invoke('projects:restoreSuggestions'),
+      repos: (projectId?: number) => invoke('projects:repos', projectId),
+      setRepos: (projectId: number, repos: ProjectRepoInput[]) => invoke('projects:setRepos', projectId, repos),
+      detectRepos: (localPath: string) => invoke('projects:detectRepos', localPath),
       create: (name: string, description: string | null, githubRepoUrl: string | null, color: string, claudeCommand: string | null, localPath?: string | null, stage?: string, businessModel?: string | null, pricing?: string | null, audience?: string | null) =>
         invoke('projects:create', name, description, githubRepoUrl, color, claudeCommand, localPath, stage, businessModel, pricing, audience),
       update: (
@@ -604,11 +607,11 @@ export function createApi() {
       send: (id: string, text: string, images?: AiImageInput[]) => invoke<boolean>('conv:send', id, text, images ?? []),
       fork: (id: string) => invoke<AiConversation>('conv:fork', id),
       changes: (id: string) => invoke<ConvChanges>('conv:changes', id),
-      fileDiff: (id: string, path: string) => invoke<ConvFileDiff>('conv:fileDiff', id, path),
-      commit: (id: string, message: string, paths?: string[] | null) => invoke<string>('conv:commit', id, message, paths ?? null),
-      discard: (id: string, path: string) => invoke<boolean>('conv:discard', id, path),
-      pr: (id: string) => invoke<string>('conv:pr', id),
-      suggestCommit: (id: string) => invoke<string>('conv:suggestCommit', id),
+      fileDiff: (id: string, path: string, repo?: string | null) => invoke<ConvFileDiff>('conv:fileDiff', id, path, repo ?? null),
+      commit: (id: string, message: string, paths?: string[] | null, repo?: string | null) => invoke<string>('conv:commit', id, message, paths ?? null, repo ?? null),
+      discard: (id: string, path: string, repo?: string | null) => invoke<boolean>('conv:discard', id, path, repo ?? null),
+      pr: (id: string, repo?: string | null) => invoke<string>('conv:pr', id, repo ?? null),
+      suggestCommit: (id: string, repo?: string | null) => invoke<string>('conv:suggestCommit', id, repo ?? null),
       removeWorktree: (id: string) => invoke<boolean>('conv:removeWorktree', id),
       cancel: (id: string) => invoke<boolean>('conv:cancel', id),
       markSeen: (id: string) => invoke<boolean>('conv:markSeen', id),

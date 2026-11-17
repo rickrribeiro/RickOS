@@ -21,7 +21,7 @@ type Handle = (channel: string, fn: (event: unknown, ...args: any[]) => unknown)
 
 export interface AiConvDeps extends RunnerDeps {
   /** Projetos com pasta local, para associar sessões do terminal ao projeto. */
-  projectPaths: () => Promise<{ id: number; localPath: string; name: string }[]>
+  projectPaths: () => Promise<{ id: number; localPath: string; name: string; repos?: { name: string; dir: string }[] }[]>
 }
 
 interface CreateParams {
@@ -197,12 +197,15 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   })
 
   // ── Mudanças no repositório da conversa ──
-  const convDir = async (id: string): Promise<{ dir: string; baseRef: string | null }> => {
+  /** Pasta git da operação: a da conversa ou, em workspace, o repo filho `repoRel` (conferido). */
+  const convDir = async (id: string, repoRel?: string | null): Promise<{ dir: string; baseRef: string | null }> => {
     const c = await repo.getConversation(id)
     if (!c) throw new Error('Conversa não encontrada.')
-    const dir = c.cwd || (await deps.resolveProjectCwd(c.projectId))
-    if (!dir) throw new Error('Esta conversa não tem pasta de trabalho.')
-    return { dir, baseRef: c.baseRef }
+    const root = c.cwd || (await deps.resolveProjectCwd(c.projectId))
+    if (!root) throw new Error('Esta conversa não tem pasta de trabalho.')
+    if (!repoRel) return { dir: root, baseRef: c.baseRef }
+    const rel = String(repoRel)
+    return { dir: gitc.resolveRepoDir(root, rel), baseRef: gitc.workspaceBaseRef(root, rel) }
   }
   handle('conv:changes', async (_e, id: string) => {
     const c = await repo.getConversation(id)
@@ -210,27 +213,27 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     if (!c || !dir) return { isRepo: false, branch: null, baseRef: null, files: [], unpushed: 0, hasRemote: false }
     return gitc.getChanges(dir, c.baseRef)
   })
-  handle('conv:fileDiff', async (_e, id: string, filePath: string) => {
-    const { dir } = await convDir(id)
+  handle('conv:fileDiff', async (_e, id: string, filePath: string, repoRel?: string | null) => {
+    const { dir } = await convDir(id, repoRel)
     return gitc.fileDiff(dir, String(filePath))
   })
-  handle('conv:commit', async (_e, id: string, message: string, paths?: string[] | null) => {
-    const { dir } = await convDir(id)
+  handle('conv:commit', async (_e, id: string, message: string, paths?: string[] | null, repoRel?: string | null) => {
+    const { dir } = await convDir(id, repoRel)
     return gitc.commit(dir, String(message ?? ''), Array.isArray(paths) ? paths.map(String) : null)
   })
-  handle('conv:discard', async (_e, id: string, filePath: string) => {
+  handle('conv:discard', async (_e, id: string, filePath: string, repoRel?: string | null) => {
     if (runner.isRunning(id)) throw new Error('Espere a execução terminar.')
-    const { dir } = await convDir(id)
+    const { dir } = await convDir(id, repoRel)
     await gitc.discard(dir, String(filePath))
     return true
   })
-  handle('conv:pr', async (_e, id: string) => {
-    const { dir, baseRef } = await convDir(id)
+  handle('conv:pr', async (_e, id: string, repoRel?: string | null) => {
+    const { dir, baseRef } = await convDir(id, repoRel)
     return gitc.openPullRequest(dir, baseRef)
   })
-  handle('conv:suggestCommit', async (_e, id: string) => {
+  handle('conv:suggestCommit', async (_e, id: string, repoRel?: string | null) => {
     const c = await repo.getConversation(id)
-    const { dir } = await convDir(id)
+    const { dir } = await convDir(id, repoRel)
     const ctx = await gitc.commitContext(dir)
     if (!ctx.trim()) throw new Error('Nada para descrever.')
     const out = await runClaude(

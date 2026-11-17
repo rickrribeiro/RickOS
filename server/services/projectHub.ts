@@ -4,6 +4,7 @@ import os from 'os'
 import {
   getProjects,
   getProject,
+  getProjectRepos,
   getProjectNumbers,
   getProjectMilestones,
   getProjectCycles,
@@ -22,6 +23,7 @@ import { runClaude } from './claude'
 import { upsertRecurringBlock, deleteRecurringBlock } from './google'
 import { gitQuiet } from './gitscan'
 import { notify } from './notifications'
+import { repoTargets, repoTargetsFrom, localTargets, isWorkspace, RepoTarget } from './projectRepos'
 
 /**
  * Central de Projetos — visão consolidada de cada projeto: horas (timer), TODOs,
@@ -80,9 +82,19 @@ function todayStr(): string {
 // ── git (cache curto: o overview é aberto com frequência) ─────────────────────
 const gitCache = new Map<string, { at: number; lastCommitAt: string | null; commits7d: number }>()
 
-async function gitPulse(localPath: string | null): Promise<{ lastCommitAt: string | null; commits7d: number }> {
-  if (!localPath) return { lastCommitAt: null, commits7d: 0 }
-  const dir = expandHome(localPath)
+/** Pulso somado de todos os repositórios do projeto (workspace) ou do único repo. */
+async function gitPulse(targets: RepoTarget[]): Promise<{ lastCommitAt: string | null; commits7d: number }> {
+  const all = await Promise.all(localTargets(targets).map((t) => gitPulseDir(t.dir)))
+  return all.reduce<{ lastCommitAt: string | null; commits7d: number }>(
+    (acc, g) => ({
+      lastCommitAt: g.lastCommitAt && (!acc.lastCommitAt || new Date(g.lastCommitAt) > new Date(acc.lastCommitAt)) ? g.lastCommitAt : acc.lastCommitAt,
+      commits7d: acc.commits7d + g.commits7d
+    }),
+    { lastCommitAt: null, commits7d: 0 }
+  )
+}
+
+async function gitPulseDir(dir: string): Promise<{ lastCommitAt: string | null; commits7d: number }> {
   const hit = gitCache.get(dir)
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit
   if (!fs.existsSync(path.join(dir, '.git')) && !fs.existsSync(dir)) return { lastCommitAt: null, commits7d: 0 }
@@ -101,21 +113,32 @@ export interface ProjectCommit {
   author: string
   date: string
   refs: string
+  /** Nome do repositório (só em projeto workspace com vários repos). */
+  repo: string | null
 }
 
-/** Commits recentes de todas as branches do repositório local do projeto. */
+/** Commits recentes de todas as branches dos repositórios locais do projeto (mais novos primeiro). */
 export async function projectCommits(projectId: number, limit = 30): Promise<ProjectCommit[]> {
   const p = await getProject(projectId)
-  if (!p?.localPath) return []
-  const out = await gitQuiet(expandHome(p.localPath), ['log', '--all', `-${limit}`, '--format=%h%x1f%s%x1f%an%x1f%aI%x1f%D'])
-  if (!out) return []
-  return out
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [hash, subject, author, date, refs] = line.split('\x1f')
-      return { hash, subject, author, date, refs: refs ?? '' }
+  if (!p) return []
+  const targets = await repoTargets(p)
+  const multi = isWorkspace(targets)
+  const lists = await Promise.all(
+    localTargets(targets).map(async (t) => {
+      const out = await gitQuiet(t.dir, ['log', '--all', `-${limit}`, '--format=%h%x1f%s%x1f%an%x1f%aI%x1f%D'])
+      return (out ?? '')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const [hash, subject, author, date, refs] = line.split('\x1f')
+          return { hash, subject, author, date, refs: refs ?? '', repo: multi ? t.name : null }
+        })
     })
+  )
+  return lists
+    .flat()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, limit)
 }
 
 // ── Roadmap (ROADMAP_RICKOS.md na raiz do projeto) ────────────────────────────
@@ -184,25 +207,27 @@ function pulseOf(idleDays: number | null): Pulse {
 }
 
 export async function projectsOverview(): Promise<ProjectOverview[]> {
-  const [projects, numbers, milestones, cycles, issues, todos] = await Promise.all([
+  const [projects, numbers, milestones, cycles, issues, todos, repoRows] = await Promise.all([
     getProjects(),
     getProjectNumbers(),
     getProjectMilestones(),
     getProjectCycles(null),
     getGithubIssues(),
-    getTodos()
+    getTodos(),
+    getProjectRepos()
   ])
+  const targetsOf = new Map(projects.map((p) => [p.id, repoTargetsFrom(p, repoRows)]))
   const today = todayStr()
   const focusLimit = Number((await getSetting('projects_focus_limit')) || 3) || 3
   const inFocus = projects.filter((p) => p.status === 'foco').length
 
-  const gits = await Promise.all(projects.map((p) => (p.status === 'concluido' || p.status === 'encerrado' ? Promise.resolve({ lastCommitAt: null, commits7d: 0 }) : gitPulse(p.localPath))))
+  const gits = await Promise.all(projects.map((p) => (p.status === 'concluido' || p.status === 'encerrado' ? Promise.resolve({ lastCommitAt: null, commits7d: 0 }) : gitPulse(targetsOf.get(p.id) ?? []))))
 
   return projects.map((p, i) => {
     const n = numbers.find((x) => x.projectId === p.id)
     const ms = milestones.filter((m) => m.projectId === p.id)
-    const repo = repoFromUrl(p.githubRepoUrl)
-    const projIssues = repo ? issues.filter((x) => x.repo.toLowerCase() === repo.toLowerCase()) : []
+    const slugs = new Set((targetsOf.get(p.id) ?? []).map((t) => t.slug).filter(Boolean))
+    const projIssues = slugs.size ? issues.filter((x) => slugs.has(x.repo.toLowerCase())) : []
     const openIssues = projIssues.filter((x) => x.state === 'open').length
     const lastIssueAt = projIssues.reduce<string | null>((max, x) => (x.updatedAt && (!max || x.updatedAt > max) ? x.updatedAt : max), null)
     const g = gits[i]
@@ -333,22 +358,31 @@ export interface CycleCommit {
   hash: string
   subject: string
   date: string
+  /** Repositório de origem (só em projeto workspace). */
+  repo?: string
 }
 
 export async function cycleCommits(cycleId: number): Promise<CycleCommit[]> {
   const c = await getProjectCycle(cycleId)
   if (!c) throw new Error('Ciclo não encontrado')
   const p = await getProject(c.projectId)
-  if (!p?.localPath) return []
+  if (!p) return []
   const until = c.closedAt ?? new Date().toISOString()
-  const out = await gitQuiet(expandHome(p.localPath), ['log', '--no-merges', `--since=${c.startDate}T00:00:00`, `--until=${until}`, '--format=%h%x1f%s%x1f%aI'])
-  return (out ?? '')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => {
-      const [hash, subject, date] = l.split('\x1f')
-      return { hash, subject, date }
+  const targets = await repoTargets(p)
+  const multi = isWorkspace(targets)
+  const lists = await Promise.all(
+    localTargets(targets).map(async (t) => {
+      const out = await gitQuiet(t.dir, ['log', '--no-merges', `--since=${c.startDate}T00:00:00`, `--until=${until}`, '--format=%h%x1f%s%x1f%aI'])
+      return (out ?? '')
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => {
+          const [hash, subject, date] = l.split('\x1f')
+          return multi ? { hash, subject, date, repo: t.name } : { hash, subject, date }
+        })
     })
+  )
+  return lists.flat().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 }
 
 /** Versão mecânica: agrupa por prefixo convencional (feat/fix/…) — sem IA. */
@@ -360,7 +394,7 @@ export function groupedChangelog(name: string, commits: CycleCommit[]): string {
     const title = g?.title ?? '📦 Outros'
     const text = g ? c.subject.replace(g.re, '').trim() : c.subject
     if (!buckets.has(title)) buckets.set(title, [])
-    buckets.get(title)!.push(`- ${text.charAt(0).toUpperCase()}${text.slice(1)} (${c.hash})`)
+    buckets.get(title)!.push(`- ${text.charAt(0).toUpperCase()}${text.slice(1)} (${c.repo ? `${c.repo}@` : ''}${c.hash})`)
   }
   const order = [...GROUPS.map((g) => g.title), '📦 Outros']
   return [`## ${name}`, '', ...order.filter((t) => buckets.has(t)).flatMap((t) => [`### ${t}`, ...buckets.get(t)!, ''])].join('\n').trim()
@@ -380,7 +414,7 @@ export async function generateCycleChangelog(cycleId: number, useAi: boolean): P
 Markdown, em português, voltado a quem USA o produto: comece com "## ${c.name}" e 1 frase de destaque; depois seções curtas (✨ Novidades, ⚡ Melhorias, 🐛 Correções) com bullets claros. Junte commits repetidos, ignore ruído (merges, builds, "wip", atualizações de dist). Não invente nada. Responda só o Markdown.
 
 Commits (${commits.length}):
-${commits.map((x) => `- ${x.date.slice(0, 10)} ${x.subject}`).join('\n')}`,
+${commits.map((x) => `- ${x.date.slice(0, 10)} ${x.repo ? `[${x.repo}] ` : ''}${x.subject}`).join('\n')}`,
         command,
         { model: ((await getSetting('claude_model')) || '').trim(), timeoutMs: 180000, usage: { source: 'changelog', projectId: c.projectId } }
       )

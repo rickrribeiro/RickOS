@@ -8,7 +8,7 @@ import { broadcast } from '../events'
 import { recordAiUsage } from '../database/queries'
 import { buildPath, usageFromResult, type ResultEvent } from '../services/claude'
 import { notify } from '../services/notifications'
-import { createWorktree } from './git'
+import { createWorktree, createWorkspaceWorktree } from './git'
 import * as repo from './repo'
 
 /**
@@ -31,6 +31,8 @@ export interface RunnerDeps {
   resolveModel: (conv: AiConversation) => Promise<string>
   /** Diretório do projeto (localPath), se houver. */
   resolveProjectCwd: (projectId: number | null) => Promise<string | undefined>
+  /** Repositórios do projeto workspace (pasta raiz com vários repos); null = projeto de 1 repo. */
+  projectWorkspaceRepos: (projectId: number | null) => Promise<{ name: string; rel: string; dir: string }[] | null>
   /** Ferramentas pré-liberadas (`--allowedTools …`). */
   allowedToolsArgs: () => Promise<string[]>
   /** Prompt de sistema extra: contexto do projeto + agente + skills. */
@@ -349,9 +351,17 @@ async function startTurn(conversationId: string, message: AiQueuedMessage): Prom
         if (!projectDir || !fs.existsSync(projectDir)) throw new Error('O worktree isolado precisa de um projeto com pasta local.')
         turn.blocks.push({ type: 'notice', text: '🌿 Criando worktree isolado…' })
         emitTurn(run, true)
-        const wt = await createWorktree(projectDir, conv.title || prompt)
+        const wsRepos = await deps.projectWorkspaceRepos(conv.projectId)
+        const wt = wsRepos?.length
+          ? await createWorkspaceWorktree(projectDir, wsRepos, conv.title || prompt)
+          : await createWorktree(projectDir, conv.title || prompt)
         turn.blocks = turn.blocks.filter((b) => b.type !== 'notice')
-        turn.blocks.push({ type: 'notice', text: `🌿 Worktree isolado na branch ${wt.branch}` })
+        turn.blocks.push({
+          type: 'notice',
+          text: wsRepos?.length
+            ? `🌿 Workspace isolado (${wsRepos.map((r) => r.name).join(', ')}) na branch ${wt.branch}`
+            : `🌿 Worktree isolado na branch ${wt.branch}`
+        })
         cwd = wt.cwd
         await repo.setConversationRuntime(conversationId, { cwd, repoPath: wt.repoPath, worktreeBranch: wt.branch, baseRef: wt.baseRef })
       } else {

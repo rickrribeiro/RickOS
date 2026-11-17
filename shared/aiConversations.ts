@@ -170,6 +170,18 @@ export interface ConvChanges {
   /** Commits na branch ainda não enviados ao remoto. */
   unpushed: number
   hasRemote: boolean
+  /**
+   * Projeto workspace (pasta raiz com vários repos): a raiz não é repo (`isRepo: false`)
+   * e as mudanças vêm por repositório. As ações (diff/commit/PR) recebem o `rel`.
+   */
+  repos?: ConvRepoChanges[]
+}
+
+export interface ConvRepoChanges {
+  name: string
+  /** Caminho relativo à pasta da conversa (ex.: "front"). */
+  rel: string
+  changes: ConvChanges
 }
 
 /** Resposta do usuário a um pedido pendente. */

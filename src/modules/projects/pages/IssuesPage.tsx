@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { GithubIssue } from '../../../types'
 import { useGithubStore, columnFor, parseLabels, repoFromUrl, BoardColumn } from '../store/githubStore'
-import { useProjectStore } from '../store/projectStore'
+import { reposOf, useProjectStore } from '../store/projectStore'
 
 const COLUMNS: { key: BoardColumn; label: string }[] = [
   { key: 'backlog', label: 'Backlog' },
@@ -104,7 +104,7 @@ function fmtSyncTime(iso: string): string {
 export function IssuesPage(): React.ReactElement {
   const { issues, refresh, sync, syncing, error, lastCount, lastSyncAt, createLocal, removeIssue, pushToGithub } =
     useGithubStore()
-  const { projects, refresh: refreshProjects } = useProjectStore()
+  const { projects, repos: projectRepos, refresh: refreshProjects } = useProjectStore()
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [doneFilter, setDoneFilter] = useState<DoneFilter>('week')
 
@@ -122,10 +122,15 @@ export function IssuesPage(): React.ReactElement {
     refreshProjects()
   }, [])
 
+  // projeto workspace entra com todos os seus repositórios
   const linkable = projects
     .filter((p) => p.archived !== 1)
-    .map((p) => ({ p, repo: repoFromUrl(p.githubRepoUrl) }))
-    .filter((x): x is { p: typeof x.p; repo: string } => !!x.repo)
+    .map((p) => {
+      const ws = reposOf(p.id, projectRepos)
+      const urls = ws.length ? ws.map((r) => r.githubRepoUrl) : [p.githubRepoUrl]
+      return { p, repos: urls.map((u) => repoFromUrl(u ?? null)).filter((r): r is string => !!r) }
+    })
+    .filter((x) => x.repos.length > 0)
 
   function toggleProject(id: number): void {
     setSelectedIds((prev) => {
@@ -138,7 +143,7 @@ export function IssuesPage(): React.ReactElement {
 
   // repos of the selected projects (empty selection = show all)
   const selectedRepos = new Set(
-    linkable.filter((x) => selectedIds.has(x.p.id)).map((x) => x.repo.toLowerCase())
+    linkable.filter((x) => selectedIds.has(x.p.id)).flatMap((x) => x.repos.map((r) => r.toLowerCase()))
   )
   const visible =
     selectedIds.size === 0 ? issues : issues.filter((i) => selectedRepos.has(i.repo.toLowerCase()))
@@ -212,7 +217,7 @@ export function IssuesPage(): React.ReactElement {
               key={x.p.id}
               className={`btn btn-sm ${selectedIds.has(x.p.id) ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => toggleProject(x.p.id)}
-              title={x.repo}
+              title={x.repos.join(', ')}
             >
               {x.p.name}
             </button>
@@ -230,9 +235,13 @@ export function IssuesPage(): React.ReactElement {
               onChange={(e) => setRepo(e.target.value)}
             />
             <datalist id="repos-datalist">
-              {linkable.map((x) => (
-                <option key={x.p.id} value={x.repo} />
-              ))}
+              {linkable.flatMap((x) =>
+                x.repos.map((r) => (
+                  <option key={`${x.p.id}:${r}`} value={r}>
+                    {x.repos.length > 1 ? x.p.name : undefined}
+                  </option>
+                ))
+              )}
             </datalist>
             <input placeholder="Título *" value={title} onChange={(e) => setTitle(e.target.value)} />
             <textarea placeholder="Descrição (opcional)" rows={3} value={body} onChange={(e) => setBody(e.target.value)} />

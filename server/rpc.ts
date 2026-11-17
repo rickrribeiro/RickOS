@@ -30,6 +30,8 @@ import {
   updateProject,
   setProjectStage,
   deleteProject,
+  getProjectRepos,
+  setProjectRepos,
   getProjectMilestones,
   createProjectMilestone,
   toggleProjectMilestone,
@@ -201,6 +203,7 @@ import { encodeSecret, decodeSecret, legacySecrets, SERVER_ONLY_KEYS } from './s
 import { broadcast } from './events'
 import { notify, notificationsChanged } from './services/notifications'
 import { suggestProjects, ignoreProjectSuggestion, restoreProjectSuggestions } from './services/projectScan'
+import { detectChildRepos, repoTargets, repoTargetsFrom, localTargets, isWorkspace } from './services/projectRepos'
 import { projectsOverview, projectCommits, readRoadmap, setRoadmapItem, createRoadmapTemplate, checkProjectRadar, generateCycleChangelog, cycleCommits, setProjectSchedule } from './services/projectHub'
 import { claudeHookStatus, installClaudeHook, uninstallClaudeHook, handleClaudeSession, AUTO_WHERE_KEY, HOOK_MODEL_KEY } from './services/claudeHook'
 import type { SessionPayload } from './services/claudeHook'
@@ -691,6 +694,18 @@ ipcMain.handle('projects:delete', (_, id: number) => deleteProject(id))
 ipcMain.handle('projects:suggestions', () => suggestProjects())
 ipcMain.handle('projects:ignoreSuggestion', (_, dir: string) => ignoreProjectSuggestion(dir))
 ipcMain.handle('projects:restoreSuggestions', () => restoreProjectSuggestions())
+// Projeto workspace: repositórios dentro da pasta raiz (front, back, infra…).
+ipcMain.handle('projects:repos', (_, projectId?: number) => getProjectRepos(projectId))
+ipcMain.handle('projects:setRepos', (_, projectId: number, repos: { name: string; path: string; githubRepoUrl: string | null }[]) =>
+  setProjectRepos(
+    projectId,
+    (repos ?? [])
+      .map((r) => ({ name: String(r.name ?? '').trim(), path: String(r.path ?? '').trim(), githubRepoUrl: r.githubRepoUrl?.trim() || null }))
+      .filter((r) => r.path)
+      .map((r) => ({ ...r, name: r.name || r.path.split('/').pop() || r.path }))
+  )
+)
+ipcMain.handle('projects:detectRepos', (_, localPath: string) => detectChildRepos(localPath))
 
 ipcMain.handle('milestones:getAll', () => getProjectMilestones())
 ipcMain.handle('milestones:create', (_, projectId: number, title: string, targetDate: string | null) => createProjectMilestone(projectId, title, targetDate))
@@ -1128,6 +1143,16 @@ async function resolveProjectCwd(projectId?: number | null): Promise<string | un
   return p?.localPath && p.localPath.trim() ? p.localPath.trim() : undefined
 }
 
+/** Repositórios do projeto workspace (null = projeto de 1 repo). */
+async function workspaceRepoDirs(projectId?: number | null): Promise<{ name: string; rel: string; dir: string }[] | null> {
+  if (projectId == null) return null
+  const p = (await getProjects()).find((x) => x.id === projectId)
+  if (!p) return null
+  const targets = await repoTargets(p)
+  if (!isWorkspace(targets)) return null
+  return localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }))
+}
+
 // Tools the local Claude may use without an approval prompt (headless `-p` blocks
 // everything else). Default lets it run gh/git and touch files; override via setting.
 const DEFAULT_ALLOWED_TOOLS = 'Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep'
@@ -1158,6 +1183,19 @@ async function buildProjectContext(projectId?: number | null): Promise<string> {
   const hasLocal = !!(p.localPath && p.localPath.trim() && fs.existsSync(p.localPath.trim()))
   const lines = ['### CONTEXTO DO PROJETO', `Projeto: ${p.name}`]
   if (p.description) lines.push(`Descrição: ${p.description}`)
+  const targets = await repoTargets(p)
+  if (isWorkspace(targets)) {
+    // workspace: a pasta raiz NÃO é um repositório; cada subpasta abaixo é um repo próprio
+    lines.push(
+      hasLocal
+        ? `Diretório de trabalho: ${p.localPath!.trim()} (pasta raiz do workspace; você já está rodando DENTRO dela).`
+        : 'Projeto com vários repositórios (sem pasta local configurada).',
+      'Esta pasta raiz não é um repositório git. Repositórios do projeto:',
+      ...targets.map((t) => `- ${t.name}: ./${t.rel}${t.slug ? ` (GitHub ${t.slug})` : ''}`),
+      'Rode git dentro da subpasta do repositório certo (git -C <pasta> …) e, no gh, sempre use --repo <owner/name> do repositório afetado.'
+    )
+    return lines.join('\n') + '\n\n'
+  }
   if (p.githubRepoUrl) lines.push(`Repositório GitHub: ${p.githubRepoUrl}`)
   if (hasLocal) {
     lines.push(
@@ -1300,6 +1338,7 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   resolveCommand: async (c) => (c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? undefined)),
   resolveModel: (c) => resolveModel(c.model),
   resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
+  projectWorkspaceRepos: (projectId) => workspaceRepoDirs(projectId),
   allowedToolsArgs: () => resolveAllowedToolsArgs(),
   systemPrompt: async (c) => {
     const parts: string[] = []
@@ -1318,8 +1357,20 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
     }
     return parts.join('\n\n')
   },
-  projectPaths: async () =>
-    (await getProjects()).filter((p) => p.localPath && p.localPath.trim()).map((p) => ({ id: p.id, localPath: p.localPath!.trim(), name: p.name }))
+  projectPaths: async () => {
+    const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()])
+    return projects
+      .filter((p) => p.localPath && p.localPath.trim())
+      .map((p) => {
+        const targets = repoTargetsFrom(p, rows)
+        return {
+          id: p.id,
+          localPath: p.localPath!.trim(),
+          name: p.name,
+          repos: isWorkspace(targets) ? targets.map((t) => ({ name: t.name, dir: t.dir })) : undefined
+        }
+      })
+  }
 })
 
 ipcMain.handle('ai:cancel', (_, runId: string) => {

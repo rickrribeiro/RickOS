@@ -2,7 +2,8 @@ import { spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { getProjects, getSetting } from '../database/queries'
+import { getProjects, getProjectRepos, getSetting } from '../database/queries'
+import { repoTargetsFrom } from './projectRepos'
 
 /**
  * Worktrees & branches of every local repo (projects' localPath + scan roots).
@@ -200,12 +201,15 @@ function findReposUnder(root: string): string[] {
 
 async function discoverRepos(): Promise<RepoCandidate[]> {
   const byPath = new Map<string, RepoCandidate>()
-  const projects = await getProjects()
-  for (const p of projects) {
-    const lp = p.localPath?.trim()
-    if (!lp || !fs.existsSync(expandHome(lp))) continue
-    const main = await mainRepoOf(expandHome(lp))
-    if (main && !byPath.has(main)) byPath.set(main, { path: main, projectId: p.id, projectName: p.name })
+  const [projects, repoRows] = await Promise.all([getProjects(), getProjectRepos()])
+  const targets = projects.map((p) => ({ p, list: repoTargetsFrom(p, repoRows) }))
+  for (const { p, list } of targets) {
+    // projeto workspace: um repo por linha de project_repos; simples: o próprio localPath
+    for (const t of list) {
+      if (!t.dir || !fs.existsSync(t.dir)) continue
+      const main = await mainRepoOf(t.dir)
+      if (main && !byPath.has(main)) byPath.set(main, { path: main, projectId: p.id, projectName: p.name })
+    }
   }
   for (const root of await getScanRoots()) {
     for (const dir of findReposUnder(root)) {
@@ -218,7 +222,7 @@ async function discoverRepos(): Promise<RepoCandidate[]> {
     if (c.projectId != null) continue
     const url = (await gitOk(c.path, ['remote', 'get-url', 'origin']))?.trim()
     const slug = repoSlug(url ?? null)
-    const p = slug ? projects.find((x) => repoSlug(x.githubRepoUrl) === slug) : undefined
+    const p = slug ? targets.find((x) => x.list.some((t) => t.slug === slug))?.p : undefined
     if (p) {
       c.projectId = p.id
       c.projectName = p.name

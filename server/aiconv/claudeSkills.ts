@@ -19,6 +19,8 @@ interface ProjectRef {
   id: number
   name: string
   localPath: string
+  /** Projeto workspace: repositórios dentro da raiz (cada um pode ter o seu .claude/). */
+  repos?: { name: string; dir: string }[]
 }
 
 function idFor(file: string): string {
@@ -125,6 +127,12 @@ export function listClaudeSkills(projects: ProjectRef[], fresh = false): ClaudeS
     if (seen.has(root) || !fs.existsSync(root)) continue
     seen.add(root)
     items.push(...scanRoot(root, { scope: 'project', source: p.name, configDir: null, projectId: p.id }))
+    for (const r of p.repos ?? []) {
+      const sub = path.join(r.dir, '.claude')
+      if (seen.has(sub) || !fs.existsSync(sub)) continue
+      seen.add(sub)
+      items.push(...scanRoot(sub, { scope: 'project', source: `${p.name} · ${r.name}`, configDir: null, projectId: p.id }))
+    }
   }
   items.sort((a, b) => a.source.localeCompare(b.source) || a.name.localeCompare(b.name))
   cache = { at: Date.now(), items }
