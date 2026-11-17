@@ -4,6 +4,7 @@ import { useTodoStore, DONE_PAGE } from '../store/todoStore'
 import { useProjectStore } from '../../projects/store/projectStore'
 import { TodoEditor } from '../components/TodoEditor'
 import { TodoBoard } from '../components/TodoBoard'
+import { AiPlanModal } from '../components/AiPlanModal'
 import { PRIORITIES, STATUSES, STATUS_LABELS, TodoStatus, TODO_TYPES, priorityDef, dueMeta, todoTypeDef } from '../constants'
 import { localDateStr, timeAgo } from '../../../utils/dates'
 
@@ -20,6 +21,7 @@ export function TodoPage(): React.ReactElement {
   const [recurringFilter, setRecurringFilter] = useState<'all' | 'yes' | 'no'>('all')
   const [newType, setNewType] = useState<string>('projeto')
   const [editing, setEditing] = useState<Todo | null>(null)
+  const [planOpen, setPlanOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [view, setView] = useState<'list' | 'board'>(() => {
     try {
@@ -117,7 +119,7 @@ export function TodoPage(): React.ReactElement {
     const onKey = (e: KeyboardEvent): void => {
       const tag = (document.activeElement?.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
-      if (editing) return
+      if (editing || planOpen) return
       if (items.length === 0) return
 
       const idx = items.findIndex((t) => t.id === selectedId)
@@ -144,7 +146,7 @@ export function TodoPage(): React.ReactElement {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, selectedId, editing])
+  }, [items, selectedId, editing, planOpen])
 
   return (
     <div className="module-page">
@@ -158,13 +160,18 @@ export function TodoPage(): React.ReactElement {
             </span>
           </p>
         </div>
-        <div className="seg-toggle">
-          <button className={`seg-btn ${view === 'list' ? 'active' : ''}`} onClick={() => changeView('list')}>
-            ☰ Lista
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setPlanOpen(true)} title="Em breve">
+            ✨ Planejar com IA
           </button>
-          <button className={`seg-btn ${view === 'board' ? 'active' : ''}`} onClick={() => changeView('board')}>
-            ▦ Quadro
-          </button>
+          <div className="seg-toggle">
+            <button className={`seg-btn ${view === 'list' ? 'active' : ''}`} onClick={() => changeView('list')}>
+              ☰ Lista
+            </button>
+            <button className={`seg-btn ${view === 'board' ? 'active' : ''}`} onClick={() => changeView('board')}>
+              ▦ Quadro
+            </button>
+          </div>
         </div>
       </div>
 
@@ -280,6 +287,7 @@ export function TodoPage(): React.ReactElement {
       )}
 
       {editing && <TodoEditor todo={editing} onClose={() => setEditing(null)} />}
+      {planOpen && <AiPlanModal onClose={() => setPlanOpen(false)} />}
     </div>
   )
 
