@@ -203,7 +203,7 @@ import { encodeSecret, decodeSecret, legacySecrets, SERVER_ONLY_KEYS } from './s
 import { broadcast } from './events'
 import { notify, notificationsChanged } from './services/notifications'
 import { suggestProjects, ignoreProjectSuggestion, restoreProjectSuggestions } from './services/projectScan'
-import { detectChildRepos, repoTargets, repoTargetsFrom, localTargets, isWorkspace } from './services/projectRepos'
+import { detectChildRepos, repoTargets, repoTargetsFrom, localTargets, isWorkspace, workspaceDuplicates, absorbIntoWorkspace } from './services/projectRepos'
 import { projectsOverview, projectCommits, readRoadmap, setRoadmapItem, createRoadmapTemplate, checkProjectRadar, generateCycleChangelog, cycleCommits, setProjectSchedule } from './services/projectHub'
 import { claudeHookStatus, installClaudeHook, uninstallClaudeHook, handleClaudeSession, AUTO_WHERE_KEY, HOOK_MODEL_KEY } from './services/claudeHook'
 import type { SessionPayload } from './services/claudeHook'
@@ -706,6 +706,13 @@ ipcMain.handle('projects:setRepos', (_, projectId: number, repos: { name: string
   )
 )
 ipcMain.handle('projects:detectRepos', (_, localPath: string) => detectChildRepos(localPath))
+// Projetos cadastrados à parte que são repos deste workspace → incorporar (você confirma na tela).
+ipcMain.handle('projects:workspaceDuplicates', (_, projectId: number) => workspaceDuplicates(projectId))
+ipcMain.handle('projects:absorb', async (_, targetId: number, sourceId: number) => {
+  await absorbIntoWorkspace(targetId, sourceId)
+  projectsChanged(targetId)
+  return true
+})
 
 ipcMain.handle('milestones:getAll', () => getProjectMilestones())
 ipcMain.handle('milestones:create', (_, projectId: number, title: string, targetDate: string | null) => createProjectMilestone(projectId, title, targetDate))

@@ -106,6 +106,8 @@ export function IssuesPage(): React.ReactElement {
     useGithubStore()
   const { projects, repos: projectRepos, refresh: refreshProjects } = useProjectStore()
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  // projeto workspace selecionado: filtra por um dos seus repositórios (null = todos)
+  const [repoFilter, setRepoFilter] = useState<string | null>(null)
   const [doneFilter, setDoneFilter] = useState<DoneFilter>('week')
 
   // Add-issue form
@@ -133,6 +135,7 @@ export function IssuesPage(): React.ReactElement {
     .filter((x) => x.repos.length > 0)
 
   function toggleProject(id: number): void {
+    setRepoFilter(null)
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -145,8 +148,11 @@ export function IssuesPage(): React.ReactElement {
   const selectedRepos = new Set(
     linkable.filter((x) => selectedIds.has(x.p.id)).flatMap((x) => x.repos.map((r) => r.toLowerCase()))
   )
-  const visible =
-    selectedIds.size === 0 ? issues : issues.filter((i) => selectedRepos.has(i.repo.toLowerCase()))
+  // repos dos projetos selecionados com mais de um repo (workspace) → chips de repo
+  const repoChoices = linkable.filter((x) => selectedIds.has(x.p.id) && x.repos.length > 1).flatMap((x) => x.repos)
+  const visible = (selectedIds.size === 0 ? issues : issues.filter((i) => selectedRepos.has(i.repo.toLowerCase()))).filter(
+    (i) => !repoFilter || i.repo.toLowerCase() === repoFilter.toLowerCase()
+  )
 
   const grouped: Record<BoardColumn, GithubIssue[]> = { backlog: [], 'in-progress': [], blocked: [], done: [] }
   for (const i of visible) {
@@ -208,7 +214,10 @@ export function IssuesPage(): React.ReactElement {
           <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 2 }}>Projetos:</span>
           <button
             className={`btn btn-sm ${selectedIds.size === 0 ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setSelectedIds(new Set())}
+            onClick={() => {
+              setSelectedIds(new Set())
+              setRepoFilter(null)
+            }}
           >
             Todos
           </button>
@@ -220,6 +229,21 @@ export function IssuesPage(): React.ReactElement {
               title={x.repos.join(', ')}
             >
               {x.p.name}
+              {x.repos.length > 1 && <span style={{ opacity: 0.7 }}> · {x.repos.length} repos</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {repoChoices.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 2 }}>Repositório:</span>
+          <button className={`btn btn-sm ${repoFilter == null ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRepoFilter(null)}>
+            Todos
+          </button>
+          {repoChoices.map((r) => (
+            <button key={r} className={`btn btn-sm ${repoFilter === r ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRepoFilter(r)} title={r}>
+              {r.split('/').pop()}
+              <span style={{ opacity: 0.7 }}> {issues.filter((i) => i.repo.toLowerCase() === r.toLowerCase() && i.state === 'open').length}</span>
             </button>
           ))}
         </div>

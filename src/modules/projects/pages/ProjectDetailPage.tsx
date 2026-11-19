@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import type { ProjectCycle, GitBranch, GithubIssue, ProjectCommit, ProjectEvent, ProjectNote, ProjectStatus, TaskWithTag, Todo } from '../../../types'
+import type { ProjectCycle, GitBranch, GithubIssue, ProjectCommit, ProjectEvent, ProjectNote, ProjectStatus, TaskWithTag, Todo, WorkspaceDuplicate } from '../../../types'
 import { useUIStore } from '../../../store/uiStore'
 import { reposOf, useProjectStore, workTagsFor } from '../store/projectStore'
 import { useTagStore } from '../../timetracker/store/tagStore'
@@ -53,6 +53,53 @@ interface AiPlan {
   milestones?: { title: string; targetDate?: string | null }[]
 }
 
+const COUNT_LABELS: Record<string, string> = {
+  todos: 'tarefa(s)',
+  tasks: 'sessão(ões) no timer',
+  tags: 'tag(s)',
+  project_milestones: 'marco(s)',
+  project_cycles: 'ciclo(s)',
+  project_events: 'registro(s) no histórico',
+  project_notes: 'nota(s)',
+  project_delegations: 'delegação(ões)',
+  ai_conversations: 'conversa(s) do Prompt Runner',
+  ai_usage: 'uso(s) de IA'
+}
+
+/** "3 tarefa(s), 2 uso(s) de IA" — o que vem junto ao incorporar um projeto. */
+function countsLabel(counts: Record<string, number>): string {
+  return Object.entries(counts)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n} ${COUNT_LABELS[k] ?? k}`)
+    .join(', ')
+}
+
+/** Filtro por repositório (projeto workspace): Todos + um chip por repo. */
+function RepoChips({
+  options,
+  value,
+  onChange,
+  total
+}: {
+  options: { key: string; label: string; count: number }[]
+  value: string | null
+  onChange: (v: string | null) => void
+  total: number
+}): React.ReactElement {
+  return (
+    <div className="ph-repo-chips" role="tablist" aria-label="Filtrar por repositório">
+      <button role="tab" aria-selected={value == null} className={value == null ? 'active' : ''} onClick={() => onChange(null)}>
+        Todos <span className="kanban-count">{total}</span>
+      </button>
+      {options.map((o) => (
+        <button key={o.key} role="tab" aria-selected={value === o.key} className={value === o.key ? 'active' : ''} onClick={() => onChange(o.key)}>
+          {o.label} <span className="kanban-count">{o.count}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function ProjectDetailPage(): React.ReactElement {
   const { selectedProjectId, setPage } = useUIStore()
   const { projects, overview, milestones, cycles, refreshAll, refreshMilestones, refreshCycles, patch, startWorking } = useProjectStore()
@@ -69,6 +116,11 @@ export function ProjectDetailPage(): React.ReactElement {
   const [issues, setIssues] = useState<GithubIssue[]>([])
   const [commits, setCommits] = useState<ProjectCommit[]>([])
   const [branches, setBranches] = useState<GitBranch[]>([])
+  // workspace: repositório escolhido nos filtros (null = todos) e projetos duplicados a incorporar
+  const [codeRepo, setCodeRepo] = useState<string | null>(null)
+  const [issueRepo, setIssueRepo] = useState<string | null>(null)
+  const [dups, setDups] = useState<WorkspaceDuplicate[]>([])
+  const [absorbing, setAbsorbing] = useState<number | null>(null)
   const [sessions, setSessions] = useState<TaskWithTag[]>([])
   const [notes, setNotes] = useState<ProjectNote[]>([])
   const [aiPlan, setAiPlan] = useState<AiPlan | null>(null)
@@ -114,14 +166,50 @@ export function ProjectDetailPage(): React.ReactElement {
   useEffect(() => {
     setAiPlan(null)
     void loadExtras()
-    if (p?.localPath) {
+  }, [p?.id])
+
+  // código (commits/branches) e duplicados: recarrega também quando a lista de repos muda
+  const repoKey = p ? reposOf(p.id, allRepos).map((r) => `${r.path}|${r.githubRepoUrl ?? ''}`).join(',') : ''
+  const loadCode = (): void => {
+    if (!p) return
+    if (p.localPath) {
       window.api.projects.commits(p.id, 40).then(setCommits).catch(() => setCommits([]))
       window.api.git.summary().then((s) => setBranches(s.branches.filter((b) => b.projectId === p.id))).catch(() => setBranches([]))
     } else {
       setCommits([])
       setBranches([])
     }
-  }, [p?.id])
+    if (repoKey) window.api.projects.workspaceDuplicates(p.id).then(setDups).catch(() => setDups([]))
+    else setDups([])
+  }
+  async function absorb(d: WorkspaceDuplicate): Promise<void> {
+    if (!p) return
+    const what = countsLabel(d.counts)
+    const ok = window.confirm(
+      `Incorporar o projeto "${d.projectName}" ao ${p.name}?\n\n` +
+        (what ? `Vem junto: ${what}.\n` : 'Ele não tem dados vinculados.\n') +
+        'Os textos dele (próxima ação, onde parei, descrição…) viram uma nota aqui. Depois o projeto antigo é apagado.'
+    )
+    if (!ok) return
+    setAbsorbing(d.projectId)
+    try {
+      await window.api.projects.absorb(p.id, d.projectId)
+      await refreshAll()
+      void loadExtras()
+      loadCode()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAbsorbing(null)
+    }
+  }
+
+  useEffect(() => {
+    setCodeRepo(null)
+    setIssueRepo(null)
+    loadCode()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p?.id, repoKey])
 
   const ms = useMemo(() => (p ? milestones.filter((m) => m.projectId === p.id) : []), [milestones, p?.id])
   const projCycles = useMemo(() => (p ? cycles.filter((c) => c.projectId === p.id) : []), [cycles, p?.id])
@@ -621,9 +709,21 @@ ${ctx}`
               <h3 className="ph-section-title">
                 Issues do GitHub ({repoSlugs.size > 1 ? `${repoSlugs.size} repos` : [...repoSlugs][0]}) <span className="kanban-count">{projIssues.filter((i) => i.state === 'open').length}</span>
               </h3>
+              {repoSlugs.size > 1 && (
+                <RepoChips
+                  options={[...repoSlugs].map((slug) => ({
+                    key: slug,
+                    label: slug.split('/').pop() ?? slug,
+                    count: projIssues.filter((i) => i.state === 'open' && i.repo.toLowerCase() === slug).length
+                  }))}
+                  value={issueRepo}
+                  onChange={setIssueRepo}
+                  total={projIssues.filter((i) => i.state === 'open').length}
+                />
+              )}
               <div className="list-stack">
                 {projIssues.length === 0 && <div className="empty-hint">Nenhuma issue (sincronize em Issues).</div>}
-                {projIssues.filter((i) => i.state === 'open').map((i) => (
+                {projIssues.filter((i) => i.state === 'open' && (!issueRepo || i.repo.toLowerCase() === issueRepo)).map((i) => (
                   <div key={i.id} className="list-row">
                     <span className="list-row-title">
                       {repoSlugs.size > 1 && <span className="ph-repo-badge">{i.repo.split('/').pop()}</span>}#{i.number > 0 ? i.number : '—'} {i.title}
@@ -687,53 +787,90 @@ ${ctx}`
                 <>
                   <h3 className="ph-section-title">Repositórios <span className="kanban-count">{wsRepos.length}</span></h3>
                   <div className="list-stack">
-                    {wsRepos.map((r) => (
-                      <div key={r.id} className="list-row">
-                        <span className="list-row-title">
-                          📦 {r.name} <code className="ph-muted">./{r.path}</code>
-                        </span>
-                        {r.githubRepoUrl && (
-                          <button className="ph-linkbtn" onClick={() => window.api.app.openExternal(r.githubRepoUrl!)}>
-                            GitHub ↗
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    {wsRepos.map((r) => {
+                      const dup = dups.filter((d) => d.repoName === r.name)
+                      return (
+                        <div key={r.id} className="list-row ph-ws-repo">
+                          <span className="list-row-title">
+                            📦 {r.name} <code className="ph-muted">./{r.path}</code>
+                          </span>
+                          {r.githubRepoUrl && (
+                            <button className="ph-linkbtn" onClick={() => window.api.app.openExternal(r.githubRepoUrl!)}>
+                              GitHub ↗
+                            </button>
+                          )}
+                          {dup.map((d) => (
+                            <div key={d.projectId} className="ph-ws-dup">
+                              <span>
+                                ⚠️ Também cadastrado como o projeto <strong>{d.projectName}</strong>
+                                {countsLabel(d.counts) ? ` (${countsLabel(d.counts)})` : ' (sem dados vinculados)'}.
+                              </span>
+                              <button className="btn btn-secondary btn-sm" disabled={absorbing != null} onClick={() => absorb(d)}>
+                                {absorbing === d.projectId ? 'Incorporando…' : `Incorporar ao ${project.name}`}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
                   </div>
+                  <RepoChips
+                    options={wsRepos.map((r) => ({ key: r.name, label: r.name, count: commits.filter((c) => c.repo === r.name).length }))}
+                    value={codeRepo}
+                    onChange={setCodeRepo}
+                    total={commits.length}
+                  />
                 </>
               )}
-              <h3 className="ph-section-title">Branches e worktrees <span className="kanban-count">{branches.length}</span></h3>
-              <div className="list-stack">
-                {branches.length === 0 && <div className="empty-hint">Nenhuma branch encontrada no último scan.</div>}
-                {branches.map((b) => (
-                  <div key={b.id} className="list-row">
-                    <span className="list-row-title">
-                      {b.isBase ? '🏠 ' : b.worktreePath ? '🌳 ' : '⎇ '}
-                      {wsRepos.length > 0 && <span className="ph-repo-badge">{b.repoName}</span>}
-                      {b.branch ?? '(detached)'}
-                      {b.worktreePath && !b.isBase && <span className="ph-muted"> · worktree</span>}
-                      {b.ahead > 0 && <span className="ph-muted"> · +{b.ahead}</span>}
-                      {(b.dirty ?? 0) > 0 && <span className="ph-muted"> · {b.dirty} alterados</span>}
-                    </span>
-                    <span className="ph-muted">{b.lastCommitAt ? timeAgo(b.lastCommitAt) : ''}</span>
+              {(() => {
+                // workspace: uma seção por repositório (ou só o escolhido); projeto simples: lista única
+                const folder = (r: { path: string }): string => r.path.split('/').pop() ?? r.path
+                const groups = wsRepos.length
+                  ? wsRepos
+                      .filter((r) => !codeRepo || r.name === codeRepo)
+                      .map((r) => ({
+                        key: r.name,
+                        title: r.name,
+                        branches: branches.filter((b) => b.repoName === folder(r)),
+                        commits: commits.filter((c) => c.repo === r.name).slice(0, codeRepo ? 40 : 15)
+                      }))
+                  : [{ key: '', title: '', branches, commits }]
+                return groups.map((g) => (
+                  <div key={g.key} className={g.title ? 'ph-ws-group' : undefined}>
+                    {g.title && <h3 className="ph-ws-group-title">📦 {g.title}</h3>}
+                    <h3 className="ph-section-title">
+                      Branches e worktrees <span className="kanban-count">{g.branches.length}</span>
+                    </h3>
+                    <div className="list-stack">
+                      {g.branches.length === 0 && <div className="empty-hint">Nenhuma branch encontrada no último scan.</div>}
+                      {g.branches.map((b) => (
+                        <div key={b.id} className="list-row">
+                          <span className="list-row-title">
+                            {b.isBase ? '🏠 ' : b.worktreePath ? '🌳 ' : '⎇ '}
+                            {b.branch ?? '(detached)'}
+                            {b.worktreePath && !b.isBase && <span className="ph-muted"> · worktree</span>}
+                            {b.ahead > 0 && <span className="ph-muted"> · +{b.ahead}</span>}
+                            {(b.dirty ?? 0) > 0 && <span className="ph-muted"> · {b.dirty} alterados</span>}
+                          </span>
+                          <span className="ph-muted">{b.lastCommitAt ? timeAgo(b.lastCommitAt) : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <h3 className="ph-section-title">Commits recentes</h3>
+                    <div className="ph-commits">
+                      {g.commits.length === 0 && <div className="empty-hint">Sem commits (ou não é um repositório git).</div>}
+                      {g.commits.map((c) => (
+                        <div key={`${c.repo ?? ''}:${c.hash}`} className="ph-commit">
+                          <code>{c.hash}</code>
+                          <span className="ph-commit-subject">{c.subject}</span>
+                          {c.refs && <span className="ph-tag">{c.refs.replace('HEAD -> ', '')}</span>}
+                          <span className="ph-muted">{timeAgo(c.date)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-              <h3 className="ph-section-title">Commits recentes</h3>
-              <div className="ph-commits">
-                {commits.length === 0 && <div className="empty-hint">Sem commits (ou não é um repositório git).</div>}
-                {commits.map((c) => (
-                  <div key={`${c.repo ?? ''}:${c.hash}`} className="ph-commit">
-                    <code>{c.hash}</code>
-                    <span className="ph-commit-subject">
-                      {c.repo && <span className="ph-repo-badge">{c.repo}</span>}
-                      {c.subject}
-                    </span>
-                    {c.refs && <span className="ph-tag">{c.refs.replace('HEAD -> ', '')}</span>}
-                    <span className="ph-muted">{timeAgo(c.date)}</span>
-                  </div>
-                ))}
-              </div>
+                ))
+              })()}
             </>
           )}
         </div>

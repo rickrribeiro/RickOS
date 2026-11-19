@@ -117,7 +117,10 @@ export interface ProjectCommit {
   repo: string | null
 }
 
-/** Commits recentes de todas as branches dos repositórios locais do projeto (mais novos primeiro). */
+/**
+ * Commits recentes de todas as branches dos repositórios locais do projeto (mais novos primeiro).
+ * Workspace: até `limit` POR repositório (um repo movimentado não esconde os outros).
+ */
 export async function projectCommits(projectId: number, limit = 30): Promise<ProjectCommit[]> {
   const p = await getProject(projectId)
   if (!p) return []
@@ -135,10 +138,8 @@ export async function projectCommits(projectId: number, limit = 30): Promise<Pro
         })
     })
   )
-  return lists
-    .flat()
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, limit)
+  const all = lists.flat().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  return multi ? all : all.slice(0, limit)
 }
 
 // ── Roadmap (ROADMAP_RICKOS.md na raiz do projeto) ────────────────────────────

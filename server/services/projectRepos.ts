@@ -2,7 +2,7 @@ import { execFile } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { getProjects, getProjectRepos, DbProject, DbProjectRepo } from '../database/queries'
+import { getProjects, getProjectRepos, setProjectRepos, projectRefCounts, absorbProject, DbProject, DbProjectRepo } from '../database/queries'
 
 /**
  * Repositórios de um projeto. Um projeto pode ser:
@@ -123,4 +123,60 @@ export async function projectForGithubRepo(repo: string): Promise<DbProject | nu
   const slug = repo.trim().toLowerCase()
   const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()])
   return projects.find((p) => repoTargetsFrom(p, rows).some((t) => t.slug === slug)) ?? null
+}
+
+function realDir(p: string): string {
+  try {
+    return fs.realpathSync(p)
+  } catch {
+    return path.resolve(p)
+  }
+}
+
+export interface WorkspaceDuplicate {
+  /** Repositório do workspace que coincide. */
+  repoName: string
+  projectId: number
+  projectName: string
+  status: string
+  /** Linhas vinculadas ao projeto antigo, por tabela (todos, tasks, project_notes…). */
+  counts: Record<string, number>
+}
+
+/**
+ * Projetos cadastrados à parte que são, na verdade, um dos repositórios deste workspace
+ * (mesma pasta ou mesmo repo do GitHub). Só sugere: incorporar é uma ação do usuário.
+ */
+export async function workspaceDuplicates(targetId: number): Promise<WorkspaceDuplicate[]> {
+  const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()])
+  const target = projects.find((p) => p.id === targetId)
+  if (!target) return []
+  const targets = repoTargetsFrom(target, rows)
+  if (!isWorkspace(targets)) return []
+  const out: WorkspaceDuplicate[] = []
+  for (const p of projects) {
+    if (p.id === targetId || rows.some((r) => r.projectId === p.id)) continue // outro workspace: não mexe
+    const dir = p.localPath?.trim() ? realDir(expandHome(p.localPath.trim())) : null
+    const slug = githubSlug(p.githubRepoUrl)
+    const hit = targets.find((t) => (dir && t.dir && realDir(t.dir) === dir) || (slug && t.slug === slug))
+    if (hit) out.push({ repoName: hit.name, projectId: p.id, projectName: p.name, status: p.status, counts: await projectRefCounts(p.id) })
+  }
+  return out
+}
+
+/** Incorpora um projeto duplicado no workspace (confere que é mesmo um dos repos dele). */
+export async function absorbIntoWorkspace(targetId: number, sourceId: number): Promise<void> {
+  const dup = (await workspaceDuplicates(targetId)).find((d) => d.projectId === sourceId)
+  if (!dup) throw new Error('Este projeto não corresponde a nenhum repositório do workspace.')
+  // o GitHub do antigo fica no repo do workspace, se ainda não estiver lá
+  const [projects, rows] = await Promise.all([getProjects(), getProjectRepos(targetId)])
+  const source = projects.find((p) => p.id === sourceId)
+  const repo = rows.find((r) => r.name === dup.repoName)
+  if (source?.githubRepoUrl && repo && !repo.githubRepoUrl) {
+    await setProjectRepos(
+      targetId,
+      rows.map((r) => ({ name: r.name, path: r.path, githubRepoUrl: r.id === repo.id ? source.githubRepoUrl : r.githubRepoUrl }))
+    )
+  }
+  await absorbProject(targetId, sourceId)
 }

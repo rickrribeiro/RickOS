@@ -767,6 +767,110 @@ export async function setProjectRepos(
   return getProjectRepos(projectId)
 }
 
+/** Tabelas com `projectId` (tudo o que pertence a um projeto). */
+const PROJECT_REF_TABLES = [
+  'todos',
+  'tasks',
+  'tags',
+  'project_milestones',
+  'project_cycles',
+  'project_events',
+  'project_notes',
+  'project_delegations',
+  'ai_conversations',
+  'ai_usage'
+] as const
+
+/** Quantas linhas de cada tabela apontam para o projeto (para mostrar antes de incorporar). */
+export async function projectRefCounts(projectId: number): Promise<Record<string, number>> {
+  const db = await getDb()
+  const out: Record<string, number> = {}
+  for (const t of PROJECT_REF_TABLES) {
+    try {
+      out[t] = getOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM ${t} WHERE projectId = ?`, [projectId])?.n ?? 0
+    } catch {
+      out[t] = 0 // tabela ausente em banco antigo
+    }
+  }
+  return out
+}
+
+/** Campos de texto do projeto que viram nota ao incorporar (nada se perde). */
+const ABSORB_TEXT_FIELDS: [keyof DbProject, string][] = [
+  ['description', 'Descrição'],
+  ['nextAction', 'Próxima ação'],
+  ['whereLeftOff', 'Onde parei'],
+  ['finishLine', 'Linha de chegada'],
+  ['scope', 'Escopo'],
+  ['futureIdeas', 'Ideias futuras'],
+  ['blocker', 'Bloqueio'],
+  ['blockerNeed', 'Para destravar'],
+  ['pauseReason', 'Motivo da pausa'],
+  ['resumeCondition', 'Retomar quando'],
+  ['closeReason', 'Motivo do encerramento'],
+  ['retrospective', 'Retrospectiva'],
+  ['businessModel', 'Modelo de receita'],
+  ['pricing', 'Preço'],
+  ['audience', 'Público-alvo']
+]
+
+/**
+ * Incorpora o projeto `sourceId` em `targetId` (ex.: repo que virou parte de um workspace):
+ * move tarefas, horas, tags, marcos, ciclos, histórico, notas, delegações, conversas e uso
+ * de IA; os textos do antigo viram uma nota; depois apaga o antigo. Tudo numa transação.
+ */
+export async function absorbProject(targetId: number, sourceId: number): Promise<void> {
+  const db = await getDb()
+  if (targetId === sourceId) throw new Error('Não dá para incorporar um projeto nele mesmo.')
+  const target = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [targetId])
+  const source = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [sourceId])
+  if (!target || !source) throw new Error('Projeto não encontrado.')
+  const exec = (sql: string, params: (string | number | null)[]): void => {
+    const st = db.prepare(sql)
+    st.run(params)
+    st.free()
+  }
+  const now = new Date().toISOString()
+  const texts = ABSORB_TEXT_FIELDS.map(([k, label]) => [label, source[k]] as const).filter(([, v]) => typeof v === 'string' && v.trim())
+  db.run('BEGIN')
+  try {
+    for (const t of PROJECT_REF_TABLES) {
+      try {
+        exec(`UPDATE ${t} SET projectId = ? WHERE projectId = ?`, [targetId, sourceId])
+      } catch {
+        // tabela ausente em banco antigo
+      }
+    }
+    // configurações que o destino ainda não tem
+    if (!target.claudeCommand && source.claudeCommand) exec('UPDATE projects SET claudeCommand = ? WHERE id = ?', [source.claudeCommand, targetId])
+    if (target.workTagId == null && source.workTagId != null)
+      exec('UPDATE projects SET workTagId = ?, workTagId2 = ? WHERE id = ?', [source.workTagId, source.workTagId2 ?? null, targetId])
+    if (texts.length) {
+      exec('INSERT INTO project_notes (projectId, kind, title, body, url, pinned, createdAt) VALUES (?, ?, ?, ?, ?, 0, ?)', [
+        targetId,
+        'nota',
+        `Incorporado de ${source.name}`,
+        texts.map(([label, v]) => `**${label}:** ${String(v).trim()}`).join('\n\n'),
+        source.githubRepoUrl,
+        now
+      ])
+    }
+    exec('INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, NULL, NULL, ?, ?)', [
+      targetId,
+      'decisao',
+      `📦 Incorporou o projeto "${source.name}" (era ${source.status}${source.localPath ? `, ${source.localPath}` : ''})`,
+      now
+    ])
+    exec('DELETE FROM project_repos WHERE projectId = ?', [sourceId])
+    exec('DELETE FROM projects WHERE id = ?', [sourceId])
+    db.run('COMMIT')
+  } catch (e) {
+    db.run('ROLLBACK')
+    throw e
+  }
+  saveDb()
+}
+
 /** Move a project between pipeline stages (drag-and-drop). */
 export async function setProjectStage(id: number, stage: string): Promise<void> {
   const db = await getDb()

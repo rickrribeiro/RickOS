@@ -343,6 +343,15 @@ export interface ProjectRepo {
   githubRepoUrl: string | null
   sortOrder: number
 }
+/** Projeto cadastrado à parte que é um dos repositórios de um workspace (pode ser incorporado). */
+export interface WorkspaceDuplicate {
+  repoName: string
+  projectId: number
+  projectName: string
+  status: string
+  /** Linhas vinculadas ao projeto antigo, por tabela. */
+  counts: Record<string, number>
+}
 export interface ProjectRepoInput {
   name: string
   path: string
@@ -907,6 +916,8 @@ declare global {
         repos: (projectId?: number) => Promise<ProjectRepo[]>
         setRepos: (projectId: number, repos: ProjectRepoInput[]) => Promise<ProjectRepo[]>
         detectRepos: (localPath: string) => Promise<{ rootIsRepo: boolean; repos: ProjectRepoInput[] }>
+        workspaceDuplicates: (projectId: number) => Promise<WorkspaceDuplicate[]>
+        absorb: (targetId: number, sourceId: number) => Promise<boolean>
         get: (id: number) => Promise<Project | null>
         patch: (id: number, fields: ProjectPatch) => Promise<Project>
         setStatus: (id: number, status: ProjectStatus, payload?: ProjectStatusPayload) => Promise<Project>

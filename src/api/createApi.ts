@@ -226,6 +226,8 @@ export function createApi() {
       repos: (projectId?: number) => invoke('projects:repos', projectId),
       setRepos: (projectId: number, repos: ProjectRepoInput[]) => invoke('projects:setRepos', projectId, repos),
       detectRepos: (localPath: string) => invoke('projects:detectRepos', localPath),
+      workspaceDuplicates: (projectId: number) => invoke('projects:workspaceDuplicates', projectId),
+      absorb: (targetId: number, sourceId: number) => invoke('projects:absorb', targetId, sourceId),
       create: (name: string, description: string | null, githubRepoUrl: string | null, color: string, claudeCommand: string | null, localPath?: string | null, stage?: string, businessModel?: string | null, pricing?: string | null, audience?: string | null) =>
         invoke('projects:create', name, description, githubRepoUrl, color, claudeCommand, localPath, stage, businessModel, pricing, audience),
       update: (
