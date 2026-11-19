@@ -81,7 +81,14 @@ function CompareModal(props: { offers: OfferView[]; onClose: () => void }): Reac
 export function ResultsExplorer(props: { m: MonitorSummary; version: number; onMore: (n: number) => void; canSearch: boolean }): React.ReactElement {
   const { m } = props
   const [status, setStatus] = useState<EligibilityStatus>('eligible')
-  const [q, setQ] = useState<OfferQuery>({ page: 1 })
+  // "ocultar antigas" fica lembrado neste navegador
+  const [q, setQ] = useState<OfferQuery>(() => {
+    try {
+      return { page: 1, hideStale: localStorage.getItem('fm-hide-stale') === '1' }
+    } catch {
+      return { page: 1 }
+    }
+  })
   const [search, setSearch] = useState('')
   const [data, setData] = useState<OfferPage | null>(null)
   const [err, setErr] = useState('')
@@ -104,6 +111,14 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
 
   const set = (p: Partial<OfferQuery>): void => setQ((x) => ({ ...x, ...p, page: p.page ?? 1 }))
   const sortBy = (s: OfferQuery['sort']): void => set({ sort: s })
+  const hideStale = (on: boolean): void => {
+    set({ hideStale: on })
+    try {
+      localStorage.setItem('fm-hide-stale', on ? '1' : '0')
+    } catch {
+      /* sem armazenamento: vale só nesta sessão */
+    }
+  }
   const toggleCmp = (o: OfferView): void => {
     const n = new Map(cmp)
     if (n.has(o.id)) n.delete(o.id)
@@ -175,6 +190,14 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
         <label className="fm-check fm-small">
           <input type="checkbox" checked={!!q.favoritesOnly} onChange={(e) => set({ favoritesOnly: e.target.checked })} /> ★ favoritos
         </label>
+        <label className="fm-check fm-small" title="Esconde cotações antigas: não revistas há mais de 72 h (12 h nas fontes ao vivo)">
+          <input
+            type="checkbox"
+            checked={!!q.hideStale}
+            onChange={(e) => hideStale(e.target.checked)}
+          />{' '}
+          ocultar antigas
+        </label>
         <label className="fm-check fm-small" title="Diversifica origem, país, data, companhia e conexões no topo da lista">
           <input type="checkbox" checked={q.diversify !== false} onChange={(e) => set({ diversify: e.target.checked })} /> diversificar
         </label>
@@ -198,6 +221,14 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
             </>
           ) : (
             <p className="fm-muted">Nada nesta aba com os filtros atuais.</p>
+          )}
+          {q.hideStale && data.counts.eligible + data.counts.pending + data.counts.excluded > 0 && (
+            <p className="fm-small">
+              "Ocultar antigas" está ligado.{' '}
+              <button className="fm-linkbtn" type="button" onClick={() => hideStale(false)}>
+                mostrar as antigas
+              </button>
+            </p>
           )}
         </div>
       ) : (

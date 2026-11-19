@@ -102,6 +102,7 @@ export async function queryOffers(m: FlightMonitor, q: OfferQuery): Promise<Offe
     if (status !== 'all' && v.status !== status) return false
     if (!q.includeUnavailable && !v.available && status !== 'excluded' && status !== 'all') return false
     if (q.favoritesOnly && !v.favorite) return false
+    if (q.hideStale && v.stale) return false
     if (q.origins?.length && !q.origins.includes(v.origin)) return false
     if (q.destinations?.length && !q.destinations.includes(v.destination)) return false
     if (q.maxStops != null && v.stops > q.maxStops) return false

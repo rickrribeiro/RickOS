@@ -425,6 +425,8 @@ export interface OfferQuery {
   providers?: string[]
   verification?: Verification[]
   favoritesOnly?: boolean
+  /** Esconde cotações antigas (`stale`: não revistas há mais de 72 h, ou 12 h ao vivo). */
+  hideStale?: boolean
   includeUnavailable?: boolean
   sort?: SortStrategy | 'depart' | 'recent'
   diversify?: boolean
