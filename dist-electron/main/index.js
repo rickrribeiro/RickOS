@@ -2011,6 +2011,96 @@ async function setProjectRepos(projectId, repos) {
   });
   return getProjectRepos(projectId);
 }
+const PROJECT_REF_TABLES = [
+  "todos",
+  "tasks",
+  "tags",
+  "project_milestones",
+  "project_cycles",
+  "project_events",
+  "project_notes",
+  "project_delegations",
+  "ai_conversations",
+  "ai_usage"
+];
+async function projectRefCounts(projectId) {
+  const db2 = await getDb();
+  const out = {};
+  for (const t of PROJECT_REF_TABLES) {
+    try {
+      out[t] = getOne(db2, `SELECT COUNT(*) AS n FROM ${t} WHERE projectId = ?`, [projectId])?.n ?? 0;
+    } catch {
+      out[t] = 0;
+    }
+  }
+  return out;
+}
+const ABSORB_TEXT_FIELDS = [
+  ["description", "Descrição"],
+  ["nextAction", "Próxima ação"],
+  ["whereLeftOff", "Onde parei"],
+  ["finishLine", "Linha de chegada"],
+  ["scope", "Escopo"],
+  ["futureIdeas", "Ideias futuras"],
+  ["blocker", "Bloqueio"],
+  ["blockerNeed", "Para destravar"],
+  ["pauseReason", "Motivo da pausa"],
+  ["resumeCondition", "Retomar quando"],
+  ["closeReason", "Motivo do encerramento"],
+  ["retrospective", "Retrospectiva"],
+  ["businessModel", "Modelo de receita"],
+  ["pricing", "Preço"],
+  ["audience", "Público-alvo"]
+];
+async function absorbProject(targetId, sourceId) {
+  const db2 = await getDb();
+  if (targetId === sourceId) throw new Error("Não dá para incorporar um projeto nele mesmo.");
+  const target = getOne(db2, "SELECT * FROM projects WHERE id = ?", [targetId]);
+  const source = getOne(db2, "SELECT * FROM projects WHERE id = ?", [sourceId]);
+  if (!target || !source) throw new Error("Projeto não encontrado.");
+  const exec2 = (sql, params) => {
+    const st = db2.prepare(sql);
+    st.run(params);
+    st.free();
+  };
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const texts = ABSORB_TEXT_FIELDS.map(([k, label]) => [label, source[k]]).filter(([, v]) => typeof v === "string" && v.trim());
+  db2.run("BEGIN");
+  try {
+    for (const t of PROJECT_REF_TABLES) {
+      try {
+        exec2(`UPDATE ${t} SET projectId = ? WHERE projectId = ?`, [targetId, sourceId]);
+      } catch {
+      }
+    }
+    if (!target.claudeCommand && source.claudeCommand) exec2("UPDATE projects SET claudeCommand = ? WHERE id = ?", [source.claudeCommand, targetId]);
+    if (target.workTagId == null && source.workTagId != null)
+      exec2("UPDATE projects SET workTagId = ?, workTagId2 = ? WHERE id = ?", [source.workTagId, source.workTagId2 ?? null, targetId]);
+    if (texts.length) {
+      exec2("INSERT INTO project_notes (projectId, kind, title, body, url, pinned, createdAt) VALUES (?, ?, ?, ?, ?, 0, ?)", [
+        targetId,
+        "nota",
+        `Incorporado de ${source.name}`,
+        texts.map(([label, v]) => `**${label}:** ${String(v).trim()}`).join("\n\n"),
+        source.githubRepoUrl,
+        now
+      ]);
+    }
+    exec2("INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, NULL, NULL, ?, ?)", [
+      targetId,
+      "decisao",
+      `📦 Incorporou o projeto "${source.name}" (era ${source.status}${source.localPath ? `, ${source.localPath}` : ""})`,
+      now
+    ]);
+    exec2("DELETE FROM project_repos WHERE projectId = ?", [sourceId]);
+    exec2("DELETE FROM projects WHERE id = ?", [sourceId]);
+    db2.run("COMMIT");
+  } catch (e) {
+    db2.run("ROLLBACK");
+    throw e;
+  }
+  saveDb();
+}
 async function setProjectStage(id, stage) {
   const db2 = await getDb();
   run$2(db2, "UPDATE projects SET stage = ? WHERE id = ?", [stage, id]);
@@ -71377,6 +71467,7 @@ async function queryOffers(m, q) {
     if (status2 !== "all" && v.status !== status2) return false;
     if (!q.includeUnavailable && !v.available && status2 !== "excluded" && status2 !== "all") return false;
     if (q.favoritesOnly && !v.favorite) return false;
+    if (q.hideStale && v.stale) return false;
     if (q.origins?.length && !q.origins.includes(v.origin)) return false;
     if (q.destinations?.length && !q.destinations.includes(v.destination)) return false;
     if (q.maxStops != null && v.stops > q.maxStops) return false;
@@ -73387,6 +73478,43 @@ async function projectForGithubRepo(repo) {
   const slug = repo.trim().toLowerCase();
   const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()]);
   return projects.find((p) => repoTargetsFrom(p, rows).some((t) => t.slug === slug)) ?? null;
+}
+function realDir(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+async function workspaceDuplicates(targetId) {
+  const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()]);
+  const target = projects.find((p) => p.id === targetId);
+  if (!target) return [];
+  const targets = repoTargetsFrom(target, rows);
+  if (!isWorkspace(targets)) return [];
+  const out = [];
+  for (const p of projects) {
+    if (p.id === targetId || rows.some((r) => r.projectId === p.id)) continue;
+    const dir = p.localPath?.trim() ? realDir(expandHome$5(p.localPath.trim())) : null;
+    const slug = githubSlug(p.githubRepoUrl);
+    const hit = targets.find((t) => dir && t.dir && realDir(t.dir) === dir || slug && t.slug === slug);
+    if (hit) out.push({ repoName: hit.name, projectId: p.id, projectName: p.name, status: p.status, counts: await projectRefCounts(p.id) });
+  }
+  return out;
+}
+async function absorbIntoWorkspace(targetId, sourceId) {
+  const dup = (await workspaceDuplicates(targetId)).find((d) => d.projectId === sourceId);
+  if (!dup) throw new Error("Este projeto não corresponde a nenhum repositório do workspace.");
+  const [projects, rows] = await Promise.all([getProjects(), getProjectRepos(targetId)]);
+  const source = projects.find((p) => p.id === sourceId);
+  const repo = rows.find((r) => r.name === dup.repoName);
+  if (source?.githubRepoUrl && repo && !repo.githubRepoUrl) {
+    await setProjectRepos(
+      targetId,
+      rows.map((r) => ({ name: r.name, path: r.path, githubRepoUrl: r.id === repo.id ? source.githubRepoUrl : r.githubRepoUrl }))
+    );
+  }
+  await absorbProject(targetId, sourceId);
 }
 const GITHUB_API = "https://api.github.com";
 function ghPath() {
@@ -80119,7 +80247,8 @@ async function projectCommits(projectId, limit = 30) {
       });
     })
   );
-  return lists.flat().sort((a, b2) => new Date(b2.date).getTime() - new Date(a.date).getTime()).slice(0, limit);
+  const all2 = lists.flat().sort((a, b2) => new Date(b2.date).getTime() - new Date(a.date).getTime());
+  return multi ? all2 : all2.slice(0, limit);
 }
 function roadmapPath(p) {
   if (!p.localPath) return null;
@@ -81205,6 +81334,12 @@ ipcMain.handle(
   )
 );
 ipcMain.handle("projects:detectRepos", (_, localPath) => detectChildRepos(localPath));
+ipcMain.handle("projects:workspaceDuplicates", (_, projectId) => workspaceDuplicates(projectId));
+ipcMain.handle("projects:absorb", async (_, targetId, sourceId) => {
+  await absorbIntoWorkspace(targetId, sourceId);
+  projectsChanged(targetId);
+  return true;
+});
 ipcMain.handle("milestones:getAll", () => getProjectMilestones());
 ipcMain.handle("milestones:create", (_, projectId, title, targetDate) => createProjectMilestone(projectId, title, targetDate));
 ipcMain.handle("milestones:toggle", (_, id, done) => toggleProjectMilestone(id, done));
