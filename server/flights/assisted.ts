@@ -55,7 +55,7 @@ export function skyscannerUrl(o: string, d: string, dep: string, ret: string | n
 
 type Combo = SkyCombo
 
-export const MAX_PER_RUN = 30
+export const MAX_PER_RUN = 45
 /** Combinações por sessão do Claude: sessões curtas mantêm o contexto (texto das páginas) pequeno. */
 export const PER_SESSION = 5
 const FRESH_HOURS = 12

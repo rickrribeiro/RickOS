@@ -222,7 +222,7 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
     return m
   }, [pv])
   const destOptions = (pv?.destinations ?? []).filter((d) => pairSet.has(pairKey(origin, d.iata)))
-  const max = pv?.maxPerRun ?? 30
+  const max = pv?.maxPerRun ?? 45
   const full = sel.size >= max
 
   const selectedPairs = [...new Set([...sel.values()].map((c) => pairKey(c.origin, c.destination)))]

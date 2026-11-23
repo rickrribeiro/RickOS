@@ -217,7 +217,7 @@ app pesquisa o Skyscanner **no seu Chrome**, sob demanda e com você acompanhand
        "results"/"status" + linhas RESULT soltas). Sessão ilegível devolve as não lidas para a
        fila e a próxima segue; duas seguidas param a busca. A resposta bruta fica em
        `<dados>/logs/passagens-chrome/run<id>-s<n>.txt` (as 40 mais recentes).
-     - Até 30 combinações por execução. O servidor revalida cada escolha contra os pares e
+     - Até 45 combinações por execução. O servidor revalida cada escolha contra os pares e
        datas do monitor e remonta as URLs (`validatePicks`).
   2. Ao confirmar, roda sessões do Claude de até 5 combinações, uma após a outra (sessões
      curtas mantêm pequeno o contexto com o texto das páginas). Cada sessão abre uma aba,
