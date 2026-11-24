@@ -5,6 +5,7 @@ import { WeeklyReview } from '../components/WeeklyReview'
 import { ProjectHomeBlocks } from '../../projects/components/ProjectHomeBlocks'
 import { LostWorkCard } from '../../projects/components/LostWorkCard'
 import { HomeChatsWidget } from '../../chats/components/HomeChatsWidget'
+import { NewsCard } from '../../news/NewsCard'
 import '../../projects/worktrees.css'
 import { useTaskStore } from '../../timetracker/store/taskStore'
 import { useTodoStore } from '../../todo/store/todoStore'
@@ -227,6 +228,9 @@ export function HomePage(): React.ReactElement {
           <div className="empty-hint">Nenhuma viagem planejada. Crie em Viagens.</div>
         )}
       </div>
+
+      {/* ── Resumo de Notícias (Google News + Gemini) ── */}
+      <NewsCard />
     </div>
   )
 }

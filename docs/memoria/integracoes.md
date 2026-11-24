@@ -1,4 +1,4 @@
-# Memória Pessoal — matriz de integração (Fase 3.8) · **APROVADA em 2026-11-25 (itens 1–7)**
+# Memória Pessoal — matriz de integração (Fase 3.8) · **APROVADA em 2026-11-25 (itens 1–8)**
 
 Todas as 7 linhas foram aprovadas pelo usuário em 2026-11-25 e estão com `approved: true` em
 `server/memory/policy.ts`. Cada uma tem um canal dedicado em `server/memory/integrations.ts`
@@ -15,6 +15,7 @@ ponto de chamada (o módulo é placeholder).
 | 5 | `memory:ctxWeeklyReview` · `memory:produceWeeklyReview` | Revisão semanal (consome) · campo "O que aprendi nesta semana" → Inbox (produz) |
 | 6 | `memory:produceBraindump` | Brain dump → botão "🧬 Sugerir memórias" → Inbox |
 | 7 | — | Jarvis (sem ponto de chamada ainda) |
+| 8 | `newsDigestContext` (servidor) · `memory:produceNews` | Resumo de Notícias: prompt do Gemini (consome) · botão "🧬 Sugerir memórias" no modal (produz) |
 
 A Base de Conhecimento antiga (`settings.knowledge_base`) e o perfil padrão do código deixaram de
 ser lidos.
@@ -30,6 +31,7 @@ o de **tokens a mais no prompt** do consumer (coluna "Orçamento").
 | 4 | `assistant.week_plan` — Assistente → Planejar a semana | CONSUMER | plano respeita rotina/produtividade (ex.: trabalho profundo de manhã) e instruções pessoais | rotina, produtividade, objetivos + instruções pessoais | NORMAL | 400 / 12 | +≤400 tokens | sem sensíveis | prompt atual sem perfil |
 | 5 | `home.weekly_review` — Revisão semanal (`src/modules/home/components/WeeklyReview.tsx`) | BOTH | consome objetivos/aprendizados; **produz** sugestões só do texto que você escrever na revisão, por botão explícito | consumo: objetivos, produtividade, aprendizados · produção: + rotina, valores | consumo NORMAL · produção PRIVATE | 500 / 12 · ≤5 sugestões | +≤500 tokens; produção = 1 chamada (modelo rápido) por clique | só o texto digitado por você; sugestões passam pelo Inbox | revisão sem memória |
 | 6 | `braindump.extract` — Brain dump → "sugerir memórias" | PRODUCER | transforma pensamentos soltos em conhecimento revisável | todas (filtradas pelas suas configurações) | PRIVATE | ≤8 sugestões | 1 chamada (modelo rápido) por clique | só com ação explícita; nunca automático | brain dump como hoje |
+| 8 | `news.digest` — Resumo de Notícias (`src/modules/news/NewsCard.tsx`, `server/services/news.ts`) · **aprovado em 2026-11-25** | BOTH | Gemini prioriza as manchetes do dia pelos seus interesses/projetos; as notícias que você abre em "Ler mais" (+ categorias próprias) viram sugestões de interesse | consumo: interesses, objetivos, profissional · produção: + aprendizados | NORMAL | 300 / 10 por categoria · ≤5 sugestões | +≤300 tokens por categoria no Gemini; produção = 1 chamada (Claude local) por clique | **o bloco de consumo SAI do app: vai à API do Google (Gemini)**; produção só por botão e só com tópicos do resumo salvo | resumo sem personalização |
 | 7 | `jarvis.assistant` — Jarvis | CONSUMER | assistente pessoal geral (módulo ainda é placeholder) | todas · todos os tipos | NORMAL | 800 / 20 | +≤800 tokens | amplo: decidir quando o Jarvis existir | sem memória |
 
 **Explicitamente NONE (sem política, com teste de não interferência):** Prompt Runner e `ai:*`

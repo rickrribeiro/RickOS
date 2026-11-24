@@ -2,6 +2,7 @@ import { extractFromText } from './agent'
 import { getMemoryContext, type MemoryContext } from './context'
 import { startManualJob } from './jobs'
 import { MemoryError } from './repo'
+import { newsReadingEvidence } from '../services/news'
 
 /**
  * Integrações APROVADAS com outros módulos (docs/memoria/integracoes.md, 2026-11-25).
@@ -46,6 +47,15 @@ async function produce(useCase: string, text: string, sourceRef: string): Promis
   return startManualJob('produce', () => extractFromText({ useCase, text: t, sourceKind: 'producer', sourceRef, op: 'agente' }))
 }
 
+/**
+ * Resumo de Notícias (`news.digest`): consumer chamado no SERVIDOR por `services/news.ts`,
+ * porque o Gemini roda lá. A consulta são a categoria + as manchetes do dia; o bloco vai
+ * no prompt do Gemini (sai do app, para o Google — aprovado pelo usuário em 2026-11-25).
+ */
+export function newsDigestContext(category: string, headlines: string[]): Promise<ConsumerBlock> {
+  return consume('news.digest', q(`notícias interesses ${category} ${headlines.join(' ')}`), 'priorizar as notícias do dia pelos interesses do usuário')
+}
+
 export function registerMemoryIntegrations(handle: Handle): void {
   // ── Consumers ──
   handle('memory:ctxTripItinerary', (_e, destination?: string) =>
@@ -58,5 +68,6 @@ export function registerMemoryIntegrations(handle: Handle): void {
 
   // ── Producers (só por botão, só texto escrito pelo usuário) ──
   handle('memory:produceWeeklyReview', (_e, text: string) => produce('home.weekly_review', text, `revisao-semanal#${new Date().toISOString().slice(0, 10)}`))
+  handle('memory:produceNews', async () => produce('news.digest', await newsReadingEvidence(), `noticias#${new Date().toISOString().slice(0, 10)}`))
   handle('memory:produceBraindump', (_e, text: string) => produce('braindump.extract', text, `braindump#${new Date().toISOString().slice(0, 10)}`))
 }

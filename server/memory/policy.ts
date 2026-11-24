@@ -190,6 +190,17 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     produce: { categories: ALL, maxSensitivity: 'PRIVATE', maxSuggestionsPerRun: 8 }
   },
   {
+    // Aprovado em 2026-11-25 (consumir + produzir). O consumo SAI do app: vai ao Gemini (Google).
+    useCase: 'news.digest',
+    label: 'Resumo de Notícias',
+    module: 'home',
+    purpose: 'Priorizar as notícias do dia pelos interesses (contexto enviado ao Gemini) e sugerir interesses a partir das notícias lidas.',
+    internal: false,
+    approved: true,
+    consume: { categories: ['interesses', 'objetivos', 'profissional'], maxSensitivity: 'NORMAL', maxTokens: 300, maxItems: 10, instructions: false },
+    produce: { categories: ['interesses', 'objetivos', 'profissional', 'aprendizados'], maxSensitivity: 'NORMAL', maxSuggestionsPerRun: 5 }
+  },
+  {
     useCase: 'jarvis.assistant',
     label: 'Jarvis (assistente pessoal)',
     module: 'jarvis',

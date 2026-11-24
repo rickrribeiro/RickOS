@@ -214,6 +214,8 @@ export interface MemoryApi {
   ctxWeeklyReview(query?: string): Promise<ConsumerBlock>
   produceWeeklyReview(text: string): Promise<number>
   produceBraindump(text: string): Promise<number>
+  /** Resumo de Notícias: o servidor monta a evidência (categorias + notícias abertas em "Ler mais"). */
+  produceNews(): Promise<number>
   categories(includeArchived?: boolean): Promise<MemoryCategory[]>
   createCategory(input: CategoryInput): Promise<MemoryCategory>
   updateCategory(id: number, input: Partial<CategoryInput> & { archived?: boolean }): Promise<MemoryCategory>
@@ -275,6 +277,7 @@ export const MEMORY_METHODS: (keyof MemoryApi)[] = [
   'ctxWeeklyReview',
   'produceWeeklyReview',
   'produceBraindump',
+  'produceNews',
   'categories',
   'createCategory',
   'updateCategory',

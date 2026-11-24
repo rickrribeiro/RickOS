@@ -21,14 +21,15 @@ export const SENSITIVE_KEYS = new Set([
   'flights_travelpayouts_token',
   'flights_duffel_token',
   'chats_beeper_token',
-  'chats_agent_key'
+  'chats_agent_key',
+  'gemini_api_key'
 ])
 
 /**
  * Credenciais que NUNCA voltam para o front (settings:get/getAll devolvem vazio). O front
  * só fica sabendo se existem (ex.: `chats:config` → hasBeeperToken).
  */
-export const SERVER_ONLY_KEYS = new Set(['chats_beeper_token', 'chats_agent_key'])
+export const SERVER_ONLY_KEYS = new Set(['chats_beeper_token', 'chats_agent_key', 'gemini_api_key'])
 const AES_PREFIX = 'aes:'
 const LEGACY_PREFIX = 'enc:'
 

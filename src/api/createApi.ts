@@ -4,6 +4,7 @@ import type { NextActionSize, ProjectPatch, ProjectRepoInput, ProjectStatus, Pro
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import { MEMORY_METHODS, type MemoryWindowApi } from '../modules/memory/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
+import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
@@ -641,6 +642,15 @@ export function createApi() {
       onUpdate: (cb: (u: AiConvUpdate) => void) => subscribe('conv:update', (p) => cb(p as AiConvUpdate)),
       /** A conexão de eventos voltou (ex.: servidor reiniciou): hora de recarregar. */
       onReconnect: (cb: () => void) => onReconnect(cb)
+    },
+    // Resumo de Notícias (Google News RSS + Gemini)
+    news: {
+      state: () => invoke<NewsState>('news:state'),
+      setCategories: (list: string[]) => invoke<string[]>('news:setCategories', list),
+      setGeminiKey: (value: string) => invoke<NewsConfig>('news:setGeminiKey', value),
+      generate: (targetDate: string, tzOffsetMin: number) => invoke<NewsDigest>('news:generate', targetDate, tzOffsetMin),
+      markRead: (url: string) => invoke<number>('news:markRead', url),
+      onUpdated: (cb: () => void) => subscribe('news:updated', () => cb())
     },
     // Events (main → renderer)
     on: {

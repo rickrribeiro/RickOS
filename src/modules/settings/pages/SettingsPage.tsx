@@ -6,6 +6,7 @@ import { useCalendarStore } from '../../calendar/store/calendarStore'
 import { useFinanceStore } from '../../finance/store/financeStore'
 import { PluggyConnect } from 'react-pluggy-connect'
 import { ChatsSection } from '../components/ChatsSection'
+import { NewsSection } from '../components/NewsSection'
 import { SnapshotsSection } from '../components/SnapshotsSection'
 import { AppearanceSection } from '../components/AppearanceSection'
 import { ModulesSection } from '../components/ModulesSection'
@@ -610,6 +611,8 @@ export function SettingsPage(): React.ReactElement {
           Abrir Passagens
         </button>
       </div>
+
+      <NewsSection />
 
       <ChatsSection />
 

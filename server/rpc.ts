@@ -202,6 +202,7 @@ import { recoverConversations, registerAiConvRpc } from './aiconv/rpc'
 import { startChatsEngine } from './chats/sync'
 import { schedulerTick as flightsTick, bootFlights } from './flights/runner'
 import { encodeSecret, decodeSecret, legacySecrets, SERVER_ONLY_KEYS } from './services/secrets'
+import { GEMINI_KEY_SETTING, generateNewsDigest, getNewsConfig, getNewsState, markNewsRead, setNewsCategories } from './services/news'
 import { broadcast } from './events'
 import { notify, notificationsChanged } from './services/notifications'
 import { suggestProjects, ignoreProjectSuggestion, restoreProjectSuggestions } from './services/projectScan'
@@ -851,6 +852,18 @@ ipcMain.handle('settings:getAll', async () => {
   }
   return all
 })
+
+// ── IPC: Resumo de Notícias (Google News RSS + Gemini) ─────────────────────────
+
+ipcMain.handle('news:state', () => getNewsState())
+ipcMain.handle('news:setCategories', (_, list: string[]) => setNewsCategories(Array.isArray(list) ? list : []))
+ipcMain.handle('news:setGeminiKey', async (_, value: string) => {
+  await setSetting(GEMINI_KEY_SETTING, encodeSecret(GEMINI_KEY_SETTING, String(value ?? '').trim()))
+  broadcast('news:updated', { kind: 'config' })
+  return getNewsConfig()
+})
+ipcMain.handle('news:markRead', (_, url: string) => markNewsRead(String(url ?? '')))
+ipcMain.handle('news:generate', (_, targetDate: string, tzOffsetMin: number) => generateNewsDigest(targetDate, Number(tzOffsetMin)))
 
 // ── IPC: GitHub ───────────────────────────────────────────────────────────────
 
