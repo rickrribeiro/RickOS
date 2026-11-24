@@ -378,6 +378,13 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE investment_history ADD COLUMN closed INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 27,
+    label: 'Transações: ignorar lançamento nos cálculos (ex.: pagamento de fatura)',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN ignoredReason TEXT;') } catch { /* exists */ }
+    }
   }
 ]
 

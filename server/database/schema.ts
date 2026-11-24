@@ -176,7 +176,8 @@ export const SCHEMA = `
     currency TEXT NOT NULL DEFAULT 'BRL',
     type TEXT NOT NULL DEFAULT 'expense',   -- income | expense
     description TEXT,
-    date TEXT NOT NULL
+    date TEXT NOT NULL,
+    ignoredReason TEXT                      -- não nulo = fora de todos os cálculos (ex.: pagamento de fatura)
   );
 
   CREATE TABLE IF NOT EXISTS budgets (

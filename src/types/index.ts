@@ -434,6 +434,7 @@ export interface Transaction {
   type: string // income | expense
   description: string | null
   date: string // YYYY-MM-DD
+  ignoredReason?: string | null // não nulo = fora de todos os cálculos e gráficos
 }
 
 export interface Budget {
@@ -1041,6 +1042,7 @@ declare global {
         create: (accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) => Promise<Transaction>
         update: (id: number, accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) => Promise<void>
         delete: (id: number) => Promise<void>
+        setIgnored: (id: number, reason: string | null) => Promise<void>
         bulk: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
       }
       budgets: {

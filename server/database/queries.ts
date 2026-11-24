@@ -1189,6 +1189,7 @@ export interface DbTransaction {
   type: string
   description: string | null
   date: string
+  ignoredReason?: string | null // não nulo = fora de todos os cálculos
 }
 export interface DbBudget {
   id: number
@@ -1291,6 +1292,11 @@ export async function updateTransaction(
     [accountId, categoryId, amount, currency, type, description, date, id]
   )
 }
+/** Marca (motivo) ou desmarca (null) a transação como ignorada nos cálculos. */
+export async function setTransactionIgnored(id: number, reason: string | null): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE transactions SET ignoredReason = ? WHERE id = ?', [reason, id])
+}
 export async function deleteTransaction(id: number): Promise<void> {
   const db = await getDb()
   run(db, 'DELETE FROM transactions WHERE id = ?', [id])
@@ -1300,8 +1306,8 @@ export async function bulkInsertTransactions(rows: Omit<DbTransaction, 'id'>[]):
   for (const r of rows) {
     run(
       db,
-      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date]
+      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null]
     )
   }
   return rows.length

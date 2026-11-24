@@ -11,12 +11,14 @@ const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 export function TransactionsPage(): React.ReactElement {
   const {
     transactions,
+    monthListing,
     categories,
     accounts,
     month,
     refresh,
     addTransaction,
     removeTransaction,
+    markTransactionValid,
     importTransactions,
     categoryName
   } = useFinanceStore()
@@ -114,7 +116,10 @@ export function TransactionsPage(): React.ReactElement {
       <div className="module-header">
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>💸 Transações</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{transactions.length} no mês</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {transactions.length} no mês
+            {monthListing.length > transactions.length && ` · ${monthListing.length - transactions.length} ignorada(s)`}
+          </p>
         </div>
         <MonthNav />
       </div>
@@ -164,8 +169,19 @@ export function TransactionsPage(): React.ReactElement {
       </div>
 
       <div className="list-stack">
-        {transactions.length === 0 && <div className="empty-hint">Nenhuma transação neste mês.</div>}
-        {transactions.map((t: Transaction) => (
+        {monthListing.length === 0 && <div className="empty-hint">Nenhuma transação neste mês.</div>}
+        {monthListing.map((t: Transaction) => t.ignoredReason ? (
+          <div key={t.id} className="list-row" style={{ opacity: 0.55 }} title="Não entra em nenhum cálculo nem gráfico">
+            <span className="due-badge due-future">{t.date.slice(5)}</span>
+            <span className="list-row-title" style={{ color: 'var(--text-muted)' }}>{t.description || categoryName(t.categoryId)}</span>
+            <span className="project-chip" style={{ color: 'var(--text-muted)' }}>ignorada · {t.ignoredReason}</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-muted)', minWidth: 90, textAlign: 'right', textDecoration: 'line-through' }}>
+              {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, t.currency)}
+            </span>
+            <button className="btn btn-secondary btn-sm" onClick={() => markTransactionValid(t.id)}>Marcar como transação válida</button>
+            <button className="btn btn-danger btn-sm" onClick={() => removeTransaction(t.id)}>✕</button>
+          </div>
+        ) : (
           <div key={t.id} className="list-row">
             <span className="due-badge due-future">{t.date.slice(5)}</span>
             <span className="list-row-title">{t.description || categoryName(t.categoryId)}</span>

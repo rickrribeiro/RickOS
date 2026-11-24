@@ -55,8 +55,9 @@ async function buildPrompt(): Promise<string> {
       return `- ${h.name}: ${n}/7`
     })
 
-  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const counted = txs.filter((t) => !t.ignoredReason)
+  const expense = counted.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const income = counted.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const budget = budgets.reduce((s, b) => s + b.amount, 0)
   const minutes = stats.reduce((s, r) => s + r.totalMinutes, 0)
   const list = (xs: string[]): string => xs.join('\n') || '(nenhum)'

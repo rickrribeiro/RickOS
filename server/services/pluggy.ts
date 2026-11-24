@@ -11,6 +11,7 @@ const OUTROS_CATEGORY_ID = 6 // seeded "Outros"
 
 interface PluggyAccount {
   id: string
+  type?: string // BANK | CREDIT
   currencyCode?: string
 }
 interface PluggyTransaction {
@@ -21,6 +22,21 @@ interface PluggyTransaction {
   currencyCode?: string
   date: string
   type?: string // DEBIT | CREDIT
+  category?: string | null
+}
+
+/**
+ * Pagamento da fatura do cartão: aparece como "Pagamento de fatura" na conta corrente e como
+ * "Pagamento recebido" na conta do cartão. As compras do cartão já entram uma a uma, então
+ * contar esses lançamentos duplicaria o gasto. Eles são importados, mas marcados como
+ * ignorados (fora dos cálculos); o usuário pode marcá-los como válidos na tela.
+ */
+function isCardBillPayment(t: PluggyTransaction, acc: PluggyAccount): boolean {
+  if ((t.category ?? '').toLowerCase() === 'credit card payment') return true
+  const d = (t.description ?? '').toLowerCase()
+  if (/\b(pagamento|pagto|pgto|pag)\.? (de |da )?fatura\b/.test(d)) return true
+  // na conta do cartão, crédito "Pagamento recebido" é a fatura sendo quitada
+  return acc.type === 'CREDIT' && /^pagamento recebido\b/.test(d)
 }
 
 /** Manual FX config from settings: base currency + rates (value of 1 unit in base). */
@@ -181,7 +197,8 @@ export async function syncPluggy(month?: string): Promise<{ imported: number; sk
         currency: 'BRL',
         type: isExpense ? 'expense' : 'income',
         description: t.description ?? null,
-        date: t.date.slice(0, 10)
+        date: t.date.slice(0, 10),
+        ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null
       })
     }
   }

@@ -87,6 +87,7 @@ import {
   createCategory,
   deleteCategory,
   getTransactions,
+  setTransactionIgnored,
   createTransaction,
   updateTransaction,
   deleteTransaction,
@@ -608,7 +609,7 @@ async function evaluateRules(): Promise<void> {
           if (!budgets.length) continue
           const txs = await getTransactions(month)
           const spent: Record<number, number> = {}
-          for (const t of txs) if (t.type === 'expense' && t.categoryId != null) spent[t.categoryId] = (spent[t.categoryId] ?? 0) + t.amount
+          for (const t of txs) if (t.type === 'expense' && t.categoryId != null && !t.ignoredReason) spent[t.categoryId] = (spent[t.categoryId] ?? 0) + t.amount
           const crossed = budgets.filter((b) => b.categoryId != null && b.amount > 0 && ((spent[b.categoryId] ?? 0) / b.amount) * 100 > percent)
           if (crossed.length) {
             const cats = await getCategories()
@@ -933,6 +934,7 @@ ipcMain.handle('transactions:update', (_, id: number, accountId: number | null, 
   updateTransaction(id, accountId, categoryId, amount, currency, type, description, date)
 )
 ipcMain.handle('transactions:delete', (_, id: number) => deleteTransaction(id))
+ipcMain.handle('transactions:setIgnored', (_, id: number, reason: string | null) => setTransactionIgnored(id, reason))
 ipcMain.handle('transactions:bulk', (_, rows: Omit<DbTransaction, 'id'>[]) => bulkInsertTransactions(rows))
 
 ipcMain.handle('budgets:getForMonth', (_, month: string) => getBudgets(month))

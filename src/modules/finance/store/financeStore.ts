@@ -16,8 +16,9 @@ interface FinanceState {
   month: string
   accounts: Account[]
   categories: Category[]
-  transactions: Transaction[] // for `month`
-  allTransactions: Transaction[] // for reports / evolution
+  transactions: Transaction[] // for `month`, só as que contam (sem ignoradas) — base de todo cálculo
+  allTransactions: Transaction[] // for reports / evolution, só as que contam
+  monthListing: Transaction[] // for `month`, inclusive ignoradas — só para a lista da tela de Transações
   budgets: Budget[] // for `month`
   investments: Investment[]
   investmentHistory: InvestmentHistory[] // all-time monthly snapshots
@@ -37,6 +38,7 @@ interface FinanceState {
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>
   updateTransaction: (t: Transaction) => Promise<void>
   removeTransaction: (id: number) => Promise<void>
+  markTransactionValid: (id: number) => Promise<void>
   importTransactions: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
   setBudget: (categoryId: number, amount: number) => Promise<void>
   addInvestment: (name: string, type: string | null, amount: number, currency: string) => Promise<void>
@@ -54,6 +56,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   categories: [],
   transactions: [],
   allTransactions: [],
+  monthListing: [],
   budgets: [],
   investments: [],
   investmentHistory: [],
@@ -98,7 +101,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     } catch {
       rates = {}
     }
-    set({ accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base: base || 'BRL', rates })
+    const counts = (t: Transaction): boolean => !t.ignoredReason
+    set({
+      accounts,
+      categories,
+      transactions: transactions.filter(counts),
+      allTransactions: allTransactions.filter(counts),
+      monthListing: transactions,
+      budgets,
+      investments,
+      investmentHistory,
+      base: base || 'BRL',
+      rates
+    })
   },
 
   saveFxConfig: async (base, rates) => {
@@ -133,6 +148,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   removeTransaction: async (id) => {
     await window.api.transactions.delete(id)
+    await get().refresh()
+  },
+  markTransactionValid: async (id) => {
+    await window.api.transactions.setIgnored(id, null)
     await get().refresh()
   },
   importTransactions: async (rows) => {
