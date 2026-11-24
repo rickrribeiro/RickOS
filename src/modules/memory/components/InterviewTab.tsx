@@ -143,6 +143,12 @@ export function InterviewTab(): React.ReactElement {
         </div>
       )}
       {iv.status === 'ended' && <p className="mem-muted">Conversa encerrada. Revise as sugestões no Inbox.</p>}
+      {iv.status === 'open' && !waiting && !busy && (
+        // a IA falhou depois de uma resposta (ou a conversa foi reaberta): pede a próxima pergunta
+        <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => run(() => window.api.memory.skipInterview(iv.id))}>
+          Continuar conversa
+        </button>
+      )}
       {waiting && (
         <form
           className="mem-toolbar"
