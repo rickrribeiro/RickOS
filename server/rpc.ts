@@ -98,6 +98,7 @@ import {
   createInvestment,
   setInvestmentValue,
   deleteInvestment,
+  closeInvestment,
   getTrips,
   createTrip,
   updateTrip,
@@ -939,9 +940,10 @@ ipcMain.handle('budgets:set', (_, categoryId: number, month: string, amount: num
 
 ipcMain.handle('investments:getAll', () => getInvestments())
 ipcMain.handle('investments:history', () => getInvestmentHistory())
-ipcMain.handle('investments:create', (_, name: string, type: string | null, amount: number, currency: string) => createInvestment(name, type, amount, currency))
+ipcMain.handle('investments:create', (_, name: string, type: string | null, amount: number, currency: string, month?: string) => createInvestment(name, type, amount, currency, month))
 ipcMain.handle('investments:setValue', (_, investmentId: number, month: string, amount: number) => setInvestmentValue(investmentId, month, amount))
 ipcMain.handle('investments:delete', (_, id: number) => deleteInvestment(id))
+ipcMain.handle('investments:close', (_, id: number, month: string) => closeInvestment(id, month))
 
 // ── IPC: Open Finance (Pluggy) ────────────────────────────────────────────────
 

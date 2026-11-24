@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Investment } from '../../../types'
+import { Investment, InvestmentHistory } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth } from '../util'
@@ -75,7 +75,7 @@ function InvestmentRow({
         <button className="btn btn-primary btn-sm" onClick={commit} disabled={!dirty}>
           Salvar
         </button>
-        <button className="btn btn-danger btn-sm" onClick={onRemove} title="Excluir investimento">
+        <button className="btn btn-danger btn-sm" onClick={onRemove} title="Encerrar a partir deste mês (meses anteriores ficam como estão)">
           ✕
         </button>
       </div>
@@ -83,8 +83,58 @@ function InvestmentRow({
   )
 }
 
+/** Registro mais recente do investimento até `month` (inclusive), ou null. */
+function latestAt(history: InvestmentHistory[], investmentId: number, month: string): InvestmentHistory | null {
+  let best: InvestmentHistory | null = null
+  for (const h of history) {
+    if (h.investmentId === investmentId && h.month <= month && (!best || h.month > best.month)) best = h
+  }
+  return best
+}
+
+/** Investimento encerrado neste mês ou antes: permite reabrir com um valor ou excluir de vez. */
+function ClosedRow({
+  investment,
+  closedSince,
+  onReopen,
+  onDeleteAll
+}: {
+  investment: Investment
+  closedSince: string
+  onReopen: (amount: number) => void
+  onDeleteAll: () => void
+}): React.ReactElement {
+  const [draft, setDraft] = useState('')
+  const parsed = parseFloat(draft)
+  const ok = draft.trim() !== '' && !isNaN(parsed)
+  return (
+    <div className="list-row" style={{ opacity: 0.75 }}>
+      <span className="list-row-title">{investment.name}</span>
+      {investment.type && <span className="project-chip">{investment.type}</span>}
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>encerrado desde {monthLabel(closedSince)}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{investment.currency}</span>
+        <input
+          type="number"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && ok && onReopen(parsed)}
+          style={{ width: 110, textAlign: 'right' }}
+          placeholder="valor"
+        />
+        <button className="btn btn-secondary btn-sm" onClick={() => onReopen(parsed)} disabled={!ok} title="Reabrir com este valor neste mês">
+          Reabrir
+        </button>
+        <button className="btn btn-danger btn-sm" onClick={onDeleteAll} title="Excluir de todos os meses">
+          🗑
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function InvestmentsPage(): React.ReactElement {
-  const { investments, investmentHistory, month, refresh, addInvestment, setInvestmentValue, removeInvestment } =
+  const { investments, investmentHistory, month, refresh, addInvestment, setInvestmentValue, removeInvestment, closeInvestment } =
     useFinanceStore()
   const [name, setName] = useState('')
   const [type, setType] = useState('')
@@ -110,6 +160,26 @@ export function InvestmentsPage(): React.ReactElement {
     amount: investmentValueAtMonth(investmentHistory, i.id, month) ?? 0
   }))
   const totals = sumByCurrency(monthItems)
+
+  // por mês: ativos (têm valor), encerrados (último registro é um encerramento) e futuros (ainda não existiam → ocultos)
+  const active: Investment[] = []
+  const closed: { investment: Investment; since: string }[] = []
+  for (const i of investments) {
+    const last = latestAt(investmentHistory, i.id, month)
+    if (!last) continue
+    if (last.closed) closed.push({ investment: i, since: last.month })
+    else active.push(i)
+  }
+
+  function handleClose(i: Investment): void {
+    if (!confirm(`Encerrar "${i.name}" a partir de ${monthLabel(month)}? Os meses anteriores ficam como estão.`)) return
+    closeInvestment(i.id, month)
+  }
+
+  function handleDeleteAll(i: Investment): void {
+    if (!confirm(`Excluir "${i.name}" de TODOS os meses? O histórico inteiro será apagado.`)) return
+    removeInvestment(i.id)
+  }
   const prevMonth = shiftMonth(month, -1)
   const prevTotals = sumByCurrency(
     investments.map((i) => ({ currency: i.currency, amount: investmentValueAtMonth(investmentHistory, i.id, prevMonth) ?? 0 }))
@@ -155,13 +225,14 @@ export function InvestmentsPage(): React.ReactElement {
         </div>
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
           Registre o valor de cada investimento mês a mês (navegue pelos meses acima). Meses sem
-          registro mantêm o último valor conhecido.
+          registro mantêm o último valor conhecido. ✕ encerra o investimento a partir do mês exibido;
+          os meses anteriores não mudam.
         </p>
       </div>
 
       <div className="list-stack">
-        {investments.length === 0 && <div className="empty-hint">Nenhum investimento.</div>}
-        {investments.map((i) => {
+        {active.length === 0 && <div className="empty-hint">Nenhum investimento neste mês.</div>}
+        {active.map((i) => {
           const explicit = investmentHistory.some((h) => h.investmentId === i.id && h.month === month)
           const value = investmentValueAtMonth(investmentHistory, i.id, month)
           const prevValue = investmentValueAtMonth(investmentHistory, i.id, shiftMonth(month, -1))
@@ -173,11 +244,30 @@ export function InvestmentsPage(): React.ReactElement {
               prevValue={prevValue}
               isExplicit={explicit}
               onSave={(v) => setInvestmentValue(i.id, month, v)}
-              onRemove={() => removeInvestment(i.id)}
+              onRemove={() => handleClose(i)}
             />
           )
         })}
       </div>
+
+      {closed.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+            Encerrados ({closed.length})
+          </div>
+          <div className="list-stack">
+            {closed.map(({ investment, since }) => (
+              <ClosedRow
+                key={`${investment.id}|${month}`}
+                investment={investment}
+                closedSince={since}
+                onReopen={(v) => setInvestmentValue(investment.id, month, v)}
+                onDeleteAll={() => handleDeleteAll(investment)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

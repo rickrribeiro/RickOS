@@ -199,7 +199,8 @@ export const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     investmentId INTEGER NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
     month TEXT NOT NULL,
-    amount REAL NOT NULL DEFAULT 0
+    amount REAL NOT NULL DEFAULT 0,
+    closed INTEGER NOT NULL DEFAULT 0 -- 1 = encerrado a partir deste mês (carry-forward para aqui)
   );
 
   INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (1, 'Salário', 'income', '#22c55e');

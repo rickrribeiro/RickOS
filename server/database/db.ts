@@ -371,6 +371,13 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE chat_org ADD COLUMN pinnedAt TEXT;') } catch { /* exists ou tabela ausente */ }
     }
+  },
+  {
+    version: 26,
+    label: 'Investimentos: encerrar a partir de um mês (snapshot closed)',
+    run: (db) => {
+      try { db.run('ALTER TABLE investment_history ADD COLUMN closed INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+    }
   }
 ]
 

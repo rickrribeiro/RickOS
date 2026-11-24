@@ -102,7 +102,7 @@ export function iofInBase(
 /**
  * Value of an investment for a given month, carrying forward the most recent
  * snapshot at or before that month (holdings persist until re-entered). null if
- * the investment had no snapshot yet by then.
+ * the investment had no snapshot yet by then or was closed (encerrado) by then.
  */
 export function investmentValueAtMonth(
   history: InvestmentHistory[],
@@ -111,7 +111,8 @@ export function investmentValueAtMonth(
 ): number | null {
   const rows = history.filter((h) => h.investmentId === investmentId && h.month <= month)
   if (!rows.length) return null
-  return rows.reduce((a, b) => (b.month > a.month ? b : a)).amount
+  const latest = rows.reduce((a, b) => (b.month > a.month ? b : a))
+  return latest.closed ? null : latest.amount
 }
 
 /** Total portfolio value at a month (carry-forward per investment), converted to base. */

@@ -1208,6 +1208,7 @@ export interface DbInvestmentHistory {
   investmentId: number
   month: string
   amount: number
+  closed: number // 1 = encerrado a partir deste mês
 }
 
 // ── Accounts ──
@@ -1327,14 +1328,14 @@ function currentMonthKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** Sync investments.amount to the value of the investment's most recent month. */
+/** Sync investments.amount to the value of the investment's most recent month (0 se encerrado). */
 function syncInvestmentLatest(db: Awaited<ReturnType<typeof getDb>>, investmentId: number): void {
   const latest = getOne<DbInvestmentHistory>(
     db,
     'SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1',
     [investmentId]
   )
-  if (latest) run(db, 'UPDATE investments SET amount = ? WHERE id = ?', [latest.amount, investmentId])
+  if (latest) run(db, 'UPDATE investments SET amount = ? WHERE id = ?', [latest.closed ? 0 : latest.amount, investmentId])
 }
 
 export async function getInvestments(): Promise<DbInvestment[]> {
@@ -1345,15 +1346,21 @@ export async function getInvestmentHistory(): Promise<DbInvestmentHistory[]> {
   const db = await getDb()
   return getAll<DbInvestmentHistory>(db, 'SELECT * FROM investment_history ORDER BY month')
 }
-export async function createInvestment(name: string, type: string | null, amount: number, currency: string): Promise<DbInvestment> {
+/** Cria o investimento com o valor inicial registrado em `month` (YYYY-MM; padrão: mês atual). */
+export async function createInvestment(
+  name: string,
+  type: string | null,
+  amount: number,
+  currency: string,
+  month?: string
+): Promise<DbInvestment> {
   const db = await getDb()
   run(db, 'INSERT INTO investments (name, type, amount, currency) VALUES (?, ?, ?, ?)', [name, type, amount, currency])
   const id = lastInsertId(db)
-  // record the opening value as this month's snapshot
-  run(db, 'INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)', [id, currentMonthKey(), amount])
+  run(db, 'INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)', [id, month || currentMonthKey(), amount])
   return getOne<DbInvestment>(db, 'SELECT * FROM investments WHERE id = ?', [id])!
 }
-/** Upsert an investment's value for a given month, then refresh its latest amount. */
+/** Upsert an investment's value for a given month (reabre se o mês estava encerrado). */
 export async function setInvestmentValue(investmentId: number, month: string, amount: number): Promise<void> {
   const db = await getDb()
   const existing = getOne<DbInvestmentHistory>(
@@ -1362,12 +1369,29 @@ export async function setInvestmentValue(investmentId: number, month: string, am
     [investmentId, month]
   )
   if (existing) {
-    run(db, 'UPDATE investment_history SET amount = ? WHERE id = ?', [amount, existing.id])
+    run(db, 'UPDATE investment_history SET amount = ?, closed = 0 WHERE id = ?', [amount, existing.id])
   } else {
     run(db, 'INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)', [investmentId, month, amount])
   }
   syncInvestmentLatest(db, investmentId)
 }
+/**
+ * Encerra o investimento a partir de `month`: apaga os registros desse mês em diante e grava
+ * um marcador `closed`. Os meses anteriores ficam intactos. Se não sobrar nenhum registro
+ * anterior, o investimento nunca existiu antes desse mês e é excluído por completo.
+ */
+export async function closeInvestment(id: number, month: string): Promise<void> {
+  const db = await getDb()
+  run(db, 'DELETE FROM investment_history WHERE investmentId = ? AND month >= ?', [id, month])
+  const before = getOne<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM investment_history WHERE investmentId = ?', [id])
+  if (!before?.n) {
+    run(db, 'DELETE FROM investments WHERE id = ?', [id])
+    return
+  }
+  run(db, 'INSERT INTO investment_history (investmentId, month, amount, closed) VALUES (?, ?, 0, 1)', [id, month])
+  syncInvestmentLatest(db, id)
+}
+/** Exclui o investimento de todos os meses. */
 export async function deleteInvestment(id: number): Promise<void> {
   const db = await getDb()
   run(db, 'DELETE FROM investment_history WHERE investmentId = ?', [id])

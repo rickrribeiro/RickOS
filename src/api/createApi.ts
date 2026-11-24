@@ -406,9 +406,10 @@ export function createApi() {
     investments: {
       getAll: () => invoke('investments:getAll'),
       history: () => invoke('investments:history'),
-      create: (name: string, type: string | null, amount: number, currency: string) => invoke('investments:create', name, type, amount, currency),
+      create: (name: string, type: string | null, amount: number, currency: string, month?: string) => invoke('investments:create', name, type, amount, currency, month),
       setValue: (investmentId: number, month: string, amount: number) => invoke('investments:setValue', investmentId, month, amount),
-      delete: (id: number) => invoke('investments:delete', id)
+      delete: (id: number) => invoke('investments:delete', id),
+      close: (id: number, month: string) => invoke('investments:close', id, month)
     },
     pluggy: {
       sync: (month?: string) => invoke('pluggy:sync', month),

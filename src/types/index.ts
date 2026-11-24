@@ -455,6 +455,7 @@ export interface InvestmentHistory {
   investmentId: number
   month: string // YYYY-MM
   amount: number
+  closed?: number // 1 = encerrado a partir deste mês
 }
 
 export interface ExportDbResult {
@@ -1049,9 +1050,10 @@ declare global {
       investments: {
         getAll: () => Promise<Investment[]>
         history: () => Promise<InvestmentHistory[]>
-        create: (name: string, type: string | null, amount: number, currency: string) => Promise<Investment>
+        create: (name: string, type: string | null, amount: number, currency: string, month?: string) => Promise<Investment>
         setValue: (investmentId: number, month: string, amount: number) => Promise<void>
         delete: (id: number) => Promise<void>
+        close: (id: number, month: string) => Promise<void>
       }
       pluggy: {
         sync: (month?: string) => Promise<{ imported: number; skipped: number }>
