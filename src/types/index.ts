@@ -1075,7 +1075,8 @@ declare global {
         state: () => Promise<import('../../shared/news').NewsState>
         setCategories: (list: string[]) => Promise<string[]>
         setGeminiKey: (value: string) => Promise<import('../../shared/news').NewsConfig>
-        generate: (targetDate: string, tzOffsetMin: number) => Promise<import('../../shared/news').NewsDigest>
+        /** `only`: refaz só essas categorias (mantém o resto do resumo salvo). */
+        generate: (targetDate: string, tzOffsetMin: number, only?: string[]) => Promise<import('../../shared/news').NewsDigest>
         markRead: (url: string) => Promise<number>
         onUpdated: (cb: () => void) => () => void
       }

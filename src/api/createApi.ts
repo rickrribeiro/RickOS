@@ -648,7 +648,7 @@ export function createApi() {
       state: () => invoke<NewsState>('news:state'),
       setCategories: (list: string[]) => invoke<string[]>('news:setCategories', list),
       setGeminiKey: (value: string) => invoke<NewsConfig>('news:setGeminiKey', value),
-      generate: (targetDate: string, tzOffsetMin: number) => invoke<NewsDigest>('news:generate', targetDate, tzOffsetMin),
+      generate: (targetDate: string, tzOffsetMin: number, only?: string[]) => invoke<NewsDigest>('news:generate', targetDate, tzOffsetMin, only),
       markRead: (url: string) => invoke<number>('news:markRead', url),
       onUpdated: (cb: () => void) => subscribe('news:updated', () => cb())
     },

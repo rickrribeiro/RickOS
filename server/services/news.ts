@@ -297,11 +297,49 @@ async function summarize(
 
 let running: Promise<NewsDigest> | null = null
 
+/** Chamadas simultâneas ao Gemini: o plano gratuito tem limite baixo por minuto. */
+const GEMINI_CONCURRENCY = 2
+const MAX_RETRIES = 2
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/** 429 por minuto: espera o `retryDelay` sugerido pela API (máx. 30 s) e tenta de novo. Cota diária não adianta esperar. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      const rateLimited = /429|RESOURCE_EXHAUSTED/i.test(msg) && !/PerDay/i.test(msg)
+      if (!rateLimited || attempt >= MAX_RETRIES) throw e
+      const suggested = Number(msg.match(/retryDelay"?\s*:\s*"?(\d+(?:\.\d+)?)s/)?.[1])
+      await sleep(Math.min(Number.isFinite(suggested) && suggested > 0 ? suggested * 1000 + 500 : 15_000 * (attempt + 1), 30_000))
+    }
+  }
+}
+
+/** Fila simples: no máximo `limit` tarefas ao mesmo tempo. */
+function limiter(limit: number): <T>(fn: () => Promise<T>) => Promise<T> {
+  let active = 0
+  const queue: (() => void)[] = []
+  return async (fn) => {
+    if (active >= limit) await new Promise<void>((r) => queue.push(r))
+    active++
+    try {
+      return await fn()
+    } finally {
+      active--
+      queue.shift()?.()
+    }
+  }
+}
+
 /**
- * Coleta + resume todas as categorias e SOBRESCREVE o resumo salvo.
+ * Coleta + resume as categorias e SOBRESCREVE o resumo salvo.
  * `targetDate`/`tzOffsetMin` vêm do cliente (o "ontem" é o do usuário, não o do servidor).
+ * `only`: refaz só essas categorias (ex.: as que falharam) e mantém o resto do resumo salvo.
  */
-export function generateNewsDigest(targetDate: string, tzOffsetMin: number): Promise<NewsDigest> {
+export function generateNewsDigest(targetDate: string, tzOffsetMin: number, only?: string[]): Promise<NewsDigest> {
   if (running) return running
   running = (async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) throw new Error('Data inválida.')
@@ -309,27 +347,41 @@ export function generateNewsDigest(targetDate: string, tzOffsetMin: number): Pro
     if (!key) throw new Error('Configure a chave de API do Google Gemini em Configurações → Resumo de Notícias.')
     const categories = await getNewsCategories()
     if (!categories.length) throw new Error('Cadastre ao menos uma categoria.')
+
+    const previous = await getNewsDigest()
+    const partial = Array.isArray(only) && only.length > 0
+    if (partial && previous?.targetDate !== targetDate) throw new Error('O resumo salvo é de outro dia: busque todas as categorias de novo.')
+    const targets = partial ? categories.filter((c) => only!.includes(c)) : categories
+    if (!targets.length) throw new Error('Nenhuma das categorias pedidas está cadastrada.')
+
     // A SDK 3.x usa `v1` por padrão; JSON mode (`responseSchema`) só existe na `v1beta`.
     const ai = new GoogleGenAI({ apiKey: key, apiVersion: 'v1beta' })
     const offset = Number.isFinite(tzOffsetMin) ? tzOffsetMin : 0
+    const gemini = limiter(GEMINI_CONCURRENCY)
 
-    const results = await Promise.all(
-      categories.map(async (categoria): Promise<NewsCategoryDigest> => {
+    const fresh = await Promise.all(
+      targets.map(async (categoria): Promise<NewsCategoryDigest> => {
         let items: FeedItem[] = []
         try {
           items = await collect(categoria, targetDate, offset)
           if (!items.length) return { categoria, topics: [], collected: 0 }
           const mem = await memoryFor(categoria, items)
-          const topics = await summarize(ai, categoria, targetDate, items, mem.block)
+          const topics = await gemini(() => withRetry(() => summarize(ai, categoria, targetDate, items, mem.block)))
           return { categoria, topics, collected: items.length, memoryItems: mem.count || undefined }
         } catch (e) {
           return { categoria, topics: [], collected: items.length, error: friendlyError(e) }
         }
       })
     )
-    if (results.every((r) => r.error)) throw new Error(results[0].error)
+    // Busca completa que falhou inteira não apaga o resumo anterior.
+    if (!partial && fresh.every((r) => r.error)) throw new Error(fresh[0].error)
 
-    const digest: NewsDigest = { generatedAt: new Date().toISOString(), targetDate, model: MODEL, categories: results }
+    const byName = new Map<string, NewsCategoryDigest>()
+    if (partial) for (const c of previous!.categories) byName.set(c.categoria, c)
+    for (const c of fresh) byName.set(c.categoria, c)
+    const merged = categories.map((c) => byName.get(c)).filter((c): c is NewsCategoryDigest => !!c)
+
+    const digest: NewsDigest = { generatedAt: new Date().toISOString(), targetDate, model: MODEL, categories: merged }
     await setSetting(DIGEST_SETTING, JSON.stringify(digest))
     broadcast('news:updated', { kind: 'digest' })
     return digest
@@ -342,7 +394,8 @@ export function generateNewsDigest(targetDate: string, tzOffsetMin: number): Pro
 function friendlyError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
   if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg)) return 'Chave do Gemini inválida ou sem permissão.'
-  if (/429|RESOURCE_EXHAUSTED|quota/i.test(msg)) return 'Limite de uso do Gemini atingido. Tente mais tarde.'
+  if (/PerDay/i.test(msg)) return 'Cota diária do Gemini esgotada. Tente amanhã ou use uma chave com faturamento.'
+  if (/429|RESOURCE_EXHAUSTED|quota/i.test(msg)) return 'Limite de uso do Gemini atingido. Tente de novo em instantes.'
   if (/timeout|aborted/i.test(msg)) return 'Tempo esgotado ao buscar notícias.'
   return msg.slice(0, 300)
 }

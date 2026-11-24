@@ -863,7 +863,9 @@ ipcMain.handle('news:setGeminiKey', async (_, value: string) => {
   return getNewsConfig()
 })
 ipcMain.handle('news:markRead', (_, url: string) => markNewsRead(String(url ?? '')))
-ipcMain.handle('news:generate', (_, targetDate: string, tzOffsetMin: number) => generateNewsDigest(targetDate, Number(tzOffsetMin)))
+ipcMain.handle('news:generate', (_, targetDate: string, tzOffsetMin: number, only?: string[]) =>
+  generateNewsDigest(targetDate, Number(tzOffsetMin), Array.isArray(only) ? only.map(String) : undefined)
+)
 
 // ── IPC: GitHub ───────────────────────────────────────────────────────────────
 

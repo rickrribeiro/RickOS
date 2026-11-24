@@ -79,6 +79,8 @@ function NewsModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [noKeyWarn, setNoKeyWarn] = useState(false)
+  /** Categorias sendo refeitas (busca parcial); null = busca completa ou parado. */
+  const [retrying, setRetrying] = useState<string[] | null>(null)
   const [memMsg, setMemMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   function readMore(url: string): void {
@@ -129,20 +131,24 @@ function NewsModal({
     await saveCategories(config.categories.filter((c) => c !== name))
   }
 
-  async function generate(): Promise<void> {
+  /** Sem `only`: busca completa do dia anterior. Com `only`: refaz só essas categorias do resumo salvo. */
+  async function generate(only?: string[]): Promise<void> {
     setError(null)
     if (!config.hasGeminiKey) {
       setNoKeyWarn(true)
       return
     }
     setBusy(true)
+    setRetrying(only ?? null)
     try {
-      const d = await window.api.news.generate(yesterdayStr(), new Date().getTimezoneOffset())
+      const day = only && digest ? digest.targetDate : yesterdayStr()
+      const d = await window.api.news.generate(day, new Date().getTimezoneOffset(), only)
       onChange({ ...state, digest: d })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setRetrying(null)
     }
   }
 
@@ -154,6 +160,14 @@ function NewsModal({
   const groups = digest
     ? digest.categories.filter((g) => selected === '__all' || g.categoria === selected)
     : []
+  // Categorias a refazer: as que falharam + as cadastradas depois da última busca.
+  const pending = digest
+    ? config.categories.filter((c) => {
+        const g = digest.categories.find((x) => x.categoria === c)
+        return !g || !!g.error
+      })
+    : []
+  const fullBusy = busy && !retrying
   const countOf = (cat: string): number | null => {
     const g = digest?.categories.find((x) => x.categoria === cat)
     return g ? g.topics.length : null
@@ -231,9 +245,19 @@ function NewsModal({
 
         <div className="news-toolbar">
           <button className="btn btn-primary btn-sm" onClick={() => void generate()} disabled={busy || !config.categories.length}>
-            {busy ? '⏳ Buscando e resumindo…' : '🔄 Buscar Notícias (Dia Anterior)'}
+            {fullBusy ? '⏳ Buscando e resumindo…' : '🔄 Buscar Notícias (Dia Anterior)'}
           </button>
-          {digest && !busy && (
+          {pending.length > 0 && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => void generate(pending)}
+              disabled={busy}
+              title={`Refaz só: ${pending.join(', ')}. O resto do resumo salvo fica como está.`}
+            >
+              {retrying ? '⏳ Refazendo…' : `🔁 Refazer só as que falharam (${pending.length})`}
+            </button>
+          )}
+          {digest && !busy && pending.length === 0 && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Buscar de novo substitui o resumo salvo.</span>
           )}
           <button
@@ -252,17 +276,17 @@ function NewsModal({
         )}
 
         <div className="news-body">
-          {busy && (
+          {fullBusy && (
             <div className="empty-hint" style={{ padding: 24 }}>
               Coletando o Google Notícias e resumindo com o Gemini… isso leva alguns segundos.
             </div>
           )}
-          {!busy && !digest && (
+          {!fullBusy && !digest && (
             <div className="empty-hint" style={{ padding: 24 }}>
               Clique em <strong>Buscar Notícias (Dia Anterior)</strong> para gerar o primeiro resumo.
             </div>
           )}
-          {!busy &&
+          {!fullBusy &&
             groups.map((g) => (
               <div key={g.categoria} className="news-group">
                 <div className="news-group-title">
@@ -276,7 +300,17 @@ function NewsModal({
                     </span>
                   ) : null}
                 </div>
-                {g.error && <div className="news-group-error">Falhou: {g.error}</div>}
+                {g.error &&
+                  (retrying?.includes(g.categoria) ? (
+                    <div className="empty-hint">⏳ Tentando de novo…</div>
+                  ) : (
+                    <div className="news-group-error">
+                      Falhou: {g.error}{' '}
+                      <button className="news-readmore" onClick={() => void generate([g.categoria])} disabled={busy}>
+                        Tentar de novo
+                      </button>
+                    </div>
+                  ))}
                 {!g.error && g.topics.length === 0 && (
                   <div className="empty-hint">Nenhuma notícia encontrada para o dia.</div>
                 )}
@@ -294,9 +328,18 @@ function NewsModal({
                 ))}
               </div>
             ))}
-          {!busy && digest && selected !== '__all' && groups.length === 0 && (
+          {!fullBusy && digest && selected !== '__all' && groups.length === 0 && (
             <div className="empty-hint" style={{ padding: 24 }}>
-              Categoria nova: busque de novo para incluí-la no resumo.
+              {retrying?.includes(selected) ? (
+                '⏳ Buscando esta categoria…'
+              ) : (
+                <>
+                  Categoria nova, ainda fora do resumo.{' '}
+                  <button className="news-readmore" onClick={() => void generate([selected])} disabled={busy}>
+                    Buscar só esta
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
