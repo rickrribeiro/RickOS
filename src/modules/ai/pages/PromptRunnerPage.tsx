@@ -109,6 +109,7 @@ export function PromptRunnerPage(): React.ReactElement {
   const messagesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const stickBottom = useRef(true)
+  const handoffText = useRef<string | null>(null) // prompt recebido por hand-off, até o composer da conversa nova assumir
 
   const conv: AiConversation | null = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? archived.find((c) => c.id === selectedId) ?? null,
@@ -179,8 +180,9 @@ export function PromptRunnerPage(): React.ReactElement {
         useWorktree: !!handoff.useWorktree && typeof handoff.projectId === 'number'
       })
       setHandoffNote(typeof handoff.note === 'string' ? handoff.note : '')
+      handoffText.current = handoff.userPrompt ?? ''
       useConvStore.getState().select(null)
-      setText(handoff.userPrompt ?? '')
+      setText(handoffText.current)
       setPane('chat')
     }
     return () => store.setViewing(false)
@@ -189,7 +191,16 @@ export function PromptRunnerPage(): React.ReactElement {
 
   // rascunho do composer por conversa
   useEffect(() => {
-    setText((cur) => (selectedId === null && cur ? cur : readStorage(COMPOSER_KEY(selectedId))))
+    // hand-off pendente: o 1º render ainda pode ter a conversa anterior selecionada (antes do select(null));
+    // não deixa o rascunho dela sobrescrever o prompt recebido
+    if (handoffText.current != null) {
+      if (selectedId !== null) return
+      const t = handoffText.current
+      handoffText.current = null
+      setText(t)
+    } else {
+      setText((cur) => (selectedId === null && cur ? cur : readStorage(COMPOSER_KEY(selectedId))))
+    }
     stickBottom.current = true
     setMenuOpen(false)
     setSkillsOpen(false)
