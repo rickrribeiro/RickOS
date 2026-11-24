@@ -2,12 +2,29 @@ import React, { useEffect, useState } from 'react'
 import { ExportDbResult } from '../types'
 import { openExternal } from '../api/createApi'
 
+/** Bytes → B, KB, MB ou GB (base 1024). */
+function formatBytes(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB']
+  let v = bytes
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${i === 0 ? v : v.toFixed(v < 10 ? 2 : 1).replace('.', ',')} ${units[i]}`
+}
+
 /** Export DB: escolher entre Google Drive, salvar no dispositivo ou cancelar. */
 export function ExportDbModal({ onClose }: { onClose: () => void }): React.ReactElement {
   const [accounts, setAccounts] = useState<string[] | null>(null)
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState<'drive' | 'device' | null>(null)
   const [result, setResult] = useState<ExportDbResult | null>(null)
+  const [size, setSize] = useState<number | null>(null)
+
+  useEffect(() => {
+    window.api.app.dbSize().then(setSize).catch(() => setSize(null))
+  }, [])
 
   useEffect(() => {
     window.api.google
@@ -48,6 +65,9 @@ export function ExportDbModal({ onClose }: { onClose: () => void }): React.React
     <div className="modal-overlay" onClick={() => !busy && onClose()}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>💾 Exportar backup</h2>
+        <p className="export-db-size">
+          Tamanho do banco: <strong>{size == null ? '…' : formatBytes(size)}</strong>
+        </p>
 
         {result?.ok ? (
           <>

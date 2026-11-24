@@ -1196,6 +1196,7 @@ declare global {
       app: {
         exportDbToDevice: () => Promise<ExportDbResult>
         exportDbToDrive: (email: string) => Promise<ExportDbResult>
+        dbSize: () => Promise<number>
         importDb: () => Promise<boolean>
         snapshots: () => Promise<{ name: string; path: string; date: string; size: number }[]>
         restoreSnapshot: (snapPath: string) => Promise<boolean>

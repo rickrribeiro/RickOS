@@ -1401,6 +1401,13 @@ ipcMain.handle('ai:cancel', (_, runId: string) => {
 // ── IPC: App ──────────────────────────────────────────────────────────────────
 
 // Download of the DB file itself is served by GET /api/export/db (see server/index.ts).
+/** Tamanho atual do arquivo do banco (bytes), após persistir o que está em memória. */
+ipcMain.handle('app:dbSize', async () => {
+  await getDb()
+  saveDb()
+  return fs.statSync(dbFilePath()).size
+})
+
 ipcMain.handle('app:exportDbToDrive', async (_, email?: string) => {
   try {
     await getDb()

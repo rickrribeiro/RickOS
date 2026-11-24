@@ -662,6 +662,7 @@ export function createApi() {
         window.location.reload()
         return true
       },
+      dbSize: () => invoke<number>('app:dbSize'),
       snapshots: () => invoke('app:snapshots'),
       restoreSnapshot: async (snapPath: string) => {
         const ok = await invoke<boolean>('app:restoreSnapshot', snapPath)

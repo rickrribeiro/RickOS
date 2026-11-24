@@ -1322,6 +1322,11 @@ select:focus {
 }
 
 /* Export DB */
+.export-db-size {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: -4px 0 12px;
+}
 .export-db-options {
   display: flex;
   flex-direction: column;
