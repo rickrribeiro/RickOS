@@ -3,7 +3,7 @@ import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { TransactionEditor } from '../components/TransactionEditor'
-import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId } from '../util'
+import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel } from '../util'
 import { localDateStr } from '../../../utils/dates'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
@@ -30,10 +30,32 @@ export function TransactionsPage(): React.ReactElement {
   const [description, setDescription] = useState('')
   const [date, setDate] = useState(localDateStr(new Date()))
   const [editing, setEditing] = useState<Transaction | null>(null)
+  const [pluggyReady, setPluggyReady] = useState(false)
+  const [pluggyBusy, setPluggyBusy] = useState(false)
+  const [pluggyMsg, setPluggyMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   useEffect(() => {
     refresh()
+    window.api.pluggy.status().then(setPluggyReady).catch(() => setPluggyReady(false))
   }, [])
+
+  useEffect(() => {
+    setPluggyMsg(null)
+  }, [month])
+
+  async function handlePluggy(): Promise<void> {
+    setPluggyBusy(true)
+    setPluggyMsg(null)
+    try {
+      const r = await window.api.pluggy.sync(month)
+      await refresh()
+      setPluggyMsg({ text: `${monthLabel(month)}: ${r.imported} importadas, ${r.skipped} já existiam.`, ok: true })
+    } catch (e) {
+      setPluggyMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
+    } finally {
+      setPluggyBusy(false)
+    }
+  }
 
   async function handleAdd(): Promise<void> {
     const value = parseFloat(amount)
@@ -119,11 +141,26 @@ export function TransactionsPage(): React.ReactElement {
           <input placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
           <button className="btn btn-primary btn-sm" onClick={handleAdd}>+ Adicionar</button>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {pluggyReady && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handlePluggy}
+              disabled={pluggyBusy}
+              title={`Importa do Open Finance (Pluggy) só as transações de ${monthLabel(month)}`}
+            >
+              {pluggyBusy ? 'Importando…' : '🏦 Importar do Open Finance (mês)'}
+            </button>
+          )}
           <input ref={fileRef} type="file" accept=".csv" onChange={handleCsv} style={{ display: 'none' }} />
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>📥 Importar CSV</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport} disabled={transactions.length === 0}>📤 Exportar CSV</button>
         </div>
+        {pluggyMsg && (
+          <div style={{ marginTop: 8, fontSize: 12, color: pluggyMsg.ok ? 'var(--success)' : 'var(--danger)' }}>
+            {pluggyMsg.text}
+          </div>
+        )}
       </div>
 
       <div className="list-stack">

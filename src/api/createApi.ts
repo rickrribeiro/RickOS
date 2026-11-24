@@ -411,7 +411,7 @@ export function createApi() {
       delete: (id: number) => invoke('investments:delete', id)
     },
     pluggy: {
-      sync: () => invoke('pluggy:sync'),
+      sync: (month?: string) => invoke('pluggy:sync', month),
       status: () => invoke('pluggy:status'),
       connectToken: () => invoke('pluggy:connectToken')
     },

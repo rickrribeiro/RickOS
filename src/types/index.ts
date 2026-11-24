@@ -1054,7 +1054,7 @@ declare global {
         delete: (id: number) => Promise<void>
       }
       pluggy: {
-        sync: () => Promise<{ imported: number; skipped: number }>
+        sync: (month?: string) => Promise<{ imported: number; skipped: number }>
         status: () => Promise<boolean>
         connectToken: () => Promise<string>
       }

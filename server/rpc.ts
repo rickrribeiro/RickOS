@@ -945,8 +945,8 @@ ipcMain.handle('investments:delete', (_, id: number) => deleteInvestment(id))
 
 // ── IPC: Open Finance (Pluggy) ────────────────────────────────────────────────
 
-ipcMain.handle('pluggy:sync', async () => {
-  const r = await syncPluggy()
+ipcMain.handle('pluggy:sync', async (_, month?: string) => {
+  const r = await syncPluggy(month)
   await setSetting('pluggy_last_sync', new Date().toISOString())
   return r
 })

@@ -153,9 +153,11 @@ async function fetchAllTransactions(accountId: string, key: string): Promise<Plu
  * Requires the user's Pluggy clientId/clientSecret and an itemId (a bank connected
  * through Pluggy Connect). Pulls transactions for all accounts of the item and
  * imports the new ones (deduped against existing by date+amount+description).
+ * `month` (YYYY-MM) restringe a importação às transações daquele mês.
  * Returns { imported, skipped }.
  */
-export async function syncPluggy(): Promise<{ imported: number; skipped: number }> {
+export async function syncPluggy(month?: string): Promise<{ imported: number; skipped: number }> {
+  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`)
   const itemId = (await getSetting('pluggy_item_id')) ?? ''
   if (!itemId) throw new Error('Configure o Item ID do Pluggy (banco conectado) em Configurações.')
 
@@ -170,6 +172,7 @@ export async function syncPluggy(): Promise<{ imported: number; skipped: number 
   for (const acc of accounts) {
     const txs = await fetchAllTransactions(acc.id, key)
     for (const t of txs) {
+      if (month && !t.date.startsWith(month)) continue
       const isExpense = t.type === 'DEBIT' || t.amount < 0
       incoming.push({
         accountId: null,
