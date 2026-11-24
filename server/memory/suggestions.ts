@@ -56,7 +56,7 @@ export interface NewSuggestion {
   explicit?: boolean
   sourceKind: string
   sourceRef?: string | null
-  evidence?: { excerpt: string; sourceRef?: string | null }[]
+  evidence?: { excerpt: string; sourceRef?: string | null; sourceKind?: string }[]
   batchId?: string | null
   /** Novas evidências permitem re-sugerir algo rejeitado antes. */
   newEvidence?: boolean
@@ -67,6 +67,7 @@ export type ProposeOutcome = { ok: true; id: number } | { ok: false; reason: str
 const REJECTED: FeedbackVerdict[] = ['rejected', 'irrelevant', 'incorrect', 'duplicate', 'too_personal']
 const OPEN: SuggestionStatus[] = ['pending', 'snoozed', 'needs_info']
 const clamp01 = (v: unknown): number | null => {
+  if (v == null) return null
   const n = Number(v)
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : null
 }
@@ -144,13 +145,13 @@ export function proposeSync(db: Database, owner: string, s: NewSuggestion, rule:
     // rejeitada antes + evidência nova → reabre para revisão
     if (s.newEvidence && !OPEN.includes(exists.status as SuggestionStatus) && exists.status !== 'approved') {
       exec(db, "UPDATE memory_suggestions SET status='pending', resolvedAt=NULL, updatedAt=? WHERE id=?", [nowIso(), exists.id])
-      for (const ev of s.evidence ?? []) addEvidenceSync(db, owner, { suggestionId: exists.id }, { sourceKind: s.sourceKind, sourceRef: ev.sourceRef ?? s.sourceRef ?? null, excerpt: ev.excerpt })
+      for (const ev of s.evidence ?? []) addEvidenceSync(db, owner, { suggestionId: exists.id }, { sourceKind: ev.sourceKind ?? s.sourceKind, sourceRef: ev.sourceRef ?? s.sourceRef ?? null, excerpt: ev.excerpt })
       return { ok: true, id: Number(exists.id) }
     }
     return { ok: false, reason: 'já sugerida' }
   }
-  const explicit = s.explicit ?? false
-  const reliability: Reliability = s.sourceKind === 'manual' || s.sourceKind === 'import' ? 'stated' : explicit ? 'stated' : 'inferred'
+  const explicit = s.explicit ?? (s.sourceKind === 'import' && proposed?.type !== 'INFERENCE')
+  const reliability: Reliability = s.sourceKind === 'manual' || explicit ? 'stated' : 'inferred'
   if (proposed && reliability === 'inferred' && proposed.type !== 'LEARNING' && proposed.type !== 'INFERENCE') proposed.type = 'INFERENCE'
   if (proposed && reliability === 'inferred') proposed.layer = defaultLayer(proposed.type)
   const now = nowIso()
@@ -180,7 +181,7 @@ export function proposeSync(db: Database, owner: string, s: NewSuggestion, rule:
     ]
   )
   const id = lastId(db)
-  for (const ev of s.evidence ?? []) addEvidenceSync(db, owner, { suggestionId: id }, { sourceKind: s.sourceKind, sourceRef: ev.sourceRef ?? s.sourceRef ?? null, excerpt: ev.excerpt })
+  for (const ev of s.evidence ?? []) addEvidenceSync(db, owner, { suggestionId: id }, { sourceKind: ev.sourceKind ?? s.sourceKind, sourceRef: ev.sourceRef ?? s.sourceRef ?? null, excerpt: ev.excerpt })
   return { ok: true, id }
 }
 

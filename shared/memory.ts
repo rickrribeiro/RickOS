@@ -310,6 +310,9 @@ export interface ExportBundle {
     ref: string
     category: string | null
     evidence: { sourceKind: string; sourceRef: string | null; excerpt: string }[]
+    /** Referência estável, com namespace da fonte, para importações em revisão. */
+    sourceRef?: string
+    reviewNote?: string
   })[]
   relations: { from: string; to: string; kind: RelationKind; note: string | null }[]
 }

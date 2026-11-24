@@ -201,6 +201,60 @@ describe('Importação e exportação', () => {
     assert.equal((await repo.listMemories(OWNER)).total, 0)
   })
 
+  it('preserva origem e evidência de uma hipótese em revisão e deduplica pela referência externa', async () => {
+    const entry = {
+      ref: 'f1',
+      sourceRef: 'fonte-ficticia:f1',
+      category: 'interesses',
+      content: 'Talvez a pessoa goste de montar maquetes.',
+      type: 'INFERENCE',
+      reliability: 'inferred',
+      sensitivity: 'NORMAL',
+      extractionConfidence: null,
+      reviewNote: 'Revisar hipótese de um resumo.',
+      evidence: [{ sourceKind: 'summary', sourceRef: 'fonte-ficticia:f1', excerpt: 'Período informado: início da década.' }]
+    }
+    const bundle = { format: 'rickos-memory', memories: [entry] }
+    assert.equal((await transfer.importJson(bundle)).suggested, 1)
+    const retry = await transfer.importJson({ ...bundle, memories: [{ ...entry, content: 'Hipótese reescrita.' }] })
+    assert.deepEqual(retry.reasons, { 'referência já importada': 1 })
+    const [s] = await sug.listSuggestions(OWNER)
+    assert.equal(s.status, 'pending')
+    assert.equal(s.sourceRef, entry.sourceRef)
+    assert.equal(s.rationale, entry.reviewNote)
+    assert.equal(s.reliability, 'inferred')
+    assert.equal(s.proposed?.type, 'INFERENCE')
+    assert.equal(s.proposed?.layer, 'reflective')
+    assert.equal(s.extractionConfidence, null)
+    assert.equal(s.evidence[0].sourceKind, entry.evidence[0].sourceKind)
+    assert.equal(s.evidence[0].excerpt, entry.evidence[0].excerpt)
+    assert.deepEqual((await sug.approveMany(OWNER, [s.id])).approved, [])
+    assert.equal((await repo.listMemories(OWNER)).total, 0)
+    const approved = await sug.approve(OWNER, s.id)
+    const detail = await repo.getMemoryDetail(OWNER, approved.resultMemoryIds[0])
+    assert.equal(detail?.memory.originRef, entry.sourceRef)
+    assert.equal(detail?.memory.reliability, 'inferred')
+  })
+
+  it('preserva sensibilidade, camada e precisão da data informada no JSON em revisão', async () => {
+    const entry = {
+      content: 'Participei de uma exposição de robótica.',
+      category: 'interesses',
+      type: 'FACT',
+      layer: 'episodic',
+      occurredAt: '2019-03',
+      sensitivity: 'PRIVATE'
+    }
+    assert.equal((await transfer.importJson({ format: 'rickos-memory', memories: [entry] })).suggested, 1)
+    const [s] = await sug.listSuggestions(OWNER)
+    assert.equal(s.sensitivity, 'PRIVATE')
+    assert.equal(s.proposed?.sensitivity, 'PRIVATE')
+    assert.equal(s.proposed?.layer, 'episodic')
+    assert.equal(s.proposed?.occurredAt, '2019-03')
+    assert.equal(s.extractionConfidence, null)
+    assert.deepEqual((await sug.approveMany(OWNER, [s.id])).approved, [])
+  })
+
   it('Markdown exportado agrupa por categoria', async () => {
     await repo.createMemory(OWNER, { content: 'Gosto de chá verde.', categoryId: (await repo.listCategories(OWNER)).find((c) => c.slug === 'preferencias')!.id })
     const md = await transfer.exportMarkdown()

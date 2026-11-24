@@ -180,7 +180,7 @@ function SuggestionCard({
         <span className="mem-chip accent">{OP_LABEL[s.op]}</span>
         {p && <span className="mem-chip">{catName(p.category)}</span>}
         {p && <span className={`mem-chip${p.type === 'INFERENCE' || p.type === 'LEARNING' ? ' warn' : ''}`}>{TYPE_LABEL[p.type]}</span>}
-        {inferred ? <span className="mem-chip warn">Inferência da IA</span> : <span className="mem-chip ok">Você disse</span>}
+        {inferred ? <span className="mem-chip warn">Inferência da IA</span> : s.sourceKind !== 'import' && <span className="mem-chip ok">Você disse</span>}
         <SensChip s={s.sensitivity} />
         {s.extractionConfidence != null && <span className="mem-muted">confiança da extração {Math.round(s.extractionConfidence * 100)}%</span>}
         {s.status === 'needs_info' && <span className="mem-chip warn">pediu mais informações</span>}
@@ -228,7 +228,7 @@ function SuggestionCard({
       {showEv &&
         s.evidence.map((e) => (
           <div key={e.id} className="mem-ev" style={{ marginTop: 6 }}>
-            “{e.excerpt}”<div className="mem-muted">{e.sourceRef ?? e.sourceKind}</div>
+            {s.sourceKind === 'import' ? e.excerpt : `“${e.excerpt}”`}<div className="mem-muted">{e.sourceRef ?? e.sourceKind}</div>
           </div>
         ))}
 

@@ -202,17 +202,32 @@ export async function importJson(input: unknown, mode: 'direct' | 'review' = 're
         r.created++
       } else {
         if (!produce.ok) throw new MemoryError(`Importação bloqueada: ${produce.reason}`, 'forbidden')
+        const sourceRef = m.sourceRef
+        if (sourceRef !== undefined) {
+          if (typeof sourceRef !== 'string' || !sourceRef.trim() || sourceRef.length > 200) {
+            bump(r, 'referência de origem inválida')
+            continue
+          }
+          if (one(db, "SELECT id FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'import' AND sourceRef = ?", [owner, sourceRef])) {
+            bump(r, 'referência já importada')
+            continue
+          }
+        }
+        const evidence = Array.isArray(m.evidence)
+          ? m.evidence.filter((e) => typeof e?.excerpt === 'string' && e.excerpt.trim())
+          : []
         const out = proposeSync(
           db,
           owner,
           {
             op: 'CREATE',
-            proposed: { title: m.title, content, category: cat?.slug ?? '', type, tags: m.tags, importance: m.importance, stability: m.stability, sensitivity: m.sensitivity, occurredAt: m.occurredAt, validUntil: m.validUntil },
-            explicit: m.reliability !== 'inferred',
-            rationale: 'Importado de arquivo JSON',
+            proposed: { title: m.title, content, category: cat?.slug ?? '', type, layer: m.layer, tags: m.tags, importance: m.importance, stability: m.stability, sensitivity: m.sensitivity, occurredAt: m.occurredAt, validUntil: m.validUntil, scope: m.scope },
+            explicit: m.reliability !== 'inferred' && type !== 'INFERENCE',
+            extractionConfidence: m.extractionConfidence,
+            rationale: m.reviewNote || 'Importado de arquivo JSON',
             sourceKind: 'import',
-            sourceRef: 'json',
-            evidence: [{ excerpt: content }]
+            sourceRef: sourceRef ?? 'json',
+            evidence: evidence.length ? evidence : [{ excerpt: content }]
           },
           produce.rule
         )
