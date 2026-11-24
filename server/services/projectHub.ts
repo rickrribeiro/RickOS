@@ -180,6 +180,22 @@ export async function numberRoadmapFile(projectId: number): Promise<{ content: s
   return r
 }
 
+/** Troca o marcador de vários itens de uma vez (ex.: delegados → em andamento). Confere cada linha antes de gravar. */
+export async function setRoadmapItems(projectId: number, items: { line: number; expected: string }[], mark: ' ' | 'x' | '~' | '-'): Promise<{ content: string }> {
+  const p = await getProject(projectId)
+  const file = p ? roadmapPath(p) : null
+  if (!file || !fs.existsSync(file)) throw new Error('ROADMAP_RICKOS.md não encontrado')
+  const lines = fs.readFileSync(file, 'utf8').split('\n')
+  for (const it of items) {
+    const cur = lines[it.line]
+    if (cur == null || !cur.includes(it.expected)) throw new Error('O arquivo mudou — recarregue o roadmap')
+  }
+  for (const it of items) lines[it.line] = lines[it.line].replace(/\[( |x|X|~|-)\]/, `[${mark}]`)
+  const content = lines.join('\n')
+  fs.writeFileSync(file, content, 'utf8')
+  return { content }
+}
+
 export async function createRoadmapTemplate(projectId: number): Promise<{ content: string }> {
   const p = await getProject(projectId)
   const file = p ? roadmapPath(p) : null

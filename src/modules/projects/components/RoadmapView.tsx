@@ -1,18 +1,28 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { Project } from '../../../types'
 import { unnumberedRoadmapItems } from '../../../../shared/roadmap'
-import { MARK_ICON, MARK_LABEL, RoadmapMark, RoadmapNode, flattenRoadmap, nextMark, parseRoadmap, roadmapStats } from '../lib/roadmap'
+import { MARK_ICON, MARK_LABEL, RoadmapMark, RoadmapNode, buildRoadmapDelegation, flattenRoadmap, isOpenItem, nextMark, openIds, parseRoadmap, roadmapStats } from '../lib/roadmap'
 
 type Mode = 'arvore' | 'tabela'
 
 /** Roadmap de funcionalidades lido do ROADMAP_RICKOS.md na raiz do projeto (árvore ou tabela). */
-export function RoadmapView({ project }: { project: Project }): React.ReactElement {
+export function RoadmapView({
+  project,
+  onDelegate
+}: {
+  project: Project
+  /** Delegar itens selecionados: abre o modal de delegação (prompt no Prompt Runner). */
+  /** `onDone` deve ser chamado quando a delegação for feita: marca os itens como em andamento. */
+  onDelegate?: (task: string, instructions: string, title: string, onDone: () => Promise<void>) => void
+}): React.ReactElement {
   const [data, setData] = useState<{ path: string | null; exists: boolean; content: string } | null>(null)
   const [mode, setMode] = useState<Mode>('arvore')
   const [filter, setFilter] = useState<'todos' | 'abertos' | RoadmapMark>('todos')
   const [version, setVersion] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   async function load(): Promise<void> {
     setError('')
@@ -29,6 +39,49 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
   const tree = useMemo(() => (data?.exists ? parseRoadmap(data.content) : []), [data])
   const stats = useMemo(() => roadmapStats(tree), [tree])
   const rows = useMemo(() => flattenRoadmap(tree), [tree])
+  // seleção sobrevive a recargas só para itens que continuam abertos na mesma linha
+  const openRows = useMemo(() => rows.filter((r) => isOpenItem(r.node)), [rows])
+  const picked = useMemo(() => openRows.filter((r) => selected.has(r.node.id)), [openRows, selected])
+
+  function toggleIds(ids: string[]): void {
+    if (!ids.length) return
+    const next = new Set(selected)
+    const all = ids.every((id) => next.has(id))
+    ids.forEach((id) => (all ? next.delete(id) : next.add(id)))
+    setSelected(next)
+  }
+
+  function delegate(): void {
+    if (!onDelegate || !picked.length) return
+    const d = buildRoadmapDelegation(picked)
+    const todo = picked.filter((r) => r.node.mark === ' ').map((r) => ({ line: r.node.line, expected: r.node.raw.trim() }))
+    onDelegate(d.task, d.instructions, d.title, async () => {
+      setSelected(new Set())
+      setSelecting(false)
+      if (!todo.length) return
+      try {
+        const r = await window.api.projects.roadmapSetMany(project.id, todo, '~')
+        setData((cur) => (cur ? { ...cur, content: r.content } : cur))
+      } catch (e) {
+        setError(`Delegado, mas não consegui marcar em andamento: ${e instanceof Error ? e.message : String(e)}`)
+        void load()
+      }
+    })
+  }
+
+  const pickBox = (ids: string[]): React.ReactElement | null =>
+    selecting ? (
+      <input
+        type="checkbox"
+        className="ph-rm-pick"
+        disabled={!ids.length}
+        checked={ids.length > 0 && ids.every((id) => selected.has(id))}
+        onChange={() => toggleIds(ids)}
+        onClick={(e) => e.stopPropagation()}
+        title={ids.length ? `Selecionar ${ids.length} ${ids.length === 1 ? 'item aberto' : 'itens abertos'}` : 'Nada aberto aqui'}
+      />
+    ) : null
+
   const unnumbered = useMemo(() => (data?.exists ? unnumberedRoadmapItems(data.content) : 0), [data])
   const versions = useMemo(() => [...new Set(rows.map((r) => r.node.version).filter(Boolean))] as string[], [rows])
 
@@ -93,6 +146,8 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
       if (!kids.length && filter !== 'todos') return null
       return (
         <div key={n.id} className={`ph-rm-group lvl-${n.level}`}>
+          <div className="ph-rm-heading-row">
+          {pickBox(openIds(n))}
           <button
             className="ph-rm-heading"
             onClick={() => {
@@ -111,6 +166,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
               </>
             )}
           </button>
+          </div>
           {!isCollapsed && <div className="ph-rm-children">{kids}</div>}
         </div>
       )
@@ -119,7 +175,8 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
     if (!matches(n) && !kids.length) return null
     return (
       <div key={n.id} className="ph-rm-item-wrap">
-        <div className={`ph-rm-item mark-${n.mark === ' ' ? 'todo' : n.mark === 'x' ? 'done' : n.mark === '~' ? 'doing' : n.mark === '-' ? 'drop' : 'none'}`}>
+        <div className={`ph-rm-item ${selected.has(n.id) && selecting ? 'picked ' : ''}mark-${n.mark === ' ' ? 'todo' : n.mark === 'x' ? 'done' : n.mark === '~' ? 'doing' : n.mark === '-' ? 'drop' : 'none'}`}>
+          {pickBox(openIds(n))}
           {n.mark ? (
             <button className="ph-rm-mark" onClick={() => cycle(n)} title={`${MARK_LABEL[n.mark]} — clique para avançar`}>
               {MARK_ICON[n.mark]}
@@ -160,6 +217,18 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
         <span className="ph-muted">
           {stats.done}/{stats.total} feitos · {stats.doing} em andamento · {pct}%
         </span>
+        {onDelegate && (
+          <button
+            className={`btn btn-sm ${selecting ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => {
+              setSelecting(!selecting)
+              if (selecting) setSelected(new Set())
+            }}
+            title="Selecionar itens ou blocos (área/funcionalidade) para delegar ao Claude de uma vez"
+          >
+            {selecting ? '✕ Sair da seleção' : '☑ Selecionar p/ delegar'}
+          </button>
+        )}
         {unnumbered > 0 && (
           <button className="btn btn-secondary btn-sm" onClick={numberItems} title="Grava #N (maior número + 1) nos itens sem número, sem mexer nos já numerados">
             # Numerar {unnumbered}
@@ -169,6 +238,23 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
       </div>
       <div className="ph-progress big"><div style={{ width: `${pct}%` }} /></div>
       {error && <div className="ph-error">{error}</div>}
+      {selecting && (
+        <div className="ph-rm-selbar">
+          <span>
+            {picked.length ? <><strong>{picked.length}</strong> {picked.length === 1 ? 'item' : 'itens'}: {picked.map((r) => (r.node.num != null ? `#${r.node.num}` : '•')).join(' ')}</> : 'Marque itens ou blocos abertos (a fazer / em andamento).'}
+          </span>
+          <span style={{ flex: 1 }} />
+          {picked.length > 0 && <button className="btn btn-secondary btn-sm" onClick={() => setSelected(new Set())}>Limpar</button>}
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={!picked.length}
+            onClick={delegate}
+            title="O Claude monta um prompt (em paralelo, um commit por item) que abre no Prompt Runner para você revisar e enviar"
+          >
+            🤖 Delegar {picked.length || ''}
+          </button>
+        </div>
+      )}
 
       {mode === 'arvore' ? (
         <div className="ph-rm-tree">{tree.map(renderNode)}</div>
@@ -177,6 +263,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
           <table className="ph-table">
             <thead>
               <tr>
+                {selecting && <th />}
                 <th>Status</th>
                 <th>#</th>
                 <th>Item</th>
@@ -189,6 +276,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
             <tbody>
               {rows.filter((r) => r.node.mark && matches(r.node)).map((r) => (
                 <tr key={r.node.id}>
+                  {selecting && <td>{pickBox(isOpenItem(r.node) ? [r.node.id] : [])}</td>}
                   <td>
                     <select value={r.node.mark ?? ' '} onChange={(e) => cycle(r.node, e.target.value as RoadmapMark)}>
                       {(Object.keys(MARK_LABEL) as RoadmapMark[]).map((m) => (

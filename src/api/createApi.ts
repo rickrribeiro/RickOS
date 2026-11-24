@@ -280,6 +280,7 @@ export function createApi() {
       roadmap: (projectId: number) => invoke('projects:roadmap', projectId),
       roadmapSet: (projectId: number, line: number, expected: string, mark: ' ' | 'x' | '~' | '-') => invoke('projects:roadmapSet', projectId, line, expected, mark),
       roadmapCreate: (projectId: number) => invoke('projects:roadmapCreate', projectId),
+      roadmapSetMany: (projectId: number, items: { line: number; expected: string }[], mark: ' ' | 'x' | '~' | '-') => invoke('projects:roadmapSetMany', projectId, items, mark),
       roadmapNumber: (projectId: number) => invoke('projects:roadmapNumber', projectId),
       radarCheck: () => invoke('projects:radarCheck'),
       onChanged: (cb: () => void) => subscribe('projects:updated', () => cb())

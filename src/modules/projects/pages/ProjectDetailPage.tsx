@@ -129,6 +129,7 @@ export function ProjectDetailPage(): React.ReactElement {
   const [cycleMode, setCycleMode] = useState<'new' | 'extend' | 'close' | null>(null)
   const [changelogCycle, setChangelogCycle] = useState<ProjectCycle | null>(null)
   const [delegating, setDelegating] = useState<string | null>(null) // texto da tarefa a delegar
+  const [delegateExtra, setDelegateExtra] = useState<{ instructions?: string; title?: string; onDone?: () => Promise<void> }>({})
   const [msTitle, setMsTitle] = useState('')
   const [msDate, setMsDate] = useState('')
   const [newTodo, setNewTodo] = useState('')
@@ -646,7 +647,15 @@ ${ctx}`
         </div>
       )}
 
-      {tab === 'roadmap' && <RoadmapView project={project} />}
+      {tab === 'roadmap' && (
+        <RoadmapView
+          project={project}
+          onDelegate={(task, instructions, title, onDone) => {
+            setDelegateExtra({ instructions, title, onDone })
+            setDelegating(task)
+          }}
+        />
+      )}
 
       {/* ── Tarefas: TODOs + issues do GitHub, sem duplicar ── */}
       {tab === 'tarefas' && (
@@ -987,7 +996,19 @@ ${ctx}`
         />
       )}
       {changelogCycle && <ChangelogModal cycle={changelogCycle} onClose={() => setChangelogCycle(null)} />}
-      {delegating != null && <DelegateModal project={project} task={delegating} onClose={() => setDelegating(null)} />}
+      {delegating != null && (
+        <DelegateModal
+          project={project}
+          task={delegating}
+          instructions={delegateExtra.instructions}
+          title={delegateExtra.title}
+          onDelegated={delegateExtra.onDone}
+          onClose={() => {
+            setDelegating(null)
+            setDelegateExtra({})
+          }}
+        />
+      )}
     </div>
   )
 }

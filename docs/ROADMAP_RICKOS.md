@@ -43,6 +43,17 @@ item numa conversa ("faz o #12"). O número é um **ID estável**, não a posiç
 O número aparece na árvore e na coluna `#` da tabela. Se houver itens sem número, a aba
 mostra o botão **"# Numerar N"**, que grava os números que faltam sem mexer nos existentes.
 
+## Delegar itens ao Claude
+
+**"☑ Selecionar p/ delegar"** liga a seleção (na árvore e na tabela). Marcar uma área ou
+funcionalidade seleciona todos os itens abertos dela (a fazer ou em andamento). **"🤖 Delegar N"** abre o
+modal de delegação já com os itens (`#N`, área, versão, prioridade) e as regras: fazer em paralelo
+com subagentes, **um commit por item** (`Roadmap-Item: N` no corpo), não mexer no roadmap e não
+fazer push. O Claude monta o prompt, que abre no Prompt Runner para você revisar, como na
+delegação normal. Ao montar o prompt (ou "Executar direto"), os itens selecionados passam para
+**em andamento** `[~]`; marcar como feito fica com você, depois de validar. Cancelar o modal não
+muda nada.
+
 ## Metadados opcionais (no fim do item)
 
 * `@v1.2` — versão/ciclo da entrega (filtro "versão" no topo).

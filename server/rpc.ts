@@ -206,7 +206,7 @@ import { broadcast } from './events'
 import { notify, notificationsChanged } from './services/notifications'
 import { suggestProjects, ignoreProjectSuggestion, restoreProjectSuggestions } from './services/projectScan'
 import { detectChildRepos, repoTargets, repoTargetsFrom, localTargets, isWorkspace, workspaceDuplicates, absorbIntoWorkspace } from './services/projectRepos'
-import { projectsOverview, projectCommits, readRoadmap, setRoadmapItem, createRoadmapTemplate, numberRoadmapFile, checkProjectRadar, generateCycleChangelog, cycleCommits, setProjectSchedule } from './services/projectHub'
+import { projectsOverview, projectCommits, readRoadmap, setRoadmapItem, createRoadmapTemplate, numberRoadmapFile, setRoadmapItems, checkProjectRadar, generateCycleChangelog, cycleCommits, setProjectSchedule } from './services/projectHub'
 import { claudeHookStatus, installClaudeHook, uninstallClaudeHook, handleClaudeSession, AUTO_WHERE_KEY, HOOK_MODEL_KEY } from './services/claudeHook'
 import type { SessionPayload } from './services/claudeHook'
 import { delegateNextAction, draftDelegationPrompt, cancelDelegation, reviewDelegation, discardDelegation, acceptDelegation, prDelegation, recoverDelegations } from './services/delegation'
@@ -761,6 +761,9 @@ ipcMain.handle('projects:linkTag', (_, tagId: number, projectId: number | null) 
 ipcMain.handle('projects:roadmap', (_, projectId: number) => readRoadmap(projectId))
 ipcMain.handle('projects:roadmapSet', (_, projectId: number, line: number, expected: string, mark: ' ' | 'x' | '~' | '-') => setRoadmapItem(projectId, line, expected, mark))
 ipcMain.handle('projects:roadmapCreate', (_, projectId: number) => createRoadmapTemplate(projectId))
+ipcMain.handle('projects:roadmapSetMany', (_, projectId: number, items: { line: number; expected: string }[], mark: ' ' | 'x' | '~' | '-') =>
+  setRoadmapItems(projectId, items, mark)
+)
 ipcMain.handle('projects:roadmapNumber', (_, projectId: number) => numberRoadmapFile(projectId))
 ipcMain.handle('projects:radarCheck', () => checkProjectRadar(true))
 ipcMain.handle('cycles:getAll', (_, projectId?: number | null) => getProjectCycles(projectId ?? null))

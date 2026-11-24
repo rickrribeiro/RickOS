@@ -21,11 +21,29 @@ export const DELEGATION_STATUS: Record<ProjectDelegation['status'], { label: str
  * monta um prompt, que abre no Prompt Runner (projeto + worktree isolado) para você
  * revisar, editar e enviar. "Executar direto" mantém o fluxo antigo (roda sozinho).
  */
-export function DelegateModal({ project, task, onClose }: { project: Project; task?: string; onClose: () => void }): React.ReactElement {
+export function DelegateModal({
+  project,
+  task,
+  instructions: initialInstructions,
+  title,
+  onDelegated,
+  onClose
+}: {
+  project: Project
+  task?: string
+  /** Instruções extras pré-preenchidas (ex.: delegação de vários itens do roadmap). */
+  instructions?: string
+  /** Título da conversa no Prompt Runner; padrão = a tarefa. */
+  title?: string
+  /** Chamado quando a delegação é feita (prompt montado ou execução iniciada), antes de fechar. */
+  onDelegated?: () => Promise<void>
+  onClose: () => void
+}): React.ReactElement {
   const { refreshDelegations } = useProjectStore()
   const { setPage } = useUIStore()
   const [action, setAction] = useState(task ?? project.nextAction ?? '')
-  const [instructions, setInstructions] = useState('')
+  const [instructions, setInstructions] = useState(initialInstructions ?? '')
+  const multi = action.includes('\n')
   const [busy, setBusy] = useState<'draft' | 'run' | null>(null)
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
@@ -57,7 +75,7 @@ export function DelegateModal({ project, task, onClose }: { project: Project; ta
             skillIds: [],
             userPrompt: prompt,
             projectId: project.id,
-            title: action.trim(),
+            title: title ?? action.trim().split('\n')[0],
             useWorktree: !!project.localPath,
             note: '📝 Prompt montado pelo Claude a partir da tarefa. Revise, ajuste o que quiser e envie.'
           })
@@ -65,6 +83,7 @@ export function DelegateModal({ project, task, onClose }: { project: Project; ta
       } catch {
         // armazenamento indisponível
       }
+      await onDelegated?.()
       onClose()
       setPage('ai-runner')
     } catch (e) {
@@ -81,6 +100,7 @@ export function DelegateModal({ project, task, onClose }: { project: Project; ta
     try {
       await window.api.delegations.start(project.id, action.trim() || null, instructions.trim() || null)
       await refreshDelegations()
+      await onDelegated?.()
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -99,9 +119,9 @@ export function DelegateModal({ project, task, onClose }: { project: Project; ta
           executado antes disso.
         </p>
         <label className="ph-label">Tarefa</label>
-        <textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
+        <textarea rows={multi ? 8 : 2} value={action} onChange={(e) => setAction(e.target.value)} />
         <label className="ph-label">Instruções extras (opcional)</label>
-        <textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex: use o componente X, não mude a API pública, escreva testes…" />
+        <textarea rows={initialInstructions ? 6 : 3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex: use o componente X, não mude a API pública, escreva testes…" />
         {error && <div className="ph-error">{error}</div>}
         {busy === 'draft' && (
           <div className="ph-muted" style={{ marginTop: 8 }}>

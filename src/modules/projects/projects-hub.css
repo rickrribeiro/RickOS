@@ -233,6 +233,10 @@
 .ph-rm-group.lvl-2 > .ph-rm-heading { font-size: 15px; font-weight: 700; }
 .ph-rm-group.lvl-3 > .ph-rm-heading { font-size: 13px; font-weight: 600; }
 .ph-rm-heading-text { flex: 1; min-width: 0; }
+.ph-rm-heading-row { display: flex; gap: 6px; align-items: center; }
+.ph-rm-pick { width: auto; margin: 0; flex-shrink: 0; cursor: pointer; accent-color: var(--accent); }
+.ph-rm-item.picked { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: var(--radius); }
+.ph-rm-selbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 8px; background: var(--bg-secondary); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: 13px; }
 .ph-rm-mini { width: 70px; height: 4px; border-radius: 2px; background: var(--bg-tertiary); overflow: hidden; }
 .ph-rm-mini span { display: block; height: 100%; background: var(--success); }
 .ph-rm-children { padding-left: 16px; border-left: 1px solid var(--border); margin-left: 5px; }
