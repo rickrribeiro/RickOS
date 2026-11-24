@@ -30,6 +30,7 @@ import { IssuesPage } from './modules/projects/pages/IssuesPage'
 import { WorktreesPage } from './modules/projects/pages/WorktreesPage'
 import { HabitsPage } from './modules/habits/pages/HabitsPage'
 import { KnowledgePage } from './modules/knowledge/pages/KnowledgePage'
+import { MemoryPage } from './modules/memory/pages/MemoryPage'
 import { QuickCapture } from './modules/inbox/components/QuickCapture'
 import {
   FinanceDashboardPage,
@@ -79,6 +80,7 @@ const PAGES: Record<Page, React.ComponentType> = {
   worktrees: WorktreesPage,
   habits: HabitsPage,
   knowledge: KnowledgePage,
+  memory: MemoryPage,
   'finance-dashboard': FinanceDashboardPage,
   transactions: TransactionsPage,
   budget: BudgetPage,

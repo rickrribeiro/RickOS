@@ -703,6 +703,7 @@ export type Page =
   | 'braindump'
   | 'habits'
   | 'knowledge'
+  | 'memory'
   | 'goals'
   | 'automations'
   // Social
@@ -1068,6 +1069,7 @@ declare global {
         onStatus: (cb: (s: ChatsStatus) => void) => () => void
         onAi: (cb: (r: AiSuggestResult) => void) => () => void
       }
+      memory: import('../modules/memory/api').MemoryWindowApi
       tripDocs: {
         get: (tripId: number) => Promise<TripDocument[]>
         set: (tripId: number, item: string, checked: number) => Promise<void>

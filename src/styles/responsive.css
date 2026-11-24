@@ -315,3 +315,43 @@
     grid-row: 2;
   }
 }
+
+/* ── Memória Pessoal ── */
+@media (max-width: 899px) {
+  .mem-layout,
+  .mem-two {
+    grid-template-columns: 1fr;
+  }
+  .mem-cats {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .mem-cat {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .mem-cat .n {
+    margin-left: 4px;
+  }
+}
+@media (max-width: 640px) {
+  .mem-form,
+  .mem-diff {
+    grid-template-columns: 1fr;
+  }
+  .mem-kv {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+  .mem-toolbar select {
+    flex: 1 1 45%;
+    max-width: none;
+  }
+  .mem-bubble {
+    max-width: 95%;
+  }
+  .mem-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

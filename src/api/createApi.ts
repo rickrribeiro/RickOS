@@ -2,6 +2,7 @@ import { invoke, subscribe, downloadUrl, onReconnect } from './transport'
 import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBase64, saveFolder } from './files'
 import type { NextActionSize, ProjectPatch, ProjectRepoInput, ProjectStatus, ProjectStatusPayload, TodoListFilters } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
+import { MEMORY_METHODS, type MemoryWindowApi } from '../modules/memory/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 
@@ -17,6 +18,15 @@ function chatsApi(): ChatsApi & {
   out.onStatus = (cb: (s: ChatsStatus) => void) => subscribe('chats:status', (p) => cb(p as ChatsStatus))
   out.onAi = (cb: (r: AiSuggestResult) => void) => subscribe('chats:ai', (p) => cb(p as AiSuggestResult))
   return out as unknown as ReturnType<typeof chatsApi>
+}
+
+/** `window.api.memory`: canais `memory:<método>` + eventos `memory:updated` / `memory:job`. */
+function memoryApi(): MemoryWindowApi {
+  const out: Record<string, unknown> = {}
+  for (const m of MEMORY_METHODS) out[m] = (...args: unknown[]) => invoke(`memory:${m}`, ...args)
+  out.onUpdated = (cb: (p: { kind: string }) => void) => subscribe('memory:updated', (p) => cb(p as { kind: string }))
+  out.onJob = (cb: (p: unknown) => void) => subscribe('memory:job', (p) => cb(p))
+  return out as unknown as MemoryWindowApi
 }
 
 /** Open a URL outside the app: system browser on desktop, new tab on web. */
@@ -412,6 +422,7 @@ export function createApi() {
     },
     // Central de Mensagens (server/chats/rpc.ts)
     chats: chatsApi(),
+    memory: memoryApi(),
     // Monitoramento de passagens (server/flights/rpc.ts)
     flightMon: {
       list: () => invoke('flightMon:list'),
