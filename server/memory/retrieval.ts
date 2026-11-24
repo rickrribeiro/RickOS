@@ -58,14 +58,17 @@ export function tokens(s: string): string[] {
     .map(stem)
 }
 
-/** Stem leve pt/en: plurais e alguns sufixos comuns. Suficiente para "viagens"→"viag", "preferências"→"preferenc". */
+/** Stem leve pt/en: plurais e alguns sufixos comuns ("viagem"/"viagens"→"viag", "café"/"cafés"→"cafe"). */
 function stem(t: string): string {
-  if (t.length <= 4) return t
-  return t
-    .replace(/(oes|aes|ais|eis|ns)$/, '')
-    .replace(/(ens|es|s)$/, '')
-    .replace(/(mente|cao|coes|ando|endo|indo|ado|ido|ing|ed)$/, '')
-    .replace(/[aeo]$/, '')
+  if (t.length <= 3) return t
+  let s = t.replace(/ns$/, 'm') // viagens→viagem, hospedagens→hospedagem
+  if (/[aeiou]s$/.test(s)) s = s.slice(0, -1) // cafés→cafe, preferências→preferencia
+  else if (/[rzl]es$/.test(s)) s = s.slice(0, -2) // cores→cor
+  const cut = s.replace(/(mente|ando|endo|indo|ado|ido|ing|ed)$/, '')
+  if (cut.length >= 4) s = cut
+  s = s.replace(/em$/, 'e') // viagem→viage
+  if (s.length > 4) s = s.replace(/[aeo]$/, '')
+  return s
 }
 
 interface Doc {

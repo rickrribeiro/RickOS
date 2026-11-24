@@ -4,12 +4,15 @@ import { useHabitStore } from '../../habits/store/habitStore'
 import { useCalendarStore } from '../../calendar/store/calendarStore'
 import { useTripStore } from '../../travel/store/tripStore'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
-import { DEFAULT_KNOWLEDGE, knowledgeBullets } from '../../knowledge/constants'
+import type { ConsumerBlock } from '../../memory/api'
 
 interface QuickAction {
   key: string
   label: string
-  build: (ctx: Ctx) => string
+  /** `mem` = bloco da Memória Pessoal (integração aprovada); vazio quando nada é relevante. */
+  build: (ctx: Ctx, mem: string) => string
+  /** Só ações aprovadas na matriz de integração consultam a memória (docs/memoria/integracoes.md). */
+  memory?: (ctx: Ctx) => Promise<ConsumerBlock>
 }
 
 interface Ctx {
@@ -18,10 +21,11 @@ interface Ctx {
   events: ReturnType<typeof useCalendarStore.getState>['upcoming']
   nextTrip: ReturnType<typeof useTripStore.getState>['trips'][number] | undefined
   weekHours: string
-  profile: string
 }
 
 const RUN_KEY = 'rickos:assistantRun'
+
+const withMemory = (prompt: string, mem: string): string => (mem ? `${prompt}\n\n${mem}` : prompt)
 
 const list = (items: string[]): string => items.map((t) => `- ${t}`).join('\n') || '(nenhum)'
 
@@ -49,22 +53,31 @@ const ACTIONS: QuickAction[] = [
   {
     key: 'week',
     label: 'Planejar a semana',
-    build: (c) =>
-      `Monte um plano de semana equilibrado a partir de:\n\nTarefas abertas:\n${list(
+    memory: (c) =>
+      window.api.memory.ctxWeekPlan(
+        [...c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title), ...c.habitNames].join(' ').slice(0, 1500)
+      ),
+    build: (c, mem) =>
+      withMemory(
+        `Monte um plano de semana equilibrado a partir de:\n\nTarefas abertas:\n${list(
         c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title)
       )}\n\nHábitos:\n${list(c.habitNames)}\n\nReuniões:\n${list(
         c.events.map((e) => `${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`)
-      )}`
+      )}`,
+        mem
+      )
   },
   {
     key: 'trip',
     label: 'Roteiro de viagem',
-    build: (c) =>
-      c.nextTrip
-        ? `Crie um roteiro para uma viagem a ${c.nextTrip.destination}${
-            c.nextTrip.startDate ? ` (a partir de ${c.nextTrip.startDate})` : ''
-          }. Considere meu perfil: ${c.profile}.`
-        : `Sugira um destino de viagem para alguém com este perfil: ${c.profile}.`
+    memory: (c) => window.api.memory.ctxTripItinerary(c.nextTrip?.destination ?? ''),
+    build: (c, mem) =>
+      withMemory(
+        c.nextTrip
+          ? `Crie um roteiro para uma viagem a ${c.nextTrip.destination}${c.nextTrip.startDate ? ` (a partir de ${c.nextTrip.startDate})` : ''}.`
+          : 'Sugira um destino de viagem para mim.',
+        mem
+      )
   },
   {
     key: 'weekly',
@@ -103,7 +116,6 @@ export function AIPage(): React.ReactElement {
     () => (localStorage.getItem('ai_permission') === 'execute' ? 'execute' : 'allowlist')
   )
   const [weekMinutes, setWeekMinutes] = useState(0)
-  const [kb, setKb] = useState(DEFAULT_KNOWLEDGE)
   const [runId, setRunId] = useState<string | null>(null)
   // current run id readable inside the stable onChunk/onDone listeners
   const runIdRef = useRef<string | null>(null)
@@ -114,7 +126,6 @@ export function AIPage(): React.ReactElement {
     rC()
     rTr()
     window.api.settings.get('claude_model').then((m) => setModel(m ?? ''))
-    window.api.settings.get('knowledge_base').then((v) => setKb(v && v.trim() ? v : DEFAULT_KNOWLEDGE))
 
     const now = new Date()
     const monday = new Date(now)
@@ -189,8 +200,7 @@ export function AIPage(): React.ReactElement {
     habitNames: habits.map((h) => h.name),
     events: upcoming,
     nextTrip: trips[0],
-    weekHours: fmtHours(weekMinutes),
-    profile: knowledgeBullets(kb).join(', ') || 'sem perfil definido (edite a Base de Conhecimento)'
+    weekHours: fmtHours(weekMinutes)
   }
 
   async function run(text: string): Promise<void> {
@@ -243,7 +253,11 @@ export function AIPage(): React.ReactElement {
             key={a.key}
             className="btn btn-secondary btn-sm"
             title="Preenche o prompt abaixo (não executa automaticamente)"
-            onClick={() => setPrompt(a.build(ctx))}
+            onClick={async () => {
+              // memória é opcional: se falhar, o atalho funciona como antes
+              const mem = a.memory ? await a.memory(ctx).then((m) => m.block, () => '') : ''
+              setPrompt(a.build(ctx, mem))
+            }}
           >
             {a.label}
           </button>

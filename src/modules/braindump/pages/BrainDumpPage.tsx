@@ -345,6 +345,19 @@ export function BrainDumpPage(): React.ReactElement {
           </button>
         )}
         <button className="btn btn-secondary btn-sm" onClick={reset} disabled={running}>Limpar</button>
+        <button
+          className="btn btn-secondary btn-sm"
+          disabled={running || text.trim().length < 20}
+          title="Produtor aprovado da Memória Pessoal: a IA sugere conhecimentos sobre você; nada é salvo sem sua aprovação no Inbox"
+          onClick={() =>
+            window.api.memory.produceBraindump(text).then(
+              () => flash('🧬 Enviado — sugestões no Inbox da Memória Pessoal'),
+              (e) => setError(e instanceof Error ? e.message : String(e))
+            )
+          }
+        >
+          🧬 Sugerir memórias
+        </button>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{text.trim().length} caracteres</span>
       </div>
 

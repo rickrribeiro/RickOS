@@ -60,3 +60,5 @@ Itens sem LLM que aparecem no `ai_usage`/`source` (regras, notificações, Googl
 * Candidatos CONSUMER: #1, #2, #3, #4 (Planejar semana), #5, #8.
 * Candidatos PRODUCER: #5, #7.
 * Todo o resto: **NONE**, com teste de não interferência (Fase 3).
+
+> **2026-11-25:** os candidatos #1, #2, #3, #4 (Planejar semana), #5, #7 e #8 (Jarvis) foram aprovados; ver `integracoes.md`. O resto continua NONE.

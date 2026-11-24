@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { DEFAULT_KNOWLEDGE, knowledgeBullets } from '../../knowledge/constants'
 
 interface Rec {
   keyword: string
@@ -18,22 +17,27 @@ const CATALOG: Rec[] = [
   { keyword: 'remotamente', items: ['Cafés com boa Wi-Fi', 'Coworkings em Shibuya'] }
 ]
 
-/** Recomendações a partir da Base de Conhecimento (perfil do usuário). */
+const fold = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/** Recomendações a partir da Memória Pessoal (integração aprovada `travel.recommendations`, sem LLM). */
 export function Recommendations(): React.ReactElement {
-  const [kb, setKb] = useState(DEFAULT_KNOWLEDGE)
+  const [bullets, setBullets] = useState<string[]>([])
 
   useEffect(() => {
-    window.api.settings.get('knowledge_base').then((v) => setKb(v && v.trim() ? v : DEFAULT_KNOWLEDGE))
+    // a consulta é o próprio catálogo: o servidor devolve só as memórias de viagem/interesses que casam
+    window.api.memory
+      .ctxTravelInterests(CATALOG.map((c) => c.keyword).join(' '))
+      .then((r) => setBullets(r.items.map((i) => i.title)))
+      .catch(() => setBullets([]))
   }, [])
 
-  const bullets = knowledgeBullets(kb)
-  const matched = CATALOG.filter((c) => bullets.some((b) => b.toLowerCase().includes(c.keyword)))
+  const matched = CATALOG.filter((c) => bullets.some((b) => fold(b).includes(fold(c.keyword))))
 
   return (
     <div className="chart-section">
       <div className="chart-title">⭐ Recomendações</div>
       <p className="travel-muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
-        Baseadas no perfil de viagem atual. A integração com a <strong>Memória Pessoal</strong> aguarda aprovação. Geração por IA na página IA.
+        Baseadas nas suas preferências de viagem e interesses da <strong>Memória Pessoal</strong>. Geração por IA na página IA.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {bullets.map((b) => (
@@ -41,7 +45,7 @@ export function Recommendations(): React.ReactElement {
         ))}
       </div>
       {matched.length === 0 ? (
-        <div className="empty-hint">Nenhuma recomendação para o seu perfil ainda.</div>
+        <div className="empty-hint">Nenhuma recomendação ainda — cadastre preferências de viagem e interesses em Organização → Memória Pessoal.</div>
       ) : (
         <div className="cards-grid">
           {matched.map((c) => (

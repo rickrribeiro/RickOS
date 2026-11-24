@@ -82,7 +82,7 @@ salvo `newEvidence`. Desfazer funciona se as memórias não mudaram desde a apro
 1. Justifique no `inventario-ia.md` (benefício concreto, categorias, orçamento, riscos).
 2. Adicione a política com `approved: false` e o menor escopo possível.
 3. Peça aprovação (linha nova em `integracoes.md`). Só então `approved: true`.
-4. No **servidor**, num handler dedicado que fixa o caso de uso:
+4. No **servidor**, num handler dedicado que fixa o caso de uso (molde: `server/memory/integrations.ts`):
 
 ```ts
 // ✅ correto — servidor decide o caso de uso; contexto opcional; vazio é normal
@@ -161,7 +161,7 @@ Nenhum conteúdo pessoal vai para `console`/logs; traces guardam ids/scores, con
 
 Memória Pessoal → Inbox → "Uma por linha (sem IA)" ou "Migrar com IA" (ou Configurações →
 Reprocessar). Idempotente por hash do documento + dedupe por item. `settings.knowledge_base`
-nunca é alterado e os consumidores antigos continuam lendo dele. A página de edição "Base (legado)" foi removida em 2026-11-25 a pedido do usuário (a Base estava vazia).
+nunca é alterado. A página "Base (legado)" foi removida e, com as integrações aprovadas em 2026-11-25, nenhuma funcionalidade lê mais a Base antiga.
 
 ### Rollback
 

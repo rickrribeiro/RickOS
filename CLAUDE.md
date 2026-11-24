@@ -75,7 +75,8 @@ Molde simples para copiar: `todos` / `habits`.
 * Efeitos colaterais (CLI, rede, arquivos) ficam em `server/`, que não importa nada de Electron.
 * Servidor → clientes: `broadcast()` no servidor + `subscribe()` de `src/api/transport.ts`. Os canais estão listados em `server/events.ts`.
 * sql.js **não aceita parâmetros em `db.exec`**: use `getAll`/`getOne`/`run` (prepare/step).
-* **Nova IA não consome nem produz Memória Pessoal por padrão.** Nunca injete memória em `runClaude`, `ai:*` ou `buildProjectContext`. Integração = política em `server/memory/policy.ts` + aprovação do usuário + handler dedicado no servidor chamando `getMemoryContext` (ver `docs/memoria/README.md`).
+* **Nova IA não consome nem produz Memória Pessoal por padrão.** Nunca injete memória em `runClaude`, `ai:*` ou `buildProjectContext`. Integração = política em `server/memory/policy.ts` + aprovação do usuário + canal dedicado em `server/memory/integrations.ts` chamando `getMemoryContext` (ver `docs/memoria/README.md` e `docs/memoria/integracoes.md`).
+* **Sempre que adicionar ou alterar uma funcionalidade de IA, PERGUNTE ao usuário se ele quer integrá-la à Memória Pessoal** (consumir contexto pessoal, produzir sugestões, ambos ou nenhum), explicando o benefício e o custo em tokens. Sem resposta afirmativa, não integre.
 * Credenciais: chaves em `SENSITIVE_KEYS` (`server/services/secrets.ts`) são criptografadas com AES-GCM ao salvar. Nunca logue nem commite segredos.
 
 ## UI

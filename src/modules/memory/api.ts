@@ -196,7 +196,24 @@ export interface CategoryInput {
   defaultSensitivity?: Sensitivity
 }
 
+/** Bloco de contexto pessoal para uma integração aprovada (vazio = nada relevante). */
+export interface ConsumerBlock {
+  allowed: boolean
+  degraded: boolean
+  block: string
+  items: { id: number; title: string; category: string | null }[]
+  tokens: number
+}
+
 export interface MemoryApi {
+  // integrações aprovadas: o caso de uso é fixado no servidor (server/memory/integrations.ts)
+  ctxTripItinerary(destination?: string): Promise<ConsumerBlock>
+  ctxTravelInterests(keywords?: string): Promise<ConsumerBlock>
+  ctxStays(query?: string): Promise<ConsumerBlock>
+  ctxWeekPlan(query?: string): Promise<ConsumerBlock>
+  ctxWeeklyReview(query?: string): Promise<ConsumerBlock>
+  produceWeeklyReview(text: string): Promise<number>
+  produceBraindump(text: string): Promise<number>
   categories(includeArchived?: boolean): Promise<MemoryCategory[]>
   createCategory(input: CategoryInput): Promise<MemoryCategory>
   updateCategory(id: number, input: Partial<CategoryInput> & { archived?: boolean }): Promise<MemoryCategory>
@@ -251,6 +268,13 @@ export interface MemoryApi {
 }
 
 export const MEMORY_METHODS: (keyof MemoryApi)[] = [
+  'ctxTripItinerary',
+  'ctxTravelInterests',
+  'ctxStays',
+  'ctxWeekPlan',
+  'ctxWeeklyReview',
+  'produceWeeklyReview',
+  'produceBraindump',
   'categories',
   'createCategory',
   'updateCategory',

@@ -131,7 +131,7 @@ export function StayFinderPage(): React.ReactElement {
   useEffect(() => {
     store.refreshFavorites()
     store.refreshWatches()
-    window.api.settings.get('travel_profile').then((p) => setProfile(p ?? 'Prefiro apartamento inteiro; evito hostel; trabalho remotamente; valorizo academia e bairros caminháveis.'))
+    window.api.settings.get('travel_profile').then((p) => setProfile(p ?? ''))
     window.api.stays.searchHistory().then(setHistory)
     const offChunk = window.api.ai.onChunk((rid, t) => {
       if (rid && rid === aiRun.current) setAiOut((o) => o + t)
@@ -158,7 +158,12 @@ export function StayFinderPage(): React.ReactElement {
     await window.api.settings.set('travel_profile', profile)
     const top = results.slice(0, 8).map((r, i) => `${i + 1}. ${r.title} — ${formatMoney(r.pricePerNight, r.currency)}/noite, ${r.neighborhood ?? '—'}, ⭐${r.rating ?? '?'}, ${r.roomType}, score ${r.score}`).join('\n')
     const model = (await window.api.settings.get('claude_model')) ?? ''
-    const prompt = `Meu perfil de viagem:\n${profile}\n\nResultados de hospedagem em ${input.city}:\n${top}\n\nAnalise e explique em português quais são as 3 MELHORES opções para o meu perfil e por quê. Seja direto.`
+    // Memória Pessoal (integração aprovada `stays.analysis`): só preferências de hospedagem/viagem; opcional
+    const mem = await window.api.memory
+      .ctxStays(`${input.city} ${(input.neighborhoods ?? []).join(' ')} ${profile}`)
+      .then((r) => r.block, () => '')
+    const notes = profile.trim() ? `Observações para esta busca:\n${profile.trim()}\n\n` : ''
+    const prompt = `${mem ? `${mem}\n\n` : ''}${notes}Resultados de hospedagem em ${input.city}:\n${top}\n\nAnalise e explique em português quais são as 3 MELHORES opções para mim e por quê. Seja direto.`
     aiRun.current = await window.api.ai.start({ prompt, model, save: false, source: 'viagens' })
   }
 
@@ -272,7 +277,7 @@ export function StayFinderPage(): React.ReactElement {
                   <span>🤖 Recomendação IA</span>
                   <button className="btn btn-primary btn-sm" onClick={runAi} disabled={aiRunning}>{aiRunning ? 'Analisando…' : 'Analisar melhores'}</button>
                 </div>
-                <textarea rows={2} value={profile} onChange={(e) => setProfile(e.target.value)} placeholder="Seu perfil de viagem…" style={{ width: '100%', marginTop: 8, fontSize: 12 }} />
+                <textarea rows={2} value={profile} onChange={(e) => setProfile(e.target.value)} placeholder="Observações para esta análise (opcional) — suas preferências gerais vêm da Memória Pessoal" style={{ width: '100%', marginTop: 8, fontSize: 12 }} />
                 {(aiRunning || aiOut) && <div className="md-preview-pane" style={{ marginTop: 8, minHeight: 0 }}>{aiOut ? renderMarkdown(aiOut) : <div className="empty-hint">…</div>}</div>}
               </div>
 

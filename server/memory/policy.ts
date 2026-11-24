@@ -7,8 +7,8 @@ import { getSetting } from '../database/queries'
  *
  * • Só casos de uso listados aqui podem consumir ou produzir memória.
  * • Consumir e produzir são permissões independentes.
- * • Integrações externas (outros módulos) nascem com `approved: false` e ficam bloqueadas
- *   até a aprovação da matriz em docs/memoria/integracoes.md (mudança de código + deploy).
+ * • Integração externa NOVA nasce com `approved: false` (bloqueada) e só muda com aprovação
+ *   explícita do usuário, registrada em docs/memoria/integracoes.md.
  * • Configurações do usuário (`memory_policy_overrides`) só RESTRINGEM: nunca ampliam
  *   categorias, sensibilidade, orçamento ou limite além do que está aqui.
  * • Quem chama informa apenas o `useCase`; categorias/permissões vêm daqui, nunca do chamador.
@@ -127,14 +127,15 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     produce: { categories: ALL, maxSensitivity: 'PRIVATE', maxSuggestionsPerRun: 10 }
   },
 
-  // ── Integrações externas CANDIDATAS — bloqueadas até aprovação (docs/memoria/integracoes.md) ──
+  // ── Integrações externas — APROVADAS pelo usuário em 2026-11-25 (docs/memoria/integracoes.md).
+  //    Pontos de chamada: server/memory/integrations.ts (canal dedicado por caso de uso). ──
   {
     useCase: 'assistant.trip_itinerary',
     label: 'Assistente: roteiro de viagem',
     module: 'ia',
     purpose: 'Personalizar roteiros com preferências de viagem.',
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ['viagens', 'preferencias', 'interesses'], types: ['PREFERENCE', 'CONSTRAINT', 'FACT', 'EXPERIENCE', 'LEARNING'], maxSensitivity: 'NORMAL', maxTokens: 400, maxItems: 12, instructions: false },
     produce: false
   },
@@ -144,7 +145,7 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     module: 'viagens',
     purpose: 'Casar o catálogo de recomendações com interesses de viagem (sem LLM).',
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ['viagens', 'interesses', 'preferencias'], types: ['PREFERENCE', 'FACT'], maxSensitivity: 'NORMAL', maxTokens: 300, maxItems: 15, instructions: false },
     produce: false
   },
@@ -154,7 +155,7 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     module: 'viagens',
     purpose: 'Ranquear hospedagens com preferências de hospedagem.',
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ['viagens', 'preferencias'], types: ['PREFERENCE', 'CONSTRAINT'], maxSensitivity: 'NORMAL', maxTokens: 250, maxItems: 8, instructions: false },
     produce: false
   },
@@ -164,7 +165,7 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     module: 'ia',
     purpose: 'Planejamento pessoal com preferências de rotina e objetivos.',
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ['rotina', 'produtividade', 'objetivos'], maxSensitivity: 'NORMAL', maxTokens: 400, maxItems: 12, instructions: true },
     produce: false
   },
@@ -174,7 +175,7 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     module: 'home',
     purpose: 'Reflexão semanal com objetivos; o texto escrito pelo usuário pode virar sugestão.',
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ['objetivos', 'produtividade', 'aprendizados'], maxSensitivity: 'NORMAL', maxTokens: 500, maxItems: 12, instructions: true },
     produce: { categories: ['objetivos', 'produtividade', 'aprendizados', 'rotina', 'valores'], maxSensitivity: 'PRIVATE', maxSuggestionsPerRun: 5 }
   },
@@ -184,7 +185,7 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     module: 'braindump',
     purpose: 'Sugerir memórias a partir de um brain dump, por ação explícita.',
     internal: false,
-    approved: false,
+    approved: true,
     consume: false,
     produce: { categories: ALL, maxSensitivity: 'PRIVATE', maxSuggestionsPerRun: 8 }
   },
@@ -194,7 +195,7 @@ export const MEMORY_POLICIES: readonly MemoryPolicy[] = deepFreeze([
     module: 'jarvis',
     purpose: 'Assistente pessoal geral (ainda não implementado).',
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ALL, maxSensitivity: 'NORMAL', maxTokens: 800, maxItems: 20, instructions: true },
     produce: false
   }

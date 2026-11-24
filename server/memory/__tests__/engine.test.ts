@@ -40,11 +40,18 @@ async function seedTravel(): Promise<void> {
   await repo.createMemory(OWNER, { content: 'Sou engenheiro de software.', categoryId: await cat('profissional'), type: 'FACT' })
 }
 
+describe('stem', () => {
+  it('singular e plural caem no mesmo radical', () => {
+    for (const [a, b] of [['viagem', 'Viagens'], ['hospedagem', 'hospedagens'], ['preferência', 'preferências'], ['café', 'cafés']])
+      assert.deepEqual(retrieval.tokens(a), retrieval.tokens(b), `${a} × ${b}`)
+  })
+})
+
 describe('MemoryContextService', () => {
   it('bloqueia casos de uso não autorizados sem ler nenhuma memória', async () => {
     await seedTravel()
     const before = retrieval.retrievalStats.candidateLoads
-    for (const uc of ['flights.search', 'projects.ai', 'chats.reply', 'assistant.trip_itinerary']) {
+    for (const uc of ['flights.search', 'projects.ai', 'chats.reply', 'braindump.extract']) {
       const c = await ctx.getMemoryContext({ useCase: uc, query: 'viagem para Seoul' })
       assert.equal(c.allowed, false, uc)
       assert.equal(c.text, '')
@@ -142,13 +149,13 @@ describe('MemoryContextService', () => {
     assert.equal(rows[1][2], null, 'consulta de consumer real fica só como hash')
   })
 
-  it('simulação de integração candidata funciona sem aprovação; chamada real continua bloqueada', async () => {
+  it('integração aprovada recebe só o domínio dela (roteiro: sem saúde, finanças ou profissão)', async () => {
     await seedTravel()
-    const sim = await ctx.getMemoryContext({ useCase: 'assistant.trip_itinerary', query: 'roteiro Seoul', simulate: true })
-    assert.equal(sim.allowed, true)
-    assert.ok(sim.items.length > 0)
-    const real = await ctx.getMemoryContext({ useCase: 'assistant.trip_itinerary', query: 'roteiro Seoul' })
-    assert.equal(real.allowed, false)
+    const c = await ctx.getMemoryContext({ useCase: 'assistant.trip_itinerary', query: 'roteiro Seoul hospedagem orçamento ansiedade voos engenheiro' })
+    assert.equal(c.allowed, true)
+    assert.ok(c.items.some((i) => /Seoul/.test(i.title)))
+    assert.doesNotMatch(c.text, /ansiedade|orçamento|engenheiro/)
+    assert.ok(c.tokens <= 400)
   })
 
   it('exclusão invalida o cache de recuperação', async () => {

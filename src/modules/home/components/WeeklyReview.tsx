@@ -101,6 +101,10 @@ export function WeeklyReview(): React.ReactElement {
   const [running, setRunning] = useState(false)
   const [stream, setStream] = useState('')
   const [error, setError] = useState('')
+  // Memória Pessoal (produtor aprovado `home.weekly_review`): só o que VOCÊ escrever aqui, por botão
+  const [learnOpen, setLearnOpen] = useState(false)
+  const [learned, setLearned] = useState('')
+  const [learnMsg, setLearnMsg] = useState('')
   const runId = useRef<string | null>(null)
 
   async function persist(output: string): Promise<void> {
@@ -170,7 +174,13 @@ export function WeeklyReview(): React.ReactElement {
     setRunning(true)
     setOpen(true)
     try {
-      const [prompt, model] = await Promise.all([buildPrompt(), window.api.settings.get('claude_model')])
+      const [base, model, mem] = await Promise.all([
+        buildPrompt(),
+        window.api.settings.get('claude_model'),
+        // consumer aprovado: objetivos/produtividade/aprendizados; opcional
+        window.api.memory.ctxWeeklyReview().then((r) => r.block, () => '')
+      ])
+      const prompt = mem ? `${base}\n\n${mem}` : base
       const rid = await window.api.ai.start({ prompt, model: model ?? '', save: false, source: 'revisao' })
       runId.current = rid
       await window.api.settings.set(PENDING_KEY, rid)
@@ -205,6 +215,38 @@ export function WeeklyReview(): React.ReactElement {
         </div>
       </div>
       {error && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{error}</div>}
+      <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setLearnOpen((o) => !o)}>
+        📝 {learnOpen ? 'Fechar' : 'O que aprendi nesta semana'}
+      </button>
+      {learnOpen && (
+        <div style={{ marginTop: 8 }}>
+          <textarea
+            rows={3}
+            value={learned}
+            onChange={(e) => setLearned(e.target.value)}
+            placeholder="Aprendizados, o que funcionou, o que quer mudar… A IA sugere memórias para você revisar no Inbox da Memória Pessoal."
+            style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
+          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={learned.trim().length < 20}
+              onClick={() =>
+                window.api.memory.produceWeeklyReview(learned).then(
+                  () => {
+                    setLearned('')
+                    setLearnMsg('Enviado — as sugestões aparecem no Inbox da Memória Pessoal em instantes.')
+                  },
+                  (e) => setLearnMsg(e instanceof Error ? e.message : String(e))
+                )
+              }
+            >
+              🧬 Sugerir memórias
+            </button>
+            {learnMsg && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{learnMsg}</span>}
+          </div>
+        </div>
+      )}
       {open && (running || content) && (
         <div className="md-preview-pane" style={{ marginTop: 10, minHeight: 0 }}>
           {content ? renderMarkdown(content) : <div className="empty-hint">Revisando sua semana…</div>}

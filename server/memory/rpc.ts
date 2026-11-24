@@ -12,6 +12,7 @@ import { MEMORY_POLICIES, OVERRIDES_KEY, loadOverrides, publicPolicies, type Pol
 import * as repo from './repo'
 import * as sug from './suggestions'
 import * as transfer from './transfer'
+import { registerMemoryIntegrations } from './integrations'
 
 /**
  * Canais `memory:*`. O dono é sempre resolvido aqui (`currentOwner()`), nunca vem do cliente.
@@ -183,6 +184,7 @@ async function traces(limit = 50): Promise<unknown[]> {
 }
 
 export function registerMemoryRpc(handle: Handle): void {
+  registerMemoryIntegrations(handle)
   // ── Categorias ──
   handle('memory:categories', (_e, includeArchived?: boolean) => repo.listCategories(owner(), includeArchived !== false))
   handle('memory:createCategory', async (_e, input: repo.CategoryInput) => {

@@ -1,10 +1,23 @@
-# Memória Pessoal — matriz de integração (Fase 3.8) · **AGUARDANDO APROVAÇÃO**
+# Memória Pessoal — matriz de integração (Fase 3.8) · **APROVADA em 2026-11-25 (itens 1–7)**
 
-Nada aqui está habilitado. Cada linha já existe em `server/memory/policy.ts` com `approved: false`
-(bloqueada em `resolveConsume`/`resolveProduce`, com teste). Aprovar uma linha = mudar para
-`approved: true` **e** trocar o ponto de chamada indicado para usar `getMemoryContext` /
-`submitEvidence`. Dá para ver o que cada uma receberia hoje, sem LLM, em
-**Memória Pessoal → Inspector → Simular** (modo candidato).
+Todas as 7 linhas foram aprovadas pelo usuário em 2026-11-25 e estão com `approved: true` em
+`server/memory/policy.ts`. Cada uma tem um canal dedicado em `server/memory/integrations.ts`
+que fixa o caso de uso no servidor (o front só manda a consulta). Memória vazia/indisponível →
+bloco vazio e a funcionalidade segue como antes. O Jarvis (#7) está aprovado, mas ainda não tem
+ponto de chamada (o módulo é placeholder).
+
+| # | Canal | Onde é usado |
+|---|---|---|
+| 1 | `memory:ctxTripItinerary` | Assistente → "Roteiro de viagem" (bloco anexado ao prompt, visível antes de executar) |
+| 2 | `memory:ctxTravelInterests` | Viagens → Destinos → Recomendações (sem LLM) |
+| 3 | `memory:ctxStays` | Hospedagens → análise por IA (o campo de texto virou "observações desta busca") |
+| 4 | `memory:ctxWeekPlan` | Assistente → "Planejar a semana" |
+| 5 | `memory:ctxWeeklyReview` · `memory:produceWeeklyReview` | Revisão semanal (consome) · campo "O que aprendi nesta semana" → Inbox (produz) |
+| 6 | `memory:produceBraindump` | Brain dump → botão "🧬 Sugerir memórias" → Inbox |
+| 7 | — | Jarvis (sem ponto de chamada ainda) |
+
+A Base de Conhecimento antiga (`settings.knowledge_base`) e o perfil padrão do código deixaram de
+ser lidos.
 
 Custos de recuperação: zero chamadas de LLM, zero embeddings, ~1–5 ms locais. O custo real é
 o de **tokens a mais no prompt** do consumer (coluna "Orçamento").
@@ -24,15 +37,7 @@ genéricos, agentes agendados, OCR do Inbox, todas as IAs de Passagens, Mensagen
 resumos), CRM, Projetos/Central de Projetos/changelog, GitHub, Delegação, "Onde parei", Estudos,
 Briefing matinal. Ver `inventario-ia.md`.
 
-## Como aprovar
+## Nova integração
 
-Responda com os números aprovados (ex.: "aprovo 1, 2 e 3"). Para cada um eu:
-1. mudo `approved: true` na política (e ajusto o teto se você pedir);
-2. troco a leitura de `settings.knowledge_base` / `travel_profile` por um canal **dedicado** no
-   servidor (ex.: `ai:tripItinerary`), que fixa o `useCase` no próprio handler e chama
-   `getMemoryContext({ useCase, query })` — o front nunca escolhe o caso de uso nem categorias.
-   Fallback para o comportamento atual se a memória estiver vazia/indisponível;
-3. adiciono teste de que o caso recebe só as categorias permitidas.
-
-Enquanto não houver aprovação, os dois consumidores antigos (#1 e #2) continuam lendo o
-Markdown, sem mudança.
+Funcionalidade nova de IA → perguntar ao usuário se quer integrar (regra no `CLAUDE.md`). Se sim:
+linha nova aqui com `approved: false`, aprovação explícita, canal dedicado em `integrations.ts`, teste.

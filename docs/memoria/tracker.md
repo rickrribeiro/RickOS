@@ -42,7 +42,7 @@ Status: ⬜ a fazer · 🟨 em andamento · ✅ concluído e validado · ⏸ blo
 | 3.3 | Segurança do contexto (delimitação, instruções separadas) | ✅ | testes de injeção |
 | 3.4 | Context Inspector + simulação | ✅ | UI |
 | 3.5 | Testes de não interferência | ✅ | `npm test` |
-| 3.6 | Matriz de integração para aprovação (`integracoes.md`) | ⏸ | matriz pronta; **aguarda aprovação do usuário** — todas as integrações externas seguem bloqueadas |
+| 3.6 | Matriz de integração para aprovação (`integracoes.md`) | ✅ | aprovada em 2026-11-25; 6 integrações ligadas por canais dedicados, Jarvis aprovado sem ponto de chamada |
 
 ## Fase 4 — Cognitive Memory
 
@@ -107,3 +107,4 @@ Status: ⬜ a fazer · 🟨 em andamento · ✅ concluído e validado · ⏸ blo
 * 2026-11-25 — Fase 5: página completa (9 abas), validada em 1366px/390px, skins classic/devlytics, claro/escuro.
 * 2026-11-25 — Fases 6–7: custos/limites, degradação, evals (recuperação no `npm test`; extração 7/7 com LLM real), docs. 3.6 aguardando aprovação.
 * 2026-11-25 — Página "Base (legado)" removida a pedido do usuário (Base antiga vazia; `settings.knowledge_base` e `knowledge/constants.ts` mantidos para os consumidores atuais até a aprovação das integrações 1 e 2).
+* 2026-11-25 — Integrações 1–7 aprovadas e ligadas (`server/memory/integrations.ts`); perfil padrão e `knowledge/constants.ts` removidos; stem corrigido (viagem/viagens, café/cafés).

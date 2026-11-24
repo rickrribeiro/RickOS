@@ -112,7 +112,7 @@ describe('Memory Agent — extração', () => {
   })
 
   it('produtor não autorizado não grava evento nem chama IA', async () => {
-    for (const uc of ['flights.search', 'projects.changelog', 'braindump.extract', 'memory.agent']) {
+    for (const uc of ['flights.search', 'projects.changelog', 'chats.reply', 'memory.agent']) {
       const r = await agent.submitEvidence(uc, 'Eu adoro viajar para o Japão todo ano em abril.')
       assert.equal(r.ok, false, uc)
     }
@@ -367,8 +367,62 @@ describe('Não interferência', () => {
     assert.equal(policy.MEMORY_POLICIES.some((p) => /flight|passag|project|projet|chat|mensag|github|delega|prompt/i.test(p.useCase + p.module)), false)
   })
 
-  it('consumidores antigos da Base de Conhecimento seguem lendo o Markdown (inalterados)', () => {
-    assert.match(read('src/modules/ai/pages/AIPage.tsx'), /settings\.get\('knowledge_base'\)/)
-    assert.match(read('src/modules/travel/components/Recommendations.tsx'), /settings\.get\('knowledge_base'\)/)
+  it('a Base antiga não é mais lida; integrações usam só os canais dedicados', () => {
+    const files = [...walk('src')]
+    assert.deepEqual(files.filter((f) => /knowledge_base/.test(read(f))), [])
+    // o front nunca escolhe caso de uso/categorias: só chama memory:ctx*/produce* (fixados no servidor)
+    for (const f of files.filter((x) => !x.includes(path.join('modules', 'memory'))))
+      assert.doesNotMatch(read(f), /memory\.(simulate|list|get|exportJson)\(/, f)
+    const integ = read('server/memory/integrations.ts')
+    for (const uc of ['assistant.trip_itinerary', 'travel.recommendations', 'stays.analysis', 'assistant.week_plan', 'home.weekly_review', 'braindump.extract'])
+      assert.match(integ, new RegExp(`'${uc.replace('.', '\\.')}'`), uc)
+  })
+})
+
+describe('Integrações aprovadas (canais dedicados)', () => {
+  const channels = new Map<string, (e: unknown, ...a: unknown[]) => unknown>()
+  before(async () => {
+    const { registerMemoryIntegrations } = await import('../integrations')
+    registerMemoryIntegrations((ch, fn) => channels.set(ch, fn))
+  })
+  const call = <T>(ch: string, ...args: unknown[]): Promise<T> => Promise.resolve(channels.get(ch)!(null, ...args)) as Promise<T>
+  type Block = import('../integrations').ConsumerBlock
+
+  it('cada canal fixa o caso de uso: recomendações não recebem finanças nem saúde', async () => {
+    const cats = await repo.listCategories(OWNER)
+    const id = (s: string): number => cats.find((c) => c.slug === s)!.id
+    await repo.createMemory(OWNER, { content: 'Gosto de café de especialidade.', categoryId: id('interesses'), type: 'PREFERENCE' })
+    await repo.createMemory(OWNER, { content: 'Gasto muito com café todo mês.', categoryId: id('financas') })
+    await repo.createMemory(OWNER, { content: 'Café me dá ansiedade.', categoryId: id('saude') })
+    const r = await call<Block>('memory:ctxTravelInterests', 'café anime ramen')
+    assert.equal(r.allowed, true)
+    assert.deepEqual(r.items.map((i) => i.title), ['Gosto de café de especialidade'])
+    assert.equal(calls.length, 0, 'consumo não chama LLM')
+  })
+
+  it('planejar semana recebe instruções pessoais em bloco separado', async () => {
+    const cats = await repo.listCategories(OWNER)
+    await repo.createMemory(OWNER, { content: 'Faço trabalho profundo melhor de manhã.', categoryId: cats.find((c) => c.slug === 'rotina')!.id, type: 'HABIT' })
+    await repo.createMemory(OWNER, { content: 'Responda de forma direta.', categoryId: cats.find((c) => c.slug === 'instrucoes-ia')!.id, type: 'INSTRUCTION' })
+    const r = await call<Block>('memory:ctxWeekPlan', 'relatório trabalho profundo academia')
+    assert.match(r.block, /<preferencias_do_usuario[\s\S]*direta[\s\S]*<\/preferencias_do_usuario>/)
+    assert.match(r.block, /<memoria_pessoal[\s\S]*manhã/)
+  })
+
+  it('sem memória relevante o bloco vem vazio (a funcionalidade segue como antes)', async () => {
+    const r = await call<Block>('memory:ctxStays', 'Osaka quarto privativo')
+    assert.equal(r.block, '')
+    assert.equal(r.items.length, 0)
+  })
+
+  it('produtores por botão geram sugestões no Inbox, nunca memórias diretas', async () => {
+    responder = () => json({ suggestions: [{ op: 'CREATE', content: 'Aprendi que reuniões de manhã me atrapalham.', category: 'aprendizados', type: 'LEARNING', explicit: true, evidence: 'reuniões de manhã me atrapalham' }] })
+    const jobId = await call<number>('memory:produceWeeklyReview', 'Nesta semana percebi que reuniões de manhã me atrapalham bastante.')
+    for (let i = 0; i < 50 && (await jobs.getJob(jobId))?.status !== 'done'; i++) await new Promise((r) => setTimeout(r, 10))
+    const [s] = await sug.listSuggestions(OWNER)
+    assert.equal(s.sourceKind, 'producer')
+    assert.match(s.sourceRef ?? '', /^revisao-semanal#/)
+    assert.equal((await repo.listMemories(OWNER)).total, 0)
+    await assert.rejects(call('memory:produceBraindump', 'curto'), /Escreva um pouco mais/)
   })
 })

@@ -148,12 +148,13 @@ describe('política de acesso', () => {
     }
   })
 
-  it('integrações externas ficam bloqueadas até aprovação', async () => {
+  it('integrações externas aprovadas têm escopo mínimo (nunca restrito, nunca tudo para consumo amplo sensível)', async () => {
     for (const p of policy.MEMORY_POLICIES.filter((x) => !x.internal)) {
-      assert.equal(p.approved, false, p.useCase)
-      const r = await policy.resolveConsume(p.useCase)
-      assert.equal(r.ok, false)
-      if (!r.ok) assert.match(r.reason, /aprovação/)
+      assert.equal(p.approved, true, p.useCase)
+      if (p.consume) assert.equal(p.consume.maxSensitivity, 'NORMAL', p.useCase)
+      if (p.produce) assert.notEqual(p.produce.maxSensitivity, 'RESTRICTED', p.useCase)
+      assert.ok((await policy.resolveConsume(p.useCase)).ok === !!p.consume, p.useCase)
+      assert.ok((await policy.resolveProduce(p.useCase)).ok === !!p.produce, p.useCase)
     }
   })
 
@@ -193,11 +194,11 @@ describe('política de acesso', () => {
   it('a lista de políticas é imutável em tempo de execução', () => {
     assert.throws(() => (policy.MEMORY_POLICIES as unknown as unknown[]).push({}))
     try {
-      ;(policy.MEMORY_POLICIES[7] as { approved: boolean }).approved = true
+      ;(policy.MEMORY_POLICIES[0] as { internal: boolean }).internal = false
     } catch {
       // modo estrito lança; fora dele a escrita é ignorada
     }
-    assert.equal(policy.MEMORY_POLICIES[7].approved, false)
+    assert.equal(policy.MEMORY_POLICIES[0].internal, true)
     assert.ok(Object.isFrozen(policy.getPolicy('memory.agent')!.consume))
   })
 })
