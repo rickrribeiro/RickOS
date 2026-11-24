@@ -73312,6 +73312,7 @@ async function startTurn(conversationId, message) {
     }
     const command = await deps.resolveCommand(conv);
     const model2 = await deps.resolveModel(conv);
+    const effort = await deps.resolveEffort(conv);
     const system = await deps.systemPrompt(conv);
     const args = [
       ...await deps.allowedToolsArgs(),
@@ -73326,7 +73327,7 @@ async function startTurn(conversationId, message) {
       "--permission-mode",
       conv.permissionMode,
       ...model2 ? ["--model", model2] : [],
-      ...conv.effort ? ["--effort", conv.effort] : [],
+      ...effort ? ["--effort", effort] : [],
       // ramificação: retoma a sessão de origem numa sessão nova
       ...conv.forkFrom && !conv.sessionId ? ["--resume", conv.forkFrom, "--fork-session"] : conv.sessionId ? ["--resume", conv.sessionId] : [],
       ...system.trim() ? ["--append-system-prompt", system] : []
@@ -79989,6 +79990,7 @@ const LAYER_TITLE = {
 const REJECTED = ["rejected", "irrelevant", "incorrect", "duplicate", "too_personal"];
 const OPEN = ["pending", "snoozed", "needs_info"];
 const clamp01 = (v) => {
+  if (v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : null;
 };
@@ -80055,13 +80057,13 @@ function proposeSync(db2, owner2, s2, rule) {
   if (exists) {
     if (s2.newEvidence && !OPEN.includes(exists.status) && exists.status !== "approved") {
       exec(db2, "UPDATE memory_suggestions SET status='pending', resolvedAt=NULL, updatedAt=? WHERE id=?", [nowIso(), exists.id]);
-      for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: exists.id }, { sourceKind: s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
+      for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: exists.id }, { sourceKind: ev.sourceKind ?? s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
       return { ok: true, id: Number(exists.id) };
     }
     return { ok: false, reason: "já sugerida" };
   }
-  const explicit = s2.explicit ?? false;
-  const reliability = s2.sourceKind === "manual" || s2.sourceKind === "import" ? "stated" : explicit ? "stated" : "inferred";
+  const explicit = s2.explicit ?? (s2.sourceKind === "import" && proposed?.type !== "INFERENCE");
+  const reliability = s2.sourceKind === "manual" || explicit ? "stated" : "inferred";
   if (proposed && reliability === "inferred" && proposed.type !== "LEARNING" && proposed.type !== "INFERENCE") proposed.type = "INFERENCE";
   if (proposed && reliability === "inferred") proposed.layer = defaultLayer(proposed.type);
   const now = nowIso();
@@ -80091,7 +80093,7 @@ function proposeSync(db2, owner2, s2, rule) {
     ]
   );
   const id = lastId(db2);
-  for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: id }, { sourceKind: s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
+  for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: id }, { sourceKind: ev.sourceKind ?? s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
   return { ok: true, id };
 }
 function snapshotOf(m) {
@@ -81357,17 +81359,30 @@ async function importJson(input, mode = "review") {
         r.created++;
       } else {
         if (!produce2.ok) throw new MemoryError(`Importação bloqueada: ${produce2.reason}`, "forbidden");
+        const sourceRef = m.sourceRef;
+        if (sourceRef !== void 0) {
+          if (typeof sourceRef !== "string" || !sourceRef.trim() || sourceRef.length > 200) {
+            bump(r, "referência de origem inválida");
+            continue;
+          }
+          if (one(db2, "SELECT id FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'import' AND sourceRef = ?", [owner2, sourceRef])) {
+            bump(r, "referência já importada");
+            continue;
+          }
+        }
+        const evidence = Array.isArray(m.evidence) ? m.evidence.filter((e) => typeof e?.excerpt === "string" && e.excerpt.trim()) : [];
         const out = proposeSync(
           db2,
           owner2,
           {
             op: "CREATE",
-            proposed: { title: m.title, content, category: cat?.slug ?? "", type, tags: m.tags, importance: m.importance, stability: m.stability, sensitivity: m.sensitivity, occurredAt: m.occurredAt, validUntil: m.validUntil },
-            explicit: m.reliability !== "inferred",
-            rationale: "Importado de arquivo JSON",
+            proposed: { title: m.title, content, category: cat?.slug ?? "", type, layer: m.layer, tags: m.tags, importance: m.importance, stability: m.stability, sensitivity: m.sensitivity, occurredAt: m.occurredAt, validUntil: m.validUntil, scope: m.scope },
+            explicit: m.reliability !== "inferred" && type !== "INFERENCE",
+            extractionConfidence: m.extractionConfidence,
+            rationale: m.reviewNote || "Importado de arquivo JSON",
             sourceKind: "import",
-            sourceRef: "json",
-            evidence: [{ excerpt: content }]
+            sourceRef: sourceRef ?? "json",
+            evidence: evidence.length ? evidence : [{ excerpt: content }]
           },
           produce2.rule
         );
@@ -81829,6 +81844,25 @@ function registerMemoryRpc(handle) {
   handle("memory:overview", () => overview());
   handle("memory:settings", () => readSettings$1());
   handle("memory:saveSettings", (_e, patch) => saveSettings(patch));
+}
+const CONV_EFFORTS = [
+  { v: "low", label: "Baixo" },
+  { v: "medium", label: "Médio" },
+  { v: "high", label: "Alto" },
+  { v: "xhigh", label: "Muito alto" },
+  { v: "max", label: "Máximo" }
+];
+const CONV_DEFAULT_MODEL_KEY = "prompt_runner_model";
+const CONV_DEFAULT_EFFORT_KEY = "prompt_runner_effort";
+const CONV_FALLBACK_MODEL = "opus";
+const CONV_FALLBACK_EFFORT = "medium";
+function convDefaultModel(saved) {
+  const v = (saved ?? "").trim();
+  return v || CONV_FALLBACK_MODEL;
+}
+function convDefaultEffort(saved) {
+  const v = (saved ?? "").trim();
+  return CONV_EFFORTS.some((e) => e.v === v) ? v : CONV_FALLBACK_EFFORT;
 }
 const IMAGE_MEDIA_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const MAX_IMAGES_PER_MESSAGE = 8;
@@ -83429,6 +83463,33 @@ async function openPath(target, app) {
   const args = app === "vscode" ? ["-a", "Visual Studio Code", target] : app === "terminal" ? ["-a", "Terminal", target] : [target];
   await run("open", args, os.homedir(), 1e4);
 }
+const CHECK_ITEM = /^(\s*[-*+]\s+\[(?: |x|X|~|-)\]\s+)(.*)$/;
+const ROADMAP_NUM = /^#(\d+)(?:\s+|$)/;
+function isQuote(line) {
+  return line.trimStart().startsWith(">");
+}
+function maxRoadmapNumber(content) {
+  let max = 0;
+  for (const line of content.split("\n")) {
+    if (isQuote(line)) continue;
+    const m = line.match(CHECK_ITEM);
+    const n = m?.[2].match(ROADMAP_NUM);
+    if (n) max = Math.max(max, Number(n[1]));
+  }
+  return max;
+}
+function numberRoadmap(content) {
+  let next = maxRoadmapNumber(content) + 1;
+  let added = 0;
+  const lines = content.split("\n").map((line) => {
+    if (isQuote(line)) return line;
+    const m = line.match(CHECK_ITEM);
+    if (!m || ROADMAP_NUM.test(m[2])) return line;
+    added++;
+    return `${m[1]}#${next++} ${m[2]}`;
+  });
+  return { content: lines.join("\n"), added };
+}
 const DAY = 864e5;
 const ROADMAP_FILE = "ROADMAP_RICKOS.md";
 function expandHome$2(p) {
@@ -83500,6 +83561,28 @@ async function setRoadmapItem(projectId, line, expected, mark) {
   fs.writeFileSync(file, content, "utf8");
   return { content };
 }
+async function numberRoadmapFile(projectId) {
+  const p = await getProject(projectId);
+  const file = p ? roadmapPath(p) : null;
+  if (!file || !fs.existsSync(file)) throw new Error("ROADMAP_RICKOS.md não encontrado");
+  const r = numberRoadmap(fs.readFileSync(file, "utf8"));
+  if (r.added) fs.writeFileSync(file, r.content, "utf8");
+  return r;
+}
+async function setRoadmapItems(projectId, items, mark) {
+  const p = await getProject(projectId);
+  const file = p ? roadmapPath(p) : null;
+  if (!file || !fs.existsSync(file)) throw new Error("ROADMAP_RICKOS.md não encontrado");
+  const lines = fs.readFileSync(file, "utf8").split("\n");
+  for (const it of items) {
+    const cur = lines[it.line];
+    if (cur == null || !cur.includes(it.expected)) throw new Error("O arquivo mudou — recarregue o roadmap");
+  }
+  for (const it of items) lines[it.line] = lines[it.line].replace(/\[( |x|X|~|-)\]/, `[${mark}]`);
+  const content = lines.join("\n");
+  fs.writeFileSync(file, content, "utf8");
+  return { content };
+}
 async function createRoadmapTemplate(projectId) {
   const p = await getProject(projectId);
   const file = p ? roadmapPath(p) : null;
@@ -83510,20 +83593,21 @@ async function createRoadmapTemplate(projectId) {
 > Padrão RickOS. \`##\` = área/épico · \`###\` = funcionalidade · \`- [ ]\` = tarefa.
 > Marcadores: \`[ ]\` a fazer · \`[~]\` em andamento · \`[x]\` feito · \`[-]\` descartado.
 > Opcional no fim do item: \`@v1.2\` (versão/ciclo) · \`!alta\` / \`!media\` / \`!baixa\` (prioridade).
+> Numeração: \`#N\` logo após o marcador é um ID estável. Item novo = maior número + 1; nunca renumere nem reaproveite.
 
 ## Agora (entrega atual)
 
 ### Funcionalidade principal
-- [ ] Primeira tarefa @v1 !alta
-- [ ] Segunda tarefa @v1
+- [ ] #1 Primeira tarefa @v1 !alta
+- [ ] #2 Segunda tarefa @v1
 
 ## Próximo
 
-- [ ] Melhoria planejada @v2
+- [ ] #3 Melhoria planejada @v2
 
 ## Futuro / ideias
 
-- [ ] Ideia para depois
+- [ ] #4 Ideia para depois
 `;
   fs.writeFileSync(file, content, "utf8");
   return { content };
@@ -84611,6 +84695,11 @@ ipcMain.handle("projects:linkTag", (_, tagId, projectId) => setTagProject(tagId,
 ipcMain.handle("projects:roadmap", (_, projectId) => readRoadmap(projectId));
 ipcMain.handle("projects:roadmapSet", (_, projectId, line, expected, mark) => setRoadmapItem(projectId, line, expected, mark));
 ipcMain.handle("projects:roadmapCreate", (_, projectId) => createRoadmapTemplate(projectId));
+ipcMain.handle(
+  "projects:roadmapSetMany",
+  (_, projectId, items, mark) => setRoadmapItems(projectId, items, mark)
+);
+ipcMain.handle("projects:roadmapNumber", (_, projectId) => numberRoadmapFile(projectId));
 ipcMain.handle("projects:radarCheck", () => checkProjectRadar(true));
 ipcMain.handle("cycles:getAll", (_, projectId) => getProjectCycles(projectId ?? null));
 ipcMain.handle("cycles:create", (_, projectId, name, goal, startDate, dueDate) => createProjectCycle(projectId, name, goal, startDate, dueDate));
@@ -85057,7 +85146,9 @@ ipcMain.handle("ai:runStream", async (_, prompt, projectId, model2, runId, sourc
 });
 registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   resolveCommand: async (c) => c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? void 0),
-  resolveModel: (c) => resolveModel(c.model),
+  // conversa sem modelo/esforço (antigas ou importadas do terminal) → padrão do Prompt Runner
+  resolveModel: async (c) => c.model.trim() || convDefaultModel(await getSetting(CONV_DEFAULT_MODEL_KEY)),
+  resolveEffort: async (c) => c.effort || convDefaultEffort(await getSetting(CONV_DEFAULT_EFFORT_KEY)),
   resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
   projectWorkspaceRepos: (projectId) => workspaceRepoDirs(projectId),
   allowedToolsArgs: () => resolveAllowedToolsArgs(),
