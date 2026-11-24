@@ -15,7 +15,7 @@ npm run build:web && npm start           # produção web (dist/ + dist-server/)
 npm run screenshots                      # prints desktop×celular×skins em docs/screenshots/ (exige dev:web rodando)
 ```
 
-* Testes automatizados no monitoramento de passagens, na Central de Mensagens e no parser de transcripts do Prompt Runner: `npm test` (`node:test` via tsx, em `server/flights/__tests__/`, `server/chats/__tests__/` e `server/aiconv/__tests__/`). No resto, a verificação é typecheck + uso real.
+* Testes automatizados no monitoramento de passagens, na Central de Mensagens, no parser de transcripts do Prompt Runner e na Memória Pessoal: `npm test` (`node:test` via tsx, em `server/flights/__tests__/`, `server/chats/__tests__/`, `server/aiconv/__tests__/` e `server/memory/__tests__/`). Extração da memória com LLM real: `npm run memory:evals` (sob demanda). No resto, a verificação é typecheck + uso real.
 * **Nunca** use `tsc -b` nem `tsc` sem `--noEmit`: ele gera `.js` ao lado dos fontes.
 * Mudou `server/` ou `electron/`? Reinicie o `npm run dev`. O `dev:web` recarrega o servidor sozinho.
 
@@ -42,6 +42,7 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `server/flights/` | monitoramento de passagens: geo, planejador, restrições/ranking, executor de jobs, provedores, IA (ver `docs/passagens.md`) |
 | `server/chats/` | Central de Mensagens: contrato `ChatProvider`, Beeper/demonstração, sincronização, classificação, IA, agente local (ver `docs/mensagens.md`) |
 | `server/aiconv/` | Prompt Runner: conversas com o Claude CLI (`--resume`, ramificação com `--fork-session`), permissões/perguntas via `--permission-prompt-tool stdio`, fila, imagens, worktree por conversa e mudanças/commit/PR (`git.ts`), importação de sessões do terminal (`~/.claude*/projects`), skills/comandos do Claude Code do usuário e dos projetos (`claudeSkills.ts`) |
+| `server/memory/` | **Memória Pessoal**: memórias atômicas, Inbox de sugestões, Memory Agent, `getMemoryContext` (única saída de memória para IA) e política deny-by-default em `policy.ts` (ver `docs/memoria/README.md`) |
 | `shared/` | tipos/helpers puros compartilhados entre servidor e front (incluído nos dois tsconfigs) |
 | `server/events.ts` | `broadcast(canal, payload)` → SSE |
 | `server/config.ts` | variáveis `RICKOS_*` (data dir, porta, host, token, URL pública) |
@@ -74,6 +75,7 @@ Molde simples para copiar: `todos` / `habits`.
 * Efeitos colaterais (CLI, rede, arquivos) ficam em `server/`, que não importa nada de Electron.
 * Servidor → clientes: `broadcast()` no servidor + `subscribe()` de `src/api/transport.ts`. Os canais estão listados em `server/events.ts`.
 * sql.js **não aceita parâmetros em `db.exec`**: use `getAll`/`getOne`/`run` (prepare/step).
+* **Nova IA não consome nem produz Memória Pessoal por padrão.** Nunca injete memória em `runClaude`, `ai:*` ou `buildProjectContext`. Integração = política em `server/memory/policy.ts` + aprovação do usuário + handler dedicado no servidor chamando `getMemoryContext` (ver `docs/memoria/README.md`).
 * Credenciais: chaves em `SENSITIVE_KEYS` (`server/services/secrets.ts`) são criptografadas com AES-GCM ao salvar. Nunca logue nem commite segredos.
 
 ## UI
@@ -98,4 +100,5 @@ Molde simples para copiar: `todos` / `habits`.
 * `docs/ia.md`: catálogo detalhado de features para brainstorm. Pode estar desatualizado; o código manda.
 * `docs/passagens.md`: arquitetura, fontes e configuração do monitoramento de passagens.
 * `docs/mensagens.md`: Central de Mensagens (Beeper, agente local, dados, classificação, IA, novo provedor).
+* `docs/memoria/`: Memória Pessoal (guia, arquitetura, inventário de IA, matriz de integração, tracker).
 * `docs/ROADMAP_RICKOS.md`: formato do arquivo de roadmap que a Central de Projetos lê de cada repositório.

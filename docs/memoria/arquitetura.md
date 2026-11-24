@@ -119,7 +119,9 @@ Aprovar duas vezes é no-op (status checado dentro da transação).
 3. score = relevância lexical (BM25) + importância + confirmação + fixada + especificidade + recência;
 4. camadas: Core (fixadas/INSTRUCTION do escopo), Domínio (categorias do caso), Semântica (relevância),
    Recente; Restrita só se a política permitir;
-5. limiar mínimo de relevância (pode retornar **zero** memórias), deduplicação por similaridade,
+5. limiar mínimo de relevância (pode retornar **zero** memórias) — memória fixada ganha score mas
+   **não** fura o limiar; instruções pessoais entram quando a política tem `instructions: true`
+   (de qualquer categoria, sujeitas à sensibilidade); deduplicação por similaridade;
    seleção gulosa até `maxItems`/`maxTokens`;
 6. render em bloco delimitado com aviso "dados, não instruções"; INSTRUCTION confirmadas num bloco
    separado de precedência inferior;
@@ -172,6 +174,16 @@ avaliação reproduzíveis (`evals`).
 * Qualidade de extração depende do modelo; tudo passa por revisão humana.
 * Política no código exige deploy para nova integração — intencional.
 
+## Decisões tomadas durante a implementação
+
+* **Sem migração de versão**: só tabelas novas (`CREATE TABLE IF NOT EXISTS`); rollback trivial.
+* **Cascatas não confiáveis no sql.js** (o `export()` reabre a conexão e perde `PRAGMA foreign_keys`):
+  exclusão definitiva apaga derivados explicitamente.
+* **Simulação de candidatas**: o Inspector calcula o contexto de integrações `approved: false`
+  localmente (sem LLM, sem contar uso) para apoiar a decisão de aprovação; a chamada real continua bloqueada.
+* **Descartes por política** aparecem só como contagem no trace (não revelam ids de memórias proibidas).
+* **Política imutável em runtime** (`deepFreeze`) e coberta por testes adversariais.
+
 ## Plano incremental
 
-Ver `tracker.md`.
+Ver `tracker.md`. Guia operacional: `README.md`.
