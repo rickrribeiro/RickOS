@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { Project } from '../../../types'
+import { unnumberedRoadmapItems } from '../../../../shared/roadmap'
 import { MARK_ICON, MARK_LABEL, RoadmapMark, RoadmapNode, flattenRoadmap, nextMark, parseRoadmap, roadmapStats } from '../lib/roadmap'
 
 type Mode = 'arvore' | 'tabela'
@@ -28,6 +29,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
   const tree = useMemo(() => (data?.exists ? parseRoadmap(data.content) : []), [data])
   const stats = useMemo(() => roadmapStats(tree), [tree])
   const rows = useMemo(() => flattenRoadmap(tree), [tree])
+  const unnumbered = useMemo(() => (data?.exists ? unnumberedRoadmapItems(data.content) : 0), [data])
   const versions = useMemo(() => [...new Set(rows.map((r) => r.node.version).filter(Boolean))] as string[], [rows])
 
   async function cycle(n: RoadmapNode, to?: RoadmapMark): Promise<void> {
@@ -35,6 +37,16 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
     const mark = to ?? nextMark(n.mark)
     try {
       const r = await window.api.projects.roadmapSet(project.id, n.line, n.raw.trim(), mark)
+      setData((d) => (d ? { ...d, content: r.content } : d))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      void load()
+    }
+  }
+
+  async function numberItems(): Promise<void> {
+    try {
+      const r = await window.api.projects.roadmapNumber(project.id)
       setData((d) => (d ? { ...d, content: r.content } : d))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -115,6 +127,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
           ) : (
             <span className="ph-rm-mark">•</span>
           )}
+          {n.num != null && <span className="ph-rm-num">#{n.num}</span>}
           <span className="ph-rm-text">{n.text}</span>
           {n.version && <span className="ph-tag">@{n.version}</span>}
           {n.priority && <span className={`ph-tag prio-${n.priority}`}>!{n.priority}</span>}
@@ -147,6 +160,11 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
         <span className="ph-muted">
           {stats.done}/{stats.total} feitos · {stats.doing} em andamento · {pct}%
         </span>
+        {unnumbered > 0 && (
+          <button className="btn btn-secondary btn-sm" onClick={numberItems} title="Grava #N (maior número + 1) nos itens sem número, sem mexer nos já numerados">
+            # Numerar {unnumbered}
+          </button>
+        )}
         <button className="btn btn-secondary btn-sm" onClick={load} title={data.path ?? ''}>↻</button>
       </div>
       <div className="ph-progress big"><div style={{ width: `${pct}%` }} /></div>
@@ -160,6 +178,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
             <thead>
               <tr>
                 <th>Status</th>
+                <th>#</th>
                 <th>Item</th>
                 <th>Área</th>
                 <th>Funcionalidade</th>
@@ -177,6 +196,7 @@ export function RoadmapView({ project }: { project: Project }): React.ReactEleme
                       ))}
                     </select>
                   </td>
+                  <td className="ph-rm-num">{r.node.num != null ? `#${r.node.num}` : ''}</td>
                   <td>{r.parent ? <span className="ph-muted">{r.parent} › </span> : null}{r.node.text}</td>
                   <td>{r.area}</td>
                   <td>{r.feature}</td>

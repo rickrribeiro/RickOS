@@ -15,8 +15,8 @@ Sem o arquivo, a aba oferece **"Criar a partir do modelo"**.
 ## Área / épico                       ← nível 1 da árvore (coluna "Área" na tabela)
 
 ### Funcionalidade                    ← nível 2 (coluna "Funcionalidade")
-- [ ] Tarefa @v1.2 !alta              ← item com status, versão e prioridade
-  - [x] Subtarefa                     ← itens aninhados por indentação (2 espaços)
+- [ ] #1 Tarefa @v1.2 !alta           ← item com número, status, versão e prioridade
+  - [x] #2 Subtarefa                  ← itens aninhados por indentação (2 espaços)
 - Nota sem checkbox                   ← aparece na árvore, não conta no progresso
 ```
 
@@ -31,6 +31,18 @@ Sem o arquivo, a aba oferece **"Criar a partir do modelo"**.
 
 Clicar no marcador na árvore avança `[ ] → [~] → [x] → [ ]`; na tabela há um seletor.
 
+## Numeração
+
+Todo item com checkbox leva `#N` logo após o marcador (`- [ ] #12 Tarefa`), para citar o
+item numa conversa ("faz o #12"). O número é um **ID estável**, não a posição:
+
+* item novo = **maior número do arquivo + 1**, em qualquer lugar do arquivo;
+* nunca renumere nem reaproveite números (nem de itens apagados ou descartados);
+* notas sem checkbox não são numeradas.
+
+O número aparece na árvore e na coluna `#` da tabela. Se houver itens sem número, a aba
+mostra o botão **"# Numerar N"**, que grava os números que faltam sem mexer nos existentes.
+
 ## Metadados opcionais (no fim do item)
 
 * `@v1.2` — versão/ciclo da entrega (filtro "versão" no topo).
@@ -44,13 +56,13 @@ Clicar no marcador na árvore avança `[ ] → [~] → [x] → [ ]`; na tabela h
 ## Projetos
 
 ### Central de projetos
-- [x] Situação × estágio @v2 !alta
-- [~] Página do projeto @v2 !alta
-  - [x] Próxima ação e onde parei
-  - [ ] Roadmap em árvore
-- [ ] Revisão semanal com IA @v2.1
+- [x] #1 Situação × estágio @v2 !alta
+- [~] #2 Página do projeto @v2 !alta
+  - [x] #3 Próxima ação e onde parei
+  - [ ] #4 Roadmap em árvore
+- [ ] #5 Revisão semanal com IA @v2.1
 
 ## Finanças
-- [ ] Importar OFX @v3
-- [-] Integração com banco X
+- [ ] #6 Importar OFX @v3
+- [-] #7 Integração com banco X
 ```

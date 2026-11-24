@@ -2,8 +2,10 @@
  * Parser do padrão ROADMAP_RICKOS.md (ver docs/ROADMAP_RICKOS.md):
  *   ## Área / épico      ### Funcionalidade      - [ ] tarefa @v1.2 !alta
  * Marcadores: [ ] a fazer · [~] em andamento · [x] feito · [-] descartado.
- * Itens podem ser aninhados por indentação.
+ * Itens podem ser aninhados por indentação. `#12` no início do item = número estável (shared/roadmap.ts).
  */
+
+import { ROADMAP_NUM } from '../../../../shared/roadmap'
 
 export type RoadmapMark = ' ' | 'x' | '~' | '-'
 
@@ -17,6 +19,7 @@ export interface RoadmapNode {
   raw: string // texto original da linha (para conferir antes de gravar)
   version: string | null
   priority: string | null
+  num: number | null // `#12` — ID incremental para citar o item (ex.: para a IA)
   children: RoadmapNode[]
 }
 
@@ -30,7 +33,13 @@ export interface RoadmapStats {
 const HEADING = /^(#{1,6})\s+(.*)$/
 const ITEM = /^(\s*)[-*+]\s+(?:\[( |x|X|~|-)\]\s+)?(.*)$/
 
-function meta(text: string): { text: string; version: string | null; priority: string | null } {
+function meta(text: string): { text: string; version: string | null; priority: string | null; num: number | null } {
+  let num: number | null = null
+  const n = text.match(ROADMAP_NUM)
+  if (n) {
+    num = Number(n[1])
+    text = text.slice(n[0].length)
+  }
   let version: string | null = null
   let priority: string | null = null
   const clean = text
@@ -44,7 +53,7 @@ function meta(text: string): { text: string; version: string | null; priority: s
     })
     .replace(/\s{2,}/g, ' ')
     .trim()
-  return { text: clean, version, priority }
+  return { text: clean, version, priority, num }
 }
 
 export function parseRoadmap(content: string): RoadmapNode[] {
@@ -60,7 +69,7 @@ export function parseRoadmap(content: string): RoadmapNode[] {
     if (h) {
       const level = h[1].length
       if (level === 1) return // título do documento
-      const node: RoadmapNode = { id: `h${line}`, kind: 'heading', level, text: h[2].trim(), mark: null, line, raw, version: null, priority: null, children: [] }
+      const node: RoadmapNode = { id: `h${line}`, kind: 'heading', level, text: h[2].trim(), mark: null, line, raw, version: null, priority: null, num: null, children: [] }
       while (headingStack.length && headingStack[headingStack.length - 1].level >= level) headingStack.pop()
       container().push(node)
       headingStack.push(node)
@@ -73,7 +82,7 @@ export function parseRoadmap(content: string): RoadmapNode[] {
     const indent = it[1].replace(/\t/g, '  ').length
     const mark = it[2] ? ((it[2] === 'X' ? 'x' : it[2]) as RoadmapMark) : null
     const m = meta(it[3])
-    const node: RoadmapNode = { id: `i${line}`, kind: 'item', level: 0, text: m.text, mark, line, raw, version: m.version, priority: m.priority, children: [] }
+    const node: RoadmapNode = { id: `i${line}`, kind: 'item', level: 0, text: m.text, mark, line, raw, version: m.version, priority: m.priority, num: mark ? m.num : null, children: [] }
     while (itemStack.length && itemStack[itemStack.length - 1].indent >= indent) itemStack.pop()
     if (itemStack.length) {
       node.level = itemStack.length

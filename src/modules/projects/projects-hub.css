@@ -243,6 +243,7 @@
 .mark-done .ph-rm-text { color: var(--text-muted); text-decoration: line-through; }
 .mark-drop .ph-rm-text { color: var(--text-muted); text-decoration: line-through; opacity: 0.6; }
 .ph-rm-text { flex: 1; min-width: 0; }
+.ph-rm-num { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .ph-table-wrap { overflow-x: auto; }
 .ph-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .ph-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }

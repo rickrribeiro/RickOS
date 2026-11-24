@@ -940,6 +940,7 @@ declare global {
         roadmap: (projectId: number) => Promise<{ path: string | null; exists: boolean; content: string }>
         roadmapSet: (projectId: number, line: number, expected: string, mark: ' ' | 'x' | '~' | '-') => Promise<{ content: string }>
         roadmapCreate: (projectId: number) => Promise<{ content: string }>
+        roadmapNumber: (projectId: number) => Promise<{ content: string; added: number }>
         radarCheck: () => Promise<number>
         onChanged: (cb: () => void) => () => void
       }

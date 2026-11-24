@@ -24,6 +24,7 @@ import { upsertRecurringBlock, deleteRecurringBlock } from './google'
 import { gitQuiet } from './gitscan'
 import { notify } from './notifications'
 import { repoTargets, repoTargetsFrom, localTargets, isWorkspace, RepoTarget } from './projectRepos'
+import { numberRoadmap } from '../../shared/roadmap'
 
 /**
  * Central de Projetos — visão consolidada de cada projeto: horas (timer), TODOs,
@@ -169,6 +170,16 @@ export async function setRoadmapItem(projectId: number, line: number, expected: 
   return { content }
 }
 
+/** Grava `#N` nos itens sem número (maior número do arquivo + 1), sem renumerar os existentes. */
+export async function numberRoadmapFile(projectId: number): Promise<{ content: string; added: number }> {
+  const p = await getProject(projectId)
+  const file = p ? roadmapPath(p) : null
+  if (!file || !fs.existsSync(file)) throw new Error('ROADMAP_RICKOS.md não encontrado')
+  const r = numberRoadmap(fs.readFileSync(file, 'utf8'))
+  if (r.added) fs.writeFileSync(file, r.content, 'utf8')
+  return r
+}
+
 export async function createRoadmapTemplate(projectId: number): Promise<{ content: string }> {
   const p = await getProject(projectId)
   const file = p ? roadmapPath(p) : null
@@ -179,20 +190,21 @@ export async function createRoadmapTemplate(projectId: number): Promise<{ conten
 > Padrão RickOS. \`##\` = área/épico · \`###\` = funcionalidade · \`- [ ]\` = tarefa.
 > Marcadores: \`[ ]\` a fazer · \`[~]\` em andamento · \`[x]\` feito · \`[-]\` descartado.
 > Opcional no fim do item: \`@v1.2\` (versão/ciclo) · \`!alta\` / \`!media\` / \`!baixa\` (prioridade).
+> Numeração: \`#N\` logo após o marcador é um ID estável. Item novo = maior número + 1; nunca renumere nem reaproveite.
 
 ## Agora (entrega atual)
 
 ### Funcionalidade principal
-- [ ] Primeira tarefa @v1 !alta
-- [ ] Segunda tarefa @v1
+- [ ] #1 Primeira tarefa @v1 !alta
+- [ ] #2 Segunda tarefa @v1
 
 ## Próximo
 
-- [ ] Melhoria planejada @v2
+- [ ] #3 Melhoria planejada @v2
 
 ## Futuro / ideias
 
-- [ ] Ideia para depois
+- [ ] #4 Ideia para depois
 `
   fs.writeFileSync(file, content, 'utf8')
   return { content }
