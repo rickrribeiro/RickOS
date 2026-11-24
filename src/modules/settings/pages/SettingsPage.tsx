@@ -19,6 +19,7 @@ import {
   convDefaultModel
 } from '../../../../shared/aiConversations'
 import { AiUsageModal } from '../components/AiUsageModal'
+import { finishPluggySync } from '../../finance/pluggySync'
 
 const FX_CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -188,8 +189,9 @@ export function SettingsPage(): React.ReactElement {
     setPMsg(null)
     try {
       const r = await window.api.pluggy.sync()
+      const text = await finishPluggySync(r, 'Banco conectado! ')
       await refreshFinance()
-      setPMsg({ text: `Banco conectado! ${r.imported} importadas, ${r.skipped} já existiam.`, ok: true })
+      setPMsg({ text, ok: true })
     } catch (e) {
       setPMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
     } finally {
@@ -203,9 +205,10 @@ export function SettingsPage(): React.ReactElement {
     setPMsg(null)
     try {
       const r = await window.api.pluggy.sync()
+      const text = await finishPluggySync(r)
       await refreshFinance()
       await refresh()
-      setPMsg({ text: `${r.imported} importadas, ${r.skipped} já existiam.`, ok: true })
+      setPMsg({ text, ok: true })
     } catch (e) {
       setPMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
     } finally {

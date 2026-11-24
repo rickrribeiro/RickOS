@@ -5,6 +5,7 @@ import { MonthNav } from '../components/MonthNav'
 import { TransactionEditor } from '../components/TransactionEditor'
 import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel } from '../util'
 import { localDateStr } from '../../../utils/dates'
+import { finishPluggySync } from '../pluggySync'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -50,8 +51,9 @@ export function TransactionsPage(): React.ReactElement {
     setPluggyMsg(null)
     try {
       const r = await window.api.pluggy.sync(month)
+      const text = await finishPluggySync(r, `${monthLabel(month)}: `)
       await refresh()
-      setPluggyMsg({ text: `${monthLabel(month)}: ${r.imported} importadas, ${r.skipped} já existiam.`, ok: true })
+      setPluggyMsg({ text, ok: true })
     } catch (e) {
       setPluggyMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
     } finally {
@@ -186,6 +188,11 @@ export function TransactionsPage(): React.ReactElement {
             <span className="due-badge due-future">{t.date.slice(5)}</span>
             <span className="list-row-title">{t.description || categoryName(t.categoryId)}</span>
             <span className="project-chip">{categoryName(t.categoryId)}</span>
+            {t.pending ? (
+              <span className="project-chip" style={{ color: 'var(--warning)' }} title="Pendente no banco: valor e descrição ainda podem mudar">
+                pendente
+              </span>
+            ) : null}
             <span style={{ fontWeight: 600, color: t.type === 'income' ? 'var(--success)' : 'var(--danger)', minWidth: 90, textAlign: 'right' }}>
               {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, t.currency)}
             </span>

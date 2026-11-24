@@ -435,6 +435,16 @@ export interface Transaction {
   description: string | null
   date: string // YYYY-MM-DD
   ignoredReason?: string | null // não nulo = fora de todos os cálculos e gráficos
+  externalId?: string | null // id no Pluggy (importada do Open Finance)
+  pending?: number // 1 = pendente no banco; valor/descrição ainda podem mudar
+}
+
+export interface PluggySyncResult {
+  imported: number
+  updated: number
+  skipped: number
+  /** pendentes que estavam no app mas o banco não devolve mais (canceladas/substituídas) */
+  vanishedPending: { id: number; date: string; description: string | null; amount: number; currency: string }[]
 }
 
 export interface Budget {
@@ -1058,7 +1068,7 @@ declare global {
         close: (id: number, month: string) => Promise<void>
       }
       pluggy: {
-        sync: (month?: string) => Promise<{ imported: number; skipped: number }>
+        sync: (month?: string) => Promise<PluggySyncResult>
         status: () => Promise<boolean>
         connectToken: () => Promise<string>
       }

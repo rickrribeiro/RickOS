@@ -385,6 +385,16 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE transactions ADD COLUMN ignoredReason TEXT;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 28,
+    label: 'Transações: id externo (Pluggy), assinatura do banco e status pendente',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN externalId TEXT;') } catch { /* exists */ }
+      try { db.run('ALTER TABLE transactions ADD COLUMN externalSig TEXT;') } catch { /* exists */ }
+      try { db.run('ALTER TABLE transactions ADD COLUMN pending INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+      try { db.run('CREATE INDEX IF NOT EXISTS idx_transactions_external ON transactions(externalId);') } catch { /* tabela ausente */ }
+    }
   }
 ]
 

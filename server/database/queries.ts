@@ -1190,6 +1190,9 @@ export interface DbTransaction {
   description: string | null
   date: string
   ignoredReason?: string | null // não nulo = fora de todos os cálculos
+  externalId?: string | null // id da transação no Pluggy
+  externalSig?: string | null // como o banco mandou na última importação (detecta mudança do banco)
+  pending?: number // 1 = pendente no banco
 }
 export interface DbBudget {
   id: number
@@ -1292,6 +1295,28 @@ export async function updateTransaction(
     [accountId, categoryId, amount, currency, type, description, date, id]
   )
 }
+/**
+ * Atualiza uma transação importada com o que o banco mandou agora. `fields` traz só o que
+ * mudou no banco; categoria e marcação de ignorada (escolhas do usuário) não são tocadas.
+ */
+export async function applyExternalTransactionUpdate(
+  id: number,
+  fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type'>>,
+  externalId: string,
+  externalSig: string,
+  pending: number
+): Promise<void> {
+  const db = await getDb()
+  const sets = ['externalId = ?', 'externalSig = ?', 'pending = ?']
+  const vals: (string | number | null)[] = [externalId, externalSig, pending]
+  for (const k of ['amount', 'description', 'date', 'type'] as const) {
+    if (k in fields) {
+      sets.push(`${k} = ?`)
+      vals.push(fields[k] ?? null)
+    }
+  }
+  run(db, `UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, [...vals, id])
+}
 /** Marca (motivo) ou desmarca (null) a transação como ignorada nos cálculos. */
 export async function setTransactionIgnored(id: number, reason: string | null): Promise<void> {
   const db = await getDb()
@@ -1306,8 +1331,8 @@ export async function bulkInsertTransactions(rows: Omit<DbTransaction, 'id'>[]):
   for (const r of rows) {
     run(
       db,
-      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null]
+      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0]
     )
   }
   return rows.length

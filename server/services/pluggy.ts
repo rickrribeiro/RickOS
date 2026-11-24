@@ -2,6 +2,7 @@ import {
   getSetting,
   getTransactions,
   bulkInsertTransactions,
+  applyExternalTransactionUpdate,
   DbTransaction
 } from '../database/queries'
 import { decodeSecret } from './secrets'
@@ -22,7 +23,9 @@ interface PluggyTransaction {
   currencyCode?: string
   date: string
   type?: string // DEBIT | CREDIT
+  status?: string // PENDING | POSTED
   category?: string | null
+  operationType?: string | null // ex.: PAGAMENTO_FATURA
 }
 
 /**
@@ -32,6 +35,7 @@ interface PluggyTransaction {
  * ignorados (fora dos cálculos); o usuário pode marcá-los como válidos na tela.
  */
 function isCardBillPayment(t: PluggyTransaction, acc: PluggyAccount): boolean {
+  if (t.operationType === 'PAGAMENTO_FATURA') return true
   if ((t.category ?? '').toLowerCase() === 'credit card payment') return true
   const d = (t.description ?? '').toLowerCase()
   if (/\b(pagamento|pagto|pgto|pag)\.? (de |da )?fatura\b/.test(d)) return true
@@ -164,15 +168,41 @@ async function fetchAllTransactions(accountId: string, key: string): Promise<Plu
   return out
 }
 
+/** Transação pendente que estava no banco do app mas o Pluggy não devolve mais (cancelada ou substituída). */
+export interface VanishedPending {
+  id: number
+  date: string
+  description: string | null
+  amount: number
+  currency: string
+}
+
+export interface PluggySyncResult {
+  imported: number
+  updated: number
+  skipped: number
+  vanishedPending: VanishedPending[]
+}
+
+type Incoming = Omit<DbTransaction, 'id'> & { externalId: string; externalSig: string; pending: number }
+
+const legacyKey = (t: { date: string; amount: number; description?: string | null }): string =>
+  `${t.date}|${t.amount}|${t.description ?? ''}`
+
 /**
  * Open Finance (Brasil) via the Pluggy aggregator.
  * Requires the user's Pluggy clientId/clientSecret and an itemId (a bank connected
- * through Pluggy Connect). Pulls transactions for all accounts of the item and
- * imports the new ones (deduped against existing by date+amount+description).
- * `month` (YYYY-MM) restringe a importação às transações daquele mês.
- * Returns { imported, skipped }.
+ * through Pluggy Connect). Pulls transactions for all accounts of the item and syncs them
+ * by the Pluggy transaction id:
+ *  - nova → insere (só as do `month`, se informado);
+ *  - já importada e o banco mudou valor/descrição/data/tipo/status → atualiza esses campos,
+ *    mantendo categoria e "ignorada". Edição manual do usuário não é sobrescrita: só aplica o
+ *    que mudou em relação ao que o banco mandou da última vez (`externalSig`);
+ *  - importada antes do id existir (casada por data+valor+descrição) → só vincula o id.
+ * Pendentes que sumiram do Pluggy voltam em `vanishedPending` para o usuário decidir; nada
+ * é apagado aqui.
  */
-export async function syncPluggy(month?: string): Promise<{ imported: number; skipped: number }> {
+export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
   if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`)
   const itemId = (await getSetting('pluggy_item_id')) ?? ''
   if (!itemId) throw new Error('Configure o Item ID do Pluggy (banco conectado) em Configurações.')
@@ -184,13 +214,16 @@ export async function syncPluggy(month?: string): Promise<{ imported: number; sk
   }
 
   const fx = await loadFx()
-  const incoming: Omit<DbTransaction, 'id'>[] = []
+  const incoming: Incoming[] = []
+  const seenIds = new Set<string>() // tudo que o Pluggy devolveu, sem filtro de mês
   for (const acc of accounts) {
     const txs = await fetchAllTransactions(acc.id, key)
     for (const t of txs) {
-      if (month && !t.date.startsWith(month)) continue
-      const isExpense = t.type === 'DEBIT' || t.amount < 0
-      incoming.push({
+      seenIds.add(t.id)
+      // Cartão (docs Pluggy): compra = valor positivo, pagamento/estorno = negativo; o `type`
+      // não é confiável ali (compra parcelada pode vir CREDIT). Conta corrente: DEBIT/negativo = saída.
+      const isExpense = acc.type === 'CREDIT' ? t.amount > 0 : t.type === 'DEBIT' || t.amount < 0
+      const row = {
         accountId: null,
         categoryId: OUTROS_CATEGORY_ID,
         amount: Math.round(toBrl(t, acc, fx) * 100) / 100, // padroniza tudo em BRL
@@ -198,18 +231,70 @@ export async function syncPluggy(month?: string): Promise<{ imported: number; sk
         type: isExpense ? 'expense' : 'income',
         description: t.description ?? null,
         date: t.date.slice(0, 10),
-        ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null
-      })
+        ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null,
+        externalId: t.id,
+        pending: t.status === 'PENDING' ? 1 : 0
+      }
+      incoming.push({ ...row, externalSig: JSON.stringify([row.amount, row.description, row.date, row.type, row.pending]) })
     }
   }
 
-  // Dedup against what we already have (date+amount+description).
   const existing = await getTransactions()
-  const seen = new Set(existing.map((t) => `${t.date}|${t.amount}|${t.description ?? ''}`))
-  const fresh = incoming.filter((t) => !seen.has(`${t.date}|${t.amount}|${t.description ?? ''}`))
+  const byExternal = new Map<string, DbTransaction>()
+  const legacy = new Map<string, DbTransaction[]>() // sem externalId, por data+valor+descrição
+  for (const t of existing) {
+    if (t.externalId) byExternal.set(t.externalId, t)
+    else {
+      const k = legacyKey(t)
+      legacy.set(k, [...(legacy.get(k) ?? []), t])
+    }
+  }
+
+  const fresh: Incoming[] = []
+  let updated = 0
+  let skipped = 0
+  for (const inc of incoming) {
+    const cur = byExternal.get(inc.externalId)
+    if (cur) {
+      if (cur.externalSig === inc.externalSig) {
+        if (!month || inc.date.startsWith(month)) skipped++
+        continue
+      }
+      // o banco mudou algo: aplica só os campos que mudaram em relação à última versão do banco
+      let prev: unknown[] | null = null
+      try {
+        prev = cur.externalSig ? JSON.parse(cur.externalSig) : null
+      } catch {
+        prev = null
+      }
+      const fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type'>> = {}
+      const next = [inc.amount, inc.description, inc.date, inc.type] as const
+      ;(['amount', 'description', 'date', 'type'] as const).forEach((k, i) => {
+        const bankChanged = !prev || prev[i] !== next[i]
+        if (bankChanged && cur[k] !== next[i]) Object.assign(fields, { [k]: next[i] })
+      })
+      await applyExternalTransactionUpdate(cur.id, fields, inc.externalId, inc.externalSig, inc.pending)
+      updated++
+      continue
+    }
+    if (month && !inc.date.startsWith(month)) continue
+    // importada por versão antiga (sem id): vincula em vez de duplicar
+    const old = legacy.get(legacyKey(inc))?.shift()
+    if (old) {
+      await applyExternalTransactionUpdate(old.id, {}, inc.externalId, inc.externalSig, inc.pending)
+      skipped++
+      continue
+    }
+    fresh.push(inc)
+  }
 
   if (fresh.length) await bulkInsertTransactions(fresh)
-  return { imported: fresh.length, skipped: incoming.length - fresh.length }
+
+  const vanishedPending: VanishedPending[] = existing
+    .filter((t) => t.externalId && t.pending && !seenIds.has(t.externalId) && (!month || t.date.startsWith(month)))
+    .map((t) => ({ id: t.id, date: t.date, description: t.description, amount: t.amount, currency: t.currency }))
+
+  return { imported: fresh.length, updated, skipped, vanishedPending }
 }
 
 /** Whether Pluggy credentials + item are configured. */
