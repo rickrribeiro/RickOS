@@ -2095,9 +2095,9 @@ async function listTodos(f = {}) {
   }
   if (f.recurring === "yes") where.push("(recurrence IS NOT NULL AND recurrence != '')");
   else if (f.recurring === "no") where.push("(recurrence IS NULL OR recurrence = '')");
-  const q = (f.search ?? "").trim().toLowerCase();
-  if (q) {
-    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const q2 = (f.search ?? "").trim().toLowerCase();
+  if (q2) {
+    const like = `%${q2.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     where.push("(ulower(title) LIKE ? ESCAPE '\\' OR ulower(COALESCE(notes, '')) LIKE ? ESCAPE '\\')");
     params.push(like, like);
   }
@@ -70194,8 +70194,8 @@ function resolveRef(ref) {
   }
 }
 function searchPlaces(query, limit = 12) {
-  const q = norm$3(query);
-  if (!q) return [];
+  const q2 = norm$3(query);
+  if (!q2) return [];
   const out = [];
   const seen2 = /* @__PURE__ */ new Set();
   const push = (s2, rank) => {
@@ -70206,19 +70206,19 @@ function searchPlaces(query, limit = 12) {
   };
   const starts = (s2) => {
     const n = norm$3(s2);
-    return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : -1;
+    return n === q2 ? 0 : n.startsWith(q2) ? 1 : n.includes(q2) ? 2 : -1;
   };
   for (const r of REGIONS) {
     const m = starts(r.label);
     if (m >= 0) push({ kind: "region", code: r.id, label: r.label, sub: "Região", airports: expandRef({ kind: "region", code: r.id }).length }, m + 0.5);
   }
   for (const [code, m] of Object.entries(METRO)) {
-    const s2 = q.length === 3 && code.toLowerCase() === q ? 0 : starts(m.label);
+    const s2 = q2.length === 3 && code.toLowerCase() === q2 ? 0 : starts(m.label);
     if (s2 >= 0) push({ kind: "city", code, label: `${m.label} (todos)`, sub: `Cidade · ${m.airports.join(", ")}`, airports: m.airports.length }, s2);
   }
   const countries = new Set(airports.map((a) => a.country));
   for (const c of countries) {
-    const s2 = q.length === 2 && c.toLowerCase() === q ? 0 : starts(countryName(c));
+    const s2 = q2.length === 2 && c.toLowerCase() === q2 ? 0 : starts(countryName(c));
     if (s2 >= 0) push({ kind: "country", code: c, label: countryName(c), sub: "País", airports: expandRef({ kind: "country", code: c }).length }, s2 + 0.3);
   }
   const states = /* @__PURE__ */ new Map();
@@ -70236,7 +70236,7 @@ function searchPlaces(query, limit = 12) {
     cities.set(cityKey(a), list);
   }
   for (const a of airports) {
-    let s2 = a.iata.toLowerCase() === q ? 0 : -1;
+    let s2 = a.iata.toLowerCase() === q2 ? 0 : -1;
     if (s2 < 0) {
       const c = starts(a.city);
       const n = starts(a.name);
@@ -70739,16 +70739,16 @@ function parseCsv(text) {
   const split = (line) => {
     const out = [];
     let cur = "";
-    let q = false;
+    let q2 = false;
     for (let i = 0; i < line.length; i++) {
       const c = line[i];
-      if (q) {
+      if (q2) {
         if (c === '"' && line[i + 1] === '"') {
           cur += '"';
           i++;
-        } else if (c === '"') q = false;
+        } else if (c === '"') q2 = false;
         else cur += c;
-      } else if (c === '"') q = true;
+      } else if (c === '"') q2 = true;
       else if (c === sep) {
         out.push(cur);
         cur = "";
@@ -70881,7 +70881,7 @@ function capFair(list, max) {
   for (const a of list) by.set(a.country, [...by.get(a.country) ?? [], a]);
   const queues2 = [...by.values()];
   const out = [];
-  while (out.length < max && queues2.some((q) => q.length)) for (const q of queues2) if (q.length && out.length < max) out.push(q.shift());
+  while (out.length < max && queues2.some((q2) => q2.length)) for (const q2 of queues2) if (q2.length && out.length < max) out.push(q2.shift());
   return out;
 }
 function paxKey(cfg) {
@@ -70922,7 +70922,7 @@ function interleavePairs(pairs) {
   }
   const out = [];
   const queues2 = [...byCountry.values()];
-  while (queues2.some((q) => q.length)) for (const q of queues2) if (q.length) out.push(q.shift());
+  while (queues2.some((q2) => q2.length)) for (const q2 of queues2) if (q2.length) out.push(q2.shift());
   return out;
 }
 function exactKey(provider, o, d, dep, ret, pk) {
@@ -71622,8 +71622,8 @@ async function monitorQueriesSince(monitorId, sinceIso) {
   return read$2((db2) => Number(one$3(db2, "SELECT COALESCE(SUM(queries), 0) AS q FROM flight_runs WHERE monitorId = ? AND startedAt >= ?", [monitorId, sinceIso])?.q ?? 0));
 }
 function searchLinks(o, d, depart, ret, currency2, adults = 1) {
-  const q = `Flights from ${o} to ${d} on ${depart}${ret ? ` through ${ret}` : " oneway"}${adults > 1 ? ` for ${adults} adults` : ""}`;
-  const google = `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&curr=${currency2}&hl=pt-BR`;
+  const q2 = `Flights from ${o} to ${d} on ${depart}${ret ? ` through ${ret}` : " oneway"}${adults > 1 ? ` for ${adults} adults` : ""}`;
+  const google = `https://www.google.com/travel/flights?q=${encodeURIComponent(q2)}&curr=${currency2}&hl=pt-BR`;
   const yymmdd = (s2) => s2.slice(2).replace(/-/g, "");
   const sky = `https://www.skyscanner.com.br/transporte/passagens-aereas/${o.toLowerCase()}/${d.toLowerCase()}/${yymmdd(depart)}/${ret ? `${yymmdd(ret)}/` : ""}?adultsv2=${adults}&currency=${currency2}`;
   return [
@@ -71695,24 +71695,24 @@ function displayTarget(m) {
   const span = u.departDates.length ? diffDays(u.departDates[0], u.departDates[u.departDates.length - 1]) + 1 : 0;
   return displayTargetFor(countries, u.destinations.length, span, m.config.displayTarget, m.extraDisplay);
 }
-async function queryOffers(m, q) {
+async function queryOffers(m, q2) {
   const { scored, rows } = await scoredOffers(m);
   const views = scored.map((s2) => ({ s: s2, v: toView(s2, rows.get(s2.offer), m) }));
   const counts2 = { eligible: 0, pending: 0, excluded: 0 };
   for (const { v } of views) counts2[v.status]++;
-  const status2 = q.status ?? "eligible";
-  const text = (q.search ?? "").trim().toUpperCase();
+  const status2 = q2.status ?? "eligible";
+  const text = (q2.search ?? "").trim().toUpperCase();
   const filtered = views.filter(({ v }) => {
     if (status2 !== "all" && v.status !== status2) return false;
-    if (!q.includeUnavailable && !v.available && status2 !== "excluded" && status2 !== "all") return false;
-    if (q.favoritesOnly && !v.favorite) return false;
-    if (q.hideStale && v.stale) return false;
-    if (q.origins?.length && !q.origins.includes(v.origin)) return false;
-    if (q.destinations?.length && !q.destinations.includes(v.destination)) return false;
-    if (q.maxStops != null && v.stops > q.maxStops) return false;
-    if (q.carriers?.length && !v.carriers.some((c) => q.carriers.includes(c))) return false;
-    if (q.providers?.length && !v.sources.some((p) => q.providers.includes(p))) return false;
-    if (q.verification?.length && !q.verification.includes(v.verification)) return false;
+    if (!q2.includeUnavailable && !v.available && status2 !== "excluded" && status2 !== "all") return false;
+    if (q2.favoritesOnly && !v.favorite) return false;
+    if (q2.hideStale && v.stale) return false;
+    if (q2.origins?.length && !q2.origins.includes(v.origin)) return false;
+    if (q2.destinations?.length && !q2.destinations.includes(v.destination)) return false;
+    if (q2.maxStops != null && v.stops > q2.maxStops) return false;
+    if (q2.carriers?.length && !v.carriers.some((c) => q2.carriers.includes(c))) return false;
+    if (q2.providers?.length && !v.sources.some((p) => q2.providers.includes(p))) return false;
+    if (q2.verification?.length && !q2.verification.includes(v.verification)) return false;
     if (text) {
       const hay = [v.origin, v.destination, ...v.carriers, ...v.connections.map((c) => c.airport), v.departDate, v.sourceLabel].join(" ").toUpperCase();
       if (!hay.includes(text)) return false;
@@ -71720,12 +71720,12 @@ async function queryOffers(m, q) {
     return true;
   });
   const target = displayTarget(m);
-  const sort = q.sort ?? m.config.preferences.strategy;
+  const sort = q2.sort ?? m.config.preferences.strategy;
   let ordered = sortScored(filtered.map((x) => x.s), sort);
-  if (q.diversify !== false && (sort === "value" || sort === m.config.preferences.strategy)) ordered = diversify(ordered, Math.max(target, 30));
+  if (q2.diversify !== false && (sort === "value" || sort === m.config.preferences.strategy)) ordered = diversify(ordered, Math.max(target, 30));
   const byOffer = new Map(filtered.map((x) => [x.s, x.v]));
-  const pageSize = Math.max(5, Math.min(100, q.pageSize ?? target));
-  const page = Math.max(1, q.page ?? 1);
+  const pageSize = Math.max(5, Math.min(100, q2.pageSize ?? target));
+  const page = Math.max(1, q2.page ?? 1);
   const items = ordered.slice((page - 1) * pageSize, page * pageSize).map((s2) => byOffer.get(s2));
   const cov = await coverage$1(m);
   return {
@@ -71897,10 +71897,10 @@ function skyscannerUrl(o, d, dep, ret, m) {
   const yymmdd = (s2) => s2.slice(2).replace(/-/g, "");
   const p = m.config.passengers;
   const cabin = { economy: "economy", premium_economy: "premiumeconomy", business: "business", first: "first" }[p.cabin];
-  const q = new URLSearchParams({ adultsv2: String(p.adults), cabinclass: cabin, currency: m.config.currency, locale: "pt-BR", market: "BR" });
-  if (p.children + p.infants > 0) q.set("childrenv2", [...Array(p.children).fill("8"), ...Array(p.infants).fill("0")].join("|"));
-  if (m.config.constraints.maxStops === 0) q.set("preferdirects", "true");
-  return `https://www.skyscanner.com.br/transporte/passagens-aereas/${o.toLowerCase()}/${d.toLowerCase()}/${yymmdd(dep)}/${ret ? `${yymmdd(ret)}/` : ""}?${q}`;
+  const q2 = new URLSearchParams({ adultsv2: String(p.adults), cabinclass: cabin, currency: m.config.currency, locale: "pt-BR", market: "BR" });
+  if (p.children + p.infants > 0) q2.set("childrenv2", [...Array(p.children).fill("8"), ...Array(p.infants).fill("0")].join("|"));
+  if (m.config.constraints.maxStops === 0) q2.set("preferdirects", "true");
+  return `https://www.skyscanner.com.br/transporte/passagens-aereas/${o.toLowerCase()}/${d.toLowerCase()}/${yymmdd(dep)}/${ret ? `${yymmdd(ret)}/` : ""}?${q2}`;
 }
 const MAX_PER_RUN = 45;
 const PER_SESSION = 5;
@@ -73143,9 +73143,9 @@ async function sendMessage$1(conversationId, text, images = []) {
   await startTurn(conversationId, msg);
 }
 async function removeQueued(conversationId, index) {
-  const q = [...queues.get(conversationId) ?? []];
-  q.splice(index, 1);
-  if (q.length) queues.set(conversationId, q);
+  const q2 = [...queues.get(conversationId) ?? []];
+  q2.splice(index, 1);
+  if (q2.length) queues.set(conversationId, q2);
   else queues.delete(conversationId);
   await emitConversation(conversationId);
 }
@@ -73574,9 +73574,9 @@ async function finishTurn(run2, error) {
       page: "ai-runner"
     });
   }
-  const q = queues.get(run2.conversationId) ?? [];
-  if (q.length && turn.status === "done") {
-    const [next, ...rest] = q;
+  const q2 = queues.get(run2.conversationId) ?? [];
+  if (q2.length && turn.status === "done") {
+    const [next, ...rest] = q2;
     if (rest.length) queues.set(run2.conversationId, rest);
     else queues.delete(run2.conversationId);
     startTurn(run2.conversationId, next).catch(() => {
@@ -74759,8 +74759,8 @@ function bagCount(segs, type) {
   for (const s2 of segs) {
     const b2 = s2.passengers?.[0]?.baggages;
     if (!b2) return null;
-    const q = b2.filter((x) => x.type === type).reduce((t, x) => t + (x.quantity ?? 0), 0);
-    min = Math.min(min, q);
+    const q2 = b2.filter((x) => x.type === type).reduce((t, x) => t + (x.quantity ?? 0), 0);
+    min = Math.min(min, q2);
   }
   return min === Infinity ? null : min;
 }
@@ -74817,11 +74817,11 @@ function normalizeDuffelOffer(o, observedAt) {
     expiresAt: o.expires_at ?? null
   };
 }
-function passengers(q) {
+function passengers(q2) {
   return [
-    ...Array.from({ length: Math.max(1, q.adults) }, () => ({ type: "adult" })),
-    ...Array.from({ length: q.children }, () => ({ age: 8 })),
-    ...Array.from({ length: q.infants }, () => ({ type: "infant_without_seat" }))
+    ...Array.from({ length: Math.max(1, q2.adults) }, () => ({ type: "adult" })),
+    ...Array.from({ length: q2.children }, () => ({ age: 8 })),
+    ...Array.from({ length: q2.infants }, () => ({ type: "infant_without_seat" }))
   ];
 }
 async function token(getSetting2) {
@@ -74856,15 +74856,15 @@ const duffel = {
     if (t.startsWith("duffel_test_")) return { configured: true, available: false, reason: "Token de TESTE: só retorna dados fictícios (Duffel Airways). Use um token live." };
     return { configured: true, available: true, reason: null };
   },
-  async search(q, ctx) {
+  async search(q2, ctx) {
     const t = await token(ctx.getSetting);
     if (!t) throw new ProviderError("config", "Token da Duffel não configurado.");
     if (t.startsWith("duffel_test_")) throw new ProviderError("config", "Token de teste da Duffel retorna dados fictícios; não usado em monitores.");
-    if (q.departDate.length !== 10) throw new ProviderError("bad_request", "Duffel exige data exata.");
-    const slices = [{ origin: q.origin, destination: q.destination, departure_date: q.departDate }];
-    if (q.returnDate) slices.push({ origin: q.destination, destination: q.origin, departure_date: q.returnDate });
-    const data2 = { slices, passengers: passengers(q), cabin_class: q.cabin };
-    if (q.maxStops != null) data2.max_connections = Math.min(2, Math.max(0, q.maxStops));
+    if (q2.departDate.length !== 10) throw new ProviderError("bad_request", "Duffel exige data exata.");
+    const slices = [{ origin: q2.origin, destination: q2.destination, departure_date: q2.departDate }];
+    if (q2.returnDate) slices.push({ origin: q2.destination, destination: q2.origin, departure_date: q2.returnDate });
+    const data2 = { slices, passengers: passengers(q2), cabin_class: q2.cabin };
+    if (q2.maxStops != null) data2.max_connections = Math.min(2, Math.max(0, q2.maxStops));
     const body = await fetchJson(
       URL_REQ,
       {
@@ -74979,26 +74979,26 @@ const travelpayouts = {
     if (!token2) return { configured: false, available: false, reason: "Token não configurado." };
     return { configured: true, available: true, reason: null };
   },
-  async search(q, ctx) {
+  async search(q2, ctx) {
     const token2 = await ctx.getSetting("flights_travelpayouts_token");
     if (!token2) throw new ProviderError("config", "Token da Travelpayouts não configurado.");
     const market = await ctx.getSetting("flights_travelpayouts_market") || "br";
     const params = new URLSearchParams({
-      origin: q.origin,
-      destination: q.destination,
-      departure_at: q.departDate,
-      currency: q.currency.toLowerCase(),
+      origin: q2.origin,
+      destination: q2.destination,
+      departure_at: q2.departDate,
+      currency: q2.currency.toLowerCase(),
       sorting: "price",
-      limit: q.departDate.length === 7 ? "100" : "30",
+      limit: q2.departDate.length === 7 ? "100" : "30",
       unique: "false",
       market,
-      one_way: q.returnDate ? "false" : "true"
+      one_way: q2.returnDate ? "false" : "true"
     });
-    if (q.returnDate) params.set("return_at", q.returnDate);
-    if (q.maxStops === 0) params.set("direct", "true");
+    if (q2.returnDate) params.set("return_at", q2.returnDate);
+    if (q2.maxStops === 0) params.set("direct", "true");
     const body = await fetchJson(`${BASE}?${params}`, { headers: { "X-Access-Token": token2, "Accept-Encoding": "gzip" } }, ctx.signal);
     if (body && body.success === false) throw new ProviderError("bad_request", body.error || "Resposta sem sucesso.");
-    const currency2 = (body?.currency || q.currency).toUpperCase();
+    const currency2 = (body?.currency || q2.currency).toUpperCase();
     const observedAt = ctx.now().toISOString();
     const offers = (body?.data ?? []).map((t) => normalizeTicket(t, currency2, observedAt)).filter((x) => !!x);
     return { offers, note: offers.length ? void 0 : "Sem preços em cache para essa rota/período." };
@@ -75250,7 +75250,7 @@ async function execute(runId, monitorId, providers, trigger, opts) {
             continue;
           }
           if (!await claimTask(t.id, runId)) continue;
-          const q = {
+          const q2 = {
             origin: t.origin,
             destination: t.destination,
             departDate: t.departDate,
@@ -75262,7 +75262,7 @@ async function execute(runId, monitorId, providers, trigger, opts) {
             maxStops: m.config.constraints.maxStops,
             currency: m.config.currency
           };
-          const cacheKey = `search:${p.id}:${JSON.stringify(q)}`;
+          const cacheKey = `search:${p.id}:${JSON.stringify(q2)}`;
           const before = (/* @__PURE__ */ new Date()).toISOString();
           try {
             let offers = await cacheGet(cacheKey);
@@ -75270,7 +75270,7 @@ async function execute(runId, monitorId, providers, trigger, opts) {
             else {
               stats.queries++;
               await incUsage(p.id, day);
-              const r = await p.search(q, { ...ctxBase, signal: ctl.signal });
+              const r = await p.search(q2, { ...ctxBase, signal: ctl.signal });
               offers = r.offers;
               await cacheSet(cacheKey, offers, CACHE_TTL$1[p.id] ?? 36e5);
             }
@@ -75528,7 +75528,7 @@ function registerFlightRpc(handle) {
     changed$3(Number(id));
     return n;
   });
-  handle("flightMon:offers", async (_, id, q) => queryOffers(await mustGet(id), q ?? {}));
+  handle("flightMon:offers", async (_, id, q2) => queryOffers(await mustGet(id), q2 ?? {}));
   handle("flightMon:favorite", async (_, offerId, fav) => {
     await setFavorite(Number(offerId), !!fav);
     const o = await getOffer(Number(offerId));
@@ -75704,10 +75704,10 @@ const ALLOWED_ROUTES = [
 function routeAllowed(method, path2) {
   return ALLOWED_ROUTES.some((r) => r.method === method && r.re.test(path2));
 }
-function buildQuery(q) {
-  if (!q) return "";
+function buildQuery(q2) {
+  if (!q2) return "";
   const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(q)) {
+  for (const [k, v] of Object.entries(q2)) {
     if (v == null) continue;
     if (Array.isArray(v)) v.forEach((x) => sp.append(k, x));
     else sp.append(k, String(v));
@@ -77405,11 +77405,11 @@ function createMockProvider(control = createMockControl()) {
     },
     async searchMessages(query, { chatIds, limit }) {
       guard();
-      const q = query.toLowerCase();
+      const q2 = query.toLowerCase();
       const out = [];
       for (const [cid, msgs] of store) {
         if (chatIds?.length && !chatIds.includes(cid)) continue;
-        for (const m of msgs) if (m.text.toLowerCase().includes(q)) out.push(m);
+        for (const m of msgs) if (m.text.toLowerCase().includes(q2)) out.push(m);
       }
       return out.sort((a, b2) => b2.sortKey.localeCompare(a.sortKey)).slice(0, limit ?? 20);
     },
@@ -77637,10 +77637,10 @@ function matches(s2, f, ctx) {
       if (s2.replyState !== "none") return false;
       break;
   }
-  const q = norm$1(f.search).trim();
-  if (q) {
+  const q2 = norm$1(f.search).trim();
+  if (q2) {
     const hay = norm$1([s2.title, s2.contactName, s2.lastMessagePreview, s2.peerHandle, s2.notes, ...s2.labels.map((l) => l.name)].join(" "));
-    if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+    if (!q2.split(/\s+/).every((w) => hay.includes(w))) return false;
   }
   return true;
 }
@@ -77978,8 +77978,8 @@ async function markRead(chatId, read2) {
   changed$2([chatId]);
 }
 async function searchMessages(query, chatId) {
-  const q = query.trim();
-  if (q.length < 2) return { results: [], partial: false, supported: true };
+  const q2 = query.trim();
+  if (q2.length < 2) return { results: [], partial: false, supported: true };
   const provider = await activeProvider();
   if (!provider?.searchMessages || !provider.capabilities().search) return { results: [], partial: true, supported: false };
   let chatRemote;
@@ -77987,7 +77987,7 @@ async function searchMessages(query, chatId) {
     const c = await chatById(chatId);
     if (c) chatRemote = [c.remoteId];
   }
-  const found = await provider.searchMessages(q, { chatIds: chatRemote, limit: 20 });
+  const found = await provider.searchMessages(q2, { chatIds: chatRemote, limit: 20 });
   const ctx = await summaryCtx();
   const out = [];
   for (const m of found) {
@@ -79019,14 +79019,15 @@ const MEMORY_POLICIES = deepFreeze([
     consume: { categories: ALL, maxSensitivity: "NORMAL", maxTokens: 1500, maxItems: 30, instructions: false },
     produce: { categories: ALL, maxSensitivity: "PRIVATE", maxSuggestionsPerRun: 10 }
   },
-  // ── Integrações externas CANDIDATAS — bloqueadas até aprovação (docs/memoria/integracoes.md) ──
+  // ── Integrações externas — APROVADAS pelo usuário em 2026-11-25 (docs/memoria/integracoes.md).
+  //    Pontos de chamada: server/memory/integrations.ts (canal dedicado por caso de uso). ──
   {
     useCase: "assistant.trip_itinerary",
     label: "Assistente: roteiro de viagem",
     module: "ia",
     purpose: "Personalizar roteiros com preferências de viagem.",
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ["viagens", "preferencias", "interesses"], types: ["PREFERENCE", "CONSTRAINT", "FACT", "EXPERIENCE", "LEARNING"], maxSensitivity: "NORMAL", maxTokens: 400, maxItems: 12, instructions: false },
     produce: false
   },
@@ -79036,7 +79037,7 @@ const MEMORY_POLICIES = deepFreeze([
     module: "viagens",
     purpose: "Casar o catálogo de recomendações com interesses de viagem (sem LLM).",
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ["viagens", "interesses", "preferencias"], types: ["PREFERENCE", "FACT"], maxSensitivity: "NORMAL", maxTokens: 300, maxItems: 15, instructions: false },
     produce: false
   },
@@ -79046,7 +79047,7 @@ const MEMORY_POLICIES = deepFreeze([
     module: "viagens",
     purpose: "Ranquear hospedagens com preferências de hospedagem.",
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ["viagens", "preferencias"], types: ["PREFERENCE", "CONSTRAINT"], maxSensitivity: "NORMAL", maxTokens: 250, maxItems: 8, instructions: false },
     produce: false
   },
@@ -79056,7 +79057,7 @@ const MEMORY_POLICIES = deepFreeze([
     module: "ia",
     purpose: "Planejamento pessoal com preferências de rotina e objetivos.",
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ["rotina", "produtividade", "objetivos"], maxSensitivity: "NORMAL", maxTokens: 400, maxItems: 12, instructions: true },
     produce: false
   },
@@ -79066,7 +79067,7 @@ const MEMORY_POLICIES = deepFreeze([
     module: "home",
     purpose: "Reflexão semanal com objetivos; o texto escrito pelo usuário pode virar sugestão.",
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ["objetivos", "produtividade", "aprendizados"], maxSensitivity: "NORMAL", maxTokens: 500, maxItems: 12, instructions: true },
     produce: { categories: ["objetivos", "produtividade", "aprendizados", "rotina", "valores"], maxSensitivity: "PRIVATE", maxSuggestionsPerRun: 5 }
   },
@@ -79076,7 +79077,7 @@ const MEMORY_POLICIES = deepFreeze([
     module: "braindump",
     purpose: "Sugerir memórias a partir de um brain dump, por ação explícita.",
     internal: false,
-    approved: false,
+    approved: true,
     consume: false,
     produce: { categories: ALL, maxSensitivity: "PRIVATE", maxSuggestionsPerRun: 8 }
   },
@@ -79086,7 +79087,7 @@ const MEMORY_POLICIES = deepFreeze([
     module: "jarvis",
     purpose: "Assistente pessoal geral (ainda não implementado).",
     internal: false,
-    approved: false,
+    approved: true,
     consume: { categories: ALL, maxSensitivity: "NORMAL", maxTokens: 800, maxItems: 20, instructions: true },
     produce: false
   }
@@ -79818,11 +79819,18 @@ function tokens(s2) {
   return normText(s2).split(" ").filter((t) => t.length >= 2 && !STOP.has(t)).map(stem);
 }
 function stem(t) {
-  if (t.length <= 4) return t;
-  return t.replace(/(oes|aes|ais|eis|ns)$/, "").replace(/(ens|es|s)$/, "").replace(/(mente|cao|coes|ando|endo|indo|ado|ido|ing|ed)$/, "").replace(/[aeo]$/, "");
+  if (t.length <= 3) return t;
+  let s2 = t.replace(/ns$/, "m");
+  if (/[aeiou]s$/.test(s2)) s2 = s2.slice(0, -1);
+  else if (/[rzl]es$/.test(s2)) s2 = s2.slice(0, -2);
+  const cut = s2.replace(/(mente|ando|endo|indo|ado|ido|ing|ed)$/, "");
+  if (cut.length >= 4) s2 = cut;
+  s2 = s2.replace(/em$/, "e");
+  if (s2.length > 4) s2 = s2.replace(/[aeo]$/, "");
+  return s2;
 }
-function bm25(docs, q) {
-  if (!q.length || !docs.length) return docs.map(() => 0);
+function bm25(docs, q2) {
+  if (!q2.length || !docs.length) return docs.map(() => 0);
   const N = docs.length;
   const avg = docs.reduce((s2, d) => s2 + d.terms.length, 0) / N || 1;
   const df = /* @__PURE__ */ new Map();
@@ -79833,7 +79841,7 @@ function bm25(docs, q) {
     const tf = /* @__PURE__ */ new Map();
     for (const t of d.terms) tf.set(t, (tf.get(t) ?? 0) + 1);
     let s2 = 0;
-    for (const t of new Set(q)) {
+    for (const t of new Set(q2)) {
       const f = tf.get(t) ?? 0;
       if (!f) continue;
       const n = df.get(t) ?? 0;
@@ -79905,8 +79913,8 @@ function retrieve(db2, owner2, opts) {
       terms: [...tokens(m.title), ...tokens(m.title), ...tokens(m.content), ...m.tags.flatMap(tokens), ...tokens(r.catName ?? "")]
     });
   }
-  const q = tokens(opts.query);
-  const raw = bm25(docs, q);
+  const q2 = tokens(opts.query);
+  const raw = bm25(docs, q2);
   const maxRaw = Math.max(0, ...raw);
   const minRel = opts.minRelevance ?? 0.2;
   const nowMs = Date.parse(now);
@@ -79915,7 +79923,7 @@ function retrieve(db2, owner2, opts) {
   docs.forEach((d, i) => {
     const m = d.memory;
     const relevance = maxRaw > 0 ? raw[i] / maxRaw : 0;
-    const coverage2 = q.length ? new Set(q.filter((t) => d.terms.includes(t))).size / new Set(q).size : 0;
+    const coverage2 = q2.length ? new Set(q2.filter((t) => d.terms.includes(t))).size / new Set(q2).size : 0;
     const ageDays = Math.max(0, (nowMs - Date.parse(m.updatedAt)) / 864e5);
     const recency = Math.exp(-ageDays / 180);
     const importance = (m.importance - 1) / 4;
@@ -79929,7 +79937,7 @@ function retrieve(db2, owner2, opts) {
     } else if (m.pinned || m.type === "INSTRUCTION") {
       layer = "core";
       reason = m.pinned ? "fixada (essencial)" : "instrução pessoal confirmada";
-    } else if (q.length && relevance > 0) {
+    } else if (q2.length && relevance > 0) {
       layer = "semantic";
       reason = `relevante à consulta (${Math.round(coverage2 * 100)}% dos termos)`;
     } else if (ageDays <= 30) {
@@ -79939,10 +79947,10 @@ function retrieve(db2, owner2, opts) {
       layer = "domain";
       reason = "domínio autorizado";
     }
-    const score = q.length ? 0.55 * relevance + 0.1 * coverage2 + 0.15 * importance + 0.1 * confirmed + 0.05 * recency + (m.pinned ? 0.05 : 0) : 0.45 * importance + 0.2 * confirmed + 0.15 * recency + (m.pinned ? 0.2 : 0);
-    const keep = q.length ? relevance >= minRel || m.type === "INSTRUCTION" : m.pinned || m.importance >= 4 || layer === "core";
+    const score = q2.length ? 0.55 * relevance + 0.1 * coverage2 + 0.15 * importance + 0.1 * confirmed + 0.05 * recency + (m.pinned ? 0.05 : 0) : 0.45 * importance + 0.2 * confirmed + 0.15 * recency + (m.pinned ? 0.2 : 0);
+    const keep = q2.length ? relevance >= minRel || m.type === "INSTRUCTION" : m.pinned || m.importance >= 4 || layer === "core";
     if (!keep) {
-      discarded.push({ id: m.id, reason: q.length ? "pouco relevante para a consulta" : "sem consulta e pouco importante", score: round(score) });
+      discarded.push({ id: m.id, reason: q2.length ? "pouco relevante para a consulta" : "sem consulta e pouco importante", score: round(score) });
       return;
     }
     const line = renderLine(m, d.catName);
@@ -80019,9 +80027,9 @@ function proposeSync(db2, owner2, s2, rule) {
   let sensitivity = "NORMAL";
   let normKey;
   if (s2.op === "ASK") {
-    const q = String(s2.question ?? "").trim().slice(0, 400);
-    if (!q) return { ok: false, reason: "pergunta vazia" };
-    normKey = `ask:${normText(q)}`;
+    const q2 = String(s2.question ?? "").trim().slice(0, 400);
+    if (!q2) return { ok: false, reason: "pergunta vazia" };
+    normKey = `ask:${normText(q2)}`;
     const slug = String(s2.proposed?.category ?? "");
     if (slug && !categoryAllowed(rule, slug)) return { ok: false, reason: "categoria fora da política" };
   } else if (s2.op === "ARCHIVE" || s2.op === "RESOLVE" && !String(s2.proposed?.content ?? "").trim()) {
@@ -80388,8 +80396,8 @@ function rejectedHints(db2, owner2) {
   return rows.length ? rows.map((r) => `- (${r.verdict}) ${r.normKey.slice(0, 140)}`).join("\n") : "(nenhuma)";
 }
 function verifiedExcerpt(source, quote) {
-  const q = String(quote ?? "").trim();
-  if (q && normText(source).includes(normText(q))) return { excerpt: q.slice(0, 600), verified: true };
+  const q2 = String(quote ?? "").trim();
+  if (q2 && normText(source).includes(normText(q2))) return { excerpt: q2.slice(0, 600), verified: true };
   return { excerpt: source.slice(0, 400), verified: false };
 }
 function toSuggestion(item, base) {
@@ -80439,21 +80447,21 @@ const EXTRACT_RULES = `Como decidir:
 async function extractFromText(req) {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  const produce = await resolveProduce(req.useCase);
-  if (!produce.ok) throw new MemoryError(`Produção de memória bloqueada: ${produce.reason}`, "forbidden");
-  const consume = await resolveConsume(req.useCase);
+  const produce2 = await resolveProduce(req.useCase);
+  if (!produce2.ok) throw new MemoryError(`Produção de memória bloqueada: ${produce2.reason}`, "forbidden");
+  const consume2 = await resolveConsume(req.useCase);
   const text = String(req.text ?? "").trim();
   const stats = { calls: 0, proposed: 0, dropped: {}, batchId: crypto.randomUUID() };
   if (!text) return stats;
   const db2 = await getDb();
   for (const chunk of chunkText(text)) {
-    if (stats.proposed >= produce.rule.maxSuggestionsPerRun) break;
-    const existing = consume.ok ? retrieve(db2, owner2, { rule: consume.rule, query: chunk.text, minRelevance: 0.15 }).selected : [];
+    if (stats.proposed >= produce2.rule.maxSuggestionsPerRun) break;
+    const existing = consume2.ok ? retrieve(db2, owner2, { rule: consume2.rule, query: chunk.text, minRelevance: 0.15 }).selected : [];
     const allowedIds = new Set(existing.map((s2) => s2.memory.id));
     const prompt = `${req.hint ? `Contexto: ${sanitizeForPrompt(req.hint, 300)}
 
 ` : ""}Categorias permitidas:
-${categoriesBlock(db2, owner2, produce.rule)}
+${categoriesBlock(db2, owner2, produce2.rule)}
 
 <memorias>
 ${existing.map((s2) => `#${s2.memory.id} ${s2.line}`).join("\n") || "(nenhuma parecida)"}
@@ -80467,7 +80475,7 @@ ${rejectedHints(db2, owner2)}
 ${chunk.text.replace(/<\/?texto[^>]*>/gi, "")}
 </texto>
 
-Proponha no máximo ${produce.rule.maxSuggestionsPerRun - stats.proposed} sugestões.`;
+Proponha no máximo ${produce2.rule.maxSuggestionsPerRun - stats.proposed} sugestões.`;
     const system = `Você é o Memory Agent do rickOS: identifica conhecimentos DURADOUROS sobre o usuário para a memória pessoal dele.
 ${SAFETY}
 ${EXTRACT_RULES}
@@ -80475,7 +80483,7 @@ ${EXTRACT_FORMAT}`;
     stats.calls++;
     const raw = await callAi(req.op, system, prompt);
     const parsed = parseJsonObject(raw);
-    applyItems(db2, owner2, parsed.suggestions ?? [], produce.rule, stats, {
+    applyItems(db2, owner2, parsed.suggestions ?? [], produce2.rule, stats, {
       sourceKind: req.sourceKind,
       sourceRef: `${req.sourceRef ?? req.sourceKind}${chunk.ref !== "início" ? `#${chunk.ref}` : ""}`,
       batchId: stats.batchId,
@@ -80556,12 +80564,12 @@ Nunca reescreva memórias confirmadas sem motivo claro. Menos é mais: zero suge
 async function analyzeMemories(useCase) {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  const consume = await resolveConsume(useCase);
-  const produce = await resolveProduce(useCase);
+  const consume2 = await resolveConsume(useCase);
+  const produce2 = await resolveProduce(useCase);
   const stats = { calls: 0, proposed: 0, dropped: {}, batchId: crypto.randomUUID() };
-  if (!consume.ok || !produce.ok) throw new MemoryError(`Bloqueado pela política: ${!consume.ok ? consume.reason : !produce.ok ? produce.reason : ""}`, "forbidden");
+  if (!consume2.ok || !produce2.ok) throw new MemoryError(`Bloqueado pela política: ${!consume2.ok ? consume2.reason : !produce2.ok ? produce2.reason : ""}`, "forbidden");
   const db2 = await getDb();
-  let mems = allowedMemories(db2, owner2, consume.rule);
+  let mems = allowedMemories(db2, owner2, consume2.rule);
   if (useCase === "memory.consolidation") {
     const ids2 = new Set(similarClusters(mems).flat());
     const old = mems.filter((m) => m.type === "GOAL" && Date.now() - Date.parse(m.confirmedAt ?? m.updatedAt) > 180 * 864e5);
@@ -80579,7 +80587,7 @@ async function analyzeMemories(useCase) {
   const cats = new Map(categoriesSync(db2, owner2).map((c) => [c.id, c.slug]));
   const list = mems.map((m) => `#${m.id} [${cats.get(m.categoryId ?? -1) ?? "sem-categoria"} · ${m.type}${m.confirmedAt ? " · confirmada" : ""} · atualizada ${m.updatedAt.slice(0, 10)}] ${sanitizeForPrompt(m.content, 300)}`).join("\n");
   const prompt = `Categorias permitidas:
-${categoriesBlock(db2, owner2, produce.rule)}
+${categoriesBlock(db2, owner2, produce2.rule)}
 
 <memorias>
 ${list}
@@ -80589,7 +80597,7 @@ ${list}
 ${rejectedHints(db2, owner2)}
 </rejeitadas>
 
-Proponha no máximo ${produce.rule.maxSuggestionsPerRun} sugestões.`;
+Proponha no máximo ${produce2.rule.maxSuggestionsPerRun} sugestões.`;
   const system = `Você é o Memory Agent do rickOS revisando a memória pessoal do usuário.
 ${SAFETY}
 ${ANALYZE_RULES}
@@ -80607,8 +80615,8 @@ No campo "evidence" cite o(s) #id que sustentam a sugestão.`;
     if (!s2) continue;
     s2.explicit = false;
     s2.evidence = ids2.map((id) => ({ excerpt: `#${id}: ${byId.get(id).content}`, sourceRef: `memoria#${id}` }));
-    if (stats.proposed >= produce.rule.maxSuggestionsPerRun) break;
-    const r = proposeSync(db2, owner2, s2, produce.rule);
+    if (stats.proposed >= produce2.rule.maxSuggestionsPerRun) break;
+    const r = proposeSync(db2, owner2, s2, produce2.rule);
     if (r.ok) stats.proposed++;
     else stats.dropped[r.reason] = (stats.dropped[r.reason] ?? 0) + 1;
   }
@@ -80776,12 +80784,12 @@ async function listGaps(status2 = "open") {
 async function detectGaps() {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  const consume = await resolveConsume("memory.gaps");
-  const produce = await resolveProduce("memory.gaps");
-  if (!consume.ok || !produce.ok) throw new MemoryError("Lacunas bloqueadas pela política.", "forbidden");
+  const consume2 = await resolveConsume("memory.gaps");
+  const produce2 = await resolveProduce("memory.gaps");
+  if (!consume2.ok || !produce2.ok) throw new MemoryError("Lacunas bloqueadas pela política.", "forbidden");
   const db2 = await getDb();
   const cov = await coverage();
-  const mems = liveMemories(db2, owner2).filter((m) => m.status === "active" && categoryAllowed(consume.rule, m.catSlug) && sensitivityAllowed(consume.rule, m.effectiveSensitivity));
+  const mems = liveMemories(db2, owner2).filter((m) => m.status === "active" && categoryAllowed(consume2.rule, m.catSlug) && sensitivityAllowed(consume2.rule, m.effectiveSensitivity));
   const dismissed = all(db2, "SELECT topic, status FROM memory_gaps WHERE ownerId = ? AND status != 'open' ORDER BY id DESC LIMIT 40", [owner2]);
   const open = all(db2, "SELECT topic FROM memory_gaps WHERE ownerId = ? AND status = 'open'", [owner2]);
   const needs = MEMORY_POLICIES.filter((p) => p.consume && !p.useCase.startsWith("memory.")).map((p) => `- ${p.label}${p.approved ? "" : " (candidata)"}: ${p.purpose} [categorias: ${!p.consume ? "" : p.consume.categories === "*" ? "todas" : p.consume.categories.join(", ")}]`).join("\n");
@@ -80792,7 +80800,7 @@ Funcionalidades que usariam memória:
 ${needs}
 
 <memorias>
-${mems.slice(0, consume.rule.maxItems).map((m) => `- [${m.catSlug ?? "sem-categoria"}] ${sanitizeForPrompt(m.title, 120)}`).join("\n")}
+${mems.slice(0, consume2.rule.maxItems).map((m) => `- [${m.catSlug ?? "sem-categoria"}] ${sanitizeForPrompt(m.title, 120)}`).join("\n")}
 </memorias>
 
 Lacunas já abertas (não repita):
@@ -80804,22 +80812,22 @@ ${SAFETY}
 - Só lacunas que melhorariam de verdade alguma funcionalidade listada ou objetivos conhecidos. Nada aleatório, nada para "encher" o perfil.
 - Não pergunte sobre saúde, finanças detalhadas, sexualidade, religião, política ou terceiros, a menos que já exista contexto do usuário nisso — e mesmo assim marque sensitivity PRIVATE.
 - Perguntas curtas, abertas, naturais.
-- Máximo ${produce.rule.maxSuggestionsPerRun} lacunas. Zero é válido.
+- Máximo ${produce2.rule.maxSuggestionsPerRun} lacunas. Zero é válido.
 Formato: {"gaps":[{"topic":"curto","category":"slug","why":"por que ajudaria","beneficiaries":["funcionalidade"],"priority":1-3,"sensitivity":"NORMAL|PRIVATE","question":"pergunta"}]}`;
   const raw = await callAi("lacunas", system, prompt);
   const parsed = parseJsonObject(raw);
   let created = 0;
   const cats = categoriesSync(db2, owner2);
-  for (const g of (parsed.gaps ?? []).slice(0, produce.rule.maxSuggestionsPerRun)) {
+  for (const g of (parsed.gaps ?? []).slice(0, produce2.rule.maxSuggestionsPerRun)) {
     const topic = String(g.topic ?? "").trim().slice(0, 120);
     const question = String(g.question ?? "").trim().slice(0, 300);
     if (!topic || !question) continue;
     if (g.sensitivity === "RESTRICTED") continue;
     const cat = cats.find((c) => c.slug === g.category);
-    if (cat && !categoryAllowed(produce.rule, cat.slug)) continue;
+    if (cat && !categoryAllowed(produce2.rule, cat.slug)) continue;
     const given = g.sensitivity === "PRIVATE" ? "PRIVATE" : "NORMAL";
     const sens = cat && SENS_RANK[cat.defaultSensitivity] > SENS_RANK[given] ? cat.defaultSensitivity : given;
-    if (SENS_RANK[sens] > SENS_RANK[produce.rule.maxSensitivity] || sens === "RESTRICTED") continue;
+    if (SENS_RANK[sens] > SENS_RANK[produce2.rule.maxSensitivity] || sens === "RESTRICTED") continue;
     created += exec(
       db2,
       "INSERT OR IGNORE INTO memory_gaps (ownerId, topic, categoryId, why, beneficiaries, priority, sensitivity, question, normKey, createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -80872,9 +80880,9 @@ ${SAFETY}
 Formato: {"suggestions":[{"op":"CREATE|UPDATE","title":"","content":"","category":"slug","type":"FACT|PREFERENCE|GOAL|CONSTRAINT|HABIT|INSTRUCTION|EXPERIENCE|LEARNING|INFERENCE","tags":[],"importance":1-5,"stability":"permanent|stable|evolving|transient","sensitivity":"NORMAL|PRIVATE|RESTRICTED","explicit":true,"confidence":0-1,"rationale":"","benefit":"","evidence":"","targetIds":[]}],"next_question":"…"|null,"why":"por que essa pergunta"}`;
 async function interviewStep(id, answer) {
   const owner2 = currentOwner();
-  const consume = await resolveConsume("memory.interview");
-  const produce = await resolveProduce("memory.interview");
-  if (!consume.ok || !produce.ok) throw new MemoryError("Entrevista bloqueada pela política.", "forbidden");
+  const consume2 = await resolveConsume("memory.interview");
+  const produce2 = await resolveProduce("memory.interview");
+  if (!consume2.ok || !produce2.ok) throw new MemoryError("Entrevista bloqueada pela política.", "forbidden");
   const db2 = await getDb();
   const iv = interviewSync(db2, owner2, id);
   if (!iv) throw new MemoryError("Entrevista não encontrada.", "not_found");
@@ -80882,28 +80890,28 @@ async function interviewStep(id, answer) {
   const last = iv.turns[iv.turns.length - 1];
   const cats = categoriesSync(db2, owner2, false);
   const cat = cats.find((c) => c.id === iv.categoryId);
-  const known = retrieve(db2, owner2, { rule: consume.rule, query: `${iv.topic} ${cat?.name ?? ""} ${answer ?? ""}`, minRelevance: 0.1 }).selected;
+  const known = retrieve(db2, owner2, { rule: consume2.rule, query: `${iv.topic} ${cat?.name ?? ""} ${answer ?? ""}`, minRelevance: 0.1 }).selected;
   const previousQs = all(db2, "SELECT turns FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 10", [owner2]).flatMap((r) => jparse(r.turns, [])).map((t) => t.question);
   const prompt = `Tema: ${sanitizeForPrompt(iv.topic, 200)}${cat ? ` (categoria ${cat.slug})` : ""}
-Categorias permitidas: ${cats.filter((c) => categoryAllowed(produce.rule, c.slug)).map((c) => c.slug).join(", ")}
+Categorias permitidas: ${cats.filter((c) => categoryAllowed(produce2.rule, c.slug)).map((c) => c.slug).join(", ")}
 
 <memorias>
 ${known.map((s2) => `#${s2.memory.id} ${s2.line}`).join("\n") || "(nada ainda)"}
 </memorias>
 
 Perguntas já feitas (não repita):
-${previousQs.slice(0, 40).map((q) => `- ${q}`).join("\n") || "(nenhuma)"}
+${previousQs.slice(0, 40).map((q2) => `- ${q2}`).join("\n") || "(nenhuma)"}
 
 <respostas>
 ${iv.turns.slice(-6).map((t) => `P: ${t.question}
 R: ${t.skipped ? "(pulou)" : sanitizeForPrompt(t.answer ?? "", 800)}`).join("\n")}
 </respostas>
 ${answer == null ? iv.turns.length ? "O usuário pulou a última pergunta. Faça outra, de outro ângulo." : "Faça a primeira pergunta." : "Analise a última resposta e faça a próxima pergunta."}`;
-  const raw = await callAi("entrevista", INTERVIEW_SYSTEM(produce.rule.maxSuggestionsPerRun), prompt);
+  const raw = await callAi("entrevista", INTERVIEW_SYSTEM(produce2.rule.maxSuggestionsPerRun), prompt);
   const parsed = parseJsonObject(raw);
   let proposed = 0;
   if (answer && last) {
-    proposed = proposeFromItems(db2, owner2, parsed.suggestions ?? [], produce.rule, { sourceKind: "interview", sourceRef: `entrevista#${id}`, source: answer, allowedIds: new Set(known.map((k) => k.memory.id)) });
+    proposed = proposeFromItems(db2, owner2, parsed.suggestions ?? [], produce2.rule, { sourceKind: "interview", sourceRef: `entrevista#${id}`, source: answer, allowedIds: new Set(known.map((k) => k.memory.id)) });
     last.proposed = proposed;
   }
   const next = String(parsed.next_question ?? "").trim();
@@ -81019,7 +81027,7 @@ function dataVersion(db2, owner2) {
 }
 const hash = (s2) => crypto.createHash("sha256").update(s2).digest("hex").slice(0, 16);
 function trace(db2, owner2, req, out) {
-  const q = (req.query ?? "").trim();
+  const q2 = (req.query ?? "").trim();
   exec(
     db2,
     `INSERT INTO memory_usage (ownerId, createdAt, useCase, purpose, queryHash, queryPreview, simulated, blocked, selected, discarded, tokens, budget, durationMs, vector, policyVersion)
@@ -81029,10 +81037,10 @@ function trace(db2, owner2, req, out) {
       nowIso(),
       String(req.useCase).slice(0, 80),
       String(req.purpose ?? "").slice(0, 120),
-      q ? hash(q) : null,
+      q2 ? hash(q2) : null,
       // só a consulta digitada no simulador fica legível; a dos consumers fica só como hash
-      q ? q.slice(0, 80) : null,
-      1,
+      req.simulate && q2 ? q2.slice(0, 80) : null,
+      req.simulate ? 1 : 0,
       out.blockedReason ?? null,
       JSON.stringify((out.items ?? []).map((i) => ({ id: i.id, layer: i.layer, score: i.score, reason: i.reason, tokens: i.tokens }))),
       JSON.stringify({ items: out.discarded ?? [], policy: out.policyFiltered ?? {} }),
@@ -81079,7 +81087,7 @@ async function getMemoryContext(req) {
       tokens: s2.tokens
     }));
     const durationMs = Date.now() - started2;
-    if (!req.simulate && items.length) ;
+    if (!req.simulate && items.length) touchUsageSync(db2, owner2, items.map((i) => i.id));
     const traceId = trace(db2, owner2, req, {
       items,
       tokens: result.tokens,
@@ -81278,7 +81286,7 @@ async function importJson(input, mode = "review") {
   const b2 = typeof input === "string" ? jparse(input, null) : input;
   if (!b2 || b2.format !== "rickos-memory" || !Array.isArray(b2.memories)) throw new MemoryError("Arquivo não é uma exportação da Memória Pessoal.");
   if (b2.memories.length > 5e3) throw new MemoryError("Arquivo grande demais (máx. 5000 memórias).");
-  const produce = await resolveProduce("memory.text");
+  const produce2 = await resolveProduce("memory.text");
   return tx((db2) => {
     const r = { created: 0, suggested: 0, skipped: 0, reasons: {} };
     for (const c of Array.isArray(b2.categories) ? b2.categories.slice(0, 200) : []) {
@@ -81348,7 +81356,7 @@ async function importJson(input, mode = "review") {
         refs.set(String(m.ref), created.id);
         r.created++;
       } else {
-        if (!produce.ok) throw new MemoryError(`Importação bloqueada: ${produce.reason}`, "forbidden");
+        if (!produce2.ok) throw new MemoryError(`Importação bloqueada: ${produce2.reason}`, "forbidden");
         const out = proposeSync(
           db2,
           owner2,
@@ -81361,7 +81369,7 @@ async function importJson(input, mode = "review") {
             sourceRef: "json",
             evidence: [{ excerpt: content }]
           },
-          produce.rule
+          produce2.rule
         );
         if (out.ok) r.suggested++;
         else bump(r, out.reason);
@@ -81429,8 +81437,8 @@ function parseMarkdownItems(md) {
 async function importMarkdownItems(md, sourceKind, sourceRef, useCase) {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  const produce = await resolveProduce(useCase);
-  if (!produce.ok) throw new MemoryError(`Importação bloqueada: ${produce.reason}`, "forbidden");
+  const produce2 = await resolveProduce(useCase);
+  if (!produce2.ok) throw new MemoryError(`Importação bloqueada: ${produce2.reason}`, "forbidden");
   const items = parseMarkdownItems(String(md ?? "")).slice(0, 1e3);
   return tx((db2) => {
     const r = { created: 0, suggested: 0, skipped: 0, reasons: {} };
@@ -81449,7 +81457,7 @@ async function importMarkdownItems(md, sourceKind, sourceRef, useCase) {
           evidence: [{ excerpt: it.content }]
         },
         // a lista de linhas é do próprio usuário: o teto de quantidade é o do lote, não o do agente
-        { ...produce.rule, maxSuggestionsPerRun: 1e3 }
+        { ...produce2.rule, maxSuggestionsPerRun: 1e3 }
       );
       if (out.ok) r.suggested++;
       else bump(r, out.reason);
@@ -81496,6 +81504,35 @@ async function migrateLegacy(opts) {
   }
   await tx((d) => registerImport(d, owner2, kind, hash2, { created: result.created, suggested: result.suggested, skipped: result.skipped, reasons: result.reasons }));
   return result;
+}
+const q = (v, max = 1500) => String(v ?? "").slice(0, max);
+function toBlock(c) {
+  return {
+    allowed: c.allowed,
+    degraded: c.degraded,
+    block: [c.instructions, c.text].filter(Boolean).join("\n\n"),
+    items: c.items.map((i) => ({ id: i.id, title: i.title, category: i.category })),
+    tokens: c.tokens
+  };
+}
+const consume = async (useCase, query, purpose) => toBlock(await getMemoryContext({ useCase, query, purpose }));
+async function produce(useCase, text, sourceRef) {
+  const t = String(text ?? "").trim();
+  if (t.length < 20) throw new MemoryError("Escreva um pouco mais para a IA sugerir memórias.");
+  if (t.length > 2e4) throw new MemoryError("Texto longo demais (máx. 20 mil caracteres).");
+  return startManualJob("produce", () => extractFromText({ useCase, text: t, sourceKind: "producer", sourceRef, op: "agente" }));
+}
+function registerMemoryIntegrations(handle) {
+  handle(
+    "memory:ctxTripItinerary",
+    (_e, destination) => consume("assistant.trip_itinerary", `viagem roteiro destino ${q(destination, 200)}`, "personalizar um roteiro de viagem")
+  );
+  handle("memory:ctxTravelInterests", (_e, keywords) => consume("travel.recommendations", q(keywords, 800), "casar recomendações de viagem com interesses"));
+  handle("memory:ctxStays", (_e, query) => consume("stays.analysis", `hospedagem ${q(query, 400)}`, "ranquear hospedagens"));
+  handle("memory:ctxWeekPlan", (_e, query) => consume("assistant.week_plan", `rotina semana trabalho ${q(query)}`, "planejar a semana"));
+  handle("memory:ctxWeeklyReview", (_e, query) => consume("home.weekly_review", `objetivos semana aprendizados produtividade ${q(query)}`, "revisão semanal"));
+  handle("memory:produceWeeklyReview", (_e, text) => produce("home.weekly_review", text, `revisao-semanal#${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`));
+  handle("memory:produceBraindump", (_e, text) => produce("braindump.extract", text, `braindump#${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`));
 }
 const owner = () => currentOwner();
 const changed$1 = (kind) => broadcast("memory:updated", { kind });
@@ -81635,6 +81672,7 @@ async function traces(limit = 50) {
   });
 }
 function registerMemoryRpc(handle) {
+  registerMemoryIntegrations(handle);
   handle("memory:categories", (_e, includeArchived) => listCategories(owner(), includeArchived !== false));
   handle("memory:createCategory", async (_e, input) => {
     const c = await createCategory(owner(), input);
