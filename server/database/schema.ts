@@ -790,4 +790,243 @@ export const SCHEMA = `
     attachments TEXT NOT NULL DEFAULT '[]'
   );
   CREATE INDEX IF NOT EXISTS idx_ai_conv_turns_conv ON ai_conv_turns(conversationId, id);
+
+  -- ── Memória Pessoal (docs/memoria/arquitetura.md) ──
+  CREATE TABLE IF NOT EXISTS memory_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT '•',
+    description TEXT NOT NULL DEFAULT '',
+    defaultSensitivity TEXT NOT NULL DEFAULT 'NORMAL',
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    archivedAt TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    UNIQUE(ownerId, slug)
+  );
+
+  CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    categoryId INTEGER REFERENCES memory_categories(id) ON DELETE SET NULL,
+    tags TEXT NOT NULL DEFAULT '[]',
+    type TEXT NOT NULL DEFAULT 'FACT',
+    layer TEXT NOT NULL DEFAULT 'semantic',
+    status TEXT NOT NULL DEFAULT 'active',
+    pinned INTEGER NOT NULL DEFAULT 0,
+    importance INTEGER NOT NULL DEFAULT 3,
+    extractionConfidence REAL,
+    reliability TEXT NOT NULL DEFAULT 'stated',
+    stability TEXT NOT NULL DEFAULT 'stable',
+    origin TEXT NOT NULL DEFAULT 'manual',
+    originRef TEXT,
+    scope TEXT NOT NULL DEFAULT 'geral',
+    sensitivity TEXT NOT NULL DEFAULT 'NORMAL',
+    occurredAt TEXT,
+    validFrom TEXT,
+    validUntil TEXT,
+    confirmedAt TEXT,
+    lastUsedAt TEXT,
+    useCount INTEGER NOT NULL DEFAULT 0,
+    normKey TEXT NOT NULL,
+    searchText TEXT NOT NULL DEFAULT '',
+    version INTEGER NOT NULL DEFAULT 1,
+    supersededById INTEGER,
+    embedding BLOB,
+    embeddingModel TEXT,
+    embeddingVersion INTEGER,
+    embeddedAt TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memories_owner_status ON memories(ownerId, status);
+  CREATE INDEX IF NOT EXISTS idx_memories_owner_cat ON memories(ownerId, categoryId);
+  CREATE INDEX IF NOT EXISTS idx_memories_owner_norm ON memories(ownerId, normKey);
+
+  CREATE TABLE IF NOT EXISTS memory_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    memoryId INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    changeKind TEXT NOT NULL,
+    actor TEXT NOT NULL DEFAULT 'user',
+    reason TEXT,
+    suggestionId INTEGER,
+    snapshot TEXT,
+    createdAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_revisions_mem ON memory_revisions(memoryId, id);
+
+  CREATE TABLE IF NOT EXISTS memory_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    memoryId INTEGER REFERENCES memories(id) ON DELETE CASCADE,
+    suggestionId INTEGER REFERENCES memory_suggestions(id) ON DELETE CASCADE,
+    sourceKind TEXT NOT NULL,
+    sourceRef TEXT,
+    excerpt TEXT NOT NULL,
+    contentHash TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_evidence_mem ON memory_evidence(memoryId);
+  CREATE INDEX IF NOT EXISTS idx_memory_evidence_sug ON memory_evidence(suggestionId);
+
+  CREATE TABLE IF NOT EXISTS memory_relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    fromId INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    toId INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    note TEXT,
+    createdAt TEXT NOT NULL,
+    UNIQUE(fromId, toId, kind)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_relations_to ON memory_relations(toId);
+
+  CREATE TABLE IF NOT EXISTS memory_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    op TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    payload TEXT,
+    question TEXT,
+    targetIds TEXT NOT NULL DEFAULT '[]',
+    targetSnapshot TEXT NOT NULL DEFAULT '[]',
+    rationale TEXT NOT NULL DEFAULT '',
+    benefit TEXT NOT NULL DEFAULT '',
+    extractionConfidence REAL,
+    reliability TEXT NOT NULL DEFAULT 'inferred',
+    sensitivity TEXT NOT NULL DEFAULT 'NORMAL',
+    sourceKind TEXT NOT NULL,
+    sourceRef TEXT,
+    dedupeKey TEXT NOT NULL,
+    snoozedUntil TEXT,
+    resultMemoryIds TEXT NOT NULL DEFAULT '[]',
+    undo TEXT,
+    batchId TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    resolvedAt TEXT,
+    UNIQUE(ownerId, dedupeKey)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_suggestions_status ON memory_suggestions(ownerId, status);
+
+  CREATE TABLE IF NOT EXISTS memory_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    suggestionId INTEGER,
+    verdict TEXT NOT NULL,
+    note TEXT,
+    normKey TEXT,
+    op TEXT,
+    createdAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_feedback_norm ON memory_feedback(ownerId, normKey);
+
+  CREATE TABLE IF NOT EXISTS memory_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    useCase TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT '',
+    queryHash TEXT,
+    queryPreview TEXT,
+    simulated INTEGER NOT NULL DEFAULT 0,
+    blocked TEXT,
+    selected TEXT NOT NULL DEFAULT '[]',
+    discarded TEXT NOT NULL DEFAULT '[]',
+    tokens INTEGER NOT NULL DEFAULT 0,
+    budget INTEGER NOT NULL DEFAULT 0,
+    durationMs INTEGER NOT NULL DEFAULT 0,
+    vector INTEGER NOT NULL DEFAULT 0,
+    policyVersion INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_usage_created ON memory_usage(ownerId, createdAt);
+
+  CREATE TABLE IF NOT EXISTS memory_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    producer TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    sourceRef TEXT,
+    dedupeKey TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    createdAt TEXT NOT NULL,
+    processedAt TEXT,
+    UNIQUE(ownerId, dedupeKey)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_events_status ON memory_events(ownerId, status);
+
+  CREATE TABLE IF NOT EXISTS memory_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    dedupeKey TEXT NOT NULL,
+    params TEXT NOT NULL DEFAULT '{}',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    maxAttempts INTEGER NOT NULL DEFAULT 3,
+    runAfter TEXT NOT NULL,
+    startedAt TEXT,
+    finishedAt TEXT,
+    error TEXT,
+    stats TEXT NOT NULL DEFAULT '{}',
+    createdAt TEXT NOT NULL,
+    UNIQUE(ownerId, dedupeKey)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_jobs_status ON memory_jobs(status, runAfter);
+
+  CREATE TABLE IF NOT EXISTS memory_gaps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    categoryId INTEGER REFERENCES memory_categories(id) ON DELETE SET NULL,
+    why TEXT NOT NULL DEFAULT '',
+    beneficiaries TEXT NOT NULL DEFAULT '[]',
+    priority INTEGER NOT NULL DEFAULT 2,
+    sensitivity TEXT NOT NULL DEFAULT 'NORMAL',
+    question TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    normKey TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    resolvedAt TEXT,
+    UNIQUE(ownerId, normKey)
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_interviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    categoryId INTEGER REFERENCES memory_categories(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    turns TEXT NOT NULL DEFAULT '[]',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    endedAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    sourceHash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'done',
+    stats TEXT NOT NULL DEFAULT '{}',
+    createdAt TEXT NOT NULL,
+    UNIQUE(ownerId, kind, sourceHash)
+  );
+
+  -- Exclusões definitivas: só o fato, nunca o conteúdo
+  CREATE TABLE IF NOT EXISTS memory_tombstones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId TEXT NOT NULL,
+    memoryId INTEGER NOT NULL,
+    deletedAt TEXT NOT NULL
+  );
 `;
