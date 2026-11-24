@@ -161,7 +161,7 @@ Nenhum conteúdo pessoal vai para `console`/logs; traces guardam ids/scores, con
 
 Memória Pessoal → Inbox → "Uma por linha (sem IA)" ou "Migrar com IA" (ou Configurações →
 Reprocessar). Idempotente por hash do documento + dedupe por item. `settings.knowledge_base`
-nunca é alterado; a página "Base (legado)" e os consumidores antigos continuam funcionando.
+nunca é alterado e os consumidores antigos continuam lendo dele. A página de edição "Base (legado)" foi removida em 2026-11-25 a pedido do usuário (a Base estava vazia).
 
 ### Rollback
 

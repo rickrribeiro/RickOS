@@ -33,7 +33,7 @@ export function Recommendations(): React.ReactElement {
     <div className="chart-section">
       <div className="chart-title">⭐ Recomendações</div>
       <p className="travel-muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
-        Baseadas na sua <strong>Base de Conhecimento</strong> (edite em Organização). Geração por IA na página IA.
+        Baseadas no perfil de viagem atual. A integração com a <strong>Memória Pessoal</strong> aguarda aprovação. Geração por IA na página IA.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {bullets.map((b) => (

@@ -702,7 +702,6 @@ export type Page =
   | 'todo'
   | 'braindump'
   | 'habits'
-  | 'knowledge'
   | 'memory'
   | 'goals'
   | 'automations'

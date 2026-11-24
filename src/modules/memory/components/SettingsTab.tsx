@@ -274,7 +274,7 @@ export function SettingsTab(): React.ReactElement {
           {legacy?.hasLegacy ? (
             <>
               <p className="mem-sub">
-                {legacy.chars} caracteres · {legacy.bullets} itens de lista. O documento continua intacto (página “Base (legado)”) e as funcionalidades antigas seguem lendo
+                {legacy.chars} caracteres · {legacy.bullets} itens de lista. O documento continua guardado (sem página de edição) e as funcionalidades antigas seguem lendo
                 dele até a migração delas ser aprovada.
               </p>
               <p className="mem-muted">

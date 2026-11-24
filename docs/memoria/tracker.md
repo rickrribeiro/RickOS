@@ -106,3 +106,4 @@ Status: ⬜ a fazer · 🟨 em andamento · ✅ concluído e validado · ⏸ blo
 * 2026-11-25 — Fases 3–4: Context Engine + Inspector, não interferência, atualidade, cobertura, lacunas, entrevista, linha do tempo.
 * 2026-11-25 — Fase 5: página completa (9 abas), validada em 1366px/390px, skins classic/devlytics, claro/escuro.
 * 2026-11-25 — Fases 6–7: custos/limites, degradação, evals (recuperação no `npm test`; extração 7/7 com LLM real), docs. 3.6 aguardando aprovação.
+* 2026-11-25 — Página "Base (legado)" removida a pedido do usuário (Base antiga vazia; `settings.knowledge_base` e `knowledge/constants.ts` mantidos para os consumidores atuais até a aprovação das integrações 1 e 2).
