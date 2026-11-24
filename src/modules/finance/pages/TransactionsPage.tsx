@@ -3,7 +3,7 @@ import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { TransactionEditor } from '../components/TransactionEditor'
-import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel } from '../util'
+import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
 
@@ -36,6 +36,23 @@ export function TransactionsPage(): React.ReactElement {
   const [pluggyReady, setPluggyReady] = useState(false)
   const [pluggyBusy, setPluggyBusy] = useState(false)
   const [pluggyMsg, setPluggyMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  // filtros da lista
+  const [fType, setFType] = useState<'' | 'income' | 'expense'>('')
+  const [fCategory, setFCategory] = useState<'' | 'none' | number>('')
+
+  const filtered = monthListing.filter(
+    (t) =>
+      (fType === '' || t.type === fType) &&
+      (fCategory === '' || (fCategory === 'none' ? t.categoryId == null : t.categoryId === fCategory))
+  )
+  const filtering = fType !== '' || fCategory !== ''
+  const fmtTotals = (items: Transaction[]): string =>
+    Object.entries(sumByCurrency(items))
+      .map(([c, v]) => formatMoney(v, c))
+      .join(' · ') || formatMoney(0)
+  const counted = filtered.filter((t) => !t.ignoredReason)
+  const inTotal = fmtTotals(counted.filter((t) => t.type === 'income'))
+  const outTotal = fmtTotals(counted.filter((t) => t.type === 'expense'))
 
   useEffect(() => {
     refresh()
@@ -170,9 +187,53 @@ export function TransactionsPage(): React.ReactElement {
         )}
       </div>
 
+      <div className="tx-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+        <select
+          value={fType}
+          onChange={(e) => {
+            const v = e.target.value as '' | 'income' | 'expense'
+            setFType(v)
+            // categoria escolhida é do outro tipo → some do select; limpa para não esconder tudo
+            if (v && typeof fCategory === 'number' && categories.find((c) => c.id === fCategory)?.type !== v) setFCategory('')
+          }}
+        >
+          <option value="">Entradas e saídas</option>
+          <option value="income">Só entradas</option>
+          <option value="expense">Só saídas</option>
+        </select>
+        <select
+          value={fCategory === '' ? '' : String(fCategory)}
+          onChange={(e) => {
+            const v = e.target.value
+            setFCategory(v === '' ? '' : v === 'none' ? 'none' : Number(v))
+          }}
+        >
+          <option value="">Todas as categorias</option>
+          <option value="none">Sem categoria</option>
+          {categories
+            .filter((c) => fType === '' || c.type === fType)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </select>
+        {filtering && (
+          <button className="btn btn-secondary btn-sm" onClick={() => { setFType(''); setFCategory('') }}>
+            Limpar filtros
+          </button>
+        )}
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+          {filtering && `${filtered.length} de ${monthListing.length} · `}
+          <span style={{ color: 'var(--success)' }}>+{inTotal}</span> ·{' '}
+          <span style={{ color: 'var(--danger)' }}>−{outTotal}</span>
+        </span>
+      </div>
+
       <div className="list-stack">
         {monthListing.length === 0 && <div className="empty-hint">Nenhuma transação neste mês.</div>}
-        {monthListing.map((t: Transaction) => t.ignoredReason ? (
+        {monthListing.length > 0 && filtered.length === 0 && <div className="empty-hint">Nenhuma transação com esses filtros.</div>}
+        {filtered.map((t: Transaction) => t.ignoredReason ? (
           <div key={t.id} className="list-row" style={{ opacity: 0.55 }} title="Não entra em nenhum cálculo nem gráfico">
             <span className="due-badge due-future">{t.date.slice(5)}</span>
             <span className="list-row-title" style={{ color: 'var(--text-muted)' }}>{t.description || categoryName(t.categoryId)}</span>
