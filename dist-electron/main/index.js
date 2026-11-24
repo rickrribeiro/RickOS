@@ -85064,6 +85064,11 @@ ipcMain.handle("ai:cancel", (_, runId) => {
   }
   return false;
 });
+ipcMain.handle("app:dbSize", async () => {
+  await getDb();
+  saveDb();
+  return fs.statSync(dbFilePath()).size;
+});
 ipcMain.handle("app:exportDbToDrive", async (_, email) => {
   try {
     await getDb();
