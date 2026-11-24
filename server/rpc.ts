@@ -196,6 +196,8 @@ import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAcco
 import { syncPluggy, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
+import { registerMemoryRpc } from './memory/rpc'
+import { memoryTick } from './memory/jobs'
 import { recoverConversations, registerAiConvRpc } from './aiconv/rpc'
 import { startChatsEngine } from './chats/sync'
 import { schedulerTick as flightsTick, bootFlights } from './flights/runner'
@@ -312,6 +314,9 @@ export function startScheduler(): void {
   setInterval(() => void flightsTick().catch(() => undefined), 5 * 60 * 1000)
   // Central de Mensagens: sincronização (tempo real + polling) e lembretes.
   startChatsEngine()
+  // Memória Pessoal: expiração, retenção e (só se ligados) Memory Agent e consolidação.
+  setTimeout(() => void memoryTick().catch(() => undefined), 90000)
+  setInterval(() => void memoryTick().catch(() => undefined), 5 * 60 * 1000)
 }
 
 // ── IPC: Tags ─────────────────────────────────────────────────────────────────
@@ -944,6 +949,9 @@ registerFlightRpc((channel, fn) => ipcMain.handle(channel, fn))
 
 // Central de Mensagens: canais `chats:*` (server/chats/rpc.ts).
 registerChatRpc((channel, fn) => ipcMain.handle(channel, fn))
+
+// Memória Pessoal: canais `memory:*` (server/memory/rpc.ts).
+registerMemoryRpc((channel, fn) => ipcMain.handle(channel, fn))
 
 ipcMain.handle('tripDocs:get', (_, tripId: number) => getTripDocuments(tripId))
 ipcMain.handle('tripDocs:set', (_, tripId: number, item: string, checked: number) =>

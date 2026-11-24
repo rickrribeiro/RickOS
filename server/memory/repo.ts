@@ -780,7 +780,9 @@ export function hardDeleteSync(db: Database, owner: string, id: number): boolean
   ])
   for (const u of uses) {
     const strip = (s: string): string => JSON.stringify(jparse<{ id: number }[]>(s, []).filter((x) => x.id !== id))
-    exec(db, 'UPDATE memory_usage SET selected=?, discarded=? WHERE id=?', [strip(u.selected), strip(u.discarded), u.id])
+    const disc = jparse<{ items?: { id: number }[]; policy?: unknown }>(u.discarded, {})
+    const discarded = JSON.stringify({ ...disc, items: (Array.isArray(disc.items) ? disc.items : []).filter((x) => x.id !== id) })
+    exec(db, 'UPDATE memory_usage SET selected=?, discarded=? WHERE id=?', [strip(u.selected), discarded, u.id])
   }
   exec(db, 'DELETE FROM memories WHERE id = ? AND ownerId = ?', [id, owner])
   exec(db, 'INSERT INTO memory_tombstones (ownerId, memoryId, deletedAt) VALUES (?,?,?)', [owner, id, nowIso()])
