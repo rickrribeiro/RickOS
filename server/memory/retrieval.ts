@@ -220,8 +220,9 @@ export function retrieve(db: Database, owner: string, opts: RetrieveOptions): Re
     const score = q.length
       ? 0.55 * relevance + 0.1 * coverage + 0.15 * importance + 0.1 * confirmed + 0.05 * recency + (m.pinned ? 0.05 : 0)
       : 0.45 * importance + 0.2 * confirmed + 0.15 * recency + (m.pinned ? 0.2 : 0)
-    // Sem consulta: só o que é importante ou fixado. Com consulta: relevante, ou essencial (core).
-    const keep = q.length ? relevance >= minRel || layer === 'core' : m.pinned || m.importance >= 4 || layer === 'core'
+    // Sem consulta: só o que é importante ou fixado. Com consulta: só o relevante — fixar aumenta o
+    // score mas NÃO fura a relevância; instruções pessoais (já filtradas pela política) valem sempre.
+    const keep = q.length ? relevance >= minRel || m.type === 'INSTRUCTION' : m.pinned || m.importance >= 4 || layer === 'core'
     if (!keep) {
       discarded.push({ id: m.id, reason: q.length ? 'pouco relevante para a consulta' : 'sem consulta e pouco importante', score: round(score) })
       return

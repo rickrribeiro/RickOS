@@ -69,6 +69,7 @@ describe('MemoryContextService', () => {
 
   it('retorna zero memórias quando nada agrega', async () => {
     await seedTravel()
+    await repo.createMemory(OWNER, { content: 'Meu lema é simplicidade.', categoryId: await cat('valores'), pinned: true, importance: 5 })
     const c = await ctx.getMemoryContext({ useCase: 'memory.interview', query: 'receita de bolo de cenoura' })
     assert.equal(c.allowed, true)
     assert.equal(c.items.length, 0)
