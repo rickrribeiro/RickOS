@@ -385,6 +385,16 @@ export function createApi() {
       update: (id: number, name: string, currency: string, balance: number) => invoke('accounts:update', id, name, currency, balance),
       delete: (id: number) => invoke('accounts:delete', id)
     },
+    financeRules: {
+      getAll: () => invoke('financeRules:getAll'),
+      create: (categoryId: number, keywords: string) => invoke('financeRules:create', categoryId, keywords),
+      update: (id: number, categoryId: number, keywords: string, active: boolean) =>
+        invoke('financeRules:update', id, categoryId, keywords, active),
+      delete: (id: number) => invoke('financeRules:delete', id),
+      move: (id: number, dir: -1 | 1) => invoke('financeRules:move', id, dir),
+      preview: (month?: string) => invoke('financeRules:preview', month),
+      apply: (changes: { id: number; categoryId: number }[]) => invoke('financeRules:apply', changes)
+    },
     categories: {
       getAll: () => invoke('categories:getAll'),
       create: (name: string, type: string, color: string) => invoke('categories:create', name, type, color),

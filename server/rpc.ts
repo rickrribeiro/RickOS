@@ -90,6 +90,12 @@ import {
   getTransactions,
   setTransactionIgnored,
   setTransactionInvestment,
+  getFinanceRules,
+  createFinanceRule,
+  updateFinanceRule,
+  deleteFinanceRule,
+  moveFinanceRule,
+  setTransactionsCategory,
   createTransaction,
   updateTransaction,
   deleteTransaction,
@@ -198,6 +204,7 @@ import { syncGithubIssues, createIssueViaClaude } from './services/github'
 import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
 import { syncPluggy, pluggyConfigured, createConnectToken } from './services/pluggy'
+import { categorizeNew, previewFinanceRules } from './services/financeRules'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
 import { registerMemoryRpc } from './memory/rpc'
@@ -939,7 +946,17 @@ ipcMain.handle('transactions:update', (_, id: number, accountId: number | null, 
 ipcMain.handle('transactions:delete', (_, id: number) => deleteTransaction(id))
 ipcMain.handle('transactions:setIgnored', (_, id: number, reason: string | null) => setTransactionIgnored(id, reason))
 ipcMain.handle('transactions:setInvestment', (_, id: number, investment: boolean) => setTransactionInvestment(id, investment))
-ipcMain.handle('transactions:bulk', (_, rows: Omit<DbTransaction, 'id'>[]) => bulkInsertTransactions(rows))
+ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[]) => bulkInsertTransactions(await categorizeNew(rows)))
+
+ipcMain.handle('financeRules:getAll', () => getFinanceRules())
+ipcMain.handle('financeRules:create', (_, categoryId: number, keywords: string) => createFinanceRule(categoryId, keywords))
+ipcMain.handle('financeRules:update', (_, id: number, categoryId: number, keywords: string, active: boolean) =>
+  updateFinanceRule(id, categoryId, keywords, active)
+)
+ipcMain.handle('financeRules:delete', (_, id: number) => deleteFinanceRule(id))
+ipcMain.handle('financeRules:move', (_, id: number, dir: -1 | 1) => moveFinanceRule(id, dir))
+ipcMain.handle('financeRules:preview', (_, month?: string) => previewFinanceRules(month))
+ipcMain.handle('financeRules:apply', (_, changes: { id: number; categoryId: number }[]) => setTransactionsCategory(changes))
 
 ipcMain.handle('budgets:getForMonth', (_, month: string) => getBudgets(month))
 ipcMain.handle('budgets:set', (_, categoryId: number, month: string, amount: number) => setBudget(categoryId, month, amount))

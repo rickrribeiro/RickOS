@@ -1,6 +1,8 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
+import type { FinanceRule } from '../../shared/finance'
+export type { FinanceRule } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
@@ -440,6 +442,17 @@ export interface Transaction {
   investment?: number // 1 = aplicação (saída) / resgate (entrada) de investimento: fora de receitas/gastos
 }
 
+export interface RulePreviewItem {
+  id: number
+  date: string
+  description: string | null
+  amount: number
+  currency: string
+  type: string
+  toCategoryId: number
+  ruleId: number
+}
+
 export interface PluggySyncResult {
   imported: number
   updated: number
@@ -734,6 +747,7 @@ export type Page =
   | 'finance-dashboard'
   | 'transactions'
   | 'budget'
+  | 'finance-rules'
   | 'investments'
   | 'reports'
   // Viagens
@@ -1042,6 +1056,15 @@ declare global {
         create: (name: string, currency: string, balance: number) => Promise<Account>
         update: (id: number, name: string, currency: string, balance: number) => Promise<void>
         delete: (id: number) => Promise<void>
+      }
+      financeRules: {
+        getAll: () => Promise<FinanceRule[]>
+        create: (categoryId: number, keywords: string) => Promise<void>
+        update: (id: number, categoryId: number, keywords: string, active: boolean) => Promise<void>
+        delete: (id: number) => Promise<void>
+        move: (id: number, dir: -1 | 1) => Promise<void>
+        preview: (month?: string) => Promise<RulePreviewItem[]>
+        apply: (changes: { id: number; categoryId: number }[]) => Promise<void>
       }
       categories: {
         getAll: () => Promise<Category[]>

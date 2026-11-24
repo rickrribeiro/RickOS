@@ -30,3 +30,51 @@ export function detectInvestmentMove(description: string | null | undefined, cat
   if (category && PLUGGY_INVESTMENT_CATEGORIES.has(category.toLowerCase())) return true
   return MOVE_START.test(d) || PRODUCTS.test(d)
 }
+
+// ── Regras de categorização ────────────────────────────────────────────────────
+
+export interface FinanceRule {
+  id: number
+  categoryId: number
+  keywords: string // separadas por vírgula
+  active: number // 1 = ativa
+  position: number // menor = mais prioritária
+}
+
+/** minúsculas, sem acentos e com espaços colapsados — para comparar descrições. */
+export function normalizeText(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function parseKeywords(keywords: string): string[] {
+  return keywords
+    .split(',')
+    .map((k) => normalizeText(k))
+    .filter(Boolean)
+}
+
+/**
+ * Primeira regra ativa (por `position`) cuja categoria é do mesmo tipo da transação e que
+ * tem alguma palavra contida na descrição. null se nenhuma bate.
+ */
+export function matchFinanceRule<R extends FinanceRule>(
+  rules: R[],
+  categories: { id: number; type: string }[],
+  description: string | null | undefined,
+  type: string
+): R | null {
+  const d = normalizeText(description ?? '')
+  if (!d) return null
+  const typeOf = new Map(categories.map((c) => [c.id, c.type]))
+  const ordered = [...rules].sort((a, b) => a.position - b.position || a.id - b.id)
+  for (const r of ordered) {
+    if (!r.active || typeOf.get(r.categoryId) !== type) continue
+    if (parseKeywords(r.keywords).some((k) => d.includes(k))) return r
+  }
+  return null
+}

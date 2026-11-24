@@ -1,5 +1,6 @@
 export { FinanceDashboardPage } from './FinanceDashboardPage'
 export { TransactionsPage } from './TransactionsPage'
 export { BudgetPage } from './BudgetPage'
+export { FinanceRulesPage } from './FinanceRulesPage'
 export { InvestmentsPage } from './InvestmentsPage'
 export { ReportsPage } from './ReportsPage'

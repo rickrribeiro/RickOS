@@ -184,6 +184,16 @@ export const SCHEMA = `
     investment INTEGER NOT NULL DEFAULT 0   -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
   );
 
+  -- Regras de categorização automática de transações (Finanças → Regras).
+  CREATE TABLE IF NOT EXISTS finance_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoryId INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    keywords TEXT NOT NULL,                 -- separadas por vírgula; casam por "contém" na descrição
+    active INTEGER NOT NULL DEFAULT 1,
+    position INTEGER NOT NULL DEFAULT 0,    -- menor = mais prioritária
+    createdAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     categoryId INTEGER REFERENCES categories(id) ON DELETE CASCADE,

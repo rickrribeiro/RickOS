@@ -1,4 +1,5 @@
 import { Database } from 'sql.js'
+import type { FinanceRule } from '../../shared/finance'
 import { randomUUID } from 'crypto'
 import { getDb, saveDb } from './db'
 
@@ -1249,12 +1250,51 @@ export async function updateCategory(id: number, name: string, color: string): P
   const db = await getDb()
   run(db, 'UPDATE categories SET name = ?, color = ? WHERE id = ?', [name, color, id])
 }
-/** Exclui a categoria; transações dela ficam sem categoria e as metas dela somem. */
+/** Exclui a categoria; transações dela ficam sem categoria e as metas e regras dela somem. */
 export async function deleteCategory(id: number): Promise<void> {
   const db = await getDb()
+  run(db, 'DELETE FROM finance_rules WHERE categoryId = ?', [id])
   run(db, 'UPDATE transactions SET categoryId = NULL WHERE categoryId = ?', [id])
   run(db, 'DELETE FROM budgets WHERE categoryId = ?', [id])
   run(db, 'DELETE FROM categories WHERE id = ?', [id])
+}
+
+// ── Finance rules (categorização automática) ──
+export async function getFinanceRules(): Promise<FinanceRule[]> {
+  const db = await getDb()
+  return getAll<FinanceRule>(db, 'SELECT id, categoryId, keywords, active, position FROM finance_rules ORDER BY position, id')
+}
+export async function createFinanceRule(categoryId: number, keywords: string): Promise<void> {
+  const db = await getDb()
+  const max = getOne<{ m: number | null }>(db, 'SELECT MAX(position) AS m FROM finance_rules')
+  run(db, 'INSERT INTO finance_rules (categoryId, keywords, active, position, createdAt) VALUES (?, ?, 1, ?, ?)', [
+    categoryId,
+    keywords,
+    (max?.m ?? -1) + 1,
+    new Date().toISOString()
+  ])
+}
+export async function updateFinanceRule(id: number, categoryId: number, keywords: string, active: boolean): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE finance_rules SET categoryId = ?, keywords = ?, active = ? WHERE id = ?', [categoryId, keywords, active ? 1 : 0, id])
+}
+export async function deleteFinanceRule(id: number): Promise<void> {
+  const db = await getDb()
+  run(db, 'DELETE FROM finance_rules WHERE id = ?', [id])
+}
+/** Sobe (-1) ou desce (+1) a regra na prioridade, renumerando as posições. */
+export async function moveFinanceRule(id: number, dir: -1 | 1): Promise<void> {
+  const db = await getDb()
+  const rules = getAll<FinanceRule>(db, 'SELECT id, categoryId, keywords, active, position FROM finance_rules ORDER BY position, id')
+  const i = rules.findIndex((r) => r.id === id)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= rules.length) return
+  ;[rules[i], rules[j]] = [rules[j], rules[i]]
+  rules.forEach((r, pos) => run(db, 'UPDATE finance_rules SET position = ? WHERE id = ?', [pos, r.id]))
+}
+export async function setTransactionsCategory(changes: { id: number; categoryId: number }[]): Promise<void> {
+  const db = await getDb()
+  for (const c of changes) run(db, 'UPDATE transactions SET categoryId = ? WHERE id = ?', [c.categoryId, c.id])
 }
 
 // ── Transactions ──

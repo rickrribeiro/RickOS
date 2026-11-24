@@ -35,6 +35,7 @@ import {
   FinanceDashboardPage,
   TransactionsPage,
   BudgetPage,
+  FinanceRulesPage,
   InvestmentsPage,
   ReportsPage
 } from './modules/finance/pages'
@@ -82,6 +83,7 @@ const PAGES: Record<Page, React.ComponentType> = {
   'finance-dashboard': FinanceDashboardPage,
   transactions: TransactionsPage,
   budget: BudgetPage,
+  'finance-rules': FinanceRulesPage,
   investments: InvestmentsPage,
   reports: ReportsPage,
   stays: StayFinderPage,

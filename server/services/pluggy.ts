@@ -7,6 +7,7 @@ import {
 } from '../database/queries'
 import { decodeSecret } from './secrets'
 import { detectInvestmentMove } from '../../shared/finance'
+import { categorizeNew } from './financeRules'
 
 const PLUGGY_API = 'https://api.pluggy.ai'
 const OUTROS_CATEGORY_ID = 6 // seeded "Outros"
@@ -290,7 +291,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
     fresh.push(inc)
   }
 
-  if (fresh.length) await bulkInsertTransactions(fresh)
+  if (fresh.length) await bulkInsertTransactions(await categorizeNew(fresh))
 
   const vanishedPending: VanishedPending[] = existing
     .filter((t) => t.externalId && t.pending && !seenIds.has(t.externalId) && (!month || t.date.startsWith(month)))
