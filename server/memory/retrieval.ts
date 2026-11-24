@@ -154,7 +154,10 @@ export function retrieve(db: Database, owner: string, opts: RetrieveOptions): Re
   const docs: Doc[] = []
   for (const r of rows) {
     const m = toMemory(r)
-    if (!categoryAllowed(rule, r.catSlug)) {
+    // `instructions: true` autoriza instruções pessoais confirmadas de qualquer categoria
+    // (elas costumam morar em "Instruções para IA"); sensibilidade continua valendo.
+    const instructionOk = m.type === 'INSTRUCTION' && rule.instructions
+    if (!instructionOk && !categoryAllowed(rule, r.catSlug)) {
       bump('categoria fora da política')
       continue
     }
