@@ -4,7 +4,7 @@ import { MonthNav } from '../components/MonthNav'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, iofInBase, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
-  const { accounts, transactions, allTransactions, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
+  const { accounts, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
     useFinanceStore()
 
   useEffect(() => {
@@ -15,6 +15,9 @@ export function FinanceDashboardPage(): React.ReactElement {
   const expense = transactions.filter((t) => t.type === 'expense')
   const incomeByCur = sumByCurrency(income)
   const expenseByCur = sumByCurrency(expense)
+  // aplicações/resgates: fora de receitas/gastos, mostrados à parte
+  const redemptionsByCur = sumByCurrency(investmentMoves.filter((t) => t.type === 'income'))
+  const applicationsByCur = sumByCurrency(investmentMoves.filter((t) => t.type === 'expense'))
 
   // balances by currency (from accounts)
   const balByCur: Record<string, number> = {}
@@ -85,10 +88,20 @@ export function FinanceDashboardPage(): React.ReactElement {
         <div className="stat-card">
           <div className="stat-card-label">Receitas do mês</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{money(incomeByCur)}</div>
+          {Object.keys(redemptionsByCur).length > 0 && (
+            <div className="stat-card-sub" title="Resgates de investimento: não contam como receita">
+              + resgates de investimento {money(redemptionsByCur)}
+            </div>
+          )}
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Gastos do mês</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--danger)' }}>{money(expenseByCur)}</div>
+          {Object.keys(applicationsByCur).length > 0 && (
+            <div className="stat-card-sub" title="Aplicações em investimento: não contam como gasto">
+              + aplicações em investimento {money(applicationsByCur)}
+            </div>
+          )}
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Meta (orçamento)</div>

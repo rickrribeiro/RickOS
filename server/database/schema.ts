@@ -180,7 +180,8 @@ export const SCHEMA = `
     ignoredReason TEXT,                     -- não nulo = fora de todos os cálculos (ex.: pagamento de fatura)
     externalId TEXT,                        -- id da transação no Pluggy (importação Open Finance)
     externalSig TEXT,                       -- valor|descrição|data|tipo|status como o banco mandou na última importação
-    pending INTEGER NOT NULL DEFAULT 0      -- 1 = pendente no banco (valor/descrição ainda podem mudar)
+    pending INTEGER NOT NULL DEFAULT 0,     -- 1 = pendente no banco (valor/descrição ainda podem mudar)
+    investment INTEGER NOT NULL DEFAULT 0   -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
   );
 
   CREATE TABLE IF NOT EXISTS budgets (

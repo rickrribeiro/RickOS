@@ -5,7 +5,7 @@ import { useFinanceStore } from '../store/financeStore'
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
 export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: () => void }): React.ReactElement {
-  const { categories, accounts, updateTransaction } = useFinanceStore()
+  const { categories, accounts, updateTransaction, setTransactionInvestment } = useFinanceStore()
   const [type, setType] = useState(tx.type)
   const [amount, setAmount] = useState(String(tx.amount))
   const [currency, setCurrency] = useState(tx.currency)
@@ -13,6 +13,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
   const [accountId, setAccountId] = useState<number | ''>(tx.accountId ?? '')
   const [description, setDescription] = useState(tx.description ?? '')
   const [date, setDate] = useState(tx.date)
+  const [investment, setInvestment] = useState(!!tx.investment)
 
   async function save(): Promise<void> {
     const v = parseFloat(amount)
@@ -27,6 +28,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
       description: description.trim() || null,
       date
     })
+    if (investment !== !!tx.investment) await setTransactionInvestment(tx.id, investment)
     onClose()
   }
 
@@ -77,6 +79,15 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
           <label>Descrição</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginTop: 8, cursor: 'pointer' }}>
+          <input type="checkbox" checked={investment} onChange={(e) => setInvestment(e.target.checked)} />
+          <span>
+            Movimentação de investimento ({type === 'income' ? 'resgate' : 'aplicação'})
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>
+              Não conta como {type === 'income' ? 'receita' : 'gasto'}; aparece à parte no Dashboard.
+            </span>
+          </span>
+        </label>
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>

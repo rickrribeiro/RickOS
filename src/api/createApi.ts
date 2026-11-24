@@ -398,6 +398,7 @@ export function createApi() {
         invoke('transactions:update', id, accountId, categoryId, amount, currency, type, description, date),
       delete: (id: number) => invoke('transactions:delete', id),
       setIgnored: (id: number, reason: string | null) => invoke('transactions:setIgnored', id, reason),
+      setInvestment: (id: number, investment: boolean) => invoke('transactions:setInvestment', id, investment),
       bulk: (rows: unknown[]) => invoke('transactions:bulk', rows)
     },
     budgets: {

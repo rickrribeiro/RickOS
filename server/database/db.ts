@@ -395,6 +395,13 @@ const MIGRATIONS: Migration[] = [
       try { db.run('ALTER TABLE transactions ADD COLUMN pending INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
       try { db.run('CREATE INDEX IF NOT EXISTS idx_transactions_external ON transactions(externalId);') } catch { /* tabela ausente */ }
     }
+  },
+  {
+    version: 29,
+    label: 'Transações: movimentação de investimento (aplicação/resgate) fora de receitas/gastos',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN investment INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+    }
   }
 ]
 

@@ -1193,6 +1193,7 @@ export interface DbTransaction {
   externalId?: string | null // id da transação no Pluggy
   externalSig?: string | null // como o banco mandou na última importação (detecta mudança do banco)
   pending?: number // 1 = pendente no banco
+  investment?: number // 1 = aplicação/resgate de investimento (fora de receitas/gastos)
 }
 export interface DbBudget {
   id: number
@@ -1317,6 +1318,11 @@ export async function applyExternalTransactionUpdate(
   }
   run(db, `UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, [...vals, id])
 }
+/** Marca/desmarca a transação como aplicação/resgate de investimento. */
+export async function setTransactionInvestment(id: number, investment: boolean): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE transactions SET investment = ? WHERE id = ?', [investment ? 1 : 0, id])
+}
 /** Marca (motivo) ou desmarca (null) a transação como ignorada nos cálculos. */
 export async function setTransactionIgnored(id: number, reason: string | null): Promise<void> {
   const db = await getDb()
@@ -1331,8 +1337,8 @@ export async function bulkInsertTransactions(rows: Omit<DbTransaction, 'id'>[]):
   for (const r of rows) {
     run(
       db,
-      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0]
+      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending, investment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0, r.investment ?? 0]
     )
   }
   return rows.length

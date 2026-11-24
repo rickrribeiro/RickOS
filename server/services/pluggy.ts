@@ -6,6 +6,7 @@ import {
   DbTransaction
 } from '../database/queries'
 import { decodeSecret } from './secrets'
+import { detectInvestmentMove } from '../../shared/finance'
 
 const PLUGGY_API = 'https://api.pluggy.ai'
 const OUTROS_CATEGORY_ID = 6 // seeded "Outros"
@@ -232,6 +233,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
         description: t.description ?? null,
         date: t.date.slice(0, 10),
         ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null,
+        investment: detectInvestmentMove(t.description, t.category) ? 1 : 0,
         externalId: t.id,
         pending: t.status === 'PENDING' ? 1 : 0
       }
