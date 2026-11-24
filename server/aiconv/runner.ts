@@ -29,6 +29,8 @@ import * as repo from './repo'
 export interface RunnerDeps {
   resolveCommand: (conv: AiConversation) => Promise<string>
   resolveModel: (conv: AiConversation) => Promise<string>
+  /** Esforço da conversa ou, se vazio, o padrão salvo nas configurações. */
+  resolveEffort: (conv: AiConversation) => Promise<string>
   /** Diretório do projeto (localPath), se houver. */
   resolveProjectCwd: (projectId: number | null) => Promise<string | undefined>
   /** Repositórios do projeto workspace (pasta raiz com vários repos); null = projeto de 1 repo. */
@@ -374,6 +376,7 @@ async function startTurn(conversationId: string, message: AiQueuedMessage): Prom
 
     const command = await deps.resolveCommand(conv)
     const model = await deps.resolveModel(conv)
+    const effort = await deps.resolveEffort(conv)
     const system = await deps.systemPrompt(conv)
     const args = [
       ...(await deps.allowedToolsArgs()),
@@ -388,7 +391,7 @@ async function startTurn(conversationId: string, message: AiQueuedMessage): Prom
       '--permission-mode',
       conv.permissionMode,
       ...(model ? ['--model', model] : []),
-      ...(conv.effort ? ['--effort', conv.effort] : []),
+      ...(effort ? ['--effort', effort] : []),
       // ramificação: retoma a sessão de origem numa sessão nova
       ...(conv.forkFrom && !conv.sessionId ? ['--resume', conv.forkFrom, '--fork-session'] : conv.sessionId ? ['--resume', conv.sessionId] : []),
       ...(system.trim() ? ['--append-system-prompt', system] : [])

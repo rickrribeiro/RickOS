@@ -16,6 +16,39 @@ export const PERMISSION_MODE_LABELS: Record<ConvPermissionMode, string> = {
 
 export type ConvEffort = '' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
+/** Modelos oferecidos no Prompt Runner (aliases do Claude CLI: sempre a versão mais recente da família). */
+export const CONV_MODELS: { v: string; label: string }[] = [
+  { v: 'opus', label: 'Opus' },
+  { v: 'sonnet', label: 'Sonnet' },
+  { v: 'haiku', label: 'Haiku' }
+]
+
+export const CONV_EFFORTS: { v: Exclude<ConvEffort, ''>; label: string }[] = [
+  { v: 'low', label: 'Baixo' },
+  { v: 'medium', label: 'Médio' },
+  { v: 'high', label: 'Alto' },
+  { v: 'xhigh', label: 'Muito alto' },
+  { v: 'max', label: 'Máximo' }
+]
+
+/** Chaves de configuração do padrão do Prompt Runner (Configurações → IA). */
+export const CONV_DEFAULT_MODEL_KEY = 'prompt_runner_model'
+export const CONV_DEFAULT_EFFORT_KEY = 'prompt_runner_effort'
+/** Padrão de fábrica quando nada foi salvo nas configurações. */
+export const CONV_FALLBACK_MODEL = 'opus'
+export const CONV_FALLBACK_EFFORT: Exclude<ConvEffort, ''> = 'medium'
+
+/** Padrão efetivo a partir do valor salvo (vazio/inválido → padrão de fábrica). */
+export function convDefaultModel(saved: string | null | undefined): string {
+  const v = (saved ?? '').trim()
+  return v || CONV_FALLBACK_MODEL
+}
+
+export function convDefaultEffort(saved: string | null | undefined): Exclude<ConvEffort, ''> {
+  const v = (saved ?? '').trim()
+  return CONV_EFFORTS.some((e) => e.v === v) ? (v as Exclude<ConvEffort, ''>) : CONV_FALLBACK_EFFORT
+}
+
 export interface AiQuestionOption {
   label: string
   description?: string

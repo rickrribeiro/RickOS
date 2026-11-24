@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AiConversation, AiConversationPatch, AiImageInput, AiPromptResponse, ConvEffort, ConvPermissionMode, SlashCommandInfo } from '../../../../shared/aiConversations'
-import { DEFAULT_CONTEXT_WINDOW, MAX_IMAGES_PER_MESSAGE, PERMISSION_MODE_LABELS } from '../../../../shared/aiConversations'
+import {
+  CONV_DEFAULT_EFFORT_KEY,
+  CONV_DEFAULT_MODEL_KEY,
+  CONV_EFFORTS,
+  CONV_MODELS,
+  DEFAULT_CONTEXT_WINDOW,
+  MAX_IMAGES_PER_MESSAGE,
+  PERMISSION_MODE_LABELS,
+  convDefaultEffort,
+  convDefaultModel
+} from '../../../../shared/aiConversations'
 import { useSkillStore, parseTags } from '../store/skillStore'
 import { useAgentStore } from '../store/agentStore'
 import { useProjectStore } from '../../projects/store/projectStore'
@@ -35,14 +45,6 @@ const MODE_HINT: Record<ConvPermissionMode, string> = {
   plan: 'Só lê e planeja; você aprova o plano antes de qualquer mudança.',
   bypassPermissions: 'Roda tudo sem perguntar (perguntas do Claude ainda aparecem).'
 }
-const EFFORTS: { v: ConvEffort; label: string }[] = [
-  { v: '', label: 'Padrão' },
-  { v: 'low', label: 'Baixo' },
-  { v: 'medium', label: 'Médio' },
-  { v: 'high', label: 'Alto' },
-  { v: 'xhigh', label: 'Muito alto' },
-  { v: 'max', label: 'Máximo' }
-]
 
 interface DraftSettings {
   projectId: number | null
@@ -83,6 +85,8 @@ export function PromptRunnerPage(): React.ReactElement {
   const { conversations, archived, showArchived, selectedId, turns } = store
 
   const [draft, setDraft] = useState<DraftSettings>(EMPTY_DRAFT)
+  /** Padrão salvo em Configurações → IA (modelo/esforço de conversas novas). */
+  const [defaults, setDefaults] = useState<{ model: string; effort: ConvEffort }>({ model: convDefaultModel(''), effort: convDefaultEffort('') })
   const [text, setText] = useState('')
   const [search, setSearch] = useState('')
   const [pane, setPane] = useState<'list' | 'chat'>('list')
@@ -117,7 +121,7 @@ export function PromptRunnerPage(): React.ReactElement {
   )
   const convTurns = selectedId ? turns[selectedId] ?? [] : []
   // configurações efetivas (conversa aberta ou rascunho de uma nova)
-  const settings: DraftSettings = conv
+  const rawSettings: DraftSettings = conv
     ? {
         projectId: conv.projectId,
         agentId: conv.agentId,
@@ -129,6 +133,12 @@ export function PromptRunnerPage(): React.ReactElement {
         title: conv.title
       }
     : draft
+  // vazio (rascunho, conversas antigas ou importadas do terminal) = padrão das configurações
+  const settings: DraftSettings = {
+    ...rawSettings,
+    model: rawSettings.model || defaults.model,
+    effort: rawSettings.effort || defaults.effort
+  }
 
   function flash(m: string): void {
     setToast(m)
@@ -137,6 +147,9 @@ export function PromptRunnerPage(): React.ReactElement {
 
   // ── carga inicial + escuta ao vivo ──
   useEffect(() => {
+    Promise.all([window.api.settings.get(CONV_DEFAULT_MODEL_KEY), window.api.settings.get(CONV_DEFAULT_EFFORT_KEY)])
+      .then(([m, e]) => setDefaults({ model: convDefaultModel(m), effort: convDefaultEffort(e) }))
+      .catch(() => {})
     refreshSkills()
     refreshAgents()
     refreshProjects()
@@ -262,7 +275,7 @@ export function PromptRunnerPage(): React.ReactElement {
   function newConversation(): void {
     setHandoffNote('')
     store.select(null)
-    setDraft(conv ? { ...EMPTY_DRAFT, projectId: conv.projectId, model: conv.model, effort: conv.effort } : EMPTY_DRAFT)
+    setDraft(conv ? { ...EMPTY_DRAFT, projectId: conv.projectId } : EMPTY_DRAFT)
     setText(readStorage(COMPOSER_KEY(null)))
     setPane('chat')
     setTimeout(() => textareaRef.current?.focus(), 0)
@@ -281,7 +294,12 @@ export function PromptRunnerPage(): React.ReactElement {
     try {
       let id = conv?.id
       if (!id) {
-        const c = await store.create({ ...draft, useWorktree: draft.useWorktree && draft.projectId != null })
+        const c = await store.create({
+          ...draft,
+          model: draft.model || defaults.model,
+          effort: draft.effort || defaults.effort,
+          useWorktree: draft.useWorktree && draft.projectId != null
+        })
         id = c.id
         await store.select(id)
         writeStorage(COMPOSER_KEY(null), '')
@@ -754,18 +772,20 @@ export function PromptRunnerPage(): React.ReactElement {
             <label title="Modelo">
               🧠
               <select value={settings.model} onChange={(e) => patch({ model: e.target.value })}>
-                <option value="">Modelo padrão</option>
-                <option value="opus">Opus</option>
-                <option value="sonnet">Sonnet</option>
-                <option value="haiku">Haiku</option>
+                {CONV_MODELS.map((x) => (
+                  <option key={x.v} value={x.v}>
+                    {x.label}
+                  </option>
+                ))}
+                {!CONV_MODELS.some((x) => x.v === settings.model) && <option value={settings.model}>{settings.model}</option>}
               </select>
             </label>
             <label title="Esforço de raciocínio (--effort)">
               ⚡
               <select value={settings.effort} onChange={(e) => patch({ effort: e.target.value as ConvEffort })}>
-                {EFFORTS.map((x) => (
+                {CONV_EFFORTS.map((x) => (
                   <option key={x.v} value={x.v}>
-                    {x.v ? `Esforço: ${x.label}` : 'Esforço padrão'}
+                    Esforço: {x.label}
                   </option>
                 ))}
               </select>

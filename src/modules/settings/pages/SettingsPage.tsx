@@ -9,6 +9,14 @@ import { ChatsSection } from '../components/ChatsSection'
 import { SnapshotsSection } from '../components/SnapshotsSection'
 import { AppearanceSection } from '../components/AppearanceSection'
 import { ModulesSection } from '../components/ModulesSection'
+import {
+  CONV_DEFAULT_EFFORT_KEY,
+  CONV_DEFAULT_MODEL_KEY,
+  CONV_EFFORTS,
+  CONV_MODELS,
+  convDefaultEffort,
+  convDefaultModel
+} from '../../../../shared/aiConversations'
 import { AiUsageModal } from '../components/AiUsageModal'
 
 const FX_CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
@@ -60,6 +68,9 @@ export function SettingsPage(): React.ReactElement {
   const [claudeSaved, setClaudeSaved] = useState(false)
   const [allowedTools, setAllowedTools] = useState('')
   const [toolsSaved, setToolsSaved] = useState(false)
+  const [runnerModel, setRunnerModel] = useState(convDefaultModel(''))
+  const [runnerEffort, setRunnerEffort] = useState<string>(convDefaultEffort(''))
+  const [runnerSaved, setRunnerSaved] = useState(false)
 
 
   // Google Calendar
@@ -111,6 +122,8 @@ export function SettingsPage(): React.ReactElement {
     setPItemId(values.pluggy_item_id ?? '')
     setClaudeCmd(values.claude_command ?? 'claude')
     setAllowedTools(values.claude_allowed_tools ?? '')
+    setRunnerModel(convDefaultModel(values[CONV_DEFAULT_MODEL_KEY]))
+    setRunnerEffort(convDefaultEffort(values[CONV_DEFAULT_EFFORT_KEY]))
     setAuthMode((values.github_auth_mode as 'token' | 'ssh') || 'token')
   }, [
     values.github_token,
@@ -122,7 +135,9 @@ export function SettingsPage(): React.ReactElement {
     values.pluggy_client_secret,
     values.pluggy_item_id,
     values.claude_command,
-    values.claude_allowed_tools
+    values.claude_allowed_tools,
+    values[CONV_DEFAULT_MODEL_KEY],
+    values[CONV_DEFAULT_EFFORT_KEY]
   ])
 
   async function saveClaudeCmd(): Promise<void> {
@@ -135,6 +150,13 @@ export function SettingsPage(): React.ReactElement {
     await set('claude_allowed_tools', allowedTools.trim())
     setToolsSaved(true)
     setTimeout(() => setToolsSaved(false), 2000)
+  }
+
+  async function saveRunnerDefaults(): Promise<void> {
+    await set(CONV_DEFAULT_MODEL_KEY, runnerModel)
+    await set(CONV_DEFAULT_EFFORT_KEY, runnerEffort)
+    setRunnerSaved(true)
+    setTimeout(() => setRunnerSaved(false), 2000)
   }
 
   async function savePluggy(): Promise<void> {
@@ -545,6 +567,36 @@ export function SettingsPage(): React.ReactElement {
         </p>
         <div style={{ marginTop: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={saveAllowedTools}>{toolsSaved ? '✓ Salvo' : 'Salvar ferramentas'}</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
+          <div className="editor-field" style={{ flex: '1 1 160px' }}>
+            <label>Modelo padrão do Prompt Runner</label>
+            <select value={runnerModel} onChange={(e) => setRunnerModel(e.target.value)}>
+              {CONV_MODELS.map((x) => (
+                <option key={x.v} value={x.v}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="editor-field" style={{ flex: '1 1 160px' }}>
+            <label>Esforço padrão</label>
+            <select value={runnerEffort} onChange={(e) => setRunnerEffort(e.target.value)}>
+              {CONV_EFFORTS.map((x) => (
+                <option key={x.v} value={x.v}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+          Já vem selecionado em toda conversa nova; dá para trocar por conversa. Conversas antigas sem
+          modelo/esforço definidos também passam a usar este padrão.
+        </p>
+        <div style={{ marginTop: 8 }}>
+          <button className="btn btn-primary btn-sm" onClick={saveRunnerDefaults}>{runnerSaved ? '✓ Salvo' : 'Salvar padrão'}</button>
         </div>
       </div>
 

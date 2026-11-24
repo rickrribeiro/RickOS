@@ -222,6 +222,7 @@ import {
   openPath
 } from './services/gitscan'
 import { getConfig } from './config'
+import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, convDefaultModel } from '../shared/aiConversations'
 
 /**
  * RPC registry: every `<ns>:<action>` channel the clients can call. The handlers
@@ -1355,7 +1356,9 @@ ipcMain.handle('ai:runStream', async (_, prompt: string, projectId?: number, mod
 // Prompt Runner: conversas com o Claude CLI (canais `conv:*`, server/aiconv/rpc.ts).
 registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   resolveCommand: async (c) => (c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? undefined)),
-  resolveModel: (c) => resolveModel(c.model),
+  // conversa sem modelo/esforço (antigas ou importadas do terminal) → padrão do Prompt Runner
+  resolveModel: async (c) => c.model.trim() || convDefaultModel(await getSetting(CONV_DEFAULT_MODEL_KEY)),
+  resolveEffort: async (c) => c.effort || convDefaultEffort(await getSetting(CONV_DEFAULT_EFFORT_KEY)),
   resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
   projectWorkspaceRepos: (projectId) => workspaceRepoDirs(projectId),
   allowedToolsArgs: () => resolveAllowedToolsArgs(),
