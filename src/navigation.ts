@@ -61,7 +61,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'finance-dashboard', label: 'Dashboard', icon: '💰' },
       { id: 'transactions', label: 'Transações', icon: '💸' },
-      { id: 'budget', label: 'Orçamento', icon: '📉' },
+      { id: 'budget', label: 'Categorias', icon: '🏷️' },
       { id: 'investments', label: 'Investimentos', icon: '📈' },
       { id: 'reports', label: 'Relatórios', icon: '🧾' }
     ]

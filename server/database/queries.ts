@@ -1245,8 +1245,15 @@ export async function createCategory(name: string, type: string, color: string):
   run(db, 'INSERT INTO categories (name, type, color) VALUES (?, ?, ?)', [name, type, color])
   return getOne<DbCategory>(db, 'SELECT * FROM categories WHERE id = ?', [lastInsertId(db)])!
 }
+export async function updateCategory(id: number, name: string, color: string): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE categories SET name = ?, color = ? WHERE id = ?', [name, color, id])
+}
+/** Exclui a categoria; transações dela ficam sem categoria e as metas dela somem. */
 export async function deleteCategory(id: number): Promise<void> {
   const db = await getDb()
+  run(db, 'UPDATE transactions SET categoryId = NULL WHERE categoryId = ?', [id])
+  run(db, 'DELETE FROM budgets WHERE categoryId = ?', [id])
   run(db, 'DELETE FROM categories WHERE id = ?', [id])
 }
 

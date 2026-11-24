@@ -85,6 +85,7 @@ import {
   deleteAccount,
   getCategories,
   createCategory,
+  updateCategory,
   deleteCategory,
   getTransactions,
   setTransactionIgnored,
@@ -925,6 +926,7 @@ ipcMain.handle('accounts:delete', (_, id: number) => deleteAccount(id))
 
 ipcMain.handle('categories:getAll', () => getCategories())
 ipcMain.handle('categories:create', (_, name: string, type: string, color: string) => createCategory(name, type, color))
+ipcMain.handle('categories:update', (_, id: number, name: string, color: string) => updateCategory(id, name, color))
 ipcMain.handle('categories:delete', (_, id: number) => deleteCategory(id))
 
 ipcMain.handle('transactions:getAll', (_, month?: string) => getTransactions(month))

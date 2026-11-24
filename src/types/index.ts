@@ -1046,6 +1046,7 @@ declare global {
       categories: {
         getAll: () => Promise<Category[]>
         create: (name: string, type: string, color: string) => Promise<Category>
+        update: (id: number, name: string, color: string) => Promise<void>
         delete: (id: number) => Promise<void>
       }
       transactions: {

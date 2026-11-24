@@ -148,7 +148,14 @@ export function TransactionsPage(): React.ReactElement {
 
       <div className="chart-section" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={type} onChange={(e) => setType(e.target.value as 'income' | 'expense')}>
+          <select
+            value={type}
+            onChange={(e) => {
+              const v = e.target.value as 'income' | 'expense'
+              setType(v)
+              if (categoryId !== '' && categories.find((c) => c.id === categoryId)?.type !== v) setCategoryId('')
+            }}
+          >
             <option value="expense">Despesa</option>
             <option value="income">Receita</option>
           </select>
@@ -158,7 +165,7 @@ export function TransactionsPage(): React.ReactElement {
           </select>
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}>
             <option value="">Categoria…</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {categories.filter((c) => c.type === type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={accountId} onChange={(e) => setAccountId(e.target.value === '' ? '' : Number(e.target.value))}>
             <option value="">Conta…</option>

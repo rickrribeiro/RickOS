@@ -388,6 +388,7 @@ export function createApi() {
     categories: {
       getAll: () => invoke('categories:getAll'),
       create: (name: string, type: string, color: string) => invoke('categories:create', name, type, color),
+      update: (id: number, name: string, color: string) => invoke('categories:update', id, name, color),
       delete: (id: number) => invoke('categories:delete', id)
     },
     transactions: {

@@ -60,7 +60,9 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
             <label>Categoria</label>
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">—</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {categories
+                .filter((c) => c.type === type || c.id === categoryId) // mantém a atual mesmo se for do outro tipo
+                .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="editor-field">
