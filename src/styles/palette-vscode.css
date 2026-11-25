@@ -1,0 +1,50 @@
+/* Paleta "VS Code" — cores do Dark 2026 / Light 2026 do VS Code. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='vscode'] {
+  --pal-bg: #121314;
+  --pal-sidebar: #191a1b;
+  --pal-surface: #191a1b;
+  --pal-elevated: #202122;
+  --pal-user-bubble: #252627;
+  --pal-border: #2a2b2c;
+  --pal-border-strong: #3c3d3e; /* derivado */
+  --pal-text: #bbbebf;
+  --pal-text-2: #a2a5a6;
+  --pal-text-3: #8c8c8c;
+  --pal-accent: #48a0c7;
+  --pal-accent-hover: #6bb4d4; /* derivado */
+  --pal-selection: #2c2e30;
+  --pal-primary: #297aa0;
+  --pal-on-primary: #ffffff;
+  --pal-success: #73c991;
+  --pal-success-bg: #1c2b22;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(187, 190, 191, 0.06);
+  --pal-ring: rgba(72, 160, 199, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='vscode'][data-theme='light'] {
+  --pal-bg: #ffffff;
+  --pal-sidebar: #fafafd;
+  --pal-surface: #ffffff;
+  --pal-elevated: #fafafd;
+  --pal-user-bubble: #f0f1f2;
+  --pal-border: #e5e6e8;
+  --pal-border-strong: #c8c9cc; /* derivado */
+  --pal-text: #202020;
+  --pal-text-2: #606060;
+  --pal-text-3: #6b6b6b;
+  --pal-accent: #0069cc;
+  --pal-accent-hover: #0063c1; /* derivado */
+  --pal-selection: #e3ecf7;
+  --pal-primary: #0069cc;
+  --pal-on-primary: #ffffff;
+  --pal-success: #4f6e0b;
+  --pal-success-bg: #edf3e0;
+  --pal-shadow: #20202014;
+  --pal-hover: rgba(32, 32, 32, 0.05);
+  --pal-ring: rgba(0, 105, 204, 0.25);
+  --pal-scrim: rgba(32, 32, 32, 0.3);
+  color-scheme: light;
+}
