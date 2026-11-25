@@ -24,7 +24,9 @@ function heatmapColor(minutes: number, maxMinutes: number): string {
   if (minutes === 0 || maxMinutes === 0) return 'var(--bg-secondary)'
   const ratio = minutes / maxMinutes
   const alpha = 0.2 + ratio * 0.8
-  return `color-mix(in srgb, var(--accent) ${Math.round(alpha * 100)}%, transparent)`
+  // Mistura com a superfície (opaca) em vez de transparente: assim o CSS consegue
+  // derivar do próprio fundo uma cor de texto legível (ver .calendar-day.heat).
+  return `color-mix(in srgb, var(--accent) ${Math.round(alpha * 100)}%, var(--bg-secondary))`
 }
 
 export function CalendarView({
@@ -193,9 +195,10 @@ export function CalendarView({
                   'calendar-day',
                   cell.otherMonth ? 'other-month' : '',
                   cell.date === today ? 'today' : '',
-                  cell.date === selectedDate ? 'selected' : ''
+                  cell.date === selectedDate ? 'selected' : '',
+                  bg && mins > 0 ? 'heat' : ''
                 ].join(' ')}
-                style={bg ? { background: bg } : {}}
+                style={bg ? ({ background: bg, '--day-bg': bg } as React.CSSProperties) : {}}
                 onClick={() => cell.date && onSelectDate(cell.date)}
               >
                 <div className="calendar-day-top">

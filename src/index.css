@@ -957,6 +957,20 @@ select:focus {
   opacity: 0.3;
 }
 
+/* Dia com horas: o fundo é a cor de destaque misturada; o texto vira escuro ou
+   claro conforme a luminosidade desse fundo (destaques claros como amarelo/coral
+   sumiam com texto claro). */
+@supports (color: lch(from red l c h)) {
+  .calendar-day.heat {
+    --heat-ink: lch(from var(--day-bg) clamp(0, calc((52 - l) * 1000), 100) 0 0);
+    color: var(--heat-ink);
+  }
+  .calendar-day.heat .calendar-day-hours,
+  .calendar-day.heat .cal-event-badge {
+    color: color-mix(in srgb, var(--heat-ink) 82%, transparent);
+  }
+}
+
 .calendar-day-num {
   font-size: 13px;
   font-weight: 600;
