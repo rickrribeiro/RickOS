@@ -1,0 +1,50 @@
+/* Paleta "Alto contraste" — preto e branco puros com destaque amarelo (azul no claro). Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='alto-contraste'] {
+  --pal-bg: #000000;
+  --pal-sidebar: #000000;
+  --pal-surface: #0d0d0d;
+  --pal-elevated: #1a1a1a;
+  --pal-user-bubble: #1f1f1f;
+  --pal-border: #8a8a8a;
+  --pal-border-strong: #bdbdbd; /* derivado */
+  --pal-text: #ffffff;
+  --pal-text-2: #e6e6e6;
+  --pal-text-3: #d0d0d0;
+  --pal-accent: #ffe14d;
+  --pal-accent-hover: #ffeb80; /* derivado */
+  --pal-selection: #332b00;
+  --pal-primary: #ffe14d;
+  --pal-on-primary: #000000;
+  --pal-success: #7cf2a0;
+  --pal-success-bg: #0b2a16;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(255, 255, 255, 0.06);
+  --pal-ring: rgba(255, 225, 77, 0.5);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='alto-contraste'][data-theme='light'] {
+  --pal-bg: #ffffff;
+  --pal-sidebar: #f2f2f2;
+  --pal-surface: #ffffff;
+  --pal-elevated: #f0f0f0;
+  --pal-user-bubble: #ebebeb;
+  --pal-border: #595959;
+  --pal-border-strong: #262626; /* derivado */
+  --pal-text: #000000;
+  --pal-text-2: #1f1f1f;
+  --pal-text-3: #333333;
+  --pal-accent: #0040b0;
+  --pal-accent-hover: #00308a; /* derivado */
+  --pal-selection: #dce7ff;
+  --pal-primary: #000000;
+  --pal-on-primary: #ffffff;
+  --pal-success: #0b5a2a;
+  --pal-success-bg: #ddf2e4;
+  --pal-shadow: #00000014;
+  --pal-hover: rgba(0, 0, 0, 0.05);
+  --pal-ring: rgba(0, 64, 176, 0.5);
+  --pal-scrim: rgba(0, 0, 0, 0.3);
+  color-scheme: light;
+}
