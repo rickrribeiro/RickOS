@@ -1,0 +1,50 @@
+/* Paleta "Matcha" — verde-chá suave, pastel. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='matcha'] {
+  --pal-bg: #171c15;
+  --pal-sidebar: #11150f;
+  --pal-surface: #1f261c;
+  --pal-elevated: #262e22;
+  --pal-user-bubble: #2b3427;
+  --pal-border: #333d2e;
+  --pal-border-strong: #44503d; /* derivado */
+  --pal-text: #eef2e8;
+  --pal-text-2: #b3bda9;
+  --pal-text-3: #a2ad98;
+  --pal-accent: #a9d47f;
+  --pal-accent-hover: #c0e0a0; /* derivado */
+  --pal-selection: #2a3a1e;
+  --pal-primary: #a9d47f;
+  --pal-on-primary: #18240c;
+  --pal-success: #9fd8c0;
+  --pal-success-bg: #18332a;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(238, 242, 232, 0.06);
+  --pal-ring: rgba(169, 212, 127, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='matcha'][data-theme='light'] {
+  --pal-bg: #f5f7f1;
+  --pal-sidebar: #e9eee2;
+  --pal-surface: #ffffff;
+  --pal-elevated: #eef2e8;
+  --pal-user-bubble: #e5ecdd;
+  --pal-border: #d3dcc8;
+  --pal-border-strong: #bac6ac; /* derivado */
+  --pal-text: #1f2a1c;
+  --pal-text-2: #55624f;
+  --pal-text-3: #5d6a57;
+  --pal-accent: #41692a;
+  --pal-accent-hover: #35571f; /* derivado */
+  --pal-selection: #e4f0d6;
+  --pal-primary: #4d7a2e;
+  --pal-on-primary: #ffffff;
+  --pal-success: #2b6655;
+  --pal-success-bg: #ddefe8;
+  --pal-shadow: #1f2a1c14;
+  --pal-hover: rgba(31, 42, 28, 0.05);
+  --pal-ring: rgba(65, 105, 42, 0.25);
+  --pal-scrim: rgba(31, 42, 28, 0.3);
+  color-scheme: light;
+}
