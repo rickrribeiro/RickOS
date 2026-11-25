@@ -14,7 +14,6 @@ export function FinanceDashboardPage(): React.ReactElement {
 
   const income = transactions.filter((t) => t.type === 'income')
   const expense = transactions.filter((t) => t.type === 'expense')
-  const incomeByCur = sumByCurrency(income)
   // salário fixo (categorias de receita marcadas como fixas) × entradas extras
   const { fixed: fixedIncome, extra: extraIncome } = splitIncome(income, categories)
   const expenseByCur = sumByCurrency(expense)
@@ -60,6 +59,9 @@ export function FinanceDashboardPage(): React.ReactElement {
   const incomeBase = sumInBase(income, base, rates)
   const expenseBase = sumInBase(expense, base, rates)
   const netBase = incomeBase - expenseBase
+  // sem extras = só o salário fixo
+  const fixedBase = sumInBase(fixedIncome, base, rates)
+  const netFixedBase = fixedBase - expenseBase
 
   // Fatura inicial: parcelas de compras anteriores que já caem neste mês (e no próximo)
   const startingBill = startingBillInBase(transactions, base, rates)
@@ -99,7 +101,10 @@ export function FinanceDashboardPage(): React.ReactElement {
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Receitas do mês</div>
-          <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{money(incomeByCur)}</div>
+          <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{formatMoney(incomeBase, base)}</div>
+          <div className="stat-card-sub">com extras</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success)', marginTop: 6 }}>{formatMoney(fixedBase, base)}</div>
+          <div className="stat-card-sub">sem extras (só salário fixo)</div>
           {Object.keys(redemptionsByCur).length > 0 && (
             <div className="stat-card-sub" title="Resgates de investimento: não contam como receita">
               + resgates de investimento {money(redemptionsByCur)}
@@ -145,7 +150,11 @@ export function FinanceDashboardPage(): React.ReactElement {
           <div className="stat-card-value" style={{ fontSize: 16, color: netBase >= 0 ? 'var(--success)' : 'var(--danger)' }}>
             {formatMoney(netBase, base)}
           </div>
-          <div className="stat-card-sub">receitas {formatMoney(incomeBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
+          <div className="stat-card-sub">com extras: {formatMoney(incomeBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6, color: netFixedBase >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+            {formatMoney(netFixedBase, base)}
+          </div>
+          <div className="stat-card-sub">sem extras: salário {formatMoney(fixedBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Fatura inicial do mês</div>
