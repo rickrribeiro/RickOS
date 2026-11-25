@@ -9,8 +9,8 @@ import { es } from './locales/es'
  *   chave faltando ou sobrando quebra o `tsc`;
  * - interpolação `{nome}`; plural com `|` ("{count} conta|{count} contas"), escolhido por
  *   `Intl.PluralRules` quando `count` é passado;
- * - `t()` é uma função comum (serve fora de componentes). Trocar o idioma remonta o `<App>`
- *   (ver `main.tsx`), então nada precisa assinar o store só para re-renderizar.
+ * - `t()` é uma função comum (serve fora de componentes e em constantes de módulo). Trocar o
+ *   idioma recarrega a página, então nada precisa assinar o store para re-renderizar.
  */
 
 export type Locale = 'pt-BR' | 'en' | 'es'
@@ -58,19 +58,20 @@ interface LocaleState {
   syncFromServer: () => Promise<void>
 }
 
-export const useLocaleStore = create<LocaleState>((set, get) => ({
+export const useLocaleStore = create<LocaleState>((_set, get) => ({
   locale: readCache(),
   setLocale: async (locale) => {
-    applyLocale(locale)
-    set({ locale })
+    if (locale === get().locale) return
     await window.api.settings.set(LOCALE_SETTING, locale)
+    applyLocale(locale)
+    window.location.reload()
   },
   syncFromServer: async () => {
     try {
       const v = await window.api.settings.get(LOCALE_SETTING)
       if (isLocale(v) && v !== get().locale) {
         applyLocale(v)
-        set({ locale: v })
+        window.location.reload()
       }
     } catch {
       /* servidor fora: fica o cache */

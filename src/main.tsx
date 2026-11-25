@@ -43,14 +43,8 @@ subscribe('db:replaced', () => window.location.reload())
 void useLocaleStore.getState().syncFromServer()
 window.addEventListener('focus', () => void useLocaleStore.getState().syncFromServer())
 
-/** Trocar o idioma remonta o app inteiro, então todo `t()` (inclusive fora de componentes) é relido. */
-function Root(): React.ReactElement {
-  const locale = useLocaleStore((s) => s.locale)
-  return <App key={locale} />
-}
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Root />
+    <App />
   </React.StrictMode>
 )
