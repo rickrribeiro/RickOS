@@ -231,7 +231,7 @@ export function InvestmentsPage(): React.ReactElement {
     }
   }
   const [name, setName] = useState('')
-  const [type, setType] = useState('')
+  const [group, setGroup] = useState<InvestmentGroup | ''>('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('BRL')
 
@@ -241,10 +241,12 @@ export function InvestmentsPage(): React.ReactElement {
 
   async function handleAdd(): Promise<void> {
     const v = parseFloat(amount)
-    if (!name.trim() || isNaN(v)) return
-    await addInvestment(name.trim(), type.trim() || null, v, currency)
+    if (!name.trim() || isNaN(v) || !group) return
+    // o rótulo do grupo vira o `type` — investmentGroup() reconhece cada rótulo
+    const label = INVESTMENT_GROUPS.find((g) => g.id === group)?.label ?? null
+    await addInvestment(name.trim(), label, v, currency)
     setName('')
-    setType('')
+    setGroup('')
     setAmount('')
   }
 
@@ -295,7 +297,14 @@ export function InvestmentsPage(): React.ReactElement {
       <div className="chart-section" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
-          <input placeholder="Tipo (ex: ação, cripto)" value={type} onChange={(e) => setType(e.target.value)} />
+          <select value={group} onChange={(e) => setGroup(e.target.value as InvestmentGroup | '')} title="Grupo do investimento">
+            <option value="">Grupo…</option>
+            {INVESTMENT_GROUPS.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.icon} {g.label}
+              </option>
+            ))}
+          </select>
           <input type="number" placeholder="Valor inicial" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 120 }} />
           <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {CURRENCIES.map((c) => (
@@ -304,7 +313,7 @@ export function InvestmentsPage(): React.ReactElement {
               </option>
             ))}
           </select>
-          <button className="btn btn-primary btn-sm" onClick={handleAdd}>
+          <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={!name.trim() || !group || isNaN(parseFloat(amount))}>
             + Adicionar
           </button>
         </div>
