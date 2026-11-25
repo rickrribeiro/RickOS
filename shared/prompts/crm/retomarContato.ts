@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * CRM → "Retomar contato": 2-3 opções de mensagem para reaproximar de alguém.
@@ -12,6 +12,7 @@ export const crmRetomarContato = definirChamada<{ nome: string; local: string; i
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'crm/retomarContato.ts',
   usadoEm: 'src/modules/crm/pages/CrmPage.tsx',
   template: `Sou nômade e quero manter viva minha relação com {{nome}}. Com base no contexto abaixo, escreva 2 ou 3 opções curtas de mensagem calorosa e natural para retomar o contato (em português, tom pessoal, sem parecer robô). Se houver um gancho no contexto (ex.: um exame, uma viagem, um projeto), puxe por ele.

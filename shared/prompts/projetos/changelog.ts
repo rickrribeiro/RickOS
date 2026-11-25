@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Projetos → ciclos: CHANGELOG da versão a partir dos commits do período (opção "com IA").
@@ -13,6 +13,7 @@ export const projetosChangelog = definirChamada<{ ciclo: string; projeto: string
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/changelog.ts',
   usadoEm: 'server/services/projectHub.ts',
   template: `[rickos:changelog] Escreva o CHANGELOG da versão/ciclo "{{ciclo}}" do projeto "{{projeto}}"{{objetivo}} a partir dos commits abaixo.

@@ -215,6 +215,7 @@ import {
   clearNotifications,
   getAiChamadas,
   getAiChamada,
+  setAiChamadaMotor,
   setAiChamadaPrompt
 } from './database/queries'
 import { setServerLocale, tt } from './i18n'
@@ -258,7 +259,8 @@ import {
 import { getConfig } from './config'
 import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, convDefaultModel } from '../shared/aiConversations'
 import { promptContextoProjeto } from '../shared/prompts/projetos/contextoProjeto'
-import { definicao } from '../shared/prompts/catalogo'
+import { definicao, type MotorIa } from '../shared/prompts/catalogo'
+import { motoresPermitidos } from '../shared/prompts/definicao'
 import { executarChamada, idValido, montarChamada } from './ia/gateway'
 
 /**
@@ -1406,6 +1408,13 @@ ipcMain.handle('iaChamadas:salvarPrompt', async (_, id: string, template: string
   const d = definicao(idValido(id))
   const limpo = (v: string | null, padrao: string | undefined): string | null => (v == null || !v.trim() || v === padrao ? null : v)
   await setAiChamadaPrompt(d.id, limpo(template, d.template), limpo(sistema, d.sistema))
+  return getAiChamada(d.id)
+})
+/** Motor da chamada; o padrão (ou null) volta a seguir o padrão do catálogo. */
+ipcMain.handle('iaChamadas:salvarMotor', async (_, id: string, motor: string | null) => {
+  const d = definicao(idValido(id))
+  if (motor != null && !motoresPermitidos(d).includes(motor as MotorIa)) throw new Error(`"${d.id}" não roda em ${motor}.`)
+  await setAiChamadaMotor(d.id, motor == null || motor === d.motor ? null : motor)
   return getAiChamada(d.id)
 })
 ipcMain.handle('iaChamadas:reverterPrompt', async (_, id: string) => {

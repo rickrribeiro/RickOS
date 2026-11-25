@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 import type { ProjetoDelegacao } from './delegacao'
 
 /**
@@ -14,6 +14,7 @@ export const projetosMontarDelegacao = definirChamada<{ projeto: ProjetoDelegaca
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/montarPromptDelegacao.ts',
   usadoEm: 'server/services/delegation.ts',
   template: `[rickos:delegacao-prompt] Você vai PREPARAR um prompt para outro agente (Claude Code) executar uma tarefa no projeto "{{projeto}}". NÃO execute a tarefa e NÃO altere nenhum arquivo: só leia o que precisar.

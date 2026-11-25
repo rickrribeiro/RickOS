@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 import { EX_PROJETO } from '../exemplos'
 
 /**
@@ -14,6 +14,7 @@ export const projetosRetrospectiva = definirChamada<{ foiBem: string; aprendi: s
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/retrospectiva.ts',
   usadoEm: 'src/modules/projects/components/ClosingRitualModal.tsx',
   template: `Estou concluindo este projeto. Escreva uma RETROSPECTIVA curta em Markdown com: "O que foi entregue", "O que funcionou", "O que aprendi", "O que faria diferente" e "Números" (horas, duração). Seja específico usando o contexto, sem inventar fatos.\n\nMinhas notas:\n- Foi bem: {{foiBem}}\n- Aprendi: {{aprendi}}\n- Faria diferente: {{fariaDiferente}}\n\nContexto:\n{{contexto}}`,

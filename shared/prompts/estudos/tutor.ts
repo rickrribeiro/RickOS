@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CODEX_MODEL } from '../padroes'
+import { ALT_CLAUDE, CODEX_MODEL } from '../padroes'
 
 /**
  * Estudos → botões do "Tutor" no editor de anotações (explicar, resumir, exercícios…).
@@ -24,6 +24,7 @@ export const estudosTutor = definirChamada<{ acao: AcaoTutor; conteudo: string }
   motor: 'codex',
   modelo: CODEX_MODEL,
   effort: null,
+  alternativas: ALT_CLAUDE,
   arquivo: 'estudos/tutor.ts',
   usadoEm: 'src/modules/estudos/components/NoteEditor.tsx',
   template: '{{instrucao}}\n\nConteúdo (Markdown):\n"""\n{{conteudo}}\n"""',

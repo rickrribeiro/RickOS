@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { MEM_FAST } from '../padroes'
+import { ALT_CODEX, MEM_FAST } from '../padroes'
 import { REGRAS_SEGURANCA_MEMORIA } from './regras'
 
 /**
@@ -28,6 +28,7 @@ export const memoriaEntrevista = definirChamada<{
   motor: 'claude-code',
   modelo: MEM_FAST,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'memoria/entrevista.ts',
   usadoEm: 'server/memory/cognitive.ts (interviewStep)',
   sistema: `Você conduz uma conversa leve e natural ("Me conheça melhor") para entender melhor o usuário.

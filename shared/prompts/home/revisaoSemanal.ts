@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { anexo, CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL, anexo } from '../padroes'
 
 export interface DadosRevisaoSemanal {
   hoje: string
@@ -36,6 +36,7 @@ export const homeRevisaoSemanal = definirChamada<DadosRevisaoSemanal>({
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'home/revisaoSemanal.ts',
   usadoEm: 'src/modules/home/components/WeeklyReview.tsx',
   template: `Você é meu chefe de gabinete fazendo minha REVISÃO SEMANAL. Com base no contexto abaixo, escreva o RELATÓRIO FINAL em Markdown, direto e honesto, com estas seções (curtas, sem repetir o contexto):

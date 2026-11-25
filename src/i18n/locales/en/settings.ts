@@ -397,5 +397,8 @@ export const settings = {
   'settings.iaPrompt.revertido': 'Back to the default prompt.',
   'settings.iaPrompt.erro': 'Error: {msg}',
   'settings.iaPrompt.exemploAtual': 'Prompt in use, assembled with sample data:',
-  'settings.iaPrompt.soTexto': 'Only builds the text; the Assistant or the Prompt Runner runs it.'
+  'settings.iaPrompt.soTexto': 'Only builds the text; the Assistant or the Prompt Runner runs it.',
+  'settings.iaMotor.padrao': '{motor} (default)',
+  'settings.iaMotor.unico': 'This call only runs on {motor} (it uses features only it has).',
+  'settings.iaMotor.salvo': 'Engine saved: the next runs use {motor}.'
 }

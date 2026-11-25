@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CODEX_MODEL } from '../padroes'
+import { ALT_CLAUDE, CODEX_MODEL } from '../padroes'
 
 /**
  * Estudos → "Lacunas do roadmap": pré-requisitos/tópicos que faltam no roadmap de um tópico.
@@ -13,6 +13,7 @@ export const estudosLacunas = definirChamada<{ topico: string; roadmap: string }
   motor: 'codex',
   modelo: CODEX_MODEL,
   effort: null,
+  alternativas: ALT_CLAUDE,
   arquivo: 'estudos/lacunasRoadmap.ts',
   usadoEm: 'src/modules/estudos/components/GapsModal.tsx',
   template: `Você é um mentor de estudos. Abaixo está o roadmap do tópico "{{topico}}".

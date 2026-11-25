@@ -1,3 +1,4 @@
+import { ALT_CODEX } from '../padroes'
 import { definirChamada, ex } from '../definicao'
 
 /**
@@ -12,6 +13,7 @@ export const projetosOndePareiSessao = definirChamada<{ projeto: string; branch:
   motor: 'claude-code',
   modelo: { setting: 'projects_hook_model', padrao: 'haiku' },
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/ondePareiSessao.ts',
   usadoEm: 'server/services/claudeHook.ts',
   template: `[rickos:onde-parei] Resuma esta sessão de programação com o Claude Code no projeto "{{projeto}}" para eu retomar depois.

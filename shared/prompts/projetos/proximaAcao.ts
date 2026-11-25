@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 import { EX_PROJETO } from '../exemplos'
 
 /**
@@ -14,6 +14,7 @@ export const projetosProximaAcao = definirChamada<{ acaoConcluida: string | null
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/proximaAcao.ts',
   usadoEm: 'src/modules/projects/components/NextActionModal.tsx',
   template: `{{acaoConcluida}} Sugira 3 opções de PRÓXIMA AÇÃO para este projeto: cada uma concreta, física, que caiba em uma sessão de 25-90 minutos e aproxime da linha de chegada. Formato: {"actions": ["...", "...", "..."]}\n\n{{contexto}}\n\nResponda APENAS com JSON válido, sem texto antes ou depois, sem cercas de código.`,

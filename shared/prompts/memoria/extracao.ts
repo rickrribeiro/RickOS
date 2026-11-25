@@ -1,5 +1,5 @@
 import { definirChamada, ex, type DefinicaoChamada } from '../definicao'
-import { MEM_FAST, MEM_MAIN } from '../padroes'
+import { ALT_CODEX, MEM_FAST, MEM_MAIN } from '../padroes'
 import { REGRAS_SEGURANCA_MEMORIA } from './regras'
 
 /**
@@ -42,6 +42,7 @@ const base: Omit<DefinicaoChamada<ParamsExtracaoMemoria>, 'id' | 'modelo' | 'usa
   tipo: 'executa',
   motor: 'claude-code',
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'memoria/extracao.ts',
   sistema: SISTEMA_EXTRACAO_MEMORIA,
   template: `{{contexto}}Categorias permitidas:\n{{categorias}}

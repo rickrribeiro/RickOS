@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { FLIGHTS_MODEL } from '../padroes'
+import { ALT_CODEX, FLIGHTS_MODEL } from '../padroes'
 
 /**
  * Passagens → "Análise da IA" das melhores ofertas de um monitor (trade-offs e riscos).
@@ -13,6 +13,7 @@ export const passagensAnaliseOfertas = definirChamada<{ monitor: string; linhas:
   motor: 'claude-code',
   modelo: FLIGHTS_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'passagens/analiseOfertas.ts',
   usadoEm: 'server/flights/ai.ts',
   template: [

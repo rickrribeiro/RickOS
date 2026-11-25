@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CODEX_MODEL } from '../padroes'
+import { ALT_CLAUDE, CODEX_MODEL } from '../padroes'
 
 /**
  * Estudos → "Quiz" de múltipla escolha com base nas anotações do tópico.
@@ -13,6 +13,7 @@ export const estudosQuiz = definirChamada<{ topico: string; material: string }>(
   motor: 'codex',
   modelo: CODEX_MODEL,
   effort: null,
+  alternativas: ALT_CLAUDE,
   arquivo: 'estudos/quiz.ts',
   usadoEm: 'src/modules/estudos/components/QuizModal.tsx',
   template: `Crie um quiz de múltipla escolha para testar meu conhecimento sobre "{{topico}}", com base APENAS no material abaixo.

@@ -11,5 +11,10 @@ export const MEM_MAIN: ConfigIa = { setting: 'memory_ai_model', padrao: 'sonnet'
 export const FLIGHTS_MODEL: ConfigIa = { setting: 'flights_ai_model', padrao: 'haiku' }
 export const CHATS_MODEL: ConfigIa = { setting: 'chats_ai_model', padrao: 'sonnet' }
 
+/** Chamada só de texto (sem ferramentas): também pode rodar no Codex, com o modelo/effort do ~/.codex/config.toml. */
+export const ALT_CODEX = { codex: { modelo: CODEX_MODEL, effort: null } } as const
+/** Chamada que nasceu no Codex e também pode rodar no Claude Code (modelo `claude_model`). */
+export const ALT_CLAUDE = { 'claude-code': { modelo: CLAUDE_MODEL, effort: null } } as const
+
 /** Bloco de memória anexado ao fim (`\n\n<bloco>`) ou nada. */
 export const anexo = (bloco: string | null | undefined): string => (bloco ? `\n\n${bloco}` : '')

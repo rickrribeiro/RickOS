@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { FLIGHTS_MODEL } from '../padroes'
+import { ALT_CODEX, FLIGHTS_MODEL } from '../padroes'
 
 /**
  * Passagens → importar texto de alerta/e-mail: a IA só estrutura as ofertas; o importador valida.
@@ -12,6 +12,7 @@ export const passagensImportarAlerta = definirChamada<{ hoje: string; texto: str
   motor: 'claude-code',
   modelo: FLIGHTS_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'passagens/importarAlerta.ts',
   usadoEm: 'server/flights/ai.ts',
   template: [

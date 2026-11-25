@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Automações → agente agendado: roda uma vez por dia o prompt escrito pelo usuário em
@@ -13,6 +13,7 @@ export const automacoesAgendado = definirChamada<{ prompt: string }>({
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'automacoes/agendado.ts',
   usadoEm: 'server/rpc.ts (runScheduledJobs)',
   template: '{{prompt}}',

@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { MEM_FAST } from '../padroes'
+import { ALT_CODEX, MEM_FAST } from '../padroes'
 import { REGRAS_SEGURANCA_MEMORIA } from './regras'
 
 /**
@@ -24,6 +24,7 @@ export const memoriaLacunas = definirChamada<{
   motor: 'claude-code',
   modelo: MEM_FAST,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'memoria/lacunas.ts',
   usadoEm: 'server/memory/cognitive.ts (detectGaps)',
   sistema: `Você identifica LACUNAS relevantes no conhecimento pessoal do usuário.

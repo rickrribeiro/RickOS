@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Inbox → "Sugerir projetos com IA": classifica cada item do inbox no projeto mais provável.
@@ -12,6 +12,7 @@ export const inboxClassificar = definirChamada<{ projetos: { id: number; name: s
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'inbox/classificarProjetos.ts',
   usadoEm: 'src/modules/inbox/pages/InboxPage.tsx',
   template: `Classifique cada item do meu inbox no projeto mais provável, ou null se não for de nenhum projeto (compras, lembretes pessoais etc.). Seja conservador.

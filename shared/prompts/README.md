@@ -14,6 +14,7 @@ chamador ──(id + dados)──▶ gateway (server/ia/gateway.ts) ──▶ mo
 * **Factory `definirChamada()`** (`definicao.ts`): cada arquivo exporta uma definição com id, módulo, padrões de motor/modelo/effort, o prompt como **template** com variáveis `{{nome}}`, a função `preparar(dados)` (dados do chamador → variáveis) e um `exemplo`.
 * O chamador **nunca** monta o prompt: passa o id e os dados. Servidor: `executarChamada(id, dados, opções)` ou `montarChamada(id, dados)`. Front: `window.api.ai.start({ chamada, params })`, `window.api.ai.executar(...)` (`runJson`/`runText`) ou `window.api.iaChamadas.montar(...)` (chamadas do tipo `texto`).
 * **Prompt sobrescrito**: em Configurações → IA → "Ver onde a IA é usada" → Editar prompt. Fica em `ai_chamadas` (template/sistema); "Reverter para o padrão" apaga. O texto sobrescrito usa as mesmas variáveis do padrão; partes condicionais (ex.: um bloco que só aparece se houver dado) já vêm prontas dentro da variável.
+* **Motor**: cada definição tem um `motor` padrão e, em `alternativas`, os outros motores que aceita (com os padrões de modelo/effort de cada um; `ALT_CODEX`/`ALT_CLAUDE` em `padroes.ts`). Sem `alternativas` = só roda no padrão (ex.: precisa de ferramenta exclusiva do Claude Code). O usuário escolhe em Configurações → IA; fica em `ai_chamadas.motor` e o gateway ignora motor não aceito.
 * Fica em `shared/` porque o servidor e o front usam (os dois tsconfigs incluem `shared/`). Nada de `window`, Node ou i18n aqui: prompts são sempre em **pt-BR**.
 * Privacidade/orçamento (ex.: só as mensagens selecionadas, limite de caracteres) continua no chamador.
 * **Memória Pessoal**: nenhum prompt daqui busca memória. Os que recebem já estavam aprovados (ver `docs/memoria/integracoes.md`) e o bloco chega como dado (`{{memoria}}`).
@@ -23,7 +24,7 @@ Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs a
 
 ## Nova chamada de IA (checklist)
 
-1. `shared/prompts/<módulo>/<nome>.ts` com `definirChamada({ id, modulo, tipo, motor, modelo, effort, arquivo, usadoEm, template, preparar, exemplo })`.
+1. `shared/prompts/<módulo>/<nome>.ts` com `definirChamada({ id, modulo, tipo, motor, modelo, effort, alternativas?, arquivo, usadoEm, template, preparar, exemplo })`.
 2. Entrada em `DEFINICOES` (`catalogo.ts`) e nome em `settings.iaChamada.<id>` (pt-BR, en, es).
 3. Chamar pelo gateway (nunca `runClaude`/CLI direto) e registrar arquivo → id no `MANIFESTO` do guardrail.
 4. Linha no índice abaixo.

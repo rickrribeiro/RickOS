@@ -1,3 +1,4 @@
+import { ALT_CODEX } from '../padroes'
 import { definirChamada, ex } from '../definicao'
 
 /**
@@ -12,6 +13,7 @@ export const promptRunnerMensagemCommit = definirChamada<{ contexto: string }>({
   motor: 'claude-code',
   modelo: { padrao: 'haiku' },
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'promptRunner/mensagemCommit.ts',
   usadoEm: 'server/aiconv/rpc.ts',
   template: `Escreva UMA mensagem de commit para as mudanças abaixo, no mesmo estilo e idioma dos commits recentes (ex.: convencional "tipo(escopo): resumo"). Responda só com a mensagem, sem aspas nem explicação; corpo opcional depois de uma linha em branco.\n\n{{contexto}}`,

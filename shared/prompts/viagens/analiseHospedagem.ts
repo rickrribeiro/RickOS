@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Viagens → "Analisar com IA" os resultados do buscador de hospedagem: as 3 melhores opções.
@@ -13,6 +13,7 @@ export const viagensHospedagem = definirChamada<{ memoria: string; observacoes: 
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'viagens/analiseHospedagem.ts',
   usadoEm: 'src/modules/travel-stays/pages/StayFinderPage.tsx',
   template: `{{memoria}}{{observacoes}}Resultados de hospedagem em {{cidade}}:\n{{resultados}}\n\nAnalise e explique em português quais são as 3 MELHORES opções para mim e por quê. Seja direto.`,

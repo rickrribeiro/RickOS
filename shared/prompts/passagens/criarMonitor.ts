@@ -1,6 +1,6 @@
 import { REGIONS } from '../../flights'
 import { definirChamada, ex } from '../definicao'
-import { FLIGHTS_MODEL } from '../padroes'
+import { ALT_CODEX, FLIGHTS_MODEL } from '../padroes'
 
 /**
  * Passagens → "Criar monitoramento com IA": pedido em linguagem natural → JSON da configuração.
@@ -34,6 +34,7 @@ export const passagensCriarMonitor = definirChamada<{ hoje: string; moeda: strin
   motor: 'claude-code',
   modelo: FLIGHTS_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'passagens/criarMonitor.ts',
   usadoEm: 'server/flights/ai.ts',
   template: [

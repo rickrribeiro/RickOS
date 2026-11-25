@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { MEM_MAIN } from '../padroes'
+import { ALT_CODEX, MEM_MAIN } from '../padroes'
 import { REGRAS_SEGURANCA_MEMORIA } from './regras'
 import { FORMATO_SUGESTOES_MEMORIA } from './extracao'
 
@@ -26,6 +26,7 @@ export const memoriaAnalise = definirChamada<{ categorias: string; memorias: str
   motor: 'claude-code',
   modelo: MEM_MAIN,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'memoria/analise.ts',
   usadoEm: 'server/memory/agent.ts (analisar e consolidar)',
   sistema: SISTEMA_ANALISE_MEMORIA,

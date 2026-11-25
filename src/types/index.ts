@@ -1,7 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { IdChamadaIa, ParamsDe } from '../../shared/prompts/catalogo'
+import type { IdChamadaIa, MotorIa, ParamsDe } from '../../shared/prompts/catalogo'
 import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
 export type { FinanceRule, InvestmentGroupDef } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
@@ -137,6 +137,8 @@ export interface AiChamadaConfig {
   id: string
   template: string | null
   sistema: string | null
+  /** Motor escolhido (null = padrão da chamada). */
+  motor: MotorIa | null
   updatedAt: string
 }
 
@@ -1232,6 +1234,8 @@ declare global {
         listar: () => Promise<AiChamadaConfig[]>
         salvarPrompt: (id: IdChamadaIa, template: string | null, sistema: string | null) => Promise<AiChamadaConfig | null>
         reverterPrompt: (id: IdChamadaIa) => Promise<boolean>
+        /** null = voltar ao motor padrão da chamada. */
+        salvarMotor: (id: IdChamadaIa, motor: MotorIa | null) => Promise<AiChamadaConfig | null>
         /** Só monta o texto (chamadas do tipo 'texto'), já com o prompt sobrescrito, se houver. */
         montar: <K extends IdChamadaIa>(id: K, params: ParamsDe<K>) => Promise<string>
       }

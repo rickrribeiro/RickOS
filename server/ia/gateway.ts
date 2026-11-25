@@ -1,4 +1,5 @@
 import { definicao, ehIdChamada, type ConfigIa, type IdChamadaIa, type MotorIa, type ParamsDe, type PromptSobrescrito } from '../../shared/prompts/catalogo'
+import { motoresPermitidos, padraoDoMotor } from '../../shared/prompts/definicao'
 import { getAiChamada, getSetting } from '../database/queries'
 import { criarMotor, type ExecucaoIa } from './motores'
 
@@ -21,9 +22,14 @@ export interface ExecucaoResolvida {
   effort: string
 }
 
+/** Motor escolhido em Configurações → IA (se a chamada aceita) ou o padrão; modelo/effort são os padrões desse motor. */
 export async function resolverExecucao(id: IdChamadaIa): Promise<ExecucaoResolvida> {
   const d = definicao(id)
-  return { motor: d.motor, modelo: await valor(d.modelo), effort: await valor(d.effort) }
+  const row = await getAiChamada(id)
+  const escolhido = row?.motor as MotorIa | null | undefined
+  const motor = escolhido && motoresPermitidos(d).includes(escolhido) ? escolhido : d.motor
+  const padrao = padraoDoMotor(d, motor) ?? { modelo: d.modelo, effort: d.effort }
+  return { motor, modelo: await valor(padrao.modelo), effort: await valor(padrao.effort) }
 }
 
 /** Prompt sobrescrito salvo (null = usar o padrão). */

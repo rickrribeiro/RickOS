@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { CATALOGO_IA, exemploMontado, type ChamadaIa, type ConfigIa, type IdChamadaIa, type ModuloIa, type MotorIa } from '../../../../shared/prompts/catalogo'
-import { variaveisDoTemplate } from '../../../../shared/prompts/definicao'
+import { motoresPermitidos, padraoDoMotor, variaveisDoTemplate } from '../../../../shared/prompts/definicao'
 import { CONV_EFFORTS } from '../../../../shared/aiConversations'
 import type { AiChamadaConfig } from '../../../types'
 import { t as tr, type MessageKey } from '../../../i18n'
@@ -28,6 +28,11 @@ function montar(c: ChamadaIa, cfg: AiChamadaConfig | undefined): string {
 }
 
 const personalizado = (cfg: AiChamadaConfig | undefined): boolean => !!cfg && (cfg.template != null || cfg.sistema != null)
+
+/** Motor em uso: o escolhido (se a chamada aceita) ou o padrão. */
+function motorEfetivo(c: ChamadaIa, cfg: AiChamadaConfig | undefined): MotorIa {
+  return cfg?.motor && motoresPermitidos(c).includes(cfg.motor) ? cfg.motor : c.motor
+}
 
 const badge: React.CSSProperties = {
   display: 'inline-block',
@@ -133,7 +138,11 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
   const [copied, setCopied] = useState<IdChamadaIa | null>(null)
 
   useEffect(() => {
-    const keys = [...new Set(CATALOGO_IA.flatMap((c) => [c.modelo.setting, c.effort?.setting]).filter((k): k is string => !!k))]
+    const keys = [
+      ...new Set(
+        CATALOGO_IA.flatMap((c) => motoresPermitidos(c).flatMap((m) => [padraoDoMotor(c, m)?.modelo.setting, padraoDoMotor(c, m)?.effort?.setting])).filter((k): k is string => !!k)
+      )
+    ]
     let alive = true
     Promise.all(keys.map((k) => window.api.settings.get(k).then((v) => [k, v ?? ''] as const, () => [k, ''] as const))).then((pairs) => {
       if (alive) setSaved(Object.fromEntries(pairs))
@@ -156,18 +165,19 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
   }, [onClose, editando])
 
   const modulos = useMemo(() => [...new Set(CATALOGO_IA.map((c) => c.modulo))], [])
-  const motores = useMemo(() => [...new Set(CATALOGO_IA.map((c) => c.motor))], [])
+  const motores = useMemo(() => [...new Set(CATALOGO_IA.flatMap((c) => motoresPermitidos(c)))], [])
 
   const lista = useMemo(() => {
     const q = query.trim().toLowerCase()
     return CATALOGO_IA.filter((c) => {
       if (modulo && c.modulo !== modulo) return false
-      if (motor && c.motor !== motor) return false
+      if (motor && motorEfetivo(c, configs[c.id]) !== motor) return false
       if (!q) return true
-      const hay = [nomeChamada(c.id), nomeModulo(c.modulo), c.id, c.arquivo ?? '', c.usadoEm, efetivo(c.modelo, saved).valor, MOTORES[c.motor]].join(' ').toLowerCase()
+      const m = motorEfetivo(c, configs[c.id])
+      const hay = [nomeChamada(c.id), nomeModulo(c.modulo), c.id, c.arquivo ?? '', c.usadoEm, efetivo(padraoDoMotor(c, m)?.modelo ?? c.modelo, saved).valor, MOTORES[m]].join(' ').toLowerCase()
       return hay.includes(q)
     })
-  }, [query, modulo, motor, saved])
+  }, [query, modulo, motor, saved, configs])
 
   const grupos = useMemo(() => {
     const m = new Map<ModuloIa, ChamadaIa[]>()
@@ -188,9 +198,20 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
     if (!window.confirm(tr('settings.iaPrompt.confirmarReverter', { nome: nomeChamada(c.id) }))) return
     try {
       await window.api.iaChamadas.reverterPrompt(c.id)
-      atualizar(c.id, null)
+      const cfg = configs[c.id]
+      atualizar(c.id, cfg ? { ...cfg, template: null, sistema: null } : null)
       setEditando(null)
       setAviso({ id: c.id, texto: tr('settings.iaPrompt.revertido') })
+    } catch (e) {
+      setAviso({ id: c.id, texto: tr('settings.iaPrompt.erro', { msg: e instanceof Error ? e.message : String(e) }) })
+    }
+  }
+
+  async function trocarMotor(c: ChamadaIa, m: MotorIa): Promise<void> {
+    try {
+      const r = await window.api.iaChamadas.salvarMotor(c.id, m === c.motor ? null : m)
+      atualizar(c.id, r)
+      setAviso({ id: c.id, texto: tr('settings.iaMotor.salvo', { motor: MOTORES[m] }) })
     } catch (e) {
       setAviso({ id: c.id, texto: tr('settings.iaPrompt.erro', { msg: e instanceof Error ? e.message : String(e) }) })
     }
@@ -246,17 +267,20 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {chamadas.map((c) => {
-                const modelo = efetivo(c.modelo, saved)
-                const effort = efetivo(c.effort, saved)
                 const aberto = open === c.id
                 const cfg = configs[c.id]
+                const motorAtual = motorEfetivo(c, cfg)
+                const permitidos = motoresPermitidos(c)
+                const pm = padraoDoMotor(c, motorAtual) ?? { modelo: c.modelo, effort: c.effort }
+                const modelo = efetivo(pm.modelo, saved)
+                const effort = efetivo(pm.effort, saved)
                 const custom = personalizado(cfg)
                 return (
                   <div key={c.id} style={{ border: `1px solid ${custom ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, padding: '8px 10px', background: 'var(--bg-secondary)' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       <div style={{ flex: '1 1 200px', minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nomeChamada(c.id)}</div>
                       {custom && <span style={{ ...badge, borderColor: 'var(--accent)', color: 'var(--accent)' }}>{tr('settings.iaPrompt.personalizado')}</span>}
-                      <span style={badge} title={tr('settings.motor')}>{MOTORES[c.motor]}</span>
+                      <span style={badge} title={tr('settings.motor')}>{MOTORES[motorAtual]}</span>
                       <span style={badge} title={`${tr('settings.modelo')} · ${modelo.origem}`}>{tr('settings.modelo')}: {modelo.valor}</span>
                       <span style={badge} title={`${tr('settings.effort')}${effort.origem ? ` · ${effort.origem}` : ''}`}>{tr('settings.effort')}: {effort.valor}</span>
                       <button
@@ -285,6 +309,22 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
                           </div>
                           {c.tipo === 'texto' && <div>{tr('settings.iaPrompt.soTexto')}</div>}
                         </div>
+
+                        {c.tipo === 'executa' &&
+                          (permitidos.length > 1 ? (
+                            <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                              {tr('settings.motor')}
+                              <select value={motorAtual} onChange={(e) => void trocarMotor(c, e.target.value as MotorIa)} style={{ minWidth: 0, flex: '0 1 220px' }}>
+                                {permitidos.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m === c.motor ? tr('settings.iaMotor.padrao', { motor: MOTORES[m] }) : MOTORES[m]}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tr('settings.iaMotor.unico', { motor: MOTORES[c.motor] })}</div>
+                          ))}
 
                         {aviso?.id === c.id && <div style={{ fontSize: 12, color: 'var(--accent)' }}>{aviso.texto}</div>}
 

@@ -397,5 +397,8 @@ export const settings = {
   'settings.iaPrompt.revertido': 'Se volvió al prompt predeterminado.',
   'settings.iaPrompt.erro': 'Error: {msg}',
   'settings.iaPrompt.exemploAtual': 'Prompt en uso, armado con datos de ejemplo:',
-  'settings.iaPrompt.soTexto': 'Solo arma el texto; lo ejecuta el Asistente o el Prompt Runner.'
+  'settings.iaPrompt.soTexto': 'Solo arma el texto; lo ejecuta el Asistente o el Prompt Runner.',
+  'settings.iaMotor.padrao': '{motor} (predeterminado)',
+  'settings.iaMotor.unico': 'Esta llamada solo funciona en {motor} (usa recursos que solo él tiene).',
+  'settings.iaMotor.salvo': 'Motor guardado: las próximas ejecuciones usan {motor}.'
 }

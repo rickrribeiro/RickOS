@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 import { EX_PROJETO } from '../exemplos'
 
 /**
@@ -14,6 +14,7 @@ export const projetosOndePareiProjeto = definirChamada<{ contexto: string }>({
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/ondePareiProjeto.ts',
   usadoEm: 'src/modules/projects/pages/ProjectDetailPage.tsx',
   template: `Com base nas atividades recentes (commits, sessões no timer, tarefas e histórico), escreva um "ONDE PAREI" de 2-4 frases em primeira pessoa para eu retomar este projeto rapidamente: o que foi feito por último, o estado atual e o próximo passo natural. Só o texto.\n\n{{contexto}}`,

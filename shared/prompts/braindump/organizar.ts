@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Brain dump → transforma o "despejo mental" em tarefas, projetos, próximos passos e agenda (JSON).
@@ -12,6 +12,7 @@ export const braindumpOrganizar = definirChamada<{ hoje: string; despejo: string
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'braindump/organizar.ts',
   usadoEm: 'src/modules/braindump/pages/BrainDumpPage.tsx',
   template: `Você é meu organizador pessoal. Abaixo está um "despejo mental" — tudo que está na minha cabeça agora, desorganizado. Transforme em um plano acionável.

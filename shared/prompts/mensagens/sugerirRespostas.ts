@@ -1,6 +1,6 @@
 import { definirChamada, ex } from '../definicao'
 import { EX_MENSAGENS } from '../exemplos'
-import { CHATS_MODEL } from '../padroes'
+import { ALT_CODEX, CHATS_MODEL } from '../padroes'
 import { ESTILOS_RESPOSTA, SISTEMA_MENSAGENS } from './sistema'
 
 /**
@@ -35,6 +35,7 @@ export const mensagensSugerir = definirChamada<PromptSugerirRespostas>({
   motor: 'claude-code',
   modelo: CHATS_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'mensagens/sistema.ts, mensagens/sugerirRespostas.ts',
   usadoEm: 'server/chats/ai.ts',
   sistema: SISTEMA_MENSAGENS,

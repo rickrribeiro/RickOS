@@ -7,7 +7,7 @@ import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import { t } from '../i18n'
-import type { IdChamadaIa, ParamsDe } from '../../shared/prompts/catalogo'
+import type { IdChamadaIa, MotorIa, ParamsDe } from '../../shared/prompts/catalogo'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -623,6 +623,7 @@ export function createApi() {
       listar: () => invoke('iaChamadas:listar'),
       salvarPrompt: (id: IdChamadaIa, template: string | null, sistema: string | null) => invoke('iaChamadas:salvarPrompt', id, template, sistema),
       reverterPrompt: (id: IdChamadaIa) => invoke<boolean>('iaChamadas:reverterPrompt', id),
+      salvarMotor: (id: IdChamadaIa, motor: MotorIa | null) => invoke('iaChamadas:salvarMotor', id, motor),
       montar: <K extends IdChamadaIa>(id: K, params: ParamsDe<K>) => invoke<string>('iaChamadas:montar', id, params)
     },
     // AI (Claude CLI)

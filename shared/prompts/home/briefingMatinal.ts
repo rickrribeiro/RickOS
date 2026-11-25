@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Home → "Briefing matinal": resumo, 3 prioridades e agenda do dia.
@@ -14,6 +14,7 @@ export const homeBriefing = definirChamada<{ contexto: string }>({
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'home/briefingMatinal.ts',
   usadoEm: 'src/modules/home/components/DailyStandup.tsx',
   template: `Você é meu chefe de gabinete. Com base no contexto do meu dia abaixo, escreva um BRIEFING MATINAL curto e acionável em Markdown:

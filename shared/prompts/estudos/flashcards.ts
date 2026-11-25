@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CODEX_MODEL } from '../padroes'
+import { ALT_CLAUDE, CODEX_MODEL } from '../padroes'
 
 /**
  * Estudos → "Gerar flashcards" de uma anotação (JSON [{front, back}]).
@@ -12,6 +12,7 @@ export const estudosFlashcards = definirChamada<{ anotacao: string }>({
   motor: 'codex',
   modelo: CODEX_MODEL,
   effort: null,
+  alternativas: ALT_CLAUDE,
   arquivo: 'estudos/flashcards.ts',
   usadoEm: 'src/modules/estudos/components/FlashcardPanel.tsx',
   template: `A partir da anotação em Markdown abaixo, crie flashcards de estudo (pergunta/resposta) concisos e úteis para memorização.

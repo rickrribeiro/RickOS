@@ -2896,6 +2896,8 @@ export interface DbAiChamada {
   id: string
   template: string | null
   sistema: string | null
+  /** Motor escolhido pelo usuário (null = padrão da chamada). */
+  motor: string | null
   updatedAt: string
 }
 
@@ -2905,6 +2907,17 @@ export async function getAiChamadas(): Promise<DbAiChamada[]> {
 
 export async function getAiChamada(id: string): Promise<DbAiChamada | null> {
   return getOne<DbAiChamada>(await getDb(), 'SELECT * FROM ai_chamadas WHERE id = ?', [id])
+}
+
+/** Grava o motor escolhido (null = padrão da chamada). */
+export async function setAiChamadaMotor(id: string, motor: string | null): Promise<void> {
+  const db = await getDb()
+  run(
+    db,
+    `INSERT INTO ai_chamadas (id, motor, updatedAt) VALUES (?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET motor = excluded.motor, updatedAt = excluded.updatedAt`,
+    [id, motor, new Date().toISOString()]
+  )
 }
 
 /** Grava o prompt sobrescrito (null = usar o padrão naquele campo). */

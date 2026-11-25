@@ -567,6 +567,15 @@ const MIGRATIONS: Migration[] = [
         );`)
       } catch { /* exists */ }
     }
+  },
+  {
+    version: 43,
+    label: 'Chamadas de IA: motor escolhido pelo usuário (claude-code | codex | gemini)',
+    run: (db) => {
+      try {
+        db.run('ALTER TABLE ai_chamadas ADD COLUMN motor TEXT')
+      } catch { /* exists */ }
+    }
   }
 ]
 

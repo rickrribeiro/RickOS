@@ -30,6 +30,13 @@ export interface ConfigIa {
   padrao: string
 }
 
+/** Padrões de execução de um motor numa chamada. */
+export interface PadraoMotor {
+  modelo: ConfigIa
+  /** null = não envia effort (padrão do CLI/conta). */
+  effort: ConfigIa | null
+}
+
 /** Prompt efetivo: o do usuário (banco) ou o padrão. `null` = usar o padrão. */
 export interface PromptSobrescrito {
   template: string | null
@@ -44,10 +51,16 @@ export interface DefinicaoChamada<P> {
    * 'texto': só monta o texto, que vai para outra chamada (ex.: Assistente, Prompt Runner).
    */
   tipo: 'executa' | 'texto'
+  /** Motor padrão. `modelo`/`effort` são os padrões dele. */
   motor: MotorIa
   modelo: ConfigIa
   /** null = não envia effort (padrão do CLI/conta). */
   effort: ConfigIa | null
+  /**
+   * Outros motores que o usuário pode escolher (Configurações → IA), com os padrões de cada um.
+   * Ausente = só o motor padrão (ex.: precisa de ferramenta que só o Claude Code tem).
+   */
+  alternativas?: Partial<Record<MotorIa, PadraoMotor>>
   /** Arquivo(s) em shared/prompts/ (null = prompt escrito pelo próprio usuário). */
   arquivo: string | null
   usadoEm: string
@@ -98,6 +111,17 @@ export function definirChamada<P>(d: DefinicaoChamada<P>): Chamada<P> {
       }
     }
   }
+}
+
+/** Motores aceitos por uma chamada (o padrão primeiro). */
+export function motoresPermitidos(d: Pick<DefinicaoChamada<unknown>, 'motor' | 'alternativas'>): MotorIa[] {
+  return [d.motor, ...(Object.keys(d.alternativas ?? {}) as MotorIa[]).filter((m) => m !== d.motor)]
+}
+
+/** Padrões (modelo/effort) de um motor numa chamada; null se o motor não é aceito. */
+export function padraoDoMotor(d: Pick<DefinicaoChamada<unknown>, 'motor' | 'modelo' | 'effort' | 'alternativas'>, motor: MotorIa): PadraoMotor | null {
+  if (motor === d.motor) return { modelo: d.modelo, effort: d.effort }
+  return d.alternativas?.[motor] ?? null
 }
 
 /** Marcador dos dados de exemplo. */

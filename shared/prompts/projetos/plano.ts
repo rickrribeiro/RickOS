@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 import { EX_PROJETO } from '../exemplos'
 
 /**
@@ -14,6 +14,7 @@ export const projetosPlano = definirChamada<{ hoje: string; contexto: string }>(
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'projetos/plano.ts',
   usadoEm: 'src/modules/projects/pages/ProjectDetailPage.tsx',
   template: `Você é meu gerente de projetos pessoal. Para o projeto abaixo, proponha um plano enxuto para TERMINAR a entrega atual:

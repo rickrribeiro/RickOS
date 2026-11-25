@@ -1,5 +1,5 @@
 import { definirChamada, ex } from '../definicao'
-import { CLAUDE_MODEL } from '../padroes'
+import { ALT_CODEX, CLAUDE_MODEL } from '../padroes'
 
 /**
  * Assistente → executa o texto da caixa do Assistente (digitado ou vindo de uma ação rápida).
@@ -13,6 +13,7 @@ export const assistenteLivre = definirChamada<{ pedido: string }>({
   motor: 'claude-code',
   modelo: CLAUDE_MODEL,
   effort: null,
+  alternativas: ALT_CODEX,
   arquivo: 'assistente/livre.ts',
   usadoEm: 'src/modules/jarvis/pages/JarvisPage.tsx',
   template: '{{pedido}}',
