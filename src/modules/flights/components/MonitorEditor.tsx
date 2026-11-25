@@ -7,6 +7,7 @@ import { errMsg, useFlightStore } from '../store/flightStore'
 import { DatesEditor } from './DatesEditor'
 import { LocationPicker, PlaceSearch } from './LocationPicker'
 import { Modal } from './Modal'
+import { t as tr, getLocale } from '../../../i18n'
 
 const CURRENCIES = ['BRL', 'USD', 'EUR', 'JPY', 'GBP', 'THB']
 const SAVED_COUNTRIES_KEY = 'flights_saved_forbidden_countries'
@@ -19,18 +20,18 @@ const parseCodes = (v: string | null | undefined): string[] => {
   }
 }
 const sameSet = (a: string[], b: string[]): boolean => a.length === b.length && a.every((x) => b.includes(x))
-const NEED_LABEL: Record<Need, string> = { required: 'Obrigatória', preferred: 'Preferência', any: 'Tanto faz' }
+const NEED_LABEL: Record<Need, string> = { required: tr('flights.obrigatoria'), preferred: tr('flights.preferencia'), any: tr('flights.tantoFaz') }
 
 function Counter(props: { value: number; min: number; max: number; onChange: (n: number) => void; label: string }): React.ReactElement {
   return (
     <div className="fm-field">
       <span className="fm-label">{props.label}</span>
       <span className="fm-counter">
-        <button type="button" onClick={() => props.onChange(Math.max(props.min, props.value - 1))} aria-label={`Menos ${props.label}`}>
+        <button type="button" onClick={() => props.onChange(Math.max(props.min, props.value - 1))} aria-label={tr('flights.menos', { label: props.label })}>
           −
         </button>
         <b>{props.value}</b>
-        <button type="button" onClick={() => props.onChange(Math.min(props.max, props.value + 1))} aria-label={`Mais ${props.label}`}>
+        <button type="button" onClick={() => props.onChange(Math.min(props.max, props.value + 1))} aria-label={tr('flights.mais', { label: props.label })}>
           +
         </button>
       </span>
@@ -47,7 +48,7 @@ function MoneyInput(props: { value: Money | null; currency: string; onChange: (m
         type="number"
         min={0}
         step="any"
-        placeholder={props.placeholder ?? 'sem limite'}
+        placeholder={props.placeholder ?? tr('flights.semLimite')}
         value={props.value ? fromMinor(props.value.amountMinor, cur) : ''}
         onChange={(e) => props.onChange(e.target.value === '' ? null : { amountMinor: toMinor(Number(e.target.value), cur), currency: cur })}
       />
@@ -80,7 +81,7 @@ function CodeChips(props: { codes: string[]; onChange: (c: string[]) => void; ki
       {props.codes.map((c) => (
         <span className="fm-chip" key={c}>
           <span>{c}</span>
-          <button type="button" className="fm-x" onClick={() => props.onChange(props.codes.filter((x) => x !== c))} aria-label={`Remover ${c}`}>
+          <button type="button" className="fm-x" onClick={() => props.onChange(props.codes.filter((x) => x !== c))} aria-label={tr('flights.remover2', { c })}>
             ✕
           </button>
         </span>
@@ -107,7 +108,7 @@ function CodeChips(props: { codes: string[]; onChange: (c: string[]) => void; ki
 }
 
 function GroundList(props: { list: GroundOption[]; onChange: (l: GroundOption[]) => void; currency: string }): React.ReactElement {
-  if (!props.list.length) return <div className="fm-small">Nenhum deslocamento terrestre. Use "Sugerir aeroportos próximos" no destino para adicionar alternativas com rota estimada.</div>
+  if (!props.list.length) return <div className="fm-small">{tr('flights.nenhumDeslocamentoTerrestreUseSugerir')}</div>
   return (
     <div>
       {props.list.map((g, i) => {
@@ -115,13 +116,13 @@ function GroundList(props: { list: GroundOption[]; onChange: (l: GroundOption[])
         return (
           <div className="fm-window" key={`${g.airport}-${i}`}>
             <b>{g.airport}</b>→
-            <input value={g.toLabel} onChange={(e) => set({ toLabel: e.target.value })} style={{ width: 120 }} aria-label="Destino final" />
+            <input value={g.toLabel} onChange={(e) => set({ toLabel: e.target.value })} style={{ width: 120 }} aria-label={tr('flights.destinoFinal')} />
             <label className="fm-row fm-small" style={{ gap: 4 }}>
-              tempo
-              <input type="number" min={0} value={g.minutes ?? ''} onChange={(e) => set({ minutes: e.target.value === '' ? null : Number(e.target.value) })} /> min
+              {tr('flights.tempo')}
+              <input type="number" min={0} value={g.minutes ?? ''} onChange={(e) => set({ minutes: e.target.value === '' ? null : Number(e.target.value) })} /> {tr('flights.min')}
             </label>
             <label className="fm-row fm-small" style={{ gap: 4 }}>
-              custo
+              {tr('flights.custo')}
               <input
                 type="number"
                 min={0}
@@ -133,14 +134,14 @@ function GroundList(props: { list: GroundOption[]; onChange: (l: GroundOption[])
               />
               {g.currency}
             </label>
-            <span className={`fm-pill ${g.source === 'manual' ? 'ok' : 'warn'}`}>{g.source === 'manual' ? 'informado' : g.source === 'osrm' ? 'rota estimada' : 'aproximação'}</span>
-            <button type="button" className="fm-x" onClick={() => props.onChange(props.list.filter((_, j) => j !== i))} aria-label="Remover">
+            <span className={`fm-pill ${g.source === 'manual' ? 'ok' : 'warn'}`}>{g.source === 'manual' ? tr('flights.informado') : g.source === 'osrm' ? tr('flights.rotaEstimada') : tr('flights.aproximacao')}</span>
+            <button type="button" className="fm-x" onClick={() => props.onChange(props.list.filter((_, j) => j !== i))} aria-label={tr('flights.remover3')}>
               ✕
             </button>
           </div>
         )
       })}
-      <div className="fm-small">Tempo {props.list.some((g) => g.minutes) ? `(ex.: ${fmtMinutes(props.list.find((g) => g.minutes)?.minutes)})` : ''} e custo entram no custo total e no porta a porta. Valores informados por você contam como "verificados"; estimativas, como "estimados".</div>
+      <div className="fm-small">{tr('flights.tempo2')} {props.list.some((g) => g.minutes) ? tr('flights.ex', { p0: fmtMinutes(props.list.find((g) => g.minutes)?.minutes) }) : ''} {tr('flights.eCustoEntramNoCusto')}</div>
     </div>
   )
 }
@@ -163,17 +164,17 @@ function AiBox(props: { currency: string; onDraft: (d: AiDraft) => void }): Reac
   }
   return (
     <div className="fm-section fm-ai">
-      <div className="fm-section-title">✨ Criar com IA</div>
+      <div className="fm-section-title">{tr('flights.criarComIa')}</div>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Ex.: Vou passar semanas pelo Sudeste Asiático, ainda não sei de qual país saio. Preciso voltar para a Bahia entre 10 e 25 de dezembro, com mala despachada, sem conexão nos EUA ou Canadá. Aceito chegar em Aracaju."
+        placeholder={tr('flights.exVouPassarSemanasPelo')}
       />
       <div className="fm-row" style={{ marginTop: 6 }}>
         <button className="btn btn-primary btn-sm" type="button" onClick={go} disabled={busy || text.trim().length < 8}>
-          {busy ? 'Interpretando…' : 'Gerar configuração'}
+          {busy ? tr('flights.interpretando') : tr('flights.gerarConfiguracao')}
         </button>
-        <span className="fm-small">A IA só sugere: códigos são conferidos na base de aeroportos, distâncias são calculadas, e nada é salvo sem você revisar.</span>
+        <span className="fm-small">{tr('flights.aIaSoSugereCodigos')}</span>
       </div>
       {err && <div className="fm-error">{err}</div>}
     </div>
@@ -247,15 +248,15 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
 
   return (
     <Modal
-      title={m ? `Editar · ${m.name}` : 'Novo monitoramento'}
+      title={m ? tr('flights.editar', { name: m.name }) : tr('flights.novoMonitoramento')}
       onClose={props.onClose}
       headExtra={
-        <div className="fm-seg" aria-label="Modo do formulário">
+        <div className="fm-seg" aria-label={tr('flights.modoDoFormulario')}>
           <button type="button" className={!advanced ? 'active' : ''} onClick={() => setAdvanced(false)}>
-            Simples
+            {tr('flights.simples')}
           </button>
           <button type="button" className={advanced ? 'active' : ''} onClick={() => setAdvanced(true)}>
-            Avançado
+            {tr('flights.avancado')}
           </button>
         </div>
       }
@@ -265,35 +266,35 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
             {val ? (
               <>
                 <span>
-                  <b>{val.origins.length}</b> origem(ns) × <b>{val.destinations.length}</b> destino(s)
+                  <b>{val.origins.length}</b> {tr('flights.origemNs')} <b>{val.destinations.length}</b> {tr('flights.destinoS')}
                 </span>
                 <span>
-                  <b>{val.dates}</b> combinação(ões) de datas
+                  <b>{val.dates}</b> {tr('flights.combinacaoOesDeDatas')}
                 </span>
                 <span>
-                  universo <b>{val.universe.toLocaleString('pt-BR')}</b>
+                  {tr('flights.universo')} <b>{val.universe.toLocaleString(getLocale())}</b>
                 </span>
-                <span title="Consultas da etapa de descoberta (o restante é progressivo, dentro do orçamento)">
-                  descoberta ≈ <b>{val.discoveryQueries}</b> consultas
+                <span title={tr('flights.consultasDaEtapaDeDescoberta')}>
+                  {tr('flights.descoberta')} <b>{val.discoveryQueries}</b> {tr('flights.consultas')}
                 </span>
-                {!val.providers.length && <span className="fm-pill warn">sem fonte automática configurada</span>}
+                {!val.providers.length && <span className="fm-pill warn">{tr('flights.semFonteAutomaticaConfigurada')}</span>}
               </>
             ) : (
-              <span>Validando…</span>
+              <span>{tr('flights.validando')}</span>
             )}
           </div>
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => save('draft')} disabled={busy}>
-            Salvar rascunho
+            {tr('flights.salvarRascunho')}
           </button>
           <button className="btn btn-primary btn-sm" type="button" onClick={() => save('active')} disabled={busy} title={errors[0] ?? ''}>
-            {busy ? 'Salvando…' : errors.length ? 'Salvar (fica aguardando configuração)' : m ? 'Salvar' : 'Criar monitoramento'}
+            {busy ? tr('flights.salvando') : errors.length ? tr('flights.salvarFicaAguardandoConfiguracao') : m ? tr('flights.salvar') : tr('flights.criarMonitoramento')}
           </button>
         </>
       }
     >
       {!showAi ? (
         <button className="fm-linkbtn" type="button" onClick={() => setShowAi(true)} style={{ marginBottom: 8 }}>
-          ✨ Criar com IA a partir de uma descrição
+          {tr('flights.criarComIaAPartir')}
         </button>
       ) : (
         <AiBox
@@ -308,7 +309,7 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
       )}
       {draftInfo && (
         <div className="fm-note info" style={{ marginBottom: 10 }}>
-          <b>Sugestão da IA{draftInfo.cached ? ' (do cache, 0 tokens)' : ''} — revise antes de salvar.</b>
+          <b>{tr('flights.sugestaoDaIa')}{draftInfo.cached ? tr('flights.doCache0Tokens') : ''} {tr('flights.reviseAntesDeSalvar')}</b>
           {draftInfo.explanations.length > 0 && (
             <ul>
               {draftInfo.explanations.map((x, i) => (
@@ -318,7 +319,7 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
           )}
           {draftInfo.questions.length > 0 && (
             <>
-              <div style={{ marginTop: 4 }}>Em aberto:</div>
+              <div style={{ marginTop: 4 }}>{tr('flights.emAberto')}</div>
               <ul>
                 {draftInfo.questions.map((x, i) => (
                   <li key={i}>{x}</li>
@@ -339,11 +340,11 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
       <div className="fm-section">
         <div className="fm-cols">
           <label className="fm-field">
-            <span className="fm-label">Nome</span>
+            <span className="fm-label">{tr('flights.nome')}</span>
             <input value={name} placeholder={autoName(cfg)} onChange={(e) => setName(e.target.value)} maxLength={80} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Viagem (opcional)</span>
+            <span className="fm-label">{tr('flights.viagemOpcional')}</span>
             <select value={tripId ?? ''} onChange={(e) => setTripId(e.target.value ? Number(e.target.value) : null)}>
               <option value="">—</option>
               {props.trips.map((t) => (
@@ -358,11 +359,11 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
       </div>
 
       <div className="fm-section">
-        <div className="fm-section-title">🗺 Origem e destino</div>
+        <div className="fm-section-title">{tr('flights.origemEDestino')}</div>
         <div className="fm-stack">
-          <LocationPicker label="De onde" value={cfg.origins} onChange={(v) => up('origins', v)} advanced={advanced} currency={cfg.currency} />
+          <LocationPicker label={tr('flights.deOnde')} value={cfg.origins} onChange={(v) => up('origins', v)} advanced={advanced} currency={cfg.currency} />
           <LocationPicker
-            label="Para onde"
+            label={tr('flights.paraOnde')}
             value={cfg.destinations}
             onChange={(v) => up('destinations', v)}
             advanced={advanced}
@@ -377,25 +378,25 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
         ))}
         {(advanced || cfg.ground.length > 0) && (
           <div style={{ marginTop: 8 }}>
-            <span className="fm-label">Deslocamento terrestre a partir de aeroportos alternativos</span>
+            <span className="fm-label">{tr('flights.deslocamentoTerrestreAPartirDe')}</span>
             <GroundList list={cfg.ground} onChange={(l) => up('ground', l)} currency={cfg.currency} />
           </div>
         )}
       </div>
 
       <div className="fm-section">
-        <div className="fm-section-title">📅 Datas</div>
+        <div className="fm-section-title">{tr('flights.datas')}</div>
         <DatesEditor value={cfg.dates} onChange={(v) => up('dates', v)} advanced={advanced} />
       </div>
 
       <div className="fm-section">
-        <div className="fm-section-title">🧳 Passageiros e bagagem</div>
+        <div className="fm-section-title">{tr('flights.passageirosEBagagem')}</div>
         <div className="fm-row" style={{ gap: 16, alignItems: 'flex-start' }}>
-          <Counter label="Adultos" value={cfg.passengers.adults} min={1} max={9} onChange={(n) => up('passengers', { ...cfg.passengers, adults: n, infants: Math.min(cfg.passengers.infants, n) })} />
-          <Counter label="Crianças" value={cfg.passengers.children} min={0} max={8} onChange={(n) => up('passengers', { ...cfg.passengers, children: n })} />
-          <Counter label="Bebês" value={cfg.passengers.infants} min={0} max={cfg.passengers.adults} onChange={(n) => up('passengers', { ...cfg.passengers, infants: n })} />
+          <Counter label={tr('flights.adultos')} value={cfg.passengers.adults} min={1} max={9} onChange={(n) => up('passengers', { ...cfg.passengers, adults: n, infants: Math.min(cfg.passengers.infants, n) })} />
+          <Counter label={tr('flights.criancas')} value={cfg.passengers.children} min={0} max={8} onChange={(n) => up('passengers', { ...cfg.passengers, children: n })} />
+          <Counter label={tr('flights.bebes')} value={cfg.passengers.infants} min={0} max={cfg.passengers.adults} onChange={(n) => up('passengers', { ...cfg.passengers, infants: n })} />
           <label className="fm-field">
-            <span className="fm-label">Cabine</span>
+            <span className="fm-label">{tr('flights.cabine')}</span>
             <select value={cfg.passengers.cabin} onChange={(e) => up('passengers', { ...cfg.passengers, cabin: e.target.value as Cabin })}>
               {(Object.keys(CABIN_LABEL) as Cabin[]).map((c) => (
                 <option key={c} value={c}>
@@ -407,14 +408,14 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
         </div>
         <div className="fm-cols3" style={{ marginTop: 8 }}>
           <label className="fm-field">
-            <span className="fm-label">Mala despachada</span>
+            <span className="fm-label">{tr('flights.malaDespachada')}</span>
             <span className="fm-row" style={{ flexWrap: 'nowrap' }}>
               <NeedSelect value={cfg.baggage.checked} onChange={(n) => up('baggage', { ...cfg.baggage, checked: n })} />
               {cfg.baggage.checked !== 'any' && (
-                <select value={cfg.baggage.checkedCount} onChange={(e) => up('baggage', { ...cfg.baggage, checkedCount: Number(e.target.value) })} style={{ width: 70 }} aria-label="Quantidade de malas">
+                <select value={cfg.baggage.checkedCount} onChange={(e) => up('baggage', { ...cfg.baggage, checkedCount: Number(e.target.value) })} style={{ width: 70 }} aria-label={tr('flights.quantidadeDeMalas')}>
                   {[1, 2, 3].map((n) => (
                     <option key={n} value={n}>
-                      {n}×
+                      {tr('flights.text', { n })}
                     </option>
                   ))}
                 </select>
@@ -422,43 +423,43 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
             </span>
           </label>
           <label className="fm-field">
-            <span className="fm-label">Bagagem de mão</span>
+            <span className="fm-label">{tr('flights.bagagemDeMao')}</span>
             <NeedSelect value={cfg.baggage.carryOn} onChange={(n) => up('baggage', { ...cfg.baggage, carryOn: n })} />
           </label>
           {advanced && (
             <label className="fm-field">
-              <span className="fm-label">Tarifa reembolsável</span>
+              <span className="fm-label">{tr('flights.tarifaReembolsavel')}</span>
               <NeedSelect value={cfg.baggage.refundable} onChange={(n) => up('baggage', { ...cfg.baggage, refundable: n })} />
             </label>
           )}
         </div>
         <div className="fm-small" style={{ marginTop: 4 }}>
-          "Obrigatória" vira restrição: tarifa sem a mala é excluída; fonte que não informa bagagem fica em "Verificação pendente" (nunca como compatível).
+          {tr('flights.obrigatoriaViraRestricaoTarifaSem')}
         </div>
       </div>
 
       <div className="fm-section">
         <div className="fm-section-title">
-          🚫 Restrições obrigatórias <span className="fm-muted">— violou, sai da lista de elegíveis</span>
+          {tr('flights.restricoesObrigatorias')} <span className="fm-muted">{tr('flights.violouSaiDaListaDe')}</span>
         </div>
         <div className="fm-cols">
           <label className="fm-field">
-            <span className="fm-label">Máx. de conexões</span>
+            <span className="fm-label">{tr('flights.maxDeConexoes')}</span>
             <select value={cfg.constraints.maxStops ?? ''} onChange={(e) => con({ maxStops: e.target.value === '' ? null : Number(e.target.value) })}>
-              <option value="">Sem limite</option>
-              <option value="0">Só voo direto</option>
-              <option value="1">Até 1</option>
-              <option value="2">Até 2</option>
-              <option value="3">Até 3</option>
+              <option value="">{tr('flights.semLimite2')}</option>
+              <option value="0">{tr('flights.soVooDireto')}</option>
+              <option value="1">{tr('flights.ate1')}</option>
+              <option value="2">{tr('flights.ate2')}</option>
+              <option value="3">{tr('flights.ate3')}</option>
             </select>
           </label>
           <label className="fm-field">
-            <span className="fm-label">Preço máximo</span>
+            <span className="fm-label">{tr('flights.precoMaximo')}</span>
             <MoneyInput value={cfg.constraints.maxPrice} currency={cfg.currency} onChange={(mp) => con({ maxPrice: mp })} />
           </label>
         </div>
         <div className="fm-field" style={{ marginTop: 8 }}>
-          <span className="fm-label">Países proibidos para conexão</span>
+          <span className="fm-label">{tr('flights.paisesProibidosParaConexao')}</span>
           <div className="fm-row" style={{ gap: 4, marginBottom: 4 }}>
             {[
               ['US', 'EUA'],
@@ -484,19 +485,19 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
               </button>
             ))}
           </div>
-          <CodeChips kind="country" codes={cfg.constraints.forbiddenConnectionCountries} onChange={(c) => con({ forbiddenConnectionCountries: c })} placeholder="outro país…" />
+          <CodeChips kind="country" codes={cfg.constraints.forbiddenConnectionCountries} onChange={(c) => con({ forbiddenConnectionCountries: c })} placeholder={tr('flights.outroPais')} />
           <div className="fm-row" style={{ gap: 6, marginTop: 4 }}>
-            <button className="btn btn-sm" type="button" disabled={savedCountries === null || countriesSaved} onClick={() => void saveCountries()} title="Monitores novos já abrem com estes países marcados">
-              💾 Salvar seleção
+            <button className="btn btn-sm" type="button" disabled={savedCountries === null || countriesSaved} onClick={() => void saveCountries()} title={tr('flights.monitoresNovosJaAbremCom')}>
+              {tr('flights.salvarSelecao')}
             </button>
             <span className="fm-small">
               {countriesSaved
                 ? savedCountries?.length
-                  ? '✓ seleção salva — monitores novos já abrem com ela'
-                  : 'nenhuma seleção salva'
+                  ? tr('flights.selecaoSalvaMonitoresNovosJa')
+                  : tr('flights.nenhumaSelecaoSalva')
                 : savedCountries?.length
-                  ? `salva: ${savedCountries.join(', ')}`
-                  : 'salve para já vir marcada nos próximos monitores'}
+                  ? tr('flights.salva', { p0: savedCountries.join(', ') })
+                  : tr('flights.salveParaJaVirMarcada')}
             </span>
           </div>
         </div>
@@ -504,25 +505,25 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
           <>
             <div className="fm-cols" style={{ marginTop: 8 }}>
               <div className="fm-field">
-                <span className="fm-label">Aeroportos proibidos para conexão</span>
-                <CodeChips kind="airport" codes={cfg.constraints.forbiddenConnectionAirports} onChange={(c) => con({ forbiddenConnectionAirports: c })} placeholder="aeroporto…" />
+                <span className="fm-label">{tr('flights.aeroportosProibidosParaConexao')}</span>
+                <CodeChips kind="airport" codes={cfg.constraints.forbiddenConnectionAirports} onChange={(c) => con({ forbiddenConnectionAirports: c })} placeholder={tr('flights.aeroporto')} />
               </div>
               <div className="fm-field">
-                <span className="fm-label">Companhias proibidas (IATA, Enter)</span>
-                <CodeChips kind="carrier" codes={cfg.constraints.forbiddenCarriers} onChange={(c) => con({ forbiddenCarriers: c })} placeholder="ex.: AA" />
+                <span className="fm-label">{tr('flights.companhiasProibidasIataEnter')}</span>
+                <CodeChips kind="carrier" codes={cfg.constraints.forbiddenCarriers} onChange={(c) => con({ forbiddenCarriers: c })} placeholder={tr('flights.exAa')} />
               </div>
             </div>
             <div className="fm-cols3" style={{ marginTop: 8 }}>
               <label className="fm-field">
-                <span className="fm-label">Duração máx. (h, por trecho)</span>
+                <span className="fm-label">{tr('flights.duracaoMaxHPorTrecho')}</span>
                 <input type="number" min={1} max={96} value={cfg.constraints.maxTotalDurationHours ?? ''} onChange={(e) => con({ maxTotalDurationHours: e.target.value === '' ? null : Number(e.target.value) })} />
               </label>
               <label className="fm-field">
-                <span className="fm-label">Conexão mín. (min)</span>
+                <span className="fm-label">{tr('flights.conexaoMinMin')}</span>
                 <input type="number" min={0} value={cfg.constraints.minConnectionMinutes ?? ''} onChange={(e) => con({ minConnectionMinutes: e.target.value === '' ? null : Number(e.target.value) })} />
               </label>
               <label className="fm-field">
-                <span className="fm-label">Conexão máx. (h)</span>
+                <span className="fm-label">{tr('flights.conexaoMaxH')}</span>
                 <input
                   type="number"
                   min={1}
@@ -535,14 +536,14 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
         )}
         <div className="fm-row" style={{ marginTop: 8, gap: 14 }}>
           <label className="fm-check">
-            <input type="checkbox" checked={cfg.constraints.forbidSelfTransfer} onChange={(e) => con({ forbidSelfTransfer: e.target.checked })} /> Proibir self-transfer
+            <input type="checkbox" checked={cfg.constraints.forbidSelfTransfer} onChange={(e) => con({ forbidSelfTransfer: e.target.checked })} /> {tr('flights.proibirSelfTransfer')}
           </label>
           <label className="fm-check">
-            <input type="checkbox" checked={cfg.constraints.forbidAirportChange} onChange={(e) => con({ forbidAirportChange: e.target.checked })} /> Proibir troca de aeroporto
+            <input type="checkbox" checked={cfg.constraints.forbidAirportChange} onChange={(e) => con({ forbidAirportChange: e.target.checked })} /> {tr('flights.proibirTrocaDeAeroporto')}
           </label>
           {advanced && (
             <label className="fm-check">
-              <input type="checkbox" checked={cfg.constraints.forbidOvernightConnections} onChange={(e) => con({ forbidOvernightConnections: e.target.checked })} /> Proibir conexão de madrugada
+              <input type="checkbox" checked={cfg.constraints.forbidOvernightConnections} onChange={(e) => con({ forbidOvernightConnections: e.target.checked })} /> {tr('flights.proibirConexaoDeMadrugada')}
             </label>
           )}
         </div>
@@ -550,11 +551,11 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
 
       <div className="fm-section">
         <div className="fm-section-title">
-          ⭐ Preferências <span className="fm-muted">— não excluem, só ordenam (pontuação explicável)</span>
+          {tr('flights.preferencias')} <span className="fm-muted">{tr('flights.naoExcluemSoOrdenamPontuacao')}</span>
         </div>
         <div className="fm-cols">
           <label className="fm-field">
-            <span className="fm-label">Ordenar por</span>
+            <span className="fm-label">{tr('flights.ordenarPor')}</span>
             <select value={cfg.preferences.strategy} onChange={(e) => pref({ strategy: e.target.value as SortStrategy })}>
               {(Object.keys(STRATEGY_LABEL) as SortStrategy[]).map((s) => (
                 <option key={s} value={s}>
@@ -564,29 +565,29 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
             </select>
           </label>
           <label className="fm-field">
-            <span className="fm-label">Conexões</span>
+            <span className="fm-label">{tr('flights.conexoes')}</span>
             <select value={cfg.preferences.connectionStyle} onChange={(e) => pref({ connectionStyle: e.target.value as MonitorConfig['preferences']['connectionStyle'] })}>
-              <option value="short">Curtas (50–150 min)</option>
-              <option value="comfortable">Confortáveis (1h30–5h)</option>
-              <option value="long_ok">Longas aceitáveis</option>
-              <option value="any">Tanto faz</option>
+              <option value="short">{tr('flights.curtas50150Min')}</option>
+              <option value="comfortable">{tr('flights.confortaveis1h305h')}</option>
+              <option value="long_ok">{tr('flights.longasAceitaveis')}</option>
+              <option value="any">{tr('flights.tantoFaz')}</option>
             </select>
           </label>
         </div>
         {advanced && (
           <>
             <span className="fm-label" style={{ marginTop: 10 }}>
-              Pesos do custo-benefício (0–10)
+              {tr('flights.pesosDoCustoBeneficio0')}
             </span>
             <div className="fm-weights">
               {(
                 [
-                  ['price', 'Preço/custo'],
-                  ['duration', 'Duração'],
-                  ['stops', 'Nº conexões'],
-                  ['connections', 'Conforto das conexões'],
-                  ['schedule', 'Horários'],
-                  ['carriers', 'Companhias preferidas']
+                  ['price', tr('flights.precoCusto')],
+                  ['duration', tr('flights.duracao')],
+                  ['stops', tr('flights.nConexoes')],
+                  ['connections', tr('flights.confortoDasConexoes')],
+                  ['schedule', tr('flights.horarios')],
+                  ['carriers', tr('flights.companhiasPreferidas')]
                 ] as const
               ).map(([k, l]) => (
                 <label key={k}>
@@ -597,11 +598,11 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
             </div>
             <div className="fm-cols" style={{ marginTop: 8 }}>
               <div className="fm-field">
-                <span className="fm-label">Companhias preferidas (IATA, Enter)</span>
-                <CodeChips kind="carrier" codes={cfg.preferences.preferredCarriers} onChange={(c) => pref({ preferredCarriers: c })} placeholder="ex.: QR" />
+                <span className="fm-label">{tr('flights.companhiasPreferidasIataEnter')}</span>
+                <CodeChips kind="carrier" codes={cfg.preferences.preferredCarriers} onChange={(c) => pref({ preferredCarriers: c })} placeholder={tr('flights.exQr')} />
               </div>
               <div className="fm-field">
-                <span className="fm-label">Chegada conveniente (hora local)</span>
+                <span className="fm-label">{tr('flights.chegadaConvenienteHoraLocal')}</span>
                 <span className="fm-row">
                   <input type="time" value={cfg.preferences.arrivalWindow?.from ?? ''} onChange={(e) => pref({ arrivalWindow: e.target.value ? { from: e.target.value, to: cfg.preferences.arrivalWindow?.to ?? '22:00' } : null })} />
                   –
@@ -611,14 +612,14 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
             </div>
             <div className="fm-row" style={{ marginTop: 8, gap: 14 }}>
               <label className="fm-check">
-                <input type="checkbox" checked={cfg.preferences.preferNightFlights} onChange={(e) => pref({ preferNightFlights: e.target.checked })} /> Prefiro voos noturnos
+                <input type="checkbox" checked={cfg.preferences.preferNightFlights} onChange={(e) => pref({ preferNightFlights: e.target.checked })} /> {tr('flights.prefiroVoosNoturnos')}
               </label>
               <label className="fm-check">
-                <input type="checkbox" checked={cfg.preferences.avoidSeparateTickets} onChange={(e) => pref({ avoidSeparateTickets: e.target.checked })} /> Evitar bilhetes separados
+                <input type="checkbox" checked={cfg.preferences.avoidSeparateTickets} onChange={(e) => pref({ avoidSeparateTickets: e.target.checked })} /> {tr('flights.evitarBilhetesSeparados')}
               </label>
               <label className="fm-row fm-small" style={{ gap: 4 }}>
-                Destacar stopovers de até
-                <input type="number" min={6} max={96} style={{ width: 64 }} value={cfg.preferences.stopoverMaxHours ?? ''} placeholder="—" onChange={(e) => pref({ stopoverMaxHours: e.target.value === '' ? null : Number(e.target.value) })} />h
+                {tr('flights.destacarStopoversDeAte')}
+                <input type="number" min={6} max={96} style={{ width: 64 }} value={cfg.preferences.stopoverMaxHours ?? ''} placeholder="—" onChange={(e) => pref({ stopoverMaxHours: e.target.value === '' ? null : Number(e.target.value) })} />{tr('flights.h')}
               </label>
             </div>
           </>
@@ -627,31 +628,31 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
 
       {advanced && (
         <div className="fm-section">
-          <div className="fm-section-title">⚙️ Execução, orçamento e alertas</div>
+          <div className="fm-section-title">{tr('flights.execucaoOrcamentoEAlertas')}</div>
           <div className="fm-cols3">
             <label className="fm-field">
-              <span className="fm-label">Atualização</span>
+              <span className="fm-label">{tr('flights.atualizacao')}</span>
               <select value={cfg.schedule.mode} onChange={(e) => up('schedule', { ...cfg.schedule, mode: e.target.value as MonitorConfig['schedule']['mode'] })}>
-                <option value="manual">Manual</option>
-                <option value="daily">Diária</option>
-                <option value="hours">A cada X horas</option>
-                <option value="adaptive">Adaptativa (mais frequente perto da viagem)</option>
+                <option value="manual">{tr('flights.manual')}</option>
+                <option value="daily">{tr('flights.diaria')}</option>
+                <option value="hours">{tr('flights.aCadaXHoras')}</option>
+                <option value="adaptive">{tr('flights.adaptativaMaisFrequentePertoDa')}</option>
               </select>
             </label>
             {cfg.schedule.mode === 'daily' && (
               <label className="fm-field">
-                <span className="fm-label">Hora</span>
+                <span className="fm-label">{tr('flights.hora')}</span>
                 <input type="number" min={0} max={23} value={cfg.schedule.hour} onChange={(e) => up('schedule', { ...cfg.schedule, hour: Number(e.target.value) })} />
               </label>
             )}
             {cfg.schedule.mode === 'hours' && (
               <label className="fm-field">
-                <span className="fm-label">Intervalo (h, mín. 3)</span>
+                <span className="fm-label">{tr('flights.intervaloHMin3')}</span>
                 <input type="number" min={3} max={168} value={cfg.schedule.everyHours} onChange={(e) => up('schedule', { ...cfg.schedule, everyHours: Number(e.target.value) })} />
               </label>
             )}
             <label className="fm-field">
-              <span className="fm-label">Moeda de comparação</span>
+              <span className="fm-label">{tr('flights.moedaDeComparacao')}</span>
               <select value={cfg.currency} onChange={(e) => up('currency', e.target.value)}>
                 {CURRENCIES.map((c) => (
                   <option key={c}>{c}</option>
@@ -661,29 +662,29 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
           </div>
           <div className="fm-cols3" style={{ marginTop: 8 }}>
             <label className="fm-field">
-              <span className="fm-label">Consultas por execução</span>
+              <span className="fm-label">{tr('flights.consultasPorExecucao')}</span>
               <input type="number" min={1} max={500} value={cfg.budget.maxQueriesPerRun} onChange={(e) => up('budget', { ...cfg.budget, maxQueriesPerRun: Number(e.target.value) })} />
             </label>
             <label className="fm-field">
-              <span className="fm-label">Consultas por dia</span>
+              <span className="fm-label">{tr('flights.consultasPorDia')}</span>
               <input type="number" min={1} max={2000} value={cfg.budget.maxQueriesPerDay} onChange={(e) => up('budget', { ...cfg.budget, maxQueriesPerDay: Number(e.target.value) })} />
             </label>
             <label className="fm-field">
-              <span className="fm-label">Tempo máx. (min)</span>
+              <span className="fm-label">{tr('flights.tempoMaxMin')}</span>
               <input type="number" min={1} max={120} value={cfg.budget.maxRunMinutes} onChange={(e) => up('budget', { ...cfg.budget, maxRunMinutes: Number(e.target.value) })} />
             </label>
             <label className="fm-field">
-              <span className="fm-label">Chamadas de IA por dia</span>
+              <span className="fm-label">{tr('flights.chamadasDeIaPorDia')}</span>
               <input type="number" min={0} max={10} value={cfg.budget.maxAiCallsPerRun} onChange={(e) => up('budget', { ...cfg.budget, maxAiCallsPerRun: Number(e.target.value) })} />
             </label>
             <label className="fm-field">
-              <span className="fm-label">Opções exibidas (0 = auto)</span>
+              <span className="fm-label">{tr('flights.opcoesExibidas0Auto')}</span>
               <input type="number" min={0} max={100} value={cfg.displayTarget} onChange={(e) => up('displayTarget', Number(e.target.value))} />
             </label>
           </div>
           {autoProviders.length > 0 && (
             <div className="fm-field" style={{ marginTop: 8 }}>
-              <span className="fm-label">Fontes deste monitor (nenhuma marcada = todas as disponíveis)</span>
+              <span className="fm-label">{tr('flights.fontesDesteMonitorNenhumaMarcada')}</span>
               <div className="fm-row" style={{ gap: 14 }}>
                 {autoProviders.map((p) => (
                   <label className="fm-check" key={p.id} title={p.reason ?? ''}>
@@ -692,39 +693,39 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
                       checked={cfg.providers.includes(p.id)}
                       onChange={(e) => up('providers', e.target.checked ? [...cfg.providers, p.id] : cfg.providers.filter((x) => x !== p.id))}
                     />
-                    {p.label} {!p.available && <span className="fm-pill warn">indisponível</span>}
+                    {p.label} {!p.available && <span className="fm-pill warn">{tr('flights.indisponivel')}</span>}
                   </label>
                 ))}
               </div>
             </div>
           )}
           <span className="fm-label" style={{ marginTop: 10 }}>
-            Alertas (notificação do rickOS, sem duplicar)
+            {tr('flights.alertasNotificacaoDoRickosSem')}
           </span>
           <div className="fm-row" style={{ gap: 14 }}>
             <label className="fm-row fm-small" style={{ gap: 4 }}>
-              Preço abaixo de
+              {tr('flights.precoAbaixoDe')}
               <MoneyInput value={cfg.alerts.priceBelow} currency={cfg.currency} onChange={(mp) => up('alerts', { ...cfg.alerts, priceBelow: mp })} placeholder="—" />
             </label>
             <label className="fm-row fm-small" style={{ gap: 4 }}>
-              Queda de
+              {tr('flights.quedaDe')}
               <input type="number" min={1} max={90} style={{ width: 60 }} value={cfg.alerts.dropPercent ?? ''} placeholder="—" onChange={(e) => up('alerts', { ...cfg.alerts, dropPercent: e.target.value === '' ? null : Number(e.target.value) })} />%
             </label>
             <label className="fm-check">
-              <input type="checkbox" checked={cfg.alerts.newLow} onChange={(e) => up('alerts', { ...cfg.alerts, newLow: e.target.checked })} /> Novo menor preço comparável
+              <input type="checkbox" checked={cfg.alerts.newLow} onChange={(e) => up('alerts', { ...cfg.alerts, newLow: e.target.checked })} /> {tr('flights.novoMenorPrecoComparavel')}
             </label>
             <label className="fm-check">
-              <input type="checkbox" checked={cfg.alerts.interesting} onChange={(e) => up('alerts', { ...cfg.alerts, interesting: e.target.checked })} /> Voo novo muito bem pontuado
+              <input type="checkbox" checked={cfg.alerts.interesting} onChange={(e) => up('alerts', { ...cfg.alerts, interesting: e.target.checked })} /> {tr('flights.vooNovoMuitoBemPontuado')}
             </label>
             <label className="fm-check">
-              <input type="checkbox" checked={cfg.alerts.promoPosts} onChange={(e) => up('alerts', { ...cfg.alerts, promoPosts: e.target.checked })} /> Post de promoção nos blogs
+              <input type="checkbox" checked={cfg.alerts.promoPosts} onChange={(e) => up('alerts', { ...cfg.alerts, promoPosts: e.target.checked })} /> {tr('flights.postDePromocaoNosBlogs')}
             </label>
             <label className="fm-check">
-              <input type="checkbox" checked={cfg.alerts.favoriteChanges} onChange={(e) => up('alerts', { ...cfg.alerts, favoriteChanges: e.target.checked })} /> Mudanças em favoritas
+              <input type="checkbox" checked={cfg.alerts.favoriteChanges} onChange={(e) => up('alerts', { ...cfg.alerts, favoriteChanges: e.target.checked })} /> {tr('flights.mudancasEmFavoritas')}
             </label>
           </div>
           <label className="fm-field" style={{ marginTop: 8 }}>
-            <span className="fm-label">Notas</span>
+            <span className="fm-label">{tr('flights.notas')}</span>
             <textarea value={cfg.notes} onChange={(e) => up('notes', e.target.value)} rows={2} />
           </label>
         </div>
@@ -732,7 +733,7 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
 
       {errors.length > 0 && (
         <div className="fm-note warn">
-          Para buscar ainda falta:
+          {tr('flights.paraBuscarAindaFalta')}
           <ul>
             {errors.map((e) => (
               <li key={e}>{e}</li>
@@ -748,5 +749,5 @@ export function MonitorEditor(props: { monitor?: FlightMonitor | null; startWith
 export function autoName(c: MonitorConfig): string {
   const o = c.origins.include[0]?.label.replace(/ \(.*\)$/, '')
   const d = c.destinations.include[0]?.label.replace(/ \(.*\)$/, '')
-  return o && d ? `${o}${c.origins.include.length > 1 ? ' +' : ''} → ${d}${c.destinations.include.length > 1 ? ' +' : ''}` : 'Novo monitoramento'
+  return o && d ? `${o}${c.origins.include.length > 1 ? ' +' : ''} → ${d}${c.destinations.include.length > 1 ? ' +' : ''}` : tr('flights.novoMonitoramento')
 }

@@ -1,5 +1,6 @@
 import React from 'react'
 import type { DateWindow, DateWindowMode, TripDates } from '../../../../shared/flights'
+import { t as tr } from '../../../i18n'
 
 export function todayStr(): string {
   const d = new Date()
@@ -7,10 +8,10 @@ export function todayStr(): string {
 }
 
 const MODES: { id: DateWindowMode; label: string }[] = [
-  { id: 'range', label: 'Intervalo' },
-  { id: 'exact', label: 'Data exata' },
-  { id: 'flex', label: 'Data ± dias' },
-  { id: 'month', label: 'Mês inteiro' }
+  { id: 'range', label: tr('flights.intervalo') },
+  { id: 'exact', label: tr('flights.dataExata') },
+  { id: 'flex', label: tr('flights.dataDias') },
+  { id: 'month', label: tr('flights.mesInteiro') }
 ]
 
 function blank(mode: DateWindowMode): DateWindow {
@@ -25,7 +26,7 @@ function WindowRow(props: { w: DateWindow; onChange: (w: DateWindow) => void; on
   const { w, onChange, min } = props
   return (
     <div className="fm-window">
-      <select value={w.mode} onChange={(e) => onChange(blank(e.target.value as DateWindowMode))} aria-label="Tipo de janela">
+      <select value={w.mode} onChange={(e) => onChange(blank(e.target.value as DateWindowMode))} aria-label={tr('flights.tipoDeJanela')}>
         {MODES.map((m) => (
           <option key={m.id} value={m.id}>
             {m.label}
@@ -34,20 +35,20 @@ function WindowRow(props: { w: DateWindow; onChange: (w: DateWindow) => void; on
       </select>
       {w.mode === 'range' && (
         <>
-          <input type="date" min={min} value={w.from ?? ''} onChange={(e) => onChange({ ...w, from: e.target.value, to: w.to && w.to < e.target.value ? e.target.value : w.to })} aria-label="De" />
-          <span className="fm-small">até</span>
-          <input type="date" min={w.from || min} value={w.to ?? ''} onChange={(e) => onChange({ ...w, to: e.target.value })} aria-label="Até" />
+          <input type="date" min={min} value={w.from ?? ''} onChange={(e) => onChange({ ...w, from: e.target.value, to: w.to && w.to < e.target.value ? e.target.value : w.to })} aria-label={tr('flights.de')} />
+          <span className="fm-small">{tr('flights.ate')}</span>
+          <input type="date" min={w.from || min} value={w.to ?? ''} onChange={(e) => onChange({ ...w, to: e.target.value })} aria-label={tr('flights.ate4')} />
         </>
       )}
-      {(w.mode === 'exact' || w.mode === 'flex') && <input type="date" min={min} value={w.date ?? ''} onChange={(e) => onChange({ ...w, date: e.target.value })} aria-label="Data" />}
+      {(w.mode === 'exact' || w.mode === 'flex') && <input type="date" min={min} value={w.date ?? ''} onChange={(e) => onChange({ ...w, date: e.target.value })} aria-label={tr('flights.data')} />}
       {w.mode === 'flex' && (
         <label className="fm-row fm-small" style={{ gap: 4 }}>
-          ±<input type="number" min={0} max={15} value={w.flexDays ?? 3} onChange={(e) => onChange({ ...w, flexDays: Number(e.target.value) })} /> dias
+          ±<input type="number" min={0} max={15} value={w.flexDays ?? 3} onChange={(e) => onChange({ ...w, flexDays: Number(e.target.value) })} /> {tr('flights.dias')}
         </label>
       )}
-      {w.mode === 'month' && <input type="month" min={min.slice(0, 7)} value={w.month ?? ''} onChange={(e) => onChange({ ...w, month: e.target.value })} aria-label="Mês" />}
+      {w.mode === 'month' && <input type="month" min={min.slice(0, 7)} value={w.month ?? ''} onChange={(e) => onChange({ ...w, month: e.target.value })} aria-label={tr('flights.mes')} />}
       {props.onRemove && (
-        <button className="fm-x" onClick={props.onRemove} type="button" aria-label="Remover janela">
+        <button className="fm-x" onClick={props.onRemove} type="button" aria-label={tr('flights.removerJanela')}>
           ✕
         </button>
       )}
@@ -84,29 +85,29 @@ export function DatesEditor(props: { value: TripDates; onChange: (v: TripDates) 
   return (
     <div>
       <div className="fm-row" style={{ marginBottom: 8 }}>
-        <div className="fm-seg" role="radiogroup" aria-label="Tipo de viagem">
+        <div className="fm-seg" role="radiogroup" aria-label={tr('flights.tipoDeViagem')}>
           <button type="button" className={d.tripType === 'oneway' ? 'active' : ''} onClick={() => onChange({ ...d, tripType: 'oneway' })}>
-            Só ida
+            {tr('flights.soIda')}
           </button>
           <button type="button" className={d.tripType === 'roundtrip' ? 'active' : ''} onClick={() => onChange({ ...d, tripType: 'roundtrip', minStayDays: d.minStayDays ?? 7, maxStayDays: d.maxStayDays ?? 14 })}>
-            Ida e volta
+            {tr('flights.idaEVolta')}
           </button>
         </div>
       </div>
-      <span className="fm-label">Ida</span>
+      <span className="fm-label">{tr('flights.ida')}</span>
       <WindowList list={d.windows} onChange={(windows) => onChange({ ...d, windows })} min={min} multi={props.advanced} addLabel="outra janela de ida" />
       {d.tripType === 'roundtrip' && (
         <div style={{ marginTop: 8 }}>
           <div className="fm-row">
             <span className="fm-label" style={{ margin: 0 }}>
-              Volta
+              {tr('flights.volta2')}
             </span>
             <div className="fm-seg">
               <button type="button" className={!useReturnWindows ? 'active' : ''} onClick={() => onChange({ ...d, returnWindows: [] })}>
-                Pela duração
+                {tr('flights.pelaDuracao')}
               </button>
               <button type="button" className={useReturnWindows ? 'active' : ''} onClick={() => onChange({ ...d, returnWindows: [blank('range')] })}>
-                Janela de volta
+                {tr('flights.janelaDeVolta')}
               </button>
             </div>
           </div>
@@ -117,11 +118,11 @@ export function DatesEditor(props: { value: TripDates; onChange: (v: TripDates) 
           )}
           <div className="fm-row" style={{ marginTop: 6 }}>
             <label className="fm-row fm-small" style={{ gap: 4 }}>
-              Duração de
+              {tr('flights.duracaoDe')}
               <input type="number" min={0} max={365} style={{ width: 64 }} value={d.minStayDays ?? ''} onChange={(e) => onChange({ ...d, minStayDays: e.target.value === '' ? null : Number(e.target.value) })} />
-              a
+              {tr('flights.a')}
               <input type="number" min={0} max={365} style={{ width: 64 }} value={d.maxStayDays ?? ''} onChange={(e) => onChange({ ...d, maxStayDays: e.target.value === '' ? null : Number(e.target.value) })} />
-              dias
+              {tr('flights.dias')}
             </label>
           </div>
         </div>

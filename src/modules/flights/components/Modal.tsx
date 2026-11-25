@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { t } from '../../../i18n'
 
 /** Modal do módulo: fecha com Esc e clique fora; rolagem interna; rodapé fixo opcional. */
 export function Modal(props: {
@@ -23,7 +24,7 @@ export function Modal(props: {
         <div className="fm-modal-head">
           <h3>{props.title}</h3>
           {props.headExtra}
-          <button className="btn btn-secondary btn-sm" onClick={onClose} aria-label="Fechar">
+          <button className="btn btn-secondary btn-sm" onClick={onClose} aria-label={t('flights.fechar')}>
             ✕
           </button>
         </div>

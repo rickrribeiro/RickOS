@@ -5,11 +5,12 @@ import { errMsg } from '../store/flightStore'
 import { Modal } from './Modal'
 import { OfferDetail } from './OfferDetail'
 import { fmtLocal, VerificationBadge } from './ui'
+import { t as tr, getLocale } from '../../../i18n'
 
 const STATUS_TABS: { id: EligibilityStatus; label: string; hint: string }[] = [
-  { id: 'eligible', label: 'Elegíveis', hint: 'Cumprem todas as restrições obrigatórias' },
-  { id: 'pending', label: 'Verificação pendente', hint: 'Falta informação para confirmar alguma restrição (ex.: bagagem, conexões)' },
-  { id: 'excluded', label: 'Excluídos', hint: 'Violam alguma restrição — veja o motivo' }
+  { id: 'eligible', label: tr('flights.elegiveis'), hint: tr('flights.cumpremTodasAsRestricoesObrigatorias') },
+  { id: 'pending', label: tr('flights.verificacaoPendente'), hint: tr('flights.faltaInformacaoParaConfirmarAlguma') },
+  { id: 'excluded', label: tr('flights.excluidos'), hint: tr('flights.violamAlgumaRestricaoVejaO') }
 ]
 
 function CompareModal(props: { offers: OfferView[]; onClose: () => void }): React.ReactElement {
@@ -40,7 +41,7 @@ function CompareModal(props: { offers: OfferView[]; onClose: () => void }): Reac
     </tr>
   )
   return (
-    <Modal title={`Comparar ${o.length} opções`} onClose={props.onClose} size="wide">
+    <Modal title={tr('flights.compararOpcoes', { count: o.length })} onClose={props.onClose} size="wide">
       <div className="fm-compare">
         <table>
           <thead>
@@ -55,22 +56,22 @@ function CompareModal(props: { offers: OfferView[]; onClose: () => void }): Reac
             </tr>
           </thead>
           <tbody>
-            {row('Tarifa', o.map((x) => x.cost.fareInCurrency?.amountMinor ?? null), (_, i) => formatMoney(o[i].cost.fareInCurrency ?? o[i].price))}
-            {row('Custo total', o.map((x) => x.cost.total?.amountMinor ?? null), (_, i) => (
+            {row(tr('flights.tarifa'), o.map((x) => x.cost.fareInCurrency?.amountMinor ?? null), (_, i) => formatMoney(o[i].cost.fareInCurrency ?? o[i].price))}
+            {row(tr('flights.custoTotal'), o.map((x) => x.cost.total?.amountMinor ?? null), (_, i) => (
               <>
-                {formatMoney(o[i].cost.total)} <span className="fm-small">({o[i].cost.totalStatus === 'verified' ? 'verificado' : o[i].cost.totalStatus === 'estimated' ? 'estimado' : 'incompleto'})</span>
+                {formatMoney(o[i].cost.total)} <span className="fm-small">({o[i].cost.totalStatus === 'verified' ? tr('flights.verificado') : o[i].cost.totalStatus === 'estimated' ? tr('flights.estimado') : tr('flights.incompleto')})</span>
               </>
             ))}
-            {row('Duração', o.map((x) => x.totalDurationMin), (v) => fmtMinutes(v))}
-            {row('Porta a porta', o.map((x) => x.cost.doorToDoorMinutes), (v) => fmtMinutes(v))}
-            {row('Conexões', o.map((x) => x.stops), (v, i) => `${v} ${o[i].connections.length ? `(${o[i].connections.map((c) => `${c.airport} ${fmtMinutes(c.minutes)}`).join(', ')})` : ''}`)}
-            {txt('Bagagem', (x) => (x.baggage.checked == null ? 'não verificado' : `${x.baggage.checked} despachada(s)`))}
-            {txt('Companhias', (x) => x.carriers.join(', ') || '—')}
-            {txt('Chegada', (x) => fmtLocal(x.slices[0].arriveLocal))}
-            {txt('Riscos', (x) => x.checks.filter((c) => c.level !== 'info').map((c) => c.message).join(' · ') || '—')}
-            {txt('Destaques', (x) => x.highlights.join(' · ') || '—')}
-            {row('Pontuação', o.map((x) => -x.score), (_, i) => o[i].score)}
-            {txt('Fonte', (x) => <VerificationBadge v={x.verification} stale={x.stale} />)}
+            {row(tr('flights.duracao'), o.map((x) => x.totalDurationMin), (v) => fmtMinutes(v))}
+            {row(tr('flights.portaAPorta'), o.map((x) => x.cost.doorToDoorMinutes), (v) => fmtMinutes(v))}
+            {row(tr('flights.conexoes'), o.map((x) => x.stops), (v, i) => `${v} ${o[i].connections.length ? `(${o[i].connections.map((c) => `${c.airport} ${fmtMinutes(c.minutes)}`).join(', ')})` : ''}`)}
+            {txt(tr('flights.bagagem'), (x) => (x.baggage.checked == null ? tr('flights.naoVerificado') : tr('flights.bag.despachadas', { n: x.baggage.checked })))}
+            {txt(tr('flights.companhias'), (x) => x.carriers.join(', ') || '—')}
+            {txt(tr('flights.chegada'), (x) => fmtLocal(x.slices[0].arriveLocal))}
+            {txt(tr('flights.riscos'), (x) => x.checks.filter((c) => c.level !== 'info').map((c) => c.message).join(' · ') || '—')}
+            {txt(tr('flights.destaques'), (x) => x.highlights.join(' · ') || '—')}
+            {row(tr('flights.pontuacao'), o.map((x) => -x.score), (_, i) => o[i].score)}
+            {txt(tr('flights.fonte'), (x) => <VerificationBadge v={x.verification} stale={x.stale} />)}
           </tbody>
         </table>
       </div>
@@ -151,55 +152,55 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
       {data?.coverageNote && <div className="fm-note info" style={{ marginBottom: 8 }}>{data.coverageNote}</div>}
 
       <div className="fm-filters">
-        <input type="search" placeholder="Buscar (aeroporto, cia, data)…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select value={q.sort ?? ''} onChange={(e) => set({ sort: (e.target.value || undefined) as OfferQuery['sort'] })} aria-label="Ordenação">
-          <option value="">Padrão: {STRATEGY_LABEL[m.config.preferences.strategy]}</option>
+        <input type="search" placeholder={tr('flights.buscarAeroportoCiaData')} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select value={q.sort ?? ''} onChange={(e) => set({ sort: (e.target.value || undefined) as OfferQuery['sort'] })} aria-label={tr('flights.ordenacao')}>
+          <option value="">{tr('flights.padrao')} {STRATEGY_LABEL[m.config.preferences.strategy]}</option>
           {(Object.keys(STRATEGY_LABEL) as SortStrategy[]).map((s) => (
             <option key={s} value={s}>
               {STRATEGY_LABEL[s]}
             </option>
           ))}
-          <option value="depart">Data de partida</option>
-          <option value="recent">Cotação mais recente</option>
+          <option value="depart">{tr('flights.dataDePartida')}</option>
+          <option value="recent">{tr('flights.cotacaoMaisRecente')}</option>
         </select>
-        <select value={q.origins?.[0] ?? ''} onChange={(e) => set({ origins: e.target.value ? [e.target.value] : undefined })} aria-label="Origem">
-          <option value="">Todas as origens</option>
+        <select value={q.origins?.[0] ?? ''} onChange={(e) => set({ origins: e.target.value ? [e.target.value] : undefined })} aria-label={tr('flights.origem')}>
+          <option value="">{tr('flights.todasAsOrigens')}</option>
           {data?.facets.origins.map((x) => <option key={x}>{x}</option>)}
         </select>
-        <select value={q.destinations?.[0] ?? ''} onChange={(e) => set({ destinations: e.target.value ? [e.target.value] : undefined })} aria-label="Destino">
-          <option value="">Todos os destinos</option>
+        <select value={q.destinations?.[0] ?? ''} onChange={(e) => set({ destinations: e.target.value ? [e.target.value] : undefined })} aria-label={tr('flights.destino')}>
+          <option value="">{tr('flights.todosOsDestinos')}</option>
           {data?.facets.destinations.map((x) => <option key={x}>{x}</option>)}
         </select>
-        <select value={q.maxStops ?? ''} onChange={(e) => set({ maxStops: e.target.value === '' ? null : Number(e.target.value) })} aria-label="Conexões">
-          <option value="">Qualquer nº de conexões</option>
-          <option value="0">Direto</option>
-          <option value="1">Até 1</option>
-          <option value="2">Até 2</option>
+        <select value={q.maxStops ?? ''} onChange={(e) => set({ maxStops: e.target.value === '' ? null : Number(e.target.value) })} aria-label={tr('flights.conexoes')}>
+          <option value="">{tr('flights.qualquerNDeConexoes')}</option>
+          <option value="0">{tr('flights.direto')}</option>
+          <option value="1">{tr('flights.ate1')}</option>
+          <option value="2">{tr('flights.ate2')}</option>
         </select>
-        <select value={q.carriers?.[0] ?? ''} onChange={(e) => set({ carriers: e.target.value ? [e.target.value] : undefined })} aria-label="Companhia">
-          <option value="">Todas as cias</option>
+        <select value={q.carriers?.[0] ?? ''} onChange={(e) => set({ carriers: e.target.value ? [e.target.value] : undefined })} aria-label={tr('flights.companhia')}>
+          <option value="">{tr('flights.todasAsCias')}</option>
           {data?.facets.carriers.map((x) => <option key={x}>{x}</option>)}
         </select>
-        <select value={q.verification?.[0] ?? ''} onChange={(e) => set({ verification: e.target.value ? [e.target.value as 'live'] : undefined })} aria-label="Verificação">
-          <option value="">Qualquer verificação</option>
-          <option value="live">Só ao vivo</option>
-          <option value="cached">Só cache</option>
-          <option value="imported">Importados</option>
-          <option value="assisted">Assistidos</option>
+        <select value={q.verification?.[0] ?? ''} onChange={(e) => set({ verification: e.target.value ? [e.target.value as 'live'] : undefined })} aria-label={tr('flights.verificacao')}>
+          <option value="">{tr('flights.qualquerVerificacao')}</option>
+          <option value="live">{tr('flights.soAoVivo')}</option>
+          <option value="cached">{tr('flights.soCache')}</option>
+          <option value="imported">{tr('flights.importados')}</option>
+          <option value="assisted">{tr('flights.assistidos')}</option>
         </select>
         <label className="fm-check fm-small">
-          <input type="checkbox" checked={!!q.favoritesOnly} onChange={(e) => set({ favoritesOnly: e.target.checked })} /> ★ favoritos
+          <input type="checkbox" checked={!!q.favoritesOnly} onChange={(e) => set({ favoritesOnly: e.target.checked })} /> {tr('flights.favoritos')}
         </label>
-        <label className="fm-check fm-small" title="Esconde cotações antigas: não revistas há mais de 72 h (12 h nas fontes ao vivo)">
+        <label className="fm-check fm-small" title={tr('flights.escondeCotacoesAntigasNaoRevistas')}>
           <input
             type="checkbox"
             checked={!!q.hideStale}
             onChange={(e) => hideStale(e.target.checked)}
           />{' '}
-          ocultar antigas
+          {tr('flights.ocultarAntigas')}
         </label>
-        <label className="fm-check fm-small" title="Diversifica origem, país, data, companhia e conexões no topo da lista">
-          <input type="checkbox" checked={q.diversify !== false} onChange={(e) => set({ diversify: e.target.checked })} /> diversificar
+        <label className="fm-check fm-small" title={tr('flights.diversificaOrigemPaisDataCompanhia')}>
+          <input type="checkbox" checked={q.diversify !== false} onChange={(e) => set({ diversify: e.target.checked })} /> {tr('flights.diversificar')}
         </label>
       </div>
 
@@ -209,24 +210,24 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
         <div className="fm-empty">
           {data.counts.eligible + data.counts.pending + data.counts.excluded === 0 ? (
             <>
-              <h3>Nenhum voo encontrado ainda</h3>
-              <p className="fm-muted">Rode uma busca ou importe resultados. Datas sem dados não significam "sem voos".</p>
+              <h3>{tr('flights.nenhumVooEncontradoAinda')}</h3>
+              <p className="fm-muted">{tr('flights.rodeUmaBuscaOuImporte')}</p>
             </>
           ) : status === 'eligible' ? (
             <>
-              <h3>Nenhum voo elegível pelos filtros</h3>
+              <h3>{tr('flights.nenhumVooElegivelPelosFiltros')}</h3>
               <p className="fm-muted">
-                {data.counts.pending} com verificação pendente e {data.counts.excluded} excluído(s). Veja as outras abas para entender o motivo.
+                {tr('flights.comVerificacaoPendenteEExcluido', { pending: data.counts.pending, excluded: data.counts.excluded })}
               </p>
             </>
           ) : (
-            <p className="fm-muted">Nada nesta aba com os filtros atuais.</p>
+            <p className="fm-muted">{tr('flights.nadaNestaAbaComOs')}</p>
           )}
           {q.hideStale && data.counts.eligible + data.counts.pending + data.counts.excluded > 0 && (
             <p className="fm-small">
-              "Ocultar antigas" está ligado.{' '}
+              {tr('flights.ocultarAntigasEstaLigado')}{' '}
               <button className="fm-linkbtn" type="button" onClick={() => hideStale(false)}>
-                mostrar as antigas
+                {tr('flights.mostrarAsAntigas')}
               </button>
             </p>
           )}
@@ -236,21 +237,21 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
           <table className="fm-table">
             <thead>
               <tr>
-                <th title="Comparar (2–4)">⇄</th>
+                <th title={tr('flights.comparar24')}>⇄</th>
                 <th>★</th>
-                {th('Origem')}
-                {th('Destino')}
-                {th('Partida', 'depart')}
-                {th('Chegada')}
-                {th('Preço', 'price')}
-                {th('Custo total', 'total_cost')}
-                {th('Duração', 'duration')}
-                {th('Conex.', 'stops')}
-                {th('Via')}
-                {th('Cia')}
-                {th('Bagagem')}
-                {th('Fonte / cotação', 'recent')}
-                {th('Nota', 'value')}
+                {th(tr('flights.origem'))}
+                {th(tr('flights.destino'))}
+                {th(tr('flights.partida'), 'depart')}
+                {th(tr('flights.chegada'))}
+                {th(tr('flights.preco'), 'price')}
+                {th(tr('flights.custoTotal'), 'total_cost')}
+                {th(tr('flights.duracao'), 'duration')}
+                {th(tr('flights.conex'), 'stops')}
+                {th(tr('flights.via'))}
+                {th(tr('flights.cia'))}
+                {th(tr('flights.bagagem'))}
+                {th(tr('flights.fonteCotacao'), 'recent')}
+                {th(tr('flights.nota'), 'value')}
               </tr>
             </thead>
             <tbody>
@@ -258,10 +259,10 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
                 <React.Fragment key={o.id}>
                   <tr className={`main ${open === o.id ? 'open' : ''} ${o.available ? '' : 'gone'}`} onClick={() => setOpen(open === o.id ? null : o.id)}>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={cmp.has(o.id)} disabled={!cmp.has(o.id) && cmp.size >= 4} onChange={() => toggleCmp(o)} aria-label="Comparar" />
+                      <input type="checkbox" checked={cmp.has(o.id)} disabled={!cmp.has(o.id) && cmp.size >= 4} onChange={() => toggleCmp(o)} aria-label={tr('flights.comparar')} />
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <button className={`fm-star ${o.favorite ? 'on' : ''}`} onClick={() => fav(o)} aria-label="Favoritar" type="button">
+                      <button className={`fm-star ${o.favorite ? 'on' : ''}`} onClick={() => fav(o)} aria-label={tr('flights.favoritar')} type="button">
                         {o.favorite ? '★' : '☆'}
                       </button>
                     </td>
@@ -273,7 +274,7 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
                     </td>
                     <td className="nowrap">
                       {fmtLocal(o.slices[0].departLocal)}
-                      {o.returnDate && <div className="fm-small">volta {fmtLocal(o.slices[1]?.departLocal)}</div>}
+                      {o.returnDate && <div className="fm-small">{tr('flights.volta')} {fmtLocal(o.slices[1]?.departLocal)}</div>}
                     </td>
                     <td className="nowrap">{fmtLocal(o.slices[0].arriveLocal)}</td>
                     <td className="num">
@@ -281,22 +282,22 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
                       {o.cost.fareInCurrency && o.cost.fareInCurrency.currency !== o.price.currency && <div className="fm-small">≈ {formatMoney(o.cost.fareInCurrency)}</div>}
                       {o.previousPrice && o.previousPrice.amountMinor !== o.price.amountMinor && (
                         <div className="fm-small" style={{ color: o.previousPrice.amountMinor > o.price.amountMinor ? 'var(--success)' : 'var(--danger)' }}>
-                          antes {formatMoney(o.previousPrice)}
+                          {tr('flights.antes', { p0: formatMoney(o.previousPrice) })}
                         </div>
                       )}
                     </td>
                     <td className="num" title={o.cost.totalStatus}>
                       {formatMoney(o.cost.total)}
-                      <div className="fm-small">{o.cost.totalStatus === 'verified' ? 'verificado' : o.cost.totalStatus === 'estimated' ? 'estimado' : 'incompleto'}</div>
+                      <div className="fm-small">{o.cost.totalStatus === 'verified' ? tr('flights.verificado') : o.cost.totalStatus === 'estimated' ? tr('flights.estimado') : tr('flights.incompleto')}</div>
                     </td>
                     <td className="num">{fmtMinutes(o.totalDurationMin)}</td>
                     <td className="num">{o.stops}</td>
                     <td className="nowrap">{o.connections.length ? o.connections.map((c) => c.airport).join(' · ') : o.stops ? <span className="fm-small">?</span> : '—'}</td>
                     <td>{o.carriers.join(', ') || '—'}</td>
-                    <td className="nowrap">{o.baggage.checked == null ? <span className="fm-pill warn">não verificado</span> : `${o.baggage.checked}× desp.`}</td>
+                    <td className="nowrap">{o.baggage.checked == null ? <span className="fm-pill warn">{tr('flights.naoVerificado')}</span> : tr('flights.desp', { checked: o.baggage.checked })}</td>
                     <td>
                       <VerificationBadge v={o.verification} stale={o.stale} />
-                      <div className="fm-small">{new Date(o.observedAt).toLocaleDateString('pt-BR')}</div>
+                      <div className="fm-small">{new Date(o.observedAt).toLocaleDateString(getLocale())}</div>
                     </td>
                     <td className="num">
                       {o.score}
@@ -326,13 +327,13 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
           {data && (
             <div className="fm-pager">
               <span className="fm-muted">
-                {data.total} opção(ões) · meta de exibição {data.displayTarget}
+                {tr('flights.opcaoOesMetaDeExibicao', { total: data.total, displayTarget: data.displayTarget })}
               </span>
               <span className="fm-spacer" />
-              <select value={data.pageSize} onChange={(e) => set({ pageSize: Number(e.target.value) })} aria-label="Itens por página">
+              <select value={data.pageSize} onChange={(e) => set({ pageSize: Number(e.target.value) })} aria-label={tr('flights.itensPorPagina')}>
                 {[data.displayTarget, 10, 20, 30, 50].filter((v, i, a) => a.indexOf(v) === i).map((n) => (
                   <option key={n} value={n}>
-                    {n} por página
+                    {tr('flights.porPagina', { n })}
                   </option>
                 ))}
               </select>
@@ -351,27 +352,27 @@ export function ResultsExplorer(props: { m: MonitorSummary; version: number; onM
       )}
 
       <div className="fm-row" style={{ marginTop: 10 }}>
-        <span className="fm-muted">Buscar mais opções:</span>
-        <select value={moreN} onChange={(e) => setMoreN(Number(e.target.value))} aria-label="Quantas opções a mais">
+        <span className="fm-muted">{tr('flights.buscarMaisOpcoes')}</span>
+        <select value={moreN} onChange={(e) => setMoreN(Number(e.target.value))} aria-label={tr('flights.quantasOpcoesAMais')}>
           {[5, 10, 20, 30].map((n) => (
             <option key={n} value={n}>
               +{n}
             </option>
           ))}
         </select>
-        <button className="btn btn-secondary btn-sm" disabled={!props.canSearch} onClick={() => props.onMore(moreN)} type="button" title={props.canSearch ? 'Explora combinações ainda não consultadas' : 'Sem fonte automática disponível ou busca em andamento'}>
-          🔭 Buscar mais opções
+        <button className="btn btn-secondary btn-sm" disabled={!props.canSearch} onClick={() => props.onMore(moreN)} type="button" title={props.canSearch ? tr('flights.exploraCombinacoesAindaNaoConsultadas') : tr('flights.semFonteAutomaticaDisponivelOu')}>
+          {tr('flights.buscarMaisOpcoes2')}
         </button>
       </div>
 
       {cmp.size > 0 && (
         <div className="fm-compare-bar">
-          {cmp.size} selecionada(s)
+          {tr('flights.selecionadaS', { size: cmp.size })}
           <button className="btn btn-primary btn-sm" disabled={cmp.size < 2} onClick={() => setShowCmp(true)} type="button">
-            Comparar
+            {tr('flights.comparar')}
           </button>
           <button className="fm-linkbtn" onClick={() => setCmp(new Map())} type="button">
-            limpar
+            {tr('flights.limpar')}
           </button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { t } from '../../../i18n'
 
 interface Rec {
   keyword: string
@@ -35,9 +36,9 @@ export function Recommendations(): React.ReactElement {
 
   return (
     <div className="chart-section">
-      <div className="chart-title">⭐ Recomendações</div>
+      <div className="chart-title">{t('travel.recomendacoes')}</div>
       <p className="travel-muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
-        Baseadas nas suas preferências de viagem e interesses da <strong>Memória Pessoal</strong>. Geração por IA na página IA.
+        {t('travel.baseadasNasSuasPreferenciasDe')} <strong>{t('travel.memoriaPessoal')}</strong>{t('travel.geracaoPorIaNaPagina')}
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {bullets.map((b) => (
@@ -45,7 +46,7 @@ export function Recommendations(): React.ReactElement {
         ))}
       </div>
       {matched.length === 0 ? (
-        <div className="empty-hint">Nenhuma recomendação ainda — cadastre preferências de viagem e interesses em Organização → Memória Pessoal.</div>
+        <div className="empty-hint">{t('travel.nenhumaRecomendacaoAindaCadastrePreferencias')}</div>
       ) : (
         <div className="cards-grid">
           {matched.map((c) => (

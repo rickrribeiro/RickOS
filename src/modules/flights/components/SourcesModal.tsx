@@ -3,19 +3,20 @@ import type { ProviderStatus } from '../../../../shared/flights'
 import { openExternal } from '../../../api/createApi'
 import { errMsg, useFlightStore } from '../store/flightStore'
 import { Modal } from './Modal'
+import { t } from '../../../i18n'
 
 /** Credenciais por provedor (chaves em SENSITIVE_KEYS são criptografadas no servidor). */
 const SECRET: Record<string, { key: string; label: string; placeholder: string }> = {
-  travelpayouts: { key: 'flights_travelpayouts_token', label: 'Token da API (Travelpayouts)', placeholder: 'token pessoal' },
-  duffel: { key: 'flights_duffel_token', label: 'Access token (live)', placeholder: 'duffel_live_…' }
+  travelpayouts: { key: 'flights_travelpayouts_token', label: t('flights.tokenDaApiTravelpayouts'), placeholder: t('flights.tokenPessoal') },
+  duffel: { key: 'flights_duffel_token', label: t('flights.accessTokenLive'), placeholder: 'duffel_live_…' }
 }
 
 const CAPS: [keyof ProviderStatus['capabilities'], string][] = [
-  ['livePrices', 'preço ao vivo'],
-  ['monthRange', 'mês inteiro por consulta'],
+  ['livePrices', t('flights.precoAoVivo')],
+  ['monthRange', t('flights.mesInteiroPorConsulta')],
   ['baggage', 'bagagem'],
-  ['segments', 'trechos/conexões'],
-  ['automated', 'execução automática']
+  ['segments', t('flights.trechosConexoes')],
+  ['automated', t('flights.execucaoAutomatica')]
 ]
 
 function ProviderCard(props: { p: ProviderStatus; values: Record<string, string>; onSaved: () => void }): React.ReactElement {
@@ -27,7 +28,7 @@ function ProviderCard(props: { p: ProviderStatus; values: Record<string, string>
   async function saveSecret(): Promise<void> {
     await window.api.settings.set(sec.key, secret.trim())
     setSecret('')
-    setMsg({ ok: true, text: 'Salvo (criptografado).' })
+    setMsg({ ok: true, text: t('flights.salvoCriptografado') })
     props.onSaved()
   }
   async function test(): Promise<void> {
@@ -51,7 +52,7 @@ function ProviderCard(props: { p: ProviderStatus; values: Record<string, string>
       <div className="fm-section-title">
         <span className={`fm-dot ${p.available ? 'active' : p.configured ? 'needs_config' : 'paused'}`} />
         <span className="fm-grow">{p.label}</span>
-        {p.available ? <span className="fm-pill ok">disponível</span> : <span className="fm-pill warn">{p.reason ?? 'indisponível'}</span>}
+        {p.available ? <span className="fm-pill ok">{t('flights.disponivel')}</span> : <span className="fm-pill warn">{p.reason ?? t('flights.indisponivel')}</span>}
       </div>
       <div className="fm-row" style={{ gap: 4, marginBottom: 6 }}>
         {CAPS.map(([k, l]) => (
@@ -59,8 +60,8 @@ function ProviderCard(props: { p: ProviderStatus; values: Record<string, string>
             {p.capabilities[k] ? '✓' : '✕'} {l}
           </span>
         ))}
-        {p.capabilities.deepLink !== 'none' && <span className="fm-pill outline">link: {p.capabilities.deepLink === 'offer' ? 'oferta' : 'pesquisa'}</span>}
-        {p.kind === 'api' && <span className="fm-small">· {p.usedToday} consulta(s) hoje</span>}
+        {p.capabilities.deepLink !== 'none' && <span className="fm-pill outline">{t('flights.link')} {p.capabilities.deepLink === 'offer' ? t('flights.oferta') : t('flights.pesquisa')}</span>}
+        {p.kind === 'api' && <span className="fm-small">{t('flights.consultaSHoje', { usedToday: p.usedToday })}</span>}
       </div>
       <ul className="fm-small" style={{ margin: '0 0 6px 16px', padding: 0 }}>
         {p.notes.map((n) => (
@@ -73,30 +74,30 @@ function ProviderCard(props: { p: ProviderStatus; values: Record<string, string>
             <input
               type="password"
               autoComplete="off"
-              placeholder={props.values[sec.key] ? '•••••••• (configurado — digite para trocar)' : sec.placeholder}
+              placeholder={props.values[sec.key] ? t('flights.configuradoDigiteParaTrocar') : sec.placeholder}
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
               className="fm-grow"
               aria-label={sec.label}
             />
             <button className="btn btn-primary btn-sm" disabled={!secret.trim()} onClick={saveSecret} type="button">
-              Salvar
+              {t('flights.salvar')}
             </button>
           </>
         )}
         {(p.kind === 'api' || p.kind === 'assisted') && (
           <label className="fm-check fm-small">
-            <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} /> {p.kind === 'assisted' ? 'ativar (opt-in)' : 'habilitado'}
+            <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} /> {p.kind === 'assisted' ? t('flights.ativarOptIn') : t('flights.habilitado')}
           </label>
         )}
         {sec && (
           <button className="btn btn-secondary btn-sm" onClick={test} disabled={busy || !props.values[sec.key]} type="button">
-            {busy ? 'Testando…' : 'Testar conexão'}
+            {busy ? t('flights.testando') : t('flights.testarConexao')}
           </button>
         )}
         {p.docs.startsWith('http') && (
           <button className="fm-linkbtn" type="button" onClick={() => openExternal(p.docs)}>
-            documentação ↗
+            {t('flights.documentacao')}
           </button>
         )}
       </div>
@@ -125,59 +126,56 @@ export function SourcesModal(props: { onClose: () => void }): React.ReactElement
   }
   const automated = providers.filter((p) => p.kind === 'api' && p.available)
   return (
-    <Modal title="Fontes, execução e IA" onClose={props.onClose}>
+    <Modal title={t('flights.fontesExecucaoEIa')} onClose={props.onClose}>
       {automated.length === 0 && (
         <div className="fm-note warn" style={{ marginBottom: 10 }}>
-          Nenhuma fonte automática configurada. Os monitoramentos podem ser criados e editados normalmente, mas buscas automáticas ficam indisponíveis até você configurar
-          uma fonte. A importação de resultados funciona sempre.
+          {t('flights.nenhumaFonteAutomaticaConfiguradaOs')}
         </div>
       )}
       <div className="fm-note" style={{ marginBottom: 10 }}>
-        <b>Skyscanner</b> não tem API aberta: aqui ele é pesquisado pelo seu Chrome (Claude Code + extensão), sob demanda e com você acompanhando — é o que pega
-        promoções relâmpago. A Aviasales é cache (≤ 48 h) e serve para mapear rotas/datas; os blogs de promoção entram pelo radar de RSS. Google Flights não tem
-        API e proíbe coleta automatizada; Amadeus Self-Service foi desativado e o Kiwi fechou cadastros.
+        <b>{t('flights.skyscanner')}</b> {t('flights.naoTemApiAbertaAqui')}
       </div>
       {providers.map((p) => (
         <ProviderCard key={p.id} p={p} values={values} onSaved={load} />
       ))}
       <div className="fm-section">
-        <div className="fm-section-title">⚙️ Execução e IA</div>
+        <div className="fm-section-title">{t('flights.execucaoEIa')}</div>
         <div className="fm-cols3">
           <label className="fm-field">
-            <span className="fm-label">Buscas simultâneas (monitores)</span>
+            <span className="fm-label">{t('flights.buscasSimultaneasMonitores')}</span>
             <input type="number" min={1} max={4} value={values.flights_concurrency ?? '1'} onChange={(e) => set('flights_concurrency', e.target.value)} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Modelo da IA (passagens)</span>
-            <input value={values.flights_ai_model ?? 'haiku'} onChange={(e) => set('flights_ai_model', e.target.value)} placeholder="haiku" />
+            <span className="fm-label">{t('flights.modeloDaIaPassagens')}</span>
+            <input value={values.flights_ai_model ?? 'haiku'} onChange={(e) => set('flights_ai_model', e.target.value)} placeholder={t('flights.haiku')} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Modelo do Skyscanner/Chrome</span>
-            <input value={values.flights_chrome_model ?? 'sonnet'} onChange={(e) => set('flights_chrome_model', e.target.value)} placeholder="sonnet" />
+            <span className="fm-label">{t('flights.modeloDoSkyscannerChrome')}</span>
+            <input value={values.flights_chrome_model ?? 'sonnet'} onChange={(e) => set('flights_chrome_model', e.target.value)} placeholder={t('flights.sonnet')} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Mercado Aviasales</span>
-            <input value={values.flights_travelpayouts_market ?? 'br'} onChange={(e) => set('flights_travelpayouts_market', e.target.value)} placeholder="br" />
+            <span className="fm-label">{t('flights.mercadoAviasales')}</span>
+            <input value={values.flights_travelpayouts_market ?? 'br'} onChange={(e) => set('flights_travelpayouts_market', e.target.value)} placeholder={t('flights.br')} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Rotas terrestres (OSRM)</span>
+            <span className="fm-label">{t('flights.rotasTerrestresOsrm')}</span>
             <select value={values.flights_osrm_enabled ?? '1'} onChange={(e) => set('flights_osrm_enabled', e.target.value)}>
-              <option value="1">Ativado (sob demanda, com cache)</option>
-              <option value="0">Desativado (só aproximação)</option>
+              <option value="1">{t('flights.ativadoSobDemandaComCache')}</option>
+              <option value="0">{t('flights.desativadoSoAproximacao')}</option>
             </select>
           </label>
           <label className="fm-field">
-            <span className="fm-label">Servidor OSRM</span>
-            <input value={values.flights_osrm_url ?? ''} onChange={(e) => set('flights_osrm_url', e.target.value)} placeholder="https://router.project-osrm.org" />
+            <span className="fm-label">{t('flights.servidorOsrm')}</span>
+            <input value={values.flights_osrm_url ?? ''} onChange={(e) => set('flights_osrm_url', e.target.value)} placeholder={t('flights.httpsRouterProjectOsrmOrg')} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Custo terrestre estimado por km</span>
+            <span className="fm-label">{t('flights.custoTerrestreEstimadoPorKm')}</span>
             <span className="fm-row" style={{ flexWrap: 'nowrap' }}>
               <input
                 type="number"
                 min={0}
                 step="0.01"
-                placeholder="desconhecido"
+                placeholder={t('flights.desconhecido')}
                 value={values.flights_ground_cost_per_km_minor ? Number(values.flights_ground_cost_per_km_minor) / 100 : ''}
                 onChange={(e) => set('flights_ground_cost_per_km_minor', e.target.value === '' ? '' : String(Math.round(Number(e.target.value) * 100)))}
               />
@@ -186,24 +184,23 @@ export function SourcesModal(props: { onClose: () => void }): React.ReactElement
           </label>
         </div>
         <label className="fm-field" style={{ marginTop: 8 }}>
-          <span className="fm-label">Feeds RSS de promoções (um por linha; vazio = padrão)</span>
+          <span className="fm-label">{t('flights.feedsRssDePromocoesUm')}</span>
           <textarea
             rows={3}
             className="fm-mono"
             value={values.flights_promo_feeds ?? ''}
-            placeholder={'https://www.melhoresdestinos.com.br/feed\nhttps://passageirodeprimeira.com/feed/'}
+            placeholder={t('flights.httpsWwwMelhoresdestinosComBr')}
             onChange={(e) => set('flights_promo_feeds', e.target.value)}
           />
         </label>
         <div className="fm-small" style={{ marginTop: 6 }}>
-          Consumo de IA aparece em Configurações → uso de IA (fonte "passagens"). Câmbio para comparar moedas: Configurações → Finanças (sem taxa, a conversão fica "desconhecida",
-          nunca 1:1).
+          {t('flights.consumoDeIaApareceEm')}
         </div>
         <div className="fm-row" style={{ marginTop: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={saveExec} type="button">
-            Salvar execução
+            {t('flights.salvarExecucao')}
           </button>
-          {saved && <span className="fm-ok">Salvo ✓</span>}
+          {saved && <span className="fm-ok">{t('flights.salvo')}</span>}
         </div>
       </div>
     </Modal>

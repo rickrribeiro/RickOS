@@ -13,16 +13,17 @@ import { SourcesModal } from '../components/SourcesModal'
 import { rel, StateBadge } from '../components/ui'
 import { errMsg, useFlightStore } from '../store/flightStore'
 import '../flights.css'
+import { t as tr } from '../../../i18n'
 
 type Tab = 'results' | 'tracked' | 'calendar' | 'history' | 'promos' | 'plan' | 'alerts'
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'results', label: 'Resultados' },
-  { id: 'calendar', label: 'Calendário de preços' },
-  { id: 'tracked', label: 'Acompanhadas' },
-  { id: 'history', label: 'Histórico' },
-  { id: 'promos', label: 'Promoções (blogs)' },
-  { id: 'plan', label: 'Plano e cobertura' },
-  { id: 'alerts', label: 'Alertas' }
+  { id: 'results', label: tr('flights.resultados') },
+  { id: 'calendar', label: tr('flights.calendarioDePrecos') },
+  { id: 'tracked', label: tr('flights.acompanhadas') },
+  { id: 'history', label: tr('flights.historico') },
+  { id: 'promos', label: tr('flights.promocoesBlogs') },
+  { id: 'plan', label: tr('flights.planoECobertura') },
+  { id: 'alerts', label: tr('flights.alertas') }
 ]
 
 export function FlightMonitorPage(): React.ReactElement {
@@ -97,14 +98,14 @@ export function FlightMonitorPage(): React.ReactElement {
     return (
       <div className="module-page fm-page">
         <div className="fm-empty">
-          <h3>Monitoramento não encontrado</h3>
+          <h3>{tr('flights.monitoramentoNaoEncontrado')}</h3>
           <button className="btn btn-secondary btn-sm" onClick={() => setPage('trip-monitoring')} type="button">
-            ← Voltar
+            {tr('flights.voltar')}
           </button>
         </div>
       </div>
     )
-  if (!m) return <div className="module-page fm-page fm-muted">Carregando…</div>
+  if (!m) return <div className="module-page fm-page fm-muted">{tr('flights.carregando')}</div>
 
   const automated = providers.filter((p) => p.kind === 'api' && p.available)
   const running = m.state === 'running'
@@ -129,7 +130,7 @@ export function FlightMonitorPage(): React.ReactElement {
     <div className="module-page fm-page">
       <div className="fm-hero">
         <div className="fm-row">
-          <button className="btn btn-secondary btn-sm" onClick={() => setPage('trip-monitoring')} type="button" aria-label="Voltar">
+          <button className="btn btn-secondary btn-sm" onClick={() => setPage('trip-monitoring')} type="button" aria-label={tr('flights.voltar2')}>
             ←
           </button>
           <h2 title={m.name}>{m.name}</h2>
@@ -140,26 +141,26 @@ export function FlightMonitorPage(): React.ReactElement {
         </div>
         <div className="fm-hero-stats">
           <span>
-            menor preço{m.eligibleCount ? '' : ' (pendente)'}
+            {tr('flights.menorPreco2')}{m.eligibleCount ? '' : tr('flights.pendente')}
             <b>{formatMoney(m.minPrice)}</b>
           </span>
           <span>
-            menor ao vivo<b>{formatMoney(m.minVerifiedPrice)}</b>
+            {tr('flights.menorAoVivo')}<b>{formatMoney(m.minVerifiedPrice)}</b>
           </span>
           <span>
-            elegíveis<b>{m.eligibleCount}</b>
+            {tr('flights.elegiveis2')}<b>{m.eligibleCount}</b>
           </span>
           <span>
-            cobertura<b>{cov.percent}%</b>
+            {tr('flights.cobertura')}<b>{cov.percent}%</b>
           </span>
           <span>
-            última busca ok<b>{rel(m.lastSuccessAt)}</b>
+            {tr('flights.ultimaBuscaOk')}<b>{rel(m.lastSuccessAt)}</b>
           </span>
           <span>
-            próxima<b>{m.config.schedule.mode === 'manual' ? 'manual' : rel(m.nextRunAt)}</b>
+            {tr('flights.proxima')}<b>{m.config.schedule.mode === 'manual' ? tr('flights.manual2') : rel(m.nextRunAt)}</b>
           </span>
         </div>
-        <div className="fm-cov" style={{ marginTop: 8 }} title={`${cov.covered}/${cov.universe} combinações`}>
+        <div className="fm-cov" style={{ marginTop: 8 }} title={tr('flights.combinacoes', { covered: cov.covered, universe: cov.universe })}>
           <span style={{ width: `${Math.min(100, cov.percent)}%` }} />
         </div>
         <div className="fm-row" style={{ marginTop: 10 }}>
@@ -167,52 +168,52 @@ export function FlightMonitorPage(): React.ReactElement {
             <>
               <span className="fm-pill accent">
                 <span className="fm-dot running" />{' '}
-                {run.trigger === 'assisted' ? `${run.message ?? 'Pesquisando no Chrome…'} (${run.planned} combinação(ões))` : `${run.done} consulta(s) ok · ${run.queries} na fonte · ${run.cacheHits} do cache · ${run.offersFound} ofertas`}
+                {run.trigger === 'assisted' ? tr('flights.combinacaoOes', { p0: run.message ?? tr('flights.pesquisandoNoChrome'), planned: run.planned }) : tr('flights.consultaSOkNaFonte', { done: run.done, queries: run.queries, cacheHits: run.cacheHits, offersFound: run.offersFound })}
               </span>
               <button className="btn btn-secondary btn-sm" onClick={() => act('cancel', () => window.api.flightMon.cancel(run.id))} type="button">
-                Cancelar
+                {tr('flights.cancelar')}
               </button>
             </>
           ) : (
             <button className="btn btn-primary btn-sm" disabled={!canSearch || !!busy} onClick={() => act('run', () => window.api.flightMon.run(m.id))} type="button">
-              {cov.pending > 0 && cov.done > 0 ? '▶ Continuar busca' : '🔎 Buscar agora'}
+              {cov.pending > 0 && cov.done > 0 ? tr('flights.continuarBusca') : tr('flights.buscarAgora')}
             </button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)} type="button">
-            Editar
+            {tr('flights.editar2')}
           </button>
           {m.status !== 'draft' && (
             <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act('status', () => window.api.flightMon.setStatus(m.id, m.status === 'paused' ? 'active' : 'paused'))} type="button">
-              {m.status === 'paused' ? 'Retomar' : 'Pausar'}
+              {m.status === 'paused' ? tr('flights.retomar') : tr('flights.pausar')}
             </button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => setImporting({})} type="button">
-            ⤓ Importar
+            {tr('flights.importar')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             disabled={running || m.state === 'needs_config'}
             onClick={() => (skyOn ? setSky(true) : setSources(true))}
             type="button"
-            title={skyOn ? 'Claude pesquisa no Skyscanner pelo seu Chrome (você acompanha)' : 'Ative "Skyscanner via Claude + Chrome" nas fontes'}
+            title={skyOn ? tr('flights.claudePesquisaNoSkyscannerPelo') : tr('flights.ativeSkyscannerViaClaudeChrome')}
           >
-            🔍 Skyscanner (Chrome)
+            {tr('flights.skyscannerChrome2')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             disabled={!!busy || !m.eligibleCount}
-            title="1 chamada de IA (com cache) sobre as melhores opções já ordenadas"
+            title={tr('flights.1ChamadaDeIaCom')}
             onClick={() => act('ai', async () => setInsight(await window.api.flightMon.insights(m.id)))}
             type="button"
           >
-            {busy === 'ai' ? 'Analisando…' : '✨ Analisar trade-offs'}
+            {busy === 'ai' ? tr('flights.analisando') : tr('flights.analisarTradeOffs')}
           </button>
           <span className="fm-spacer" />
           <button
             className="btn btn-danger btn-sm"
             type="button"
             onClick={() =>
-              window.confirm(`Excluir "${m.name}" com todo o histórico?`) &&
+              window.confirm(tr('flights.excluirComTodoOHistorico', { name: m.name })) &&
               act('del', async () => {
                 await window.api.flightMon.delete(m.id)
                 await refreshList()
@@ -220,7 +221,7 @@ export function FlightMonitorPage(): React.ReactElement {
               })
             }
           >
-            Excluir
+            {tr('flights.excluir')}
           </button>
         </div>
       </div>
@@ -230,20 +231,20 @@ export function FlightMonitorPage(): React.ReactElement {
           <div className="fm-row" style={{ gap: 8, alignItems: 'flex-start' }}>
             <div className="fm-grow">
               <b>
-                Busca no Skyscanner {skyFail.status === 'failed' ? 'falhou' : skyFail.status === 'interrupted' ? 'interrompida' : 'incompleta'}
+                {tr('flights.buscaNoSkyscanner')} {skyFail.status === 'failed' ? tr('flights.falhou') : skyFail.status === 'interrupted' ? tr('flights.interrompida') : tr('flights.incompleta')}
               </b>{' '}
               <span className="fm-small">
-                ({rel(skyFail.finishedAt ?? skyFail.startedAt)} · {skyFail.done}/{skyFail.planned} combinação(ões) lida(s))
+                {tr('flights.combinacaoOesLidaS', { p0: rel(skyFail.finishedAt ?? skyFail.startedAt), done: skyFail.done, planned: skyFail.planned })}
               </span>
-              <div style={{ marginTop: 4 }}>{skyFail.message ?? 'Sem detalhes.'}</div>
+              <div style={{ marginTop: 4 }}>{skyFail.message ?? tr('flights.semDetalhes')}</div>
             </div>
-            <button className="fm-x" type="button" onClick={() => dismissSky(skyFail.id)} title="Dispensar" aria-label="Dispensar">
+            <button className="fm-x" type="button" onClick={() => dismissSky(skyFail.id)} title={tr('flights.dispensar')} aria-label={tr('flights.dispensar')}>
               ✕
             </button>
           </div>
           {skyOn && (
             <button className="btn btn-sm" type="button" style={{ marginTop: 6 }} onClick={() => setSky(true)}>
-              🔍 Tentar de novo (mesma seleção)
+              {tr('flights.tentarDeNovoMesmaSelecao')}
             </button>
           )}
         </div>
@@ -251,50 +252,50 @@ export function FlightMonitorPage(): React.ReactElement {
 
       {m.state === 'needs_config' && (
         <div className="fm-note warn" style={{ marginBottom: 10 }}>
-          Aguardando configuração: {m.stateDetail}{' '}
+          {tr('flights.aguardandoConfiguracao2')} {m.stateDetail}{' '}
           <button className="fm-linkbtn" onClick={() => setEditing(true)} type="button">
-            completar
+            {tr('flights.completar')}
           </button>
           {m.legacy && (
             <div className="fm-small" style={{ marginTop: 4 }}>
-              Migrado do monitoramento antigo ({m.legacy.origin} → {m.legacy.destination}
-              {m.legacy.price != null ? `, último preço anotado ${m.legacy.price} ${m.legacy.currency}` : ''}
-              {m.legacy.checkedAt ? ` em ${m.legacy.checkedAt.slice(0, 10)}` : ''}). O preço antigo não tinha itinerário, então não entra no histórico comparável.
+              {tr('flights.migradoDoMonitoramentoAntigo')}{m.legacy.origin} → {m.legacy.destination}
+              {m.legacy.price != null ? tr('flights.ultimoPrecoAnotado', { price: m.legacy.price, currency: m.legacy.currency }) : ''}
+              {m.legacy.checkedAt ? tr('flights.em', { p0: m.legacy.checkedAt.slice(0, 10) }) : ''}{tr('flights.oPrecoAntigoNaoTinha')}
             </div>
           )}
         </div>
       )}
       {m.state !== 'needs_config' && automated.length === 0 && (
         <div className="fm-note warn" style={{ marginBottom: 10 }}>
-          Nenhuma fonte automática configurada: buscas desativadas. Você pode{' '}
+          {tr('flights.nenhumaFonteAutomaticaConfiguradaBuscas')}{' '}
           <button className="fm-linkbtn" onClick={() => setSources(true)} type="button">
-            configurar uma fonte
+            {tr('flights.configurarUmaFonte')}
           </button>{' '}
-          ou{' '}
+          {tr('flights.ou')}{' '}
           <button className="fm-linkbtn" onClick={() => setImporting({})} type="button">
-            importar resultados reais
+            {tr('flights.importarResultadosReais')}
           </button>
           .
         </div>
       )}
-      {m.state === 'error' && <div className="fm-note danger" style={{ marginBottom: 10 }}>Última busca falhou: {m.lastError}</div>}
-      {m.status === 'paused' && <div className="fm-note" style={{ marginBottom: 10 }}>Pausado: o agendador não roda este monitor (buscas manuais continuam disponíveis).</div>}
+      {m.state === 'error' && <div className="fm-note danger" style={{ marginBottom: 10 }}>{tr('flights.ultimaBuscaFalhou')} {m.lastError}</div>}
+      {m.status === 'paused' && <div className="fm-note" style={{ marginBottom: 10 }}>{tr('flights.pausadoOAgendadorNaoRoda')}</div>}
       {m.lastSuccessAt && Date.now() - Date.parse(m.lastSuccessAt) > 3 * 86400_000 && (
-        <div className="fm-note" style={{ marginBottom: 10 }}>Dados desatualizados: a última busca bem-sucedida foi {rel(m.lastSuccessAt)}.</div>
+        <div className="fm-note" style={{ marginBottom: 10 }}>{tr('flights.dadosDesatualizadosAUltimaBusca', { p0: rel(m.lastSuccessAt) })}</div>
       )}
       {err && <div className="fm-note danger" style={{ marginBottom: 10 }}>{err}</div>}
 
       {insight && (
         <div className="fm-section fm-ai">
           <div className="fm-section-title">
-            ✨ Análise da IA {insight.cached && <span className="fm-pill">cache · 0 tokens</span>}
+            {tr('flights.analiseDaIa')} {insight.cached && <span className="fm-pill">{tr('flights.cache0Tokens')}</span>}
             <span className="fm-spacer" />
-            <button className="fm-x" onClick={() => setInsight(null)} type="button" aria-label="Fechar">
+            <button className="fm-x" onClick={() => setInsight(null)} type="button" aria-label={tr('flights.fechar')}>
               ✕
             </button>
           </div>
           <div className="fm-insights">{insight.text}</div>
-          <div className="fm-small">Comentário sobre dados já filtrados e ordenados pelo código; não substitui verificar regras de trânsito/visto.</div>
+          <div className="fm-small">{tr('flights.comentarioSobreDadosJaFiltrados')}</div>
         </div>
       )}
 

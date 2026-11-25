@@ -4,6 +4,7 @@ import { formatMoney } from '../../../../shared/flights'
 import { errMsg } from '../store/flightStore'
 import { Modal } from './Modal'
 import { fmtLocal } from './ui'
+import { t } from '../../../i18n'
 
 const EXAMPLE = `[{"origin":"BKK","destination":"SSA","depart":"2026-12-12T08:05","arrive":"2026-12-13T06:40","price":5230.90,"currency":"BRL","stops":2,"carrier":"QR","flight":"833","checked_bags":1,"link":"https://…","link_kind":"search","source":"Alerta do site X","observed_at":"2026-11-10"}]`
 
@@ -51,16 +52,16 @@ export function ImportModal(props: { m: MonitorSummary; onClose: () => void; onD
   }
   return (
     <Modal
-      title="Importar resultados"
+      title={t('flights.importarResultados')}
       onClose={props.onClose}
       footer={
         <>
-          <span className="fm-grow fm-small">Fica marcado como "{assisted ? 'Busca assistida' : 'Importado'}", com a fonte e a data da observação. Nada vira "ao vivo".</span>
+          <span className="fm-grow fm-small">{t('flights.ficaMarcadoComo')}{assisted ? t('flights.buscaAssistida') : t('flights.importado')}{t('flights.comAFonteEA')}</span>
           <button className="btn btn-secondary btn-sm" onClick={doPreview} disabled={busy || !text.trim()} type="button">
-            {busy && !preview ? 'Lendo…' : 'Pré-visualizar'}
+            {busy && !preview ? t('flights.lendo') : t('flights.preVisualizar')}
           </button>
           <button className="btn btn-primary btn-sm" onClick={commit} disabled={busy || !preview?.offers.length} type="button">
-            Gravar {preview?.offers.length ?? ''}
+            {t('flights.gravar')} {preview?.offers.length ?? ''}
           </button>
         </>
       }
@@ -68,24 +69,24 @@ export function ImportModal(props: { m: MonitorSummary; onClose: () => void; onD
       <div className="fm-row" style={{ marginBottom: 8 }}>
         <div className="fm-seg">
           <button className={mode === 'structured' ? 'active' : ''} onClick={() => setMode('structured')} type="button">
-            JSON / CSV
+            {t('flights.jsonCsv')}
           </button>
           <button className={mode === 'ai' ? 'active' : ''} onClick={() => setMode('ai')} type="button">
-            Texto de alerta/e-mail (IA)
+            {t('flights.textoDeAlertaEMail')}
           </button>
         </div>
         <label className="fm-check fm-small">
-          <input type="checkbox" checked={assisted} onChange={(e) => setAssisted(e.target.checked)} /> veio da busca assistida
+          <input type="checkbox" checked={assisted} onChange={(e) => setAssisted(e.target.checked)} /> {t('flights.veioDaBuscaAssistida')}
         </label>
       </div>
       {mode === 'structured' && (
         <div className="fm-cols" style={{ marginBottom: 8 }}>
           <label className="fm-field">
-            <span className="fm-label">Fonte (se não vier no arquivo)</span>
-            <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="ex.: alerta da cia X" />
+            <span className="fm-label">{t('flights.fonteSeNaoVierNo')}</span>
+            <input value={source} onChange={(e) => setSource(e.target.value)} placeholder={t('flights.exAlertaDaCiaX')} />
           </label>
           <label className="fm-field">
-            <span className="fm-label">Data da observação (se não vier)</span>
+            <span className="fm-label">{t('flights.dataDaObservacaoSeNao')}</span>
             <input type="date" value={observed} onChange={(e) => setObserved(e.target.value)} />
           </label>
         </div>
@@ -99,11 +100,11 @@ export function ImportModal(props: { m: MonitorSummary; onClose: () => void; onD
         rows={8}
         style={{ width: '100%' }}
         className="fm-mono"
-        placeholder={mode === 'structured' ? EXAMPLE : 'Cole aqui o texto do alerta de preço / e-mail. A IA extrai só o que estiver escrito; o resto fica como desconhecido.'}
+        placeholder={mode === 'structured' ? EXAMPLE : t('flights.coleAquiOTextoDo')}
       />
       {mode === 'structured' && (
         <div className="fm-small">
-          CSV: cabeçalho com origin,destination,depart,arrive,price,currency,stops,carrier,flight,checked_bags,carry_on,link,source,observed_at. Formato completo em docs/passagens.md.
+          {t('flights.csvCabecalhoComOriginDestination')}
         </div>
       )}
       {err && <div className="fm-error">{err}</div>}
@@ -123,12 +124,12 @@ export function ImportModal(props: { m: MonitorSummary; onClose: () => void; onD
             <table className="fm-table" style={{ minWidth: 600 }}>
               <thead>
                 <tr>
-                  <th>Rota</th>
-                  <th>Partida</th>
-                  <th>Preço</th>
-                  <th>Conex.</th>
-                  <th>Mala</th>
-                  <th>Fonte</th>
+                  <th>{t('flights.rota')}</th>
+                  <th>{t('flights.partida')}</th>
+                  <th>{t('flights.preco')}</th>
+                  <th>{t('flights.conex')}</th>
+                  <th>{t('flights.mala')}</th>
+                  <th>{t('flights.fonte')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -136,7 +137,7 @@ export function ImportModal(props: { m: MonitorSummary; onClose: () => void; onD
                   <tr key={i}>
                     <td>
                       {o.slices[0].from} → {o.slices[0].to}
-                      {o.slices[1] ? ' (ida e volta)' : ''}
+                      {o.slices[1] ? t('flights.idaEVolta2') : ''}
                     </td>
                     <td>{fmtLocal(o.slices[0].departLocal)}</td>
                     <td>{formatMoney(o.price)}</td>
@@ -150,7 +151,7 @@ export function ImportModal(props: { m: MonitorSummary; onClose: () => void; onD
               </tbody>
             </table>
           </div>
-          {!preview.offers.length && <div className="fm-muted">Nenhuma oferta válida.</div>}
+          {!preview.offers.length && <div className="fm-muted">{t('flights.nenhumaOfertaValida')}</div>}
         </div>
       )}
     </Modal>

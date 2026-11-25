@@ -5,10 +5,11 @@ import { openExternal } from '../../../api/createApi'
 import { errMsg } from '../store/flightStore'
 import { LineChart } from './Panels'
 import { rel } from './ui'
+import { t as tr, getLocale } from '../../../i18n'
 
 const short = (minor: number, currency: string): string => formatMoney({ amountMinor: minor, currency }).replace(/,\d\d$/, '')
 const dm = (d: string): string => `${d.slice(8, 10)}/${d.slice(5, 7)}`
-const dayLabel = (d: string): string => new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')
+const dayLabel = (d: string): string => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')
 
 function Delta(props: { c: TrackedCombo }): React.ReactElement {
   const { latest, previous } = props.c
@@ -17,7 +18,7 @@ function Delta(props: { c: TrackedCombo }): React.ReactElement {
   if (d === 0) return <span className="fm-muted">=</span>
   const pct = Math.round((Math.abs(d) / previous.amountMinor) * 100)
   return (
-    <span className={d < 0 ? 'fm-delta down' : 'fm-delta up'} title={`antes ${formatMoney(previous)}`}>
+    <span className={d < 0 ? 'fm-delta down' : 'fm-delta up'} title={tr('flights.antes', { p0: formatMoney(previous) })}>
       {d < 0 ? '▼' : '▲'} {short(Math.abs(d), latest.currency)} ({pct}%)
     </span>
   )
@@ -45,9 +46,9 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
   }, [props.m.id, props.version, tick])
 
   if (err) return <div className="fm-error">{err}</div>
-  if (!data) return <div className="fm-muted">Carregando…</div>
+  if (!data) return <div className="fm-muted">{tr('flights.carregando')}</div>
   if (!data.combos.length)
-    return <div className="fm-empty">Nenhuma combinação acompanhada ainda. Tudo que você pesquisar no Skyscanner (botão 🔍) entra aqui automaticamente, com o preço de cada dia.</div>
+    return <div className="fm-empty">{tr('flights.nenhumaCombinacaoAcompanhadaAindaTudo')}</div>
 
   const cur = data.currency
   const key = (c: SkyPick): string => `${c.origin}|${c.destination}|${c.depart}|${c.ret ?? '-'}`
@@ -80,18 +81,18 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
     <div>
       <div className="fm-row" style={{ marginBottom: 8 }}>
         <span className="fm-small fm-grow">
-          {future.length} combinação(ões) futuras · menor preço lido em cada dia, de todas as fontes (ofertas excluídas pelas suas restrições não contam). Pesquise de novo a cada dia para ver a variação.
+          {tr('flights.combinacaoOesFuturasMenorPreco', { count: future.length })}
         </span>
         <button className="btn btn-primary btn-sm" type="button" disabled={!future.length} onClick={() => props.onResearch(future.map((c) => ({ origin: c.origin, destination: c.destination, depart: c.depart, ret: c.ret })))}>
-          🔍 Pesquisar de novo no Skyscanner
+          {tr('flights.pesquisarDeNovoNoSkyscanner')}
         </button>
       </div>
 
       <div className="fm-chart-card">
-        <h4>Variação dia a dia {series.length ? `(${series.length} no gráfico — marque na tabela)` : ''}</h4>
+        <h4>{tr('flights.variacaoDiaADia')} {series.length ? tr('flights.noGraficoMarqueNaTabela', { count: series.length }) : ''}</h4>
         {data.days.length < 2 ? (
           <div className="fm-muted">
-            Por enquanto só há leitura de {data.days[0] ? dm(data.days[0]) : 'nenhum dia'}. O gráfico aparece a partir da 2ª leitura em outro dia — pesquise as acompanhadas de novo amanhã.
+            {tr('flights.porEnquantoSoHaLeitura')} {data.days[0] ? dm(data.days[0]) : tr('flights.nenhumDia')}{tr('flights.oGraficoApareceAPartir')}
           </div>
         ) : (
           <LineChart series={series} currency={cur} />
@@ -102,11 +103,11 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
         <table className="report-table fm-tracked">
           <thead>
             <tr>
-              <th title="No gráfico">📈</th>
-              <th>Rota e datas</th>
-              <th>Último</th>
-              <th>Variação</th>
-              <th>Menor já visto</th>
+              <th title={tr('flights.noGrafico')}>📈</th>
+              <th>{tr('flights.rotaEDatas')}</th>
+              <th>{tr('flights.ultimo')}</th>
+              <th>{tr('flights.variacao')}</th>
+              <th>{tr('flights.menorJaVisto')}</th>
               {data.days.map((d) => (
                 <th key={d} className="fm-num">
                   {dm(d)}
@@ -119,7 +120,7 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
             {data.combos.map((c) => (
               <tr key={key(c)} className={c.past ? 'past' : c.latest && c.latest.amountMinor === cheapest ? 'best' : ''}>
                 <td>
-                  <input type="checkbox" checked={chartKeys.has(key(c))} disabled={!c.points.length} onChange={() => toggleChart(c)} aria-label="Mostrar no gráfico" />
+                  <input type="checkbox" checked={chartKeys.has(key(c))} disabled={!c.points.length} onChange={() => toggleChart(c)} aria-label={tr('flights.mostrarNoGrafico')} />
                 </td>
                 <td className="fm-tracked-route">
                   <div>
@@ -128,14 +129,14 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
                   <div className="fm-small">
                     {dayLabel(c.depart)}
                     {c.ret ? ` → ${dayLabel(c.ret)}` : ''}
-                    {c.past ? ' · já passou' : ''}
-                    {c.lastCheckedAt ? ` · Skyscanner ${rel(c.lastCheckedAt)}` : ' · ainda não lida no Skyscanner'}
-                    {c.offers ? ` · ${c.offers} oferta(s)` : ''}
+                    {c.past ? tr('flights.jaPassou') : ''}
+                    {c.lastCheckedAt ? tr('flights.skyscanner2', { p0: rel(c.lastCheckedAt) }) : tr('flights.aindaNaoLidaNoSkyscanner')}
+                    {c.offers ? tr('flights.ofertaS', { offers: c.offers }) : ''}
                   </div>
                 </td>
                 <td className="fm-num">
-                  {c.latest ? <b>{formatMoney(c.latest)}</b> : <span className="fm-muted">sem preço</span>}
-                  {c.latest && c.latest.amountMinor === cheapest && !c.past && <div className="fm-pill ok">mais barata</div>}
+                  {c.latest ? <b>{formatMoney(c.latest)}</b> : <span className="fm-muted">{tr('flights.semPreco')}</span>}
+                  {c.latest && c.latest.amountMinor === cheapest && !c.past && <div className="fm-pill ok">{tr('flights.maisBarata')}</div>}
                 </td>
                 <td className="fm-num">
                   <Delta c={c} />
@@ -150,10 +151,10 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
                   )
                 })}
                 <td className="fm-nowrap">
-                  <button className="fm-linkbtn" type="button" onClick={() => openExternal(c.url)} title="Abrir a pesquisa no Skyscanner">
+                  <button className="fm-linkbtn" type="button" onClick={() => openExternal(c.url)} title={tr('flights.abrirAPesquisaNoSkyscanner')}>
                     ↗
                   </button>{' '}
-                  <button className="fm-x" type="button" onClick={() => void untrack(c)} title="Parar de acompanhar" aria-label="Parar de acompanhar">
+                  <button className="fm-x" type="button" onClick={() => void untrack(c)} title={tr('flights.pararDeAcompanhar')} aria-label={tr('flights.pararDeAcompanhar')}>
                     ✕
                   </button>
                 </td>
@@ -163,7 +164,7 @@ export function TrackedPanel(props: { m: MonitorSummary; version: number; onRese
         </table>
       </div>
       <div className="fm-small" style={{ marginTop: 6 }}>
-        Colunas = dias em que houve leitura (não a data do voo). Em verde, a mais barata de cada dia. Os preços ficam guardados mesmo quando a oferta some.
+        {tr('flights.colunasDiasEmQueHouve')}
       </div>
     </div>
   )

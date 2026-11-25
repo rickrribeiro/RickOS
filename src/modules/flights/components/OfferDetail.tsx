@@ -3,11 +3,12 @@ import type { OfferView, Slice } from '../../../../shared/flights'
 import { fmtMinutes, formatMoney } from '../../../../shared/flights'
 import { openExternal } from '../../../api/createApi'
 import { fmtLocal, VerificationBadge } from './ui'
+import { t, getLocale } from '../../../i18n'
 
 function bagText(o: OfferView): string {
   const b = o.baggage
-  const c = b.checked == null ? 'mala despachada: não verificado' : b.checked === 0 ? 'sem mala despachada' : `${b.checked} mala(s) despachada(s)`
-  const h = b.carryOn == null ? 'mão: não verificado' : b.carryOn === 0 ? 'sem bagagem de mão' : `${b.carryOn} de mão`
+  const c = b.checked == null ? t('flights.bag.checkedUnknown') : b.checked === 0 ? t('flights.bag.noChecked') : t('flights.bag.checked', { n: b.checked })
+  const h = b.carryOn == null ? t('flights.bag.carryUnknown') : b.carryOn === 0 ? t('flights.bag.noCarry') : t('flights.bag.carry', { n: b.carryOn })
   return `${c} · ${h}`
 }
 
@@ -20,9 +21,9 @@ function Leg(props: { s: Slice; o: OfferView; title: string }): React.ReactEleme
           {props.title}: {s.from} → {s.to}
         </div>
         <div className="fm-note warn">
-          A fonte informa só o resumo: partida {fmtLocal(s.departLocal)}, chegada {fmtLocal(s.arriveLocal)}, {s.stops} conexão(ões){s.carriers.length ? `, ${s.carriers.join('/')}` : ''}
-          {s.firstFlightNumber ? ` (voo ${s.carriers[0] ?? ''}${s.firstFlightNumber})` : ''}
-          {s.via?.length ? `, escalas em ${s.via.join(', ')} (tempos de conexão não lidos).` : '. Aeroportos e tempos de conexão não verificados — revalide numa fonte ao vivo.'}
+          {t('flights.aFonteInformaSoO', { p0: fmtLocal(s.departLocal), p1: fmtLocal(s.arriveLocal), stops: s.stops })}{s.carriers.length ? `, ${s.carriers.join('/')}` : ''}
+          {s.firstFlightNumber ? t('flights.voo', { p0: s.carriers[0] ?? '', firstFlightNumber: s.firstFlightNumber }) : ''}
+          {s.via?.length ? t('flights.escalasEmTemposDeConexao', { p0: s.via.join(', ') }) : t('flights.aeroportosETemposDeConexao')}
         </div>
       </div>
     )
@@ -44,25 +45,25 @@ function Leg(props: { s: Slice; o: OfferView; title: string }): React.ReactEleme
               <div className="fm-seg-body">
                 <div>
                   <b>{fmtLocal(g.departLocal)}</b> {g.from}
-                  {g.terminalFrom ? ` · T${g.terminalFrom}` : ''} → <b>{fmtLocal(g.arriveLocal)}</b> {g.to}
-                  {g.terminalTo ? ` · T${g.terminalTo}` : ''}
+                  {g.terminalFrom ? t('flights.t', { terminalFrom: g.terminalFrom }) : ''} → <b>{fmtLocal(g.arriveLocal)}</b> {g.to}
+                  {g.terminalTo ? t('flights.t2', { terminalTo: g.terminalTo }) : ''}
                 </div>
                 <div className="fm-small">
                   {g.marketingCarrier}
-                  {g.flightNumber} {g.operatingCarrier && g.operatingCarrier !== g.marketingCarrier ? `· operado por ${g.operatingCarrier}` : ''} · {fmtMinutes(g.durationMin)}
-                  {g.aircraft ? ` · ${g.aircraft}` : ''} · horários locais
+                  {g.flightNumber} {g.operatingCarrier && g.operatingCarrier !== g.marketingCarrier ? t('flights.operadoPor', { operatingCarrier: g.operatingCarrier }) : ''} · {fmtMinutes(g.durationMin)}
+                  {g.aircraft ? ` · ${g.aircraft}` : ''} {t('flights.horariosLocais')}
                 </div>
               </div>
             </div>
             {conn && (
               <div className={`fm-layover ${conn.airportChange || (conn.minutes != null && conn.minutes < 60) ? 'danger' : conn.overnight ? 'warn' : conn.stopover ? 'stopover' : ''}`}>
-                Conexão em <b>{conn.airport}</b>: {fmtMinutes(conn.minutes)}
-                {conn.airportChange && ` · ⚠️ troca de aeroporto ${conn.arriveAirport} → ${conn.departAirport} (deslocamento por sua conta)`}
-                {conn.overnight && ' · madrugada'}
-                {conn.minutes != null && conn.minutes < 60 && ' · conexão curta'}
-                {conn.stopover && ' · 🌏 dá para um stopover — verifique regras de entrada/visto e se a bagagem segue despachada'}
-                {o.selfTransfer === true && ' · self-transfer: retirar e despachar a mala de novo'}
-                {o.selfTransfer == null && ' · bilhete único não verificado'}
+                {t('flights.conexaoEm')} <b>{conn.airport}</b>: {fmtMinutes(conn.minutes)}
+                {conn.airportChange && t('flights.trocaDeAeroportoDeslocamentoPor', { arriveAirport: conn.arriveAirport, departAirport: conn.departAirport })}
+                {conn.overnight && t('flights.madrugada')}
+                {conn.minutes != null && conn.minutes < 60 && t('flights.conexaoCurta')}
+                {conn.stopover && t('flights.daParaUmStopoverVerifique')}
+                {o.selfTransfer === true && t('flights.selfTransferRetirarEDespachar')}
+                {o.selfTransfer == null && t('flights.bilheteUnicoNaoVerificado')}
               </div>
             )}
           </React.Fragment>
@@ -78,42 +79,42 @@ export function OfferDetail(props: { o: OfferView }): React.ReactElement {
   return (
     <div className="fm-detail">
       <div>
-        <Leg s={o.slices[0]} o={o} title="Ida" />
-        {o.slices[1] && <Leg s={o.slices[1]} o={o} title="Volta" />}
+        <Leg s={o.slices[0]} o={o} title={t('flights.ida')} />
+        {o.slices[1] && <Leg s={o.slices[1]} o={o} title={t('flights.volta2')} />}
         <div className="fm-small" style={{ marginTop: 6 }}>
-          Condições de trânsito/visto não são verificadas pelo app. Confirme com a companhia e as autoridades antes de comprar.
+          {t('flights.condicoesDeTransitoVistoNao')}
         </div>
       </div>
       <div>
         <dl className="fm-kv">
-          <dt>Tarifa</dt>
+          <dt>{t('flights.tarifa')}</dt>
           <dd>
             {formatMoney(o.price)}
             {c.fareInCurrency && c.fareInCurrency.currency !== o.price.currency ? ` ≈ ${formatMoney(c.fareInCurrency)}` : ''}
-            {o.previousPrice && ` (antes ${formatMoney(o.previousPrice)})`}
+            {o.previousPrice && t('flights.antes2', { p0: formatMoney(o.previousPrice) })}
           </dd>
-          <dt>Bagagem</dt>
+          <dt>{t('flights.bagagem')}</dt>
           <dd>{bagText(o)}</dd>
-          <dt>Terrestre</dt>
+          <dt>{t('flights.terrestre')}</dt>
           <dd>
             {c.ground.status === 'none'
               ? '—'
-              : `até ${c.ground.label}: ${fmtMinutes(c.ground.minutes)} · ${c.ground.amount ? formatMoney(c.ground.amount) : 'custo desconhecido'} (${c.ground.status === 'manual' ? 'informado' : c.ground.status === 'estimated' ? 'estimado' : 'desconhecido'})`}
+              : t('flights.ate5', { label: c.ground.label, p1: fmtMinutes(c.ground.minutes), p2: c.ground.amount ? formatMoney(c.ground.amount) : t('flights.custoDesconhecido'), p3: c.ground.status === 'manual' ? 'informado' : c.ground.status === 'estimated' ? 'estimado' : 'desconhecido' })}
           </dd>
-          <dt>Custo total</dt>
+          <dt>{t('flights.custoTotal')}</dt>
           <dd>
-            {formatMoney(c.total)} <span className={`fm-pill ${c.totalStatus === 'verified' ? 'ok' : c.totalStatus === 'estimated' ? 'warn' : 'danger'}`}>{c.totalStatus === 'verified' ? 'verificado' : c.totalStatus === 'estimated' ? 'estimado' : 'incompleto'}</span>
+            {formatMoney(c.total)} <span className={`fm-pill ${c.totalStatus === 'verified' ? 'ok' : c.totalStatus === 'estimated' ? 'warn' : 'danger'}`}>{c.totalStatus === 'verified' ? t('flights.verificado') : c.totalStatus === 'estimated' ? t('flights.estimado') : t('flights.incompleto')}</span>
           </dd>
-          <dt>Porta a porta</dt>
+          <dt>{t('flights.portaAPorta')}</dt>
           <dd>{fmtMinutes(c.doorToDoorMinutes)}</dd>
-          <dt>Reembolso</dt>
-          <dd>{o.refundable == null ? 'não verificado' : o.refundable ? 'permitido' : 'não reembolsável'}</dd>
-          <dt>Fonte</dt>
+          <dt>{t('flights.reembolso')}</dt>
+          <dd>{o.refundable == null ? t('flights.naoVerificado') : o.refundable ? t('flights.permitido') : t('flights.naoReembolsavel')}</dd>
+          <dt>{t('flights.fonte')}</dt>
           <dd>
-            {o.sourceLabel} <VerificationBadge v={o.verification} stale={o.stale} /> · cotado {new Date(o.observedAt).toLocaleString('pt-BR')}
-            {o.sources.length > 1 ? ` · visto também em: ${o.sources.join(', ')}` : ''}
+            {o.sourceLabel} <VerificationBadge v={o.verification} stale={o.stale} /> {t('flights.cotado')} {new Date(o.observedAt).toLocaleString(getLocale())}
+            {o.sources.length > 1 ? t('flights.vistoTambemEm', { p0: o.sources.join(', ') }) : ''}
           </dd>
-          <dt>Pontuação</dt>
+          <dt>{t('flights.pontuacao')}</dt>
           <dd title={Object.entries(o.scoreParts).map(([k, v]) => `${k}: ${Math.round(v * 100)}%`).join('\n')}>
             {o.score} — {Object.entries(o.scoreParts).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ')}
           </dd>
@@ -131,17 +132,17 @@ export function OfferDetail(props: { o: OfferView }): React.ReactElement {
         <div className="fm-row" style={{ marginTop: 8 }}>
           {o.deepLink && (
             <button className="btn btn-primary btn-sm" type="button" onClick={() => openExternal(o.deepLink!)}>
-              {o.linkKind === 'offer' ? 'Abrir oferta ↗' : `Abrir pesquisa em ${o.sourceLabel.split(' ')[0]} ↗`}
+              {o.linkKind === 'offer' ? t('flights.abrirOferta') : t('flights.abrirPesquisaEm', { p0: o.sourceLabel.split(' ')[0] })}
             </button>
           )}
           {o.searchLinks.map((l) => (
-            <button key={l.url} className="btn btn-secondary btn-sm" type="button" onClick={() => openExternal(l.url)} title="Abre uma pesquisa equivalente — não necessariamente esta oferta/preço">
+            <button key={l.url} className="btn btn-secondary btn-sm" type="button" onClick={() => openExternal(l.url)} title={t('flights.abreUmaPesquisaEquivalenteNao')}>
               {l.label} ↗
             </button>
           ))}
         </div>
         <div className="fm-small" style={{ marginTop: 4 }}>
-          {o.linkKind === 'offer' ? 'Link direto informado pela fonte.' : 'Links de pesquisa abrem a busca da rota/data; o preço pode ser diferente.'}
+          {o.linkKind === 'offer' ? t('flights.linkDiretoInformadoPelaFonte') : t('flights.linksDePesquisaAbremA')}
         </div>
       </div>
     </div>

@@ -3,8 +3,9 @@ import type { ChromeStatus, MonitorSummary, SkyPick, SkyPlace, SkyPreview } from
 import { formatMoney, skyKey } from '../../../../shared/flights'
 import { errMsg } from '../store/flightStore'
 import { Modal } from './Modal'
+import { t as tr, getLocale } from '../../../i18n'
 
-const dayLabel = (d: string): string => new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')
+const dayLabel = (d: string): string => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')
 const dateText = (p: { depart: string; ret: string | null }): string => `${dayLabel(p.depart)}${p.ret ? ` → ${dayLabel(p.ret)}` : ''}`
 
 const norm = (x: string): string => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -54,7 +55,7 @@ function PlacePicker(props: { places: SkyPlace[]; value: string; onChange: (iata
       />
       {open && (
         <div className="fm-suggest">
-          {list.length === 0 && <div className="fm-muted" style={{ padding: '6px 10px' }}>Nada encontrado.</div>}
+          {list.length === 0 && <div className="fm-muted" style={{ padding: '6px 10px' }}>{tr('flights.nadaEncontrado')}</div>}
           {list.map((p, i) => (
             <React.Fragment key={p.iata}>
               {multi && (i === 0 || list[i - 1].country !== p.country) && <div className="fm-suggest-group">{p.countryName}</div>}
@@ -75,44 +76,44 @@ const SUGGESTED_ROUTES = 8
 /** Aviso de conexão do Chrome, com o passo a passo para o caso encontrado. */
 function ChromeCheck(props: { st: ChromeStatus | null; checking: boolean; forced: boolean; onRecheck: () => void; onForce: () => void }): React.ReactElement | null {
   const { st } = props
-  if (!st) return <div className="fm-small fm-muted" style={{ marginBottom: 8 }}>Verificando a conexão com o Chrome…</div>
+  if (!st) return <div className="fm-small fm-muted" style={{ marginBottom: 8 }}>{tr('flights.verificandoAConexaoComO')}</div>
   if (st.unknown) return null
   if (st.ok)
     return (
       <div className="fm-small" style={{ marginBottom: 8 }}>
-        <span className="fm-pill ok">✓ Chrome conectado ao Claude Code</span>
+        <span className="fm-pill ok">{tr('flights.chromeConectadoAoClaudeCode')}</span>
       </div>
     )
   return (
     <div className="fm-note warn fm-chromecheck">
-      <b>{st.chrome ? 'O Chrome não está conectado ao Claude Code.' : 'O Chrome não está aberto.'}</b>
+      <b>{st.chrome ? tr('flights.oChromeNaoEstaConectado') : tr('flights.oChromeNaoEstaAberto')}</b>
       {st.chrome && st.desktopHost && !st.desktopApp && (
-        <div>A extensão Claude in Chrome está presa ao app Claude desktop, que está fechado.</div>
+        <div>{tr('flights.aExtensaoClaudeInChrome')}</div>
       )}
-      {st.chrome && st.desktopHost && st.desktopApp && <div>A extensão Claude in Chrome está ligada ao app Claude desktop, não ao Claude Code.</div>}
+      {st.chrome && st.desktopHost && st.desktopApp && <div>{tr('flights.aExtensaoClaudeInChrome2')}</div>}
       <ol>
         {st.chrome ? (
           <li>
-            Feche o Chrome por completo (<b>⌘Q</b>) e abra de novo.
+            {tr('flights.fecheOChromePorCompleto')}<b>{tr('flights.q')}</b>{tr('flights.eAbraDeNovo')}
           </li>
         ) : (
-          <li>Abra o Chrome.</li>
+          <li>{tr('flights.abraOChrome')}</li>
         )}
-        <li>Confira se a extensão Claude in Chrome está ativa e logada.</li>
+        <li>{tr('flights.confiraSeAExtensaoClaude')}</li>
         <li>
-          Se continuar, rode <code>claude --chrome</code> no terminal e use <code>/chrome</code> para reconectar.
+          {tr('flights.seContinuarRode')} <code>claude --chrome</code> {tr('flights.noTerminalEUse')} <code>/chrome</code> {tr('flights.paraReconectar')}
         </li>
       </ol>
       <div className="fm-row" style={{ gap: 10 }}>
         <button className="btn btn-sm" type="button" disabled={props.checking} onClick={props.onRecheck}>
-          {props.checking ? 'Verificando…' : '↻ Verificar de novo'}
+          {props.checking ? tr('flights.verificando') : tr('flights.verificarDeNovo')}
         </button>
         {!props.forced ? (
-          <button className="fm-linkbtn" type="button" onClick={props.onForce} title="A checagem olha os processos da máquina; se ela errar, dá para tentar assim mesmo">
-            tentar mesmo assim
+          <button className="fm-linkbtn" type="button" onClick={props.onForce} title={tr('flights.aChecagemOlhaOsProcessos')}>
+            {tr('flights.tentarMesmoAssim')}
           </button>
         ) : (
-          <span className="fm-small">vai tentar mesmo assim</span>
+          <span className="fm-small">{tr('flights.vaiTentarMesmoAssim')}</span>
         )}
       </div>
     </div>
@@ -268,7 +269,7 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
     setSel(next)
     if (on) {
       setOpen((o) => new Set(o).add(pk))
-      setNotice(skipped ? `Limite de ${max} combinações por busca: ${skipped} data(s) de ${names.get(pk.split('|')[0]) ?? pk} ficaram de fora. Desmarque outras para incluir.` : '')
+      setNotice(skipped ? tr('flights.limiteDeCombinacoesPorBusca', { max, skipped, p2: names.get(pk.split('|')[0]) ?? pk }) : '')
     } else setNotice('')
   }
   function addRoute(o: string, d: string): void {
@@ -321,64 +322,64 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
 
   return (
     <Modal
-      title="Buscar no Skyscanner (Claude + Chrome)"
+      title={tr('flights.buscarNoSkyscannerClaudeChrome')}
       size="wide"
       onClose={props.onClose}
       footer={
         <>
           <span className="fm-grow fm-small">
-            {sel.size} de no máx. {max} · {sessions} sessão(ões) do Claude de até {pv?.perSession ?? 5} combinações, uma após a outra. Acompanhe pelo Chrome.
+            {tr('flights.deNoMaxSessaoOes', { size: sel.size, max, sessions, p3: pv?.perSession ?? 5 })}
           </span>
           <button className="btn btn-primary btn-sm" disabled={starting || !sel.size || !!pv?.busy || (!!chrome && !chrome.ok && !forced)} onClick={start} type="button">
-            {starting ? 'Iniciando…' : `Pesquisar ${sel.size} combinação(ões)`}
+            {starting ? tr('flights.iniciando') : tr('flights.pesquisarCombinacaoOes', { size: sel.size })}
           </button>
         </>
       }
     >
       <div className="fm-small" style={{ marginBottom: 8 }}>
-        Chrome aberto com a extensão <b>Claude in Chrome</b> conectada. Se o Skyscanner pedir verificação, o Claude para (o app não contorna) e o resto volta para a fila. Cada sessão custa ~US$ 0,10–0,25 (equivalente API) — só abrir as ferramentas do Chrome já custa isso.
+        {tr('flights.chromeAbertoComAExtensao')} <b>{tr('flights.claudeInChrome')}</b> {tr('flights.conectadaSeOSkyscannerPedir')}
       </div>
       <ChromeCheck st={chrome} checking={checking} forced={forced} onRecheck={() => void checkChrome()} onForce={() => setForced(true)} />
-      {pv?.busy && <div className="fm-note warn">Já há uma busca no Chrome em andamento (uma por vez).</div>}
+      {pv?.busy && <div className="fm-note warn">{tr('flights.jaHaUmaBuscaNo')}</div>}
       {err && <div className="fm-error">{err}</div>}
       {!pv ? (
-        !err && <div className="fm-muted">Montando combinações…</div>
+        !err && <div className="fm-muted">{tr('flights.montandoCombinacoes')}</div>
       ) : (
         <>
           {pv.tracked.length > 0 && (
             <div className="fm-note" style={{ margin: '4px 0 8px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="fm-grow">
-                <b>{pv.tracked.length}</b> combinação(ões) acompanhada(s) — {pv.tracked.filter((t) => sel.has(skyKey(t))).length} marcada(s). Tudo que você pesquisa entra na aba Acompanhadas.
+                <b>{pv.tracked.length}</b> {tr('flights.combinacaoOesAcompanhadaSMarcada', { count: pv.tracked.filter((t) => sel.has(skyKey(t))).length })}
               </span>
               <button className="fm-linkbtn" type="button" onClick={() => setTracked(true)}>
-                marcar acompanhadas
+                {tr('flights.marcarAcompanhadas')}
               </button>
               <button className="fm-linkbtn" type="button" onClick={() => setTracked(false)}>
-                desmarcar
+                {tr('flights.desmarcar')}
               </button>
             </div>
           )}
 
           <div className="fm-row" style={{ margin: '4px 0 6px' }}>
             <span className="fm-label" style={{ margin: 0 }}>
-              Rotas
+              {tr('flights.rotas')}
             </span>
             <span className="fm-small fm-grow">
-              marcar a rota marca as {pv.dates.length} data(s) do intervalo{pv.datesTotal > pv.dates.length ? ` (de ${pv.datesTotal}; estreite a duração para ver todas)` : ''} · desmarque as que não quiser
+              {tr('flights.marcarARotaMarcaAs', { count: pv.dates.length })}{pv.datesTotal > pv.dates.length ? tr('flights.deEstreiteADuracaoPara', { datesTotal: pv.datesTotal }) : ''} {tr('flights.desmarqueAsQueNaoQuiser')}
             </span>
             <button className="fm-linkbtn" type="button" disabled={!sel.size} onClick={() => (setSel(new Map()), setNotice(''))}>
-              limpar tudo
+              {tr('flights.limparTudo')}
             </button>
           </div>
           {restored > 0 && (
             <div className="fm-small" style={{ marginBottom: 6 }}>
-              ↺ {restored} combinação(ões) da última vez já marcada(s).
+              {tr('flights.combinacaoOesDaUltimaVez', { restored })}
             </div>
           )}
           {notice && <div className="fm-note warn" style={{ marginBottom: 6 }}>{notice}</div>}
 
           <div className="fm-sky-list fm-sky-routes" ref={listRef}>
-            {shown.length === 0 && <div className="fm-muted" style={{ padding: 8 }}>Nenhuma rota sugerida — adicione abaixo.</div>}
+            {shown.length === 0 && <div className="fm-muted" style={{ padding: 8 }}>{tr('flights.nenhumaRotaSugeridaAdicioneAbaixo')}</div>}
             {shown.map((pk) => {
               const [o, d] = pk.split('|')
               const st = routeState(pk)
@@ -389,16 +390,16 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
               return (
                 <div className={`fm-sky-routebox ${st !== 'none' ? 'on' : ''}`} key={pk}>
                   <div className="fm-sky-row">
-                    <TriCheck state={st} disabled={st === 'none' && full} onChange={() => setRoute(pk, st === 'none')} label={`Rota ${o} → ${d}`} />
+                    <TriCheck state={st} disabled={st === 'none' && full} onChange={() => setRoute(pk, st === 'none')} label={tr('flights.rota2', { o, d })} />
                     <span className="fm-sky-route" onClick={() => toggleOpen(pk)}>
                       <b>{names.get(o) ?? o}</b> → {names.get(d) ?? d}
                     </span>
-                    {suggested.indexOf(pk) >= 0 && suggested.indexOf(pk) < SUGGESTED_ROUTES && <span className="fm-pill outline">sugerida</span>}
-                    {best && <span className="fm-pill ok" title="Melhor tarifa já vista nesta rota">{best}</span>}
+                    {suggested.indexOf(pk) >= 0 && suggested.indexOf(pk) < SUGGESTED_ROUTES && <span className="fm-pill outline">{tr('flights.sugerida')}</span>}
+                    {best && <span className="fm-pill ok" title={tr('flights.melhorTarifaJaVistaNesta')}>{best}</span>}
                     <span className="fm-sky-date">
-                      {n}/{combos.length} datas
+                      {tr('flights.datas2', { n, count: combos.length })}
                     </span>
-                    <button className="fm-linkbtn fm-sky-caret" type="button" onClick={() => toggleOpen(pk)} aria-expanded={isOpen} title={isOpen ? 'Esconder datas' : 'Ver datas'}>
+                    <button className="fm-linkbtn fm-sky-caret" type="button" onClick={() => toggleOpen(pk)} aria-expanded={isOpen} title={isOpen ? tr('flights.esconderDatas') : tr('flights.verDatas')}>
                       {isOpen ? '▴' : '▾'}
                     </button>
                   </div>
@@ -416,10 +417,10 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
                             className={`fm-datechip ${on ? 'on' : ''} ${rc ? 'recent' : ''}`}
                             disabled={!on && full}
                             onClick={() => toggle(p)}
-                            title={rc ? `Consultado no Skyscanner às ${new Date(rc).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : undefined}
+                            title={rc ? tr('flights.consultadoNoSkyscannerAs', { p0: new Date(rc).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' }) }) : undefined}
                           >
                             <span>{dateText(p)}</span>
-                            <small>{pr ?? (rc ? 'consultado' : ' ')}</small>
+                            <small>{pr ?? (rc ? tr('flights.consultado') : ' ')}</small>
                           </button>
                         )
                       })}
@@ -431,28 +432,28 @@ export function SkyscannerModal(props: { m: MonitorSummary; initial?: SkyPick[];
           </div>
 
           <div className="fm-label" style={{ margin: '12px 0 6px' }}>
-            Adicionar outra rota ({pv.pairs.length} possíveis)
+            {tr('flights.adicionarOutraRotaPossiveis', { count: pv.pairs.length })}
           </div>
           <div className="fm-sky-pick">
-            <PlacePicker places={pv.origins} value={origin} onChange={(o) => (setOrigin(o), setDest(''))} placeholder="Buscar origem (cidade, país ou IATA)" />
+            <PlacePicker places={pv.origins} value={origin} onChange={(o) => (setOrigin(o), setDest(''))} placeholder={tr('flights.buscarOrigemCidadePaisOu')} />
             <span className="fm-muted">→</span>
-            <PlacePicker places={destOptions} value={dest} onChange={(d) => addRoute(origin, d)} placeholder={origin ? 'Buscar destino (cidade, país ou IATA)' : 'Escolha a origem primeiro'} />
+            <PlacePicker places={destOptions} value={dest} onChange={(d) => addRoute(origin, d)} placeholder={origin ? tr('flights.buscarDestinoCidadePaisOu') : tr('flights.escolhaAOrigemPrimeiro')} />
           </div>
           <div className="fm-small" style={{ marginTop: 4 }}>
-            Ao escolher o destino, a rota entra na lista acima com todas as datas marcadas.
+            {tr('flights.aoEscolherODestinoA')}
           </div>
 
           {sel.size > 0 && (
             <>
               <div className="fm-label" style={{ margin: '12px 0 6px' }}>
-                Selecionadas ({sel.size})
+                {tr('flights.selecionadas', { size: sel.size })}
               </div>
               <div className="fm-chips">
                 {[...sel.entries()].map(([k, p]) => (
                   <span className="fm-chip" key={k}>
                     {p.origin}→{p.destination} {dateText(p)}
-                    <button className="fm-x" type="button" onClick={() => toggle(p, false)} aria-label="Remover">
-                      ×
+                    <button className="fm-x" type="button" onClick={() => toggle(p, false)} aria-label={tr('flights.remover3')}>
+                      {tr('flights.text2')}
                     </button>
                   </span>
                 ))}

@@ -1,5 +1,6 @@
 import React from 'react'
 import { StayResult, SearchInput } from '../types'
+import { t } from '../../../i18n'
 
 /** Lightweight pin scatter (no map lib): normalizes lat/long to a box. */
 export function StayMap({ results, input, selectedId, onSelect }: { results: StayResult[]; input: SearchInput; selectedId?: string; onSelect?: (id: string) => void }): React.ReactElement | null {
@@ -38,7 +39,7 @@ export function StayMap({ results, input, selectedId, onSelect }: { results: Sta
               stroke={r.id === selectedId ? '#fff' : 'none'}
               strokeWidth={0.4}
             >
-              <title>{`${r.title} · ${r.score}pts`}</title>
+              <title>{t('travel.pts', { title: r.title, score: r.score })}</title>
             </circle>
           </g>
         ))}

@@ -1,15 +1,16 @@
+import { t } from '../../i18n'
 export type ProviderName = 'booking' | 'airbnb' | 'agoda' | 'trip' | 'mock'
 
 export type AccommodationType = 'apartment' | 'studio' | 'hotel' | 'aparthotel' | 'hostel' | 'private_room' | 'shared_room'
 
 export const ACCOMMODATION_LABELS: Record<AccommodationType, string> = {
-  apartment: 'Apartamento inteiro',
-  studio: 'Studio',
-  hotel: 'Hotel',
-  aparthotel: 'Apart-hotel',
-  hostel: 'Hostel',
-  private_room: 'Quarto privado',
-  shared_room: 'Quarto compartilhado'
+  apartment: t('travel.apartamentoInteiro'),
+  studio: t('travel.studio'),
+  hotel: t('travel.hotel'),
+  aparthotel: t('travel.apartHotel'),
+  hostel: t('travel.hostel'),
+  private_room: t('travel.quartoPrivado'),
+  shared_room: t('travel.quartoCompartilhado')
 }
 
 export type Amenity =
@@ -25,16 +26,16 @@ export type Amenity =
   | 'private_bathroom'
 
 export const AMENITY_LABELS: Record<Amenity, string> = {
-  wifi: 'Wi-Fi',
-  gym: 'Academia',
-  air_conditioning: 'Ar-condicionado',
-  kitchen: 'Cozinha',
-  washing_machine: 'Máquina de lavar',
-  workspace: 'Mesa de trabalho',
-  elevator: 'Elevador',
-  self_checkin: 'Check-in automático',
-  free_cancellation: 'Cancelamento grátis',
-  private_bathroom: 'Banheiro privativo'
+  wifi: t('travel.wiFi'),
+  gym: t('travel.academia'),
+  air_conditioning: t('travel.arCondicionado'),
+  kitchen: t('travel.cozinha'),
+  washing_machine: t('travel.maquinaDeLavar'),
+  workspace: t('travel.mesaDeTrabalho'),
+  elevator: t('travel.elevador'),
+  self_checkin: t('travel.checkInAutomatico'),
+  free_cancellation: t('travel.cancelamentoGratis'),
+  private_bathroom: t('travel.banheiroPrivativo')
 }
 
 export interface SearchInput {

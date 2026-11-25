@@ -6,6 +6,7 @@ import { TripsSidebar, TRIP_STATUS, byStart } from '../components/TripsSidebar'
 import { TripDocuments } from '../components/TripDocuments'
 import { Recommendations } from '../components/Recommendations'
 import '../travel.css'
+import { t as tr } from '../../../i18n'
 
 interface Destination {
   name: string
@@ -54,20 +55,20 @@ export function DestinationsPage(): React.ReactElement {
             <>
               <div className="module-header">
                 <div>
-                  <h2 style={{ fontSize: 18, fontWeight: 700 }}>🗺 Destinos</h2>
+                  <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('travel.destinos')}</h2>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    {destinations.length} destino(s) · clique para ver viagens, documentos e recomendações
+                    {tr('travel.destinoSCliqueParaVer', { count: destinations.length })}
                   </p>
                 </div>
               </div>
 
               {destinations.length === 0 && (
-                <div className="empty-hint">Crie uma viagem na barra ao lado para ver destinos aqui.</div>
+                <div className="empty-hint">{tr('travel.crieUmaViagemNaBarra')}</div>
               )}
 
               {planned.length > 0 && (
                 <>
-                  <div className="travel-group-label">Com viagem planejada</div>
+                  <div className="travel-group-label">{tr('travel.comViagemPlanejada')}</div>
                   <div className="cards-grid" style={{ marginBottom: 20 }}>
                     {planned.map((d) => (
                       <DestinationCard key={d.name} dest={d} highlight onClick={() => setSelected(d.name)} />
@@ -78,7 +79,7 @@ export function DestinationsPage(): React.ReactElement {
 
               {others.length > 0 && (
                 <>
-                  <div className="travel-group-label">Outros destinos</div>
+                  <div className="travel-group-label">{tr('travel.outrosDestinos')}</div>
                   <div className="cards-grid">
                     {others.map((d) => (
                       <DestinationCard key={d.name} dest={d} onClick={() => setSelected(d.name)} />
@@ -107,12 +108,12 @@ function DestinationCard({ dest, highlight, onClick }: { dest: Destination; high
       </div>
       {next ? (
         <div className="stat-card-sub">
-          {next.startDate ? `Ida ${next.startDate}` : 'Sem data'}
-          {dleft != null && dleft > 0 && <strong> · faltam {dleft}d</strong>}
-          {dleft != null && dleft <= 0 && <strong> · em curso</strong>}
+          {next.startDate ? tr('travel.ida2', { startDate: next.startDate }) : tr('travel.semData2')}
+          {dleft != null && dleft > 0 && <strong> {tr('travel.faltamD', { dleft })}</strong>}
+          {dleft != null && dleft <= 0 && <strong> {tr('travel.emCurso')}</strong>}
         </div>
       ) : null}
-      <div className="stat-card-sub">{dest.trips.length} viagem(ns)</div>
+      <div className="stat-card-sub">{dest.trips.length} {tr('travel.viagemNs')}</div>
     </button>
   )
 }
@@ -122,15 +123,15 @@ function DestinationDetail({ dest, onBack }: { dest: Destination; onBack: () => 
     <>
       <div className="module-header">
         <div>
-          <button className="btn btn-secondary btn-sm" onClick={onBack} style={{ marginBottom: 8 }}>← Destinos</button>
+          <button className="btn btn-secondary btn-sm" onClick={onBack} style={{ marginBottom: 8 }}>{tr('travel.destinos2')}</button>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>🗺 {dest.name}</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{dest.trips.length} viagem(ns)</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{dest.trips.length} {tr('travel.viagemNs')}</p>
         </div>
       </div>
 
       <div className="travel-detail">
         <div className="chart-section">
-          <div className="chart-title">✈️ Viagens para {dest.name}</div>
+          <div className="chart-title">{tr('travel.viagensPara')} {dest.name}</div>
           <div className="list-stack" style={{ marginTop: 10 }}>
             {dest.trips.map((t) => {
               const dleft = daysUntil(t.startDate)
@@ -140,7 +141,7 @@ function DestinationDetail({ dest, onBack }: { dest: Destination; onBack: () => 
                     {t.origin ? `${t.origin} → ` : ''}{t.destination}
                     <span className="travel-muted">
                       {' · '}{t.startDate ?? '?'} — {t.endDate ?? '?'}
-                      {dleft != null && dleft >= 0 && t.status !== 'done' && ` · faltam ${dleft}d`}
+                      {dleft != null && dleft >= 0 && t.status !== 'done' && tr('travel.faltamD2', { dleft })}
                       {t.budget != null && ` · ${formatMoney(t.budget, t.currency)}`}
                     </span>
                   </span>

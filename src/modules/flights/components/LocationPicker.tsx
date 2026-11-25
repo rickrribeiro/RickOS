@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { GroundOption, LocationRef, LocationSet, NearbyAirport, PlaceSuggestion } from '../../../../shared/flights'
 import { fmtMinutes, formatMoney } from '../../../../shared/flights'
 import { errMsg } from '../store/flightStore'
+import { t as tr } from '../../../i18n'
 
-const KIND_LABEL: Record<string, string> = { airport: 'aeroporto', city: 'cidade', state: 'estado', country: 'país', region: 'região' }
+const KIND_LABEL: Record<string, string> = { airport: 'aeroporto', city: 'cidade', state: 'estado', country: tr('flights.pais'), region: tr('flights.regiao') }
 
 /** Campo de busca com autocomplete da base de aeroportos (aeroporto/cidade/estado/país/região). */
 export function PlaceSearch(props: { placeholder: string; onPick: (s: PlaceSuggestion) => void; kinds?: string[]; autoFocus?: boolean }): React.ReactElement {
@@ -64,7 +65,7 @@ export function PlaceSearch(props: { placeholder: string; onPick: (s: PlaceSugge
               <span>{s.label}</span>
               <small>
                 {s.sub}
-                {s.kind !== 'airport' ? ` · ${s.airports} aerop.` : ''}
+                {s.kind !== 'airport' ? tr('flights.aerop', { airports: s.airports }) : ''}
               </small>
             </button>
           ))}
@@ -104,33 +105,33 @@ export function LocationPicker(props: {
           <span className="fm-chip" key={`${r.kind}:${r.code}`} title={`${KIND_LABEL[r.kind]} ${r.code}`}>
             <i>{KIND_LABEL[r.kind]}</i>
             <span>{r.label}</span>
-            <button className="fm-x" onClick={() => remove(r)} aria-label={`Remover ${r.label}`} type="button">
+            <button className="fm-x" onClick={() => remove(r)} aria-label={tr('flights.remover', { label: r.label })} type="button">
               ✕
             </button>
           </span>
         ))}
         {value.exclude.map((c) => (
-          <span className="fm-chip exclude" key={`x:${c}`} title="Excluído">
+          <span className="fm-chip exclude" key={`x:${c}`} title={tr('flights.excluido')}>
             <span>{c}</span>
-            <button className="fm-x" onClick={() => onChange({ ...value, exclude: value.exclude.filter((x) => x !== c) })} aria-label={`Voltar a incluir ${c}`} type="button">
+            <button className="fm-x" onClick={() => onChange({ ...value, exclude: value.exclude.filter((x) => x !== c) })} aria-label={tr('flights.voltarAIncluir', { c })} type="button">
               ✕
             </button>
           </span>
         ))}
-        <PlaceSearch placeholder={value.include.length ? 'Adicionar…' : 'Cidade, aeroporto, país ou região…'} onPick={add} />
+        <PlaceSearch placeholder={value.include.length ? tr('flights.adicionar') : tr('flights.cidadeAeroportoPaisOuRegiao')} onPick={add} />
       </div>
       <div className="fm-row" style={{ marginTop: 4 }}>
         {nearCandidates.length > 0 && (
           <button className="fm-linkbtn" type="button" onClick={() => setNearFor(nearFor ? null : nearCandidates[0])}>
-            📍 Sugerir aeroportos próximos
+            {tr('flights.sugerirAeroportosProximos')}
           </button>
         )}
         {props.advanced && hasBroad && (
           <span className="fm-row" style={{ gap: 4 }}>
-            <span className="fm-small">Excluir aeroporto:</span>
+            <span className="fm-small">{tr('flights.excluirAeroporto')}</span>
             <div style={{ width: 180 }}>
               <PlaceSearch
-                placeholder="IATA ou nome"
+                placeholder={tr('flights.iataOuNome')}
                 kinds={['airport']}
                 onPick={(s) => !value.exclude.includes(s.code) && onChange({ ...value, exclude: [...value.exclude, s.code] })}
               />
@@ -140,7 +141,7 @@ export function LocationPicker(props: {
         {props.advanced && hasBroad && (
           <label className="fm-check fm-small">
             <input type="checkbox" checked={!!value.includeSmall} onChange={(e) => onChange({ ...value, includeSmall: e.target.checked })} />
-            incluir aeroportos pequenos
+            {tr('flights.incluirAeroportosPequenos')}
           </label>
         )}
       </div>
@@ -209,7 +210,7 @@ function NearbyPanel(props: {
   return (
     <div className="fm-nearby">
       <div className="fm-row">
-        <b style={{ fontSize: 12 }}>Aeroportos perto de</b>
+        <b style={{ fontSize: 12 }}>{tr('flights.aeroportosPertoDe')}</b>
         <select value={`${props.current.kind}:${props.current.code}`} onChange={(e) => props.setCurrent(props.refs.find((r) => `${r.kind}:${r.code}` === e.target.value)!)}>
           {props.refs.map((r) => (
             <option key={`${r.kind}:${r.code}`} value={`${r.kind}:${r.code}`}>
@@ -218,17 +219,17 @@ function NearbyPanel(props: {
           ))}
         </select>
         <label className="fm-row fm-small" style={{ gap: 4 }}>
-          raio
-          <input type="number" min={25} max={1000} step={25} value={radius} onChange={(e) => setRadius(Number(e.target.value) || 300)} style={{ width: 72 }} /> km
+          {tr('flights.raio')}
+          <input type="number" min={25} max={1000} step={25} value={radius} onChange={(e) => setRadius(Number(e.target.value) || 300)} style={{ width: 72 }} /> {tr('flights.km')}
         </label>
         <label className="fm-check fm-small">
-          <input type="checkbox" checked={withGround} onChange={(e) => setWithGround(e.target.checked)} /> rota terrestre
+          <input type="checkbox" checked={withGround} onChange={(e) => setWithGround(e.target.checked)} /> {tr('flights.rotaTerrestre')}
         </label>
         <button className="btn btn-secondary btn-sm" onClick={load} disabled={busy} type="button">
-          {busy ? 'Calculando…' : 'Atualizar'}
+          {busy ? tr('flights.calculando') : tr('flights.atualizar')}
         </button>
         <span className="fm-spacer" />
-        <button className="fm-x" onClick={props.onClose} type="button" aria-label="Fechar">
+        <button className="fm-x" onClick={props.onClose} type="button" aria-label={tr('flights.fechar')}>
           ✕
         </button>
       </div>
@@ -236,7 +237,7 @@ function NearbyPanel(props: {
       {list && (
         <>
           <div className="fm-nearby-list">
-            {list.length === 0 && <div className="fm-muted">Nenhum aeroporto com voo regular nesse raio.</div>}
+            {list.length === 0 && <div className="fm-muted">{tr('flights.nenhumAeroportoComVooRegular')}</div>}
             {list.map((a) => (
               <label className="fm-nearby-item" key={a.iata}>
                 <input
@@ -252,15 +253,15 @@ function NearbyPanel(props: {
                 />
                 <span>
                   <b>{a.iata}</b> {a.city || a.name} <span className="fm-small">· {a.name}</span>
-                  {!a.scheduled && <span className="fm-pill warn">sem voo regular conhecido</span>}
+                  {!a.scheduled && <span className="fm-pill warn">{tr('flights.semVooRegularConhecido')}</span>}
                 </span>
                 <span className="fm-small" style={{ textAlign: 'right' }}>
-                  {a.distanceKm} km em linha reta
+                  {tr('flights.kmEmLinhaReta', { distanceKm: a.distanceKm })}
                   {a.ground && (
                     <>
                       <br />
-                      {a.ground.source === 'osrm' ? '🚗' : '≈'} {a.ground.km} km · {fmtMinutes(a.ground.minutes)}
-                      {a.ground.costMinor != null && a.ground.currency ? ` · ${formatMoney({ amountMinor: a.ground.costMinor, currency: a.ground.currency })} (estim.)` : ''}
+                      {a.ground.source === 'osrm' ? '🚗' : '≈'} {tr('flights.km2', { km: a.ground.km, p1: fmtMinutes(a.ground.minutes) })}
+                      {a.ground.costMinor != null && a.ground.currency ? tr('flights.estim', { p0: formatMoney({ amountMinor: a.ground.costMinor, currency: a.ground.currency }) }) : ''}
                     </>
                   )}
                 </span>
@@ -269,13 +270,13 @@ function NearbyPanel(props: {
           </div>
           <div className="fm-row" style={{ marginTop: 6 }}>
             <button className="btn btn-primary btn-sm" type="button" disabled={!checked.size} onClick={() => props.onAdd(list.filter((a) => checked.has(a.iata)))}>
-              Adicionar {checked.size || ''} selecionado(s)
+              {tr('flights.adicionar2')} {checked.size || ''} {tr('flights.selecionadoS')}
             </button>
             <button className="fm-linkbtn" type="button" onClick={() => setChecked(new Set(list.filter((a) => !props.selected.has(a.iata)).map((a) => a.iata)))}>
-              selecionar todos
+              {tr('flights.selecionarTodos')}
             </button>
             <span className="fm-small">
-              Distâncias da base OurAirports. {withGround ? 'Rotas: OSRM (estimativa; ≈ = aproximação em linha reta). Custo só se configurado.' : ''}
+              {tr('flights.distanciasDaBaseOurairports')} {withGround ? tr('flights.rotasOsrmEstimativaAproximacaoEm') : ''}
             </span>
           </div>
         </>

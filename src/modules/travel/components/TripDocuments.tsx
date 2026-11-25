@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Trip } from '../../../types'
+import { t as tr } from '../../../i18n'
 
 const CHECKLIST = [
   'Passaporte',
@@ -45,13 +46,13 @@ export function TripDocuments({ trips }: { trips: Trip[] }): React.ReactElement 
     <div className="chart-section">
       <div className="travel-section-head">
         <div className="chart-title">
-          📄 Documentos {tripId != null && <span className="travel-muted">· {done}/{CHECKLIST.length}</span>}
+          {tr('travel.documentos')} {tripId != null && <span className="travel-muted">· {done}/{CHECKLIST.length}</span>}
         </div>
         {trips.length > 1 && (
           <select value={tripId ?? ''} onChange={(e) => setTripId(Number(e.target.value))}>
             {trips.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.startDate ?? 'sem data'}{t.origin ? ` · de ${t.origin}` : ''}
+                {t.startDate ?? tr('travel.semData')}{t.origin ? tr('travel.de', { origin: t.origin }) : ''}
               </option>
             ))}
           </select>
@@ -59,7 +60,7 @@ export function TripDocuments({ trips }: { trips: Trip[] }): React.ReactElement 
       </div>
 
       {tripId == null ? (
-        <div className="empty-hint">Crie uma viagem para este destino para usar o checklist.</div>
+        <div className="empty-hint">{tr('travel.crieUmaViagemParaEste')}</div>
       ) : (
         <div className="list-stack" style={{ marginTop: 10 }}>
           {CHECKLIST.map((item) => (

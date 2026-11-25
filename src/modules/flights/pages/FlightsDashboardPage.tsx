@@ -8,6 +8,7 @@ import { SourcesModal } from '../components/SourcesModal'
 import { rel, StateBadge } from '../components/ui'
 import { errMsg, useFlightStore } from '../store/flightStore'
 import '../flights.css'
+import { t as tr } from '../../../i18n'
 
 function MonitorCard(props: { m: MonitorSummary; canSearch: boolean; onOpen: () => void; onEdit: () => void; onError: (e: string) => void }): React.ReactElement {
   const { m } = props
@@ -44,39 +45,39 @@ function MonitorCard(props: { m: MonitorSummary; canSearch: boolean; onOpen: () 
       <div className="fm-small">{m.dateSummary}</div>
       <div className="fm-card-prices">
         {m.minPrice ? (
-          <span className="fm-price" title={m.eligibleCount ? 'Menor preço entre as opções elegíveis' : 'Menor preço com verificação pendente'}>
+          <span className="fm-price" title={m.eligibleCount ? tr('flights.menorPrecoEntreAsOpcoes') : tr('flights.menorPrecoComVerificacaoPendente')}>
             {formatMoney(m.minPrice)}
           </span>
         ) : (
-          <span className="fm-price muted">{m.offerCount ? 'sem elegíveis' : 'sem preços'}</span>
+          <span className="fm-price muted">{m.offerCount ? tr('flights.semElegiveis') : tr('flights.semPrecos')}</span>
         )}
         {m.minVerifiedPrice && m.minVerifiedPrice.amountMinor !== m.minPrice?.amountMinor && (
-          <span className="fm-small" title="Menor preço confirmado ao vivo">
-            ✓ {formatMoney(m.minVerifiedPrice)} ao vivo
+          <span className="fm-small" title={tr('flights.menorPrecoConfirmadoAoVivo')}>
+            {tr('flights.aoVivo', { p0: formatMoney(m.minVerifiedPrice) })}
           </span>
         )}
-        {m.minVerifiedPrice && m.minVerifiedPrice.amountMinor === m.minPrice?.amountMinor && <span className="fm-pill ok">ao vivo</span>}
-        {m.minPrice && !m.eligibleCount && <span className="fm-pill warn">verificação pendente</span>}
+        {m.minVerifiedPrice && m.minVerifiedPrice.amountMinor === m.minPrice?.amountMinor && <span className="fm-pill ok">{tr('flights.aoVivo2')}</span>}
+        {m.minPrice && !m.eligibleCount && <span className="fm-pill warn">{tr('flights.verificacaoPendente2')}</span>}
         {m.trend && (
-          <span className={`fm-trend ${m.trend.direction}`} title="Menor preço comparável: últimos 3 dias × 7 anteriores">
+          <span className={`fm-trend ${m.trend.direction}`} title={tr('flights.menorPrecoComparavelUltimos3')}>
             {m.trend.direction === 'down' ? '▼' : m.trend.direction === 'up' ? '▲' : '='} {Math.abs(m.trend.deltaPercent)}%
           </span>
         )}
       </div>
       <div className="fm-card-meta">
         <span>
-          {m.eligibleCount} elegível(is){m.pendingCount ? ` · ${m.pendingCount} pendente(s)` : ''}
+          {tr('flights.elegivelIs', { eligibleCount: m.eligibleCount })}{m.pendingCount ? tr('flights.pendenteS', { pendingCount: m.pendingCount }) : ''}
         </span>
-        <span title={m.lastSuccessAt ?? ''}>busca ok {rel(m.lastSuccessAt)}</span>
-        {m.nextRunAt && <span title={m.nextRunAt}>próxima {rel(m.nextRunAt)}</span>}
+        <span title={m.lastSuccessAt ?? ''}>{tr('flights.buscaOk')} {rel(m.lastSuccessAt)}</span>
+        {m.nextRunAt && <span title={m.nextRunAt}>{tr('flights.proxima')} {rel(m.nextRunAt)}</span>}
       </div>
-      <div title={`Cobertura: ${cov.covered} de ${cov.universe} combinações (${cov.percent}%)`}>
+      <div title={tr('flights.coberturaDeCombinacoes', { covered: cov.covered, universe: cov.universe, percent: cov.percent })}>
         <div className="fm-cov">
           <span style={{ width: `${Math.min(100, cov.percent)}%` }} />
         </div>
         <div className="fm-small" style={{ marginTop: 2 }}>
-          cobertura {cov.percent}%{cov.pending ? ` · ${cov.pending} na fila` : ''}
-          {cov.failed ? ` · ${cov.failed} falha(s)` : ''}
+          {tr('flights.cobertura2', { percent: cov.percent })}{cov.pending ? tr('flights.naFila2', { pending: cov.pending }) : ''}
+          {cov.failed ? tr('flights.falhaS', { failed: cov.failed }) : ''}
         </div>
       </div>
       {m.stateDetail && <div className={`fm-state-detail ${m.state === 'error' ? 'error' : ''}`}>{m.stateDetail}</div>}
@@ -84,29 +85,29 @@ function MonitorCard(props: { m: MonitorSummary; canSearch: boolean; onOpen: () 
         <button
           className="btn btn-primary"
           disabled={busy || m.state === 'running' || m.state === 'needs_config' || !props.canSearch}
-          title={!props.canSearch ? 'Nenhuma fonte automática configurada' : m.state === 'needs_config' ? 'Complete a configuração' : 'Executar nova busca'}
+          title={!props.canSearch ? tr('flights.nenhumaFonteAutomaticaConfigurada') : m.state === 'needs_config' ? tr('flights.completeAConfiguracao') : tr('flights.executarNovaBusca')}
           onClick={() => act(() => window.api.flightMon.run(m.id))}
           type="button"
         >
-          {m.state === 'running' ? 'Buscando…' : '🔎 Buscar'}
+          {m.state === 'running' ? tr('flights.buscando') : tr('flights.buscar')}
         </button>
         <button className="btn btn-secondary" onClick={props.onEdit} type="button">
-          Editar
+          {tr('flights.editar2')}
         </button>
         {m.status !== 'draft' && (
           <button className="btn btn-secondary" disabled={busy} onClick={() => act(() => window.api.flightMon.setStatus(m.id, m.status === 'paused' ? 'active' : 'paused'))} type="button">
-            {m.status === 'paused' ? 'Retomar' : 'Pausar'}
+            {m.status === 'paused' ? tr('flights.retomar') : tr('flights.pausar')}
           </button>
         )}
-        <button className="btn btn-secondary" disabled={busy} onClick={() => act(() => window.api.flightMon.duplicate(m.id))} type="button" title="Duplicar">
+        <button className="btn btn-secondary" disabled={busy} onClick={() => act(() => window.api.flightMon.duplicate(m.id))} type="button" title={tr('flights.duplicar')}>
           ⧉
         </button>
         <button
           className="btn btn-danger"
           disabled={busy}
           type="button"
-          title="Excluir"
-          onClick={() => window.confirm(`Excluir "${m.name}" com todo o histórico de preços?`) && act(() => window.api.flightMon.delete(m.id))}
+          title={tr('flights.excluir')}
+          onClick={() => window.confirm(tr('flights.excluirComTodoOHistorico2', { name: m.name })) && act(() => window.api.flightMon.delete(m.id))}
         >
           🗑
         </button>
@@ -153,29 +154,29 @@ export function FlightsDashboardPage(): React.ReactElement {
     <div className="module-page fm-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>✈️ Monitoramento de passagens</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Descubra, compare e acompanhe passagens com origem/destino flexíveis.</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('flights.monitoramentoDePassagens')}</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{tr('flights.descubraCompareEAcompanhePassagens')}</p>
         </div>
       </div>
 
       <div className="fm-toolbar">
         <button className="btn btn-primary btn-sm" onClick={() => setEditing({ monitor: null, ai: false })} type="button">
-          + Novo monitoramento
+          {tr('flights.novoMonitoramento2')}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ monitor: null, ai: true })} type="button">
-          ✨ Criar com IA
+          {tr('flights.criarComIa')}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={() => setSources(true)} type="button">
-          ⚙️ Fontes e execução
+          {tr('flights.fontesEExecucao')}
         </button>
         <span className="fm-spacer" />
         <div className="fm-seg">
           {(
             [
-              ['all', 'Todos'],
-              ['active', 'Ativos'],
-              ['paused', 'Pausados'],
-              ['attention', 'Atenção']
+              ['all', tr('flights.todos')],
+              ['active', tr('flights.ativos')],
+              ['paused', tr('flights.pausados')],
+              ['attention', tr('flights.atencao')]
             ] as const
           ).map(([k, l]) => (
             <button key={k} className={filter === k ? 'active' : ''} onClick={() => setFilter(k)} type="button">
@@ -183,11 +184,11 @@ export function FlightsDashboardPage(): React.ReactElement {
             </button>
           ))}
         </div>
-        <input type="search" placeholder="Filtrar…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" placeholder={tr('flights.filtrar')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
       <div className="fm-providers-strip">
-        <span className="fm-muted">Fontes:</span>
+        <span className="fm-muted">{tr('flights.fontes')}</span>
         {providers.map((p) => (
           <span key={p.id} className={`fm-pill ${p.available ? 'ok' : 'outline'}`} title={p.reason ?? ''}>
             {p.available ? '●' : '○'} {p.label}
@@ -195,7 +196,7 @@ export function FlightsDashboardPage(): React.ReactElement {
         ))}
         {loaded && automated.length === 0 && (
           <button className="fm-linkbtn" onClick={() => setSources(true)} type="button">
-            Nenhuma fonte automática — configurar
+            {tr('flights.nenhumaFonteAutomaticaConfigurar')}
           </button>
         )}
       </div>
@@ -204,7 +205,7 @@ export function FlightsDashboardPage(): React.ReactElement {
         <div className="fm-note danger" style={{ marginBottom: 10 }}>
           {msg}{' '}
           <button className="fm-linkbtn" onClick={() => setMsg('')} type="button">
-            fechar
+            {tr('flights.fechar2')}
           </button>
         </div>
       )}
@@ -212,14 +213,14 @@ export function FlightsDashboardPage(): React.ReactElement {
 
       {loaded && monitors.length === 0 ? (
         <div className="fm-empty">
-          <h3>Nenhum monitoramento ainda</h3>
-          <p className="fm-muted">Ex.: "Sudeste Asiático → Salvador ou Aracaju, 10–25/dez, com mala, sem conexão nos EUA/Canadá".</p>
+          <h3>{tr('flights.nenhumMonitoramentoAinda')}</h3>
+          <p className="fm-muted">{tr('flights.exSudesteAsiaticoSalvadorOu')}</p>
           <div className="fm-row" style={{ justifyContent: 'center', marginTop: 10 }}>
             <button className="btn btn-primary btn-sm" onClick={() => setEditing({ monitor: null, ai: true })} type="button">
-              ✨ Descrever para a IA
+              {tr('flights.descreverParaAIa')}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ monitor: null, ai: false })} type="button">
-              Montar manualmente
+              {tr('flights.montarManualmente')}
             </button>
           </div>
         </div>
@@ -228,7 +229,7 @@ export function FlightsDashboardPage(): React.ReactElement {
           {shown.map((m) => (
             <MonitorCard key={m.id} m={m} canSearch={automated.length > 0} onOpen={() => openMonitor(m.id)} onEdit={() => setEditing({ monitor: m, ai: false })} onError={setMsg} />
           ))}
-          {loaded && shown.length === 0 && <div className="empty-hint">Nada com esse filtro.</div>}
+          {loaded && shown.length === 0 && <div className="empty-hint">{tr('flights.nadaComEsseFiltro')}</div>}
         </div>
       )}
 

@@ -2,8 +2,14 @@ import React, { useState } from 'react'
 import { Trip } from '../../../types'
 import { useTripStore, daysUntil, isUpcoming } from '../store/tripStore'
 import { formatMoney } from '../../finance/util'
+import { t as tr } from '../../../i18n'
 
-export const TRIP_STATUS: Record<string, string> = { planned: 'Planejada', booked: 'Reservada', ongoing: 'Em curso', done: 'Concluída' }
+export const TRIP_STATUS: Record<string, string> = {
+  planned: tr('travel.status.planned'),
+  booked: tr('travel.status.booked'),
+  ongoing: tr('travel.status.ongoing'),
+  done: tr('travel.status.done')
+}
 const CURRENCIES = ['BRL', 'JPY', 'USD', 'EUR']
 
 interface FormState {
@@ -74,7 +80,7 @@ export function TripsSidebar({ selected, onSelect }: Props): React.ReactElement 
   }
 
   async function remove(t: Trip): Promise<void> {
-    if (!confirm(`Excluir a viagem para ${t.destination}?`)) return
+    if (!confirm(tr('travel.excluirAViagemPara', { destination: t.destination }))) return
     await removeTrip(t.id)
   }
 
@@ -91,14 +97,14 @@ export function TripsSidebar({ selected, onSelect }: Props): React.ReactElement 
           {(t.startDate || t.endDate) && (
             <div className="travel-muted">
               {t.startDate ?? '?'} — {t.endDate ?? '?'}
-              {dleft != null && dleft >= 0 && <strong> · faltam {dleft}d</strong>}
+              {dleft != null && dleft >= 0 && <strong> {tr('travel.faltamD', { dleft })}</strong>}
             </div>
           )}
-          {t.budget != null && <div className="travel-muted">Orçamento: {formatMoney(t.budget, t.currency)}</div>}
+          {t.budget != null && <div className="travel-muted">{tr('travel.orcamento')} {formatMoney(t.budget, t.currency)}</div>}
         </button>
         <div className="travel-trip-actions">
-          <button className="btn btn-secondary btn-sm" onClick={() => startEdit(t)}>Editar</button>
-          <button className="btn btn-danger btn-sm" onClick={() => remove(t)}>Excluir</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => startEdit(t)}>{tr('travel.editar')}</button>
+          <button className="btn btn-danger btn-sm" onClick={() => remove(t)}>{tr('travel.excluir')}</button>
         </div>
       </div>
     )
@@ -107,21 +113,21 @@ export function TripsSidebar({ selected, onSelect }: Props): React.ReactElement 
   return (
     <aside className="travel-sidebar">
       <div className="travel-section-head">
-        <div className="chart-title">✈️ Viagens <span className="travel-muted">· {trips.length}</span></div>
-        <button className="btn btn-primary btn-sm" onClick={startCreate}>+ Nova</button>
+        <div className="chart-title">{tr('travel.viagens')} <span className="travel-muted">· {trips.length}</span></div>
+        <button className="btn btn-primary btn-sm" onClick={startCreate}>{tr('travel.nova')}</button>
       </div>
 
       {showForm && (
         <div className="travel-form">
-          <div className="travel-form-title">{editing ? 'Editar viagem' : 'Nova viagem'}</div>
-          <input placeholder="Destino *" value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} />
-          <input placeholder="Origem" value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} />
+          <div className="travel-form-title">{editing ? tr('travel.editarViagem') : tr('travel.novaViagem')}</div>
+          <input placeholder={tr('travel.destino')} value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} />
+          <input placeholder={tr('travel.origem')} value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} />
           <div className="travel-form-row">
-            <input type="date" title="Ida" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-            <input type="date" title="Volta" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            <input type="date" title={tr('travel.ida')} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            <input type="date" title={tr('travel.volta')} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
           </div>
           <div className="travel-form-row">
-            <input type="number" placeholder="Orçamento" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+            <input type="number" placeholder={tr('travel.orcamento2')} value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
             <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -130,16 +136,16 @@ export function TripsSidebar({ selected, onSelect }: Props): React.ReactElement 
             {Object.entries(TRIP_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="btn btn-secondary btn-sm" onClick={close}>Cancelar</button>
-            <button className="btn btn-primary btn-sm" onClick={submit}>{editing ? 'Salvar' : 'Criar'}</button>
+            <button className="btn btn-secondary btn-sm" onClick={close}>{tr('travel.cancelar')}</button>
+            <button className="btn btn-primary btn-sm" onClick={submit}>{editing ? tr('travel.salvar') : tr('travel.criar')}</button>
           </div>
         </div>
       )}
 
-      {trips.length === 0 && <div className="empty-hint">Nenhuma viagem ainda.</div>}
-      {upcoming.length > 0 && <div className="travel-group-label">Próximas</div>}
+      {trips.length === 0 && <div className="empty-hint">{tr('travel.nenhumaViagemAinda')}</div>}
+      {upcoming.length > 0 && <div className="travel-group-label">{tr('travel.proximas')}</div>}
       {upcoming.map(renderTrip)}
-      {past.length > 0 && <div className="travel-group-label">Anteriores</div>}
+      {past.length > 0 && <div className="travel-group-label">{tr('travel.anteriores')}</div>}
       {past.map(renderTrip)}
     </aside>
   )
