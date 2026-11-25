@@ -2884,6 +2884,53 @@ button.todo-divider:hover {
   color: white;
 }
 
+/* Configurações → Aparência: visuais com estrela de favorito */
+.skin-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.skin-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+.skin-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.skin-chip-name {
+  padding: 6px 4px 6px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.skin-chip-name:hover,
+.skin-chip.active .skin-chip-name {
+  color: var(--text-primary);
+}
+.skin-chip-star {
+  padding: 6px 10px 6px 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.skin-chip-star:hover,
+.skin-chip-star.on {
+  color: var(--warning);
+}
+.skin-picker-more {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.skin-picker-more:hover {
+  text-decoration: underline;
+}
+
 .collapse-all-btn {
   display: block;
   margin: 0 4px 6px auto;

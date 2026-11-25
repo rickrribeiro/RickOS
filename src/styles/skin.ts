@@ -85,6 +85,26 @@ export function setSkin(skin: Skin | null): void {
   applySkin()
 }
 
+const FAVORITES_KEY = 'rickos-skin-favorites'
+/** Shown in Aparência before "ver mais" until the user stars their own. */
+const DEFAULT_FAVORITES: Skin[] = ['devlytics', 'grafite', 'vampiro', 'classic']
+
+/** Visuals starred in Configurações → Aparência (per device, like the skin itself). */
+export function getFavoriteSkins(): Skin[] {
+  const raw = read(FAVORITES_KEY)
+  if (raw == null) return DEFAULT_FAVORITES
+  try {
+    const list = JSON.parse(raw)
+    return Array.isArray(list) ? SKINS.filter((s) => list.includes(s)) : DEFAULT_FAVORITES
+  } catch {
+    return DEFAULT_FAVORITES
+  }
+}
+
+export function setFavoriteSkins(list: Skin[]): void {
+  write(FAVORITES_KEY, JSON.stringify(list))
+}
+
 export function setTheme(theme: Theme): void {
   write(THEME_KEY, theme)
   applySkin()
