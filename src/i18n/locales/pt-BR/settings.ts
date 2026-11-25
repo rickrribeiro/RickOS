@@ -400,5 +400,15 @@ export const settings = {
   'settings.iaPrompt.soTexto': 'Só monta o texto; quem executa é o Assistente ou o Prompt Runner.',
   'settings.iaMotor.padrao': '{motor} (padrão)',
   'settings.iaMotor.unico': 'Esta chamada só roda no {motor} (usa recursos que só ele tem).',
-  'settings.iaMotor.salvo': 'Motor salvo: as próximas execuções usam {motor}.'
+  'settings.iaMotor.salvo': 'Motor salvo: as próximas execuções usam {motor}.',
+  'settings.iaModelo.padrao': 'Padrão: {valor}',
+  'settings.iaModelo.outro': 'Outro…',
+  'settings.iaModelo.placeholder': 'nome do modelo',
+  'settings.iaModelo.aplicar': 'Aplicar',
+  'settings.iaModelo.salvo': 'Salvo: as próximas execuções usam {modelo} · effort {effort}.',
+  'settings.iaModelo.escolhido': 'escolhido aqui',
+  'settings.iaModelo.configCodex': '~/.codex/config.toml',
+  'settings.iaModelo.semEffort': 'Este motor não tem effort.',
+  'settings.iaModelo.conversa': 'Padrão das conversas novas; cada conversa pode trocar o modelo e o effort no próprio Prompt Runner.',
+  'settings.iaEffort.minimal': 'Mínimo'
 }

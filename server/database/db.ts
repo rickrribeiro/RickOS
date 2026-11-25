@@ -576,6 +576,18 @@ const MIGRATIONS: Migration[] = [
         db.run('ALTER TABLE ai_chamadas ADD COLUMN motor TEXT')
       } catch { /* exists */ }
     }
+  },
+  {
+    version: 44,
+    label: 'Chamadas de IA: modelo e effort escolhidos pelo usuário (valem para o motor em uso)',
+    run: (db) => {
+      try {
+        db.run('ALTER TABLE ai_chamadas ADD COLUMN modelo TEXT')
+      } catch { /* exists */ }
+      try {
+        db.run('ALTER TABLE ai_chamadas ADD COLUMN effort TEXT')
+      } catch { /* exists */ }
+    }
   }
 ]
 

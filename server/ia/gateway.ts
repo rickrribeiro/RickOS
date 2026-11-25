@@ -1,5 +1,9 @@
 import { definicao, ehIdChamada, type ConfigIa, type IdChamadaIa, type MotorIa, type ParamsDe, type PromptSobrescrito } from '../../shared/prompts/catalogo'
 import { motoresPermitidos, padraoDoMotor } from '../../shared/prompts/definicao'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { EFFORTS_DO_MOTOR } from '../../shared/prompts/motores'
 import { getAiChamada, getSetting } from '../database/queries'
 import { criarMotor, type ExecucaoIa } from './motores'
 
@@ -29,7 +33,22 @@ export async function resolverExecucao(id: IdChamadaIa): Promise<ExecucaoResolvi
   const escolhido = row?.motor as MotorIa | null | undefined
   const motor = escolhido && motoresPermitidos(d).includes(escolhido) ? escolhido : d.motor
   const padrao = padraoDoMotor(d, motor) ?? { modelo: d.modelo, effort: d.effort }
-  return { motor, modelo: await valor(padrao.modelo), effort: await valor(padrao.effort) }
+  // modelo/effort escolhidos em Configurações → IA valem só para o motor em uso (trocar o motor os limpa)
+  const modelo = row?.modelo?.trim() || (await valor(padrao.modelo))
+  const effort = row?.effort && EFFORTS_DO_MOTOR[motor].includes(row.effort) ? row.effort : await valor(padrao.effort)
+  return { motor, modelo, effort: EFFORTS_DO_MOTOR[motor].length ? effort : '' }
+}
+
+/** Padrões do Codex lidos do ~/.codex/config.toml (para mostrar como "padrão" na tela). */
+export function padroesCodex(): { modelo: string | null; effort: string | null } {
+  try {
+    const toml = fs.readFileSync(path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml'), 'utf8')
+    const topo = toml.split(/^\s*\[/m)[0] // só as chaves da raiz (antes da primeira [seção])
+    const ler = (k: string): string | null => topo.match(new RegExp(`^\\s*${k}\\s*=\\s*"([^"]*)"`, 'm'))?.[1] ?? null
+    return { modelo: ler('model'), effort: ler('model_reasoning_effort') }
+  } catch {
+    return { modelo: null, effort: null }
+  }
 }
 
 /** Prompt sobrescrito salvo (null = usar o padrão). */

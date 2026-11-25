@@ -624,6 +624,8 @@ export function createApi() {
       salvarPrompt: (id: IdChamadaIa, template: string | null, sistema: string | null) => invoke('iaChamadas:salvarPrompt', id, template, sistema),
       reverterPrompt: (id: IdChamadaIa) => invoke<boolean>('iaChamadas:reverterPrompt', id),
       salvarMotor: (id: IdChamadaIa, motor: MotorIa | null) => invoke('iaChamadas:salvarMotor', id, motor),
+      salvarModelo: (id: IdChamadaIa, modelo: string | null, effort: string | null) => invoke('iaChamadas:salvarModelo', id, modelo, effort),
+      padroesMotores: () => invoke('iaChamadas:padroesMotores'),
       montar: <K extends IdChamadaIa>(id: K, params: ParamsDe<K>) => invoke<string>('iaChamadas:montar', id, params)
     },
     // AI (Claude CLI)

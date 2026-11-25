@@ -139,6 +139,9 @@ export interface AiChamadaConfig {
   sistema: string | null
   /** Motor escolhido (null = padrão da chamada). */
   motor: MotorIa | null
+  /** Modelo/effort escolhidos para o motor em uso (null = padrão). */
+  modelo: string | null
+  effort: string | null
   updatedAt: string
 }
 
@@ -1236,6 +1239,10 @@ declare global {
         reverterPrompt: (id: IdChamadaIa) => Promise<boolean>
         /** null = voltar ao motor padrão da chamada. */
         salvarMotor: (id: IdChamadaIa, motor: MotorIa | null) => Promise<AiChamadaConfig | null>
+        /** Modelo/effort para o motor em uso (null = padrão). */
+        salvarModelo: (id: IdChamadaIa, modelo: string | null, effort: string | null) => Promise<AiChamadaConfig | null>
+        /** Padrões que não vêm do app (Codex: ~/.codex/config.toml). */
+        padroesMotores: () => Promise<{ codex: { modelo: string | null; effort: string | null } }>
         /** Só monta o texto (chamadas do tipo 'texto'), já com o prompt sobrescrito, se houver. */
         montar: <K extends IdChamadaIa>(id: K, params: ParamsDe<K>) => Promise<string>
       }

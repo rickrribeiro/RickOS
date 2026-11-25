@@ -400,5 +400,15 @@ export const settings = {
   'settings.iaPrompt.soTexto': 'Only builds the text; the Assistant or the Prompt Runner runs it.',
   'settings.iaMotor.padrao': '{motor} (default)',
   'settings.iaMotor.unico': 'This call only runs on {motor} (it uses features only it has).',
-  'settings.iaMotor.salvo': 'Engine saved: the next runs use {motor}.'
+  'settings.iaMotor.salvo': 'Engine saved: the next runs use {motor}.',
+  'settings.iaModelo.padrao': 'Default: {valor}',
+  'settings.iaModelo.outro': 'Other…',
+  'settings.iaModelo.placeholder': 'model name',
+  'settings.iaModelo.aplicar': 'Apply',
+  'settings.iaModelo.salvo': 'Saved: the next runs use {modelo} · effort {effort}.',
+  'settings.iaModelo.escolhido': 'chosen here',
+  'settings.iaModelo.configCodex': '~/.codex/config.toml',
+  'settings.iaModelo.semEffort': 'This engine has no effort setting.',
+  'settings.iaModelo.conversa': 'Default for new conversations; each conversation can change model and effort in the Prompt Runner itself.',
+  'settings.iaEffort.minimal': 'Minimal'
 }

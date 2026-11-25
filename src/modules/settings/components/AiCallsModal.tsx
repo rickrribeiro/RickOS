@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { CATALOGO_IA, exemploMontado, type ChamadaIa, type ConfigIa, type IdChamadaIa, type ModuloIa, type MotorIa } from '../../../../shared/prompts/catalogo'
 import { motoresPermitidos, padraoDoMotor, variaveisDoTemplate } from '../../../../shared/prompts/definicao'
+import { EFFORTS_DO_MOTOR, MODELOS_SUGERIDOS } from '../../../../shared/prompts/motores'
 import { CONV_EFFORTS } from '../../../../shared/aiConversations'
 import type { AiChamadaConfig } from '../../../types'
 import { t as tr, type MessageKey } from '../../../i18n'
@@ -10,13 +11,41 @@ const MOTORES: Record<MotorIa, string> = { 'claude-code': 'Claude Code', codex: 
 const nomeChamada = (id: IdChamadaIa): string => tr(`settings.iaChamada.${id}` as MessageKey)
 const nomeModulo = (m: ModuloIa): string => tr(`settings.iaModulo.${m}` as MessageKey)
 
-/** Valor efetivo de um modelo/effort: salvo nas Configurações → padrão → padrão do CLI. */
-function efetivo(cfg: ConfigIa | null, saved: Record<string, string>): { valor: string; origem: string } {
-  if (!cfg) return { valor: tr('settings.padraoDoCli'), origem: '' }
-  const v = cfg.setting ? (saved[cfg.setting] ?? '').trim() : ''
-  const raw = v || cfg.padrao
-  const valor = CONV_EFFORTS.find((e) => e.v === raw)?.label ?? (raw || tr('settings.padraoDoCli'))
-  return { valor, origem: cfg.setting ? tr('settings.configuracaoKey', { key: cfg.setting }) : tr('settings.fixoNoCodigo') }
+type PadroesCodex = { modelo: string | null; effort: string | null }
+
+const rotuloEffort = (v: string): string => (v === 'minimal' ? tr('settings.iaEffort.minimal') : CONV_EFFORTS.find((e) => e.v === v)?.label ?? v)
+
+interface Valor {
+  /** Valor cru ('' = padrão do CLI). */
+  raw: string
+  valor: string
+  origem: string
+}
+
+/** Padrão de um modelo/effort: salvo nas Configurações → padrão do catálogo → config do Codex → padrão do CLI. */
+function padrao(cfg: ConfigIa | null, motor: MotorIa, campo: 'modelo' | 'effort', saved: Record<string, string>, codex: PadroesCodex): Valor {
+  const v = cfg?.setting ? (saved[cfg.setting] ?? '').trim() : ''
+  const raw = v || cfg?.padrao || ''
+  if (raw) return { raw, valor: campo === 'effort' ? rotuloEffort(raw) : raw, origem: cfg?.setting ? tr('settings.configuracaoKey', { key: cfg.setting }) : tr('settings.fixoNoCodigo') }
+  const doCodex = motor === 'codex' ? codex[campo] : null
+  if (doCodex) return { raw: '', valor: campo === 'effort' ? rotuloEffort(doCodex) : doCodex, origem: tr('settings.iaModelo.configCodex') }
+  return { raw: '', valor: tr('settings.padraoDoCli'), origem: cfg?.setting ? tr('settings.configuracaoKey', { key: cfg.setting }) : '' }
+}
+
+/** Motor, modelo e effort em uso numa chamada (escolhas do usuário por cima dos padrões). */
+function execucao(c: ChamadaIa, cfg: AiChamadaConfig | undefined, saved: Record<string, string>, codex: PadroesCodex) {
+  const motor = motorEfetivo(c, cfg)
+  const pm = padraoDoMotor(c, motor) ?? { modelo: c.modelo, effort: c.effort }
+  const modeloPadrao = padrao(pm.modelo, motor, 'modelo', saved, codex)
+  const effortPadrao = padrao(pm.effort, motor, 'effort', saved, codex)
+  const temEffort = EFFORTS_DO_MOTOR[motor].length > 0
+  const modelo: Valor = cfg?.modelo ? { raw: cfg.modelo, valor: cfg.modelo, origem: tr('settings.iaModelo.escolhido') } : modeloPadrao
+  const effort: Valor = !temEffort
+    ? { raw: '', valor: '—', origem: '' }
+    : cfg?.effort
+      ? { raw: cfg.effort, valor: rotuloEffort(cfg.effort), origem: tr('settings.iaModelo.escolhido') }
+      : effortPadrao
+  return { motor, modelo, effort, modeloPadrao, effortPadrao, temEffort }
 }
 
 function montar(c: ChamadaIa, cfg: AiChamadaConfig | undefined): string {
@@ -125,6 +154,93 @@ function EditorPrompt({ c, cfg, onSalvo, onCancelar }: { c: ChamadaIa; cfg: AiCh
   )
 }
 
+const OUTRO = '__outro__'
+
+/** Motor, modelo e effort de uma chamada (o padrão aparece como primeira opção de cada lista). */
+function ConfigExecucao({
+  c,
+  cfg,
+  exec,
+  onMotor,
+  onModelo
+}: {
+  c: ChamadaIa
+  cfg: AiChamadaConfig | undefined
+  exec: ReturnType<typeof execucao>
+  onMotor: (m: MotorIa) => void
+  onModelo: (modelo: string | null, effort: string | null) => void
+}): React.ReactElement {
+  const permitidos = motoresPermitidos(c)
+  const sugeridos = MODELOS_SUGERIDOS[exec.motor]
+  const atual = cfg?.modelo ?? ''
+  const [outro, setOutro] = useState(!!atual && !sugeridos.includes(atual))
+  const [texto, setTexto] = useState(atual && !sugeridos.includes(atual) ? atual : '')
+  const efforts = EFFORTS_DO_MOTOR[exec.motor]
+  const linha: React.CSSProperties = { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }
+  const campo: React.CSSProperties = { minWidth: 0, flex: '0 1 240px' }
+  const rotulo: React.CSSProperties = { width: 64 }
+
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {permitidos.length > 1 ? (
+        <label style={linha}>
+          <span style={rotulo}>{tr('settings.motor')}</span>
+          <select value={exec.motor} onChange={(e) => onMotor(e.target.value as MotorIa)} style={campo}>
+            {permitidos.map((m) => (
+              <option key={m} value={m}>
+                {m === c.motor ? tr('settings.iaMotor.padrao', { motor: MOTORES[m] }) : MOTORES[m]}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tr('settings.iaMotor.unico', { motor: MOTORES[c.motor] })}</div>
+      )}
+      <label style={linha}>
+        <span style={rotulo}>{tr('settings.modelo')}</span>
+        <select
+          value={outro ? OUTRO : sugeridos.includes(atual) ? atual : ''}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === OUTRO) return setOutro(true)
+            setOutro(false)
+            onModelo(v || null, cfg?.effort ?? null)
+          }}
+          style={campo}
+        >
+          <option value="">{tr('settings.iaModelo.padrao', { valor: exec.modeloPadrao.valor })}</option>
+          {sugeridos.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+          <option value={OUTRO}>{tr('settings.iaModelo.outro')}</option>
+        </select>
+        {outro && (
+          <>
+            <input value={texto} placeholder={tr('settings.iaModelo.placeholder')} onChange={(e) => setTexto(e.target.value)} style={{ minWidth: 0, flex: '1 1 140px' }} />
+            <button className="btn btn-secondary btn-sm" disabled={!texto.trim()} onClick={() => onModelo(texto.trim(), cfg?.effort ?? null)}>
+              {tr('settings.iaModelo.aplicar')}
+            </button>
+          </>
+        )}
+      </label>
+      {efforts.length > 0 ? (
+        <label style={linha}>
+          <span style={rotulo}>{tr('settings.effort')}</span>
+          <select value={cfg?.effort && efforts.includes(cfg.effort) ? cfg.effort : ''} onChange={(e) => onModelo(cfg?.modelo ?? null, e.target.value || null)} style={campo}>
+            <option value="">{tr('settings.iaModelo.padrao', { valor: exec.effortPadrao.valor })}</option>
+            {efforts.map((v) => (
+              <option key={v} value={v}>{rotuloEffort(v)}</option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tr('settings.iaModelo.semEffort')}</div>
+      )}
+      {c.id === 'promptRunner.conversa' && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tr('settings.iaModelo.conversa')}</div>}
+    </div>
+  )
+}
+
 /** Catálogo de todas as chamadas de IA do app (shared/prompts/catalogo.ts), com edição do prompt. */
 export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactElement {
   const [saved, setSaved] = useState<Record<string, string>>({})
@@ -136,6 +252,7 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
   const [editando, setEditando] = useState<IdChamadaIa | null>(null)
   const [aviso, setAviso] = useState<{ id: IdChamadaIa; texto: string } | null>(null)
   const [copied, setCopied] = useState<IdChamadaIa | null>(null)
+  const [codex, setCodex] = useState<PadroesCodex>({ modelo: null, effort: null })
 
   useEffect(() => {
     const keys = [
@@ -147,6 +264,10 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
     Promise.all(keys.map((k) => window.api.settings.get(k).then((v) => [k, v ?? ''] as const, () => [k, ''] as const))).then((pairs) => {
       if (alive) setSaved(Object.fromEntries(pairs))
     })
+    window.api.iaChamadas.padroesMotores().then(
+      (r) => alive && setCodex(r.codex),
+      () => undefined
+    )
     window.api.iaChamadas.listar().then(
       (rows) => alive && setConfigs(Object.fromEntries(rows.map((r) => [r.id, r]))),
       () => undefined
@@ -174,10 +295,10 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
       if (motor && motorEfetivo(c, configs[c.id]) !== motor) return false
       if (!q) return true
       const m = motorEfetivo(c, configs[c.id])
-      const hay = [nomeChamada(c.id), nomeModulo(c.modulo), c.id, c.arquivo ?? '', c.usadoEm, efetivo(padraoDoMotor(c, m)?.modelo ?? c.modelo, saved).valor, MOTORES[m]].join(' ').toLowerCase()
+      const hay = [nomeChamada(c.id), nomeModulo(c.modulo), c.id, c.arquivo ?? '', c.usadoEm, execucao(c, configs[c.id], saved, codex).modelo.valor, MOTORES[m]].join(' ').toLowerCase()
       return hay.includes(q)
     })
-  }, [query, modulo, motor, saved, configs])
+  }, [query, modulo, motor, saved, configs, codex])
 
   const grupos = useMemo(() => {
     const m = new Map<ModuloIa, ChamadaIa[]>()
@@ -212,6 +333,17 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
       const r = await window.api.iaChamadas.salvarMotor(c.id, m === c.motor ? null : m)
       atualizar(c.id, r)
       setAviso({ id: c.id, texto: tr('settings.iaMotor.salvo', { motor: MOTORES[m] }) })
+    } catch (e) {
+      setAviso({ id: c.id, texto: tr('settings.iaPrompt.erro', { msg: e instanceof Error ? e.message : String(e) }) })
+    }
+  }
+
+  async function salvarModelo(c: ChamadaIa, modelo: string | null, effort: string | null): Promise<void> {
+    try {
+      const r = await window.api.iaChamadas.salvarModelo(c.id, modelo, effort)
+      atualizar(c.id, r)
+      const e = execucao(c, r ?? undefined, saved, codex)
+      setAviso({ id: c.id, texto: tr('settings.iaModelo.salvo', { modelo: e.modelo.valor, effort: e.effort.valor }) })
     } catch (e) {
       setAviso({ id: c.id, texto: tr('settings.iaPrompt.erro', { msg: e instanceof Error ? e.message : String(e) }) })
     }
@@ -269,18 +401,15 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
               {chamadas.map((c) => {
                 const aberto = open === c.id
                 const cfg = configs[c.id]
-                const motorAtual = motorEfetivo(c, cfg)
-                const permitidos = motoresPermitidos(c)
-                const pm = padraoDoMotor(c, motorAtual) ?? { modelo: c.modelo, effort: c.effort }
-                const modelo = efetivo(pm.modelo, saved)
-                const effort = efetivo(pm.effort, saved)
+                const exec = execucao(c, cfg, saved, codex)
+                const { modelo, effort } = exec
                 const custom = personalizado(cfg)
                 return (
                   <div key={c.id} style={{ border: `1px solid ${custom ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, padding: '8px 10px', background: 'var(--bg-secondary)' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       <div style={{ flex: '1 1 200px', minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nomeChamada(c.id)}</div>
                       {custom && <span style={{ ...badge, borderColor: 'var(--accent)', color: 'var(--accent)' }}>{tr('settings.iaPrompt.personalizado')}</span>}
-                      <span style={badge} title={tr('settings.motor')}>{MOTORES[motorAtual]}</span>
+                      <span style={badge} title={tr('settings.motor')}>{MOTORES[exec.motor]}</span>
                       <span style={badge} title={`${tr('settings.modelo')} · ${modelo.origem}`}>{tr('settings.modelo')}: {modelo.valor}</span>
                       <span style={badge} title={`${tr('settings.effort')}${effort.origem ? ` · ${effort.origem}` : ''}`}>{tr('settings.effort')}: {effort.valor}</span>
                       <button
@@ -304,27 +433,22 @@ export function AiCallsModal({ onClose }: { onClose: () => void }): React.ReactE
                             {tr('settings.usadoEm')}: <code>{c.usadoEm}</code>
                           </div>
                           <div>
-                            {tr('settings.modelo')}: {modelo.origem}
-                            {c.effort ? ` · ${tr('settings.effort')}: ${effort.origem}` : ''}
+                            {tr('settings.modelo')}: {modelo.origem || '—'}
+                            {effort.origem ? ` · ${tr('settings.effort')}: ${effort.origem}` : ''}
                           </div>
                           {c.tipo === 'texto' && <div>{tr('settings.iaPrompt.soTexto')}</div>}
                         </div>
 
-                        {c.tipo === 'executa' &&
-                          (permitidos.length > 1 ? (
-                            <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                              {tr('settings.motor')}
-                              <select value={motorAtual} onChange={(e) => void trocarMotor(c, e.target.value as MotorIa)} style={{ minWidth: 0, flex: '0 1 220px' }}>
-                                {permitidos.map((m) => (
-                                  <option key={m} value={m}>
-                                    {m === c.motor ? tr('settings.iaMotor.padrao', { motor: MOTORES[m] }) : MOTORES[m]}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          ) : (
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tr('settings.iaMotor.unico', { motor: MOTORES[c.motor] })}</div>
-                          ))}
+                        {c.tipo === 'executa' && (
+                          <ConfigExecucao
+                            key={`${c.id}:${exec.motor}`}
+                            c={c}
+                            cfg={cfg}
+                            exec={exec}
+                            onMotor={(m) => void trocarMotor(c, m)}
+                            onModelo={(modelo, effort) => void salvarModelo(c, modelo, effort)}
+                          />
+                        )}
 
                         {aviso?.id === c.id && <div style={{ fontSize: 12, color: 'var(--accent)' }}>{aviso.texto}</div>}
 

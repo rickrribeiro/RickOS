@@ -2898,6 +2898,9 @@ export interface DbAiChamada {
   sistema: string | null
   /** Motor escolhido pelo usuário (null = padrão da chamada). */
   motor: string | null
+  /** Modelo/effort escolhidos para o motor em uso (null = padrão). */
+  modelo: string | null
+  effort: string | null
   updatedAt: string
 }
 
@@ -2909,14 +2912,25 @@ export async function getAiChamada(id: string): Promise<DbAiChamada | null> {
   return getOne<DbAiChamada>(await getDb(), 'SELECT * FROM ai_chamadas WHERE id = ?', [id])
 }
 
-/** Grava o motor escolhido (null = padrão da chamada). */
+/** Grava o motor escolhido (null = padrão da chamada). Modelo/effort são do motor: voltam ao padrão. */
 export async function setAiChamadaMotor(id: string, motor: string | null): Promise<void> {
   const db = await getDb()
   run(
     db,
-    `INSERT INTO ai_chamadas (id, motor, updatedAt) VALUES (?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET motor = excluded.motor, updatedAt = excluded.updatedAt`,
+    `INSERT INTO ai_chamadas (id, motor, modelo, effort, updatedAt) VALUES (?, ?, NULL, NULL, ?)
+     ON CONFLICT(id) DO UPDATE SET motor = excluded.motor, modelo = NULL, effort = NULL, updatedAt = excluded.updatedAt`,
     [id, motor, new Date().toISOString()]
+  )
+}
+
+/** Grava modelo e effort (null = padrão do motor em uso). */
+export async function setAiChamadaModelo(id: string, modelo: string | null, effort: string | null): Promise<void> {
+  const db = await getDb()
+  run(
+    db,
+    `INSERT INTO ai_chamadas (id, modelo, effort, updatedAt) VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET modelo = excluded.modelo, effort = excluded.effort, updatedAt = excluded.updatedAt`,
+    [id, modelo, effort, new Date().toISOString()]
   )
 }
 

@@ -215,6 +215,7 @@ import {
   clearNotifications,
   getAiChamadas,
   getAiChamada,
+  setAiChamadaModelo,
   setAiChamadaMotor,
   setAiChamadaPrompt
 } from './database/queries'
@@ -261,7 +262,8 @@ import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, con
 import { promptContextoProjeto } from '../shared/prompts/projetos/contextoProjeto'
 import { definicao, type MotorIa } from '../shared/prompts/catalogo'
 import { motoresPermitidos } from '../shared/prompts/definicao'
-import { executarChamada, idValido, montarChamada } from './ia/gateway'
+import { executarChamada, idValido, montarChamada, padroesCodex, resolverExecucao } from './ia/gateway'
+import { EFFORTS_DO_MOTOR, modeloValido } from '../shared/prompts/motores'
 
 /**
  * RPC registry: every `<ns>:<action>` channel the clients can call. The handlers
@@ -1417,6 +1419,19 @@ ipcMain.handle('iaChamadas:salvarMotor', async (_, id: string, motor: string | n
   await setAiChamadaMotor(d.id, motor == null || motor === d.motor ? null : motor)
   return getAiChamada(d.id)
 })
+/** Modelo/effort da chamada para o motor em uso (null = padrão). */
+ipcMain.handle('iaChamadas:salvarModelo', async (_, id: string, modelo: string | null, effort: string | null) => {
+  const cid = idValido(id)
+  const d = definicao(cid)
+  const { motor } = await resolverExecucao(cid)
+  const m = modelo?.trim() || null
+  if (m && !modeloValido(m)) throw new Error(`Modelo inválido: ${m}`)
+  if (effort && !EFFORTS_DO_MOTOR[motor].includes(effort)) throw new Error(`Effort "${effort}" não existe no ${motor}.`)
+  await setAiChamadaModelo(d.id, m, effort || null)
+  return getAiChamada(d.id)
+})
+/** Padrões dos motores que não vêm do app (Codex: ~/.codex/config.toml). */
+ipcMain.handle('iaChamadas:padroesMotores', () => ({ codex: padroesCodex() }))
 ipcMain.handle('iaChamadas:reverterPrompt', async (_, id: string) => {
   await setAiChamadaPrompt(idValido(id), null, null)
   return true
@@ -1530,8 +1545,9 @@ ipcMain.handle('ai:getRun', (_, runId: string) => {
 registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   resolveCommand: async (c) => (c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? undefined)),
   // conversa sem modelo/esforço (antigas ou importadas do terminal) → padrão do Prompt Runner
-  resolveModel: async (c) => c.model.trim() || convDefaultModel(await getSetting(CONV_DEFAULT_MODEL_KEY)),
-  resolveEffort: async (c) => c.effort || convDefaultEffort(await getSetting(CONV_DEFAULT_EFFORT_KEY)),
+  // padrão das conversas = chamada promptRunner.conversa (Configurações → IA), senão prompt_runner_model/effort
+  resolveModel: async (c) => c.model.trim() || convDefaultModel((await resolverExecucao('promptRunner.conversa')).modelo),
+  resolveEffort: async (c) => c.effort || convDefaultEffort((await resolverExecucao('promptRunner.conversa')).effort),
   resolveProjectCwd: (projectId) => resolveProjectCwd(projectId),
   projectWorkspaceRepos: (projectId) => workspaceRepoDirs(projectId),
   allowedToolsArgs: () => resolveAllowedToolsArgs(),
