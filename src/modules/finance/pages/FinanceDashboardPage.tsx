@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
+import { DailySpending } from '../components/DailySpending'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
@@ -180,6 +181,8 @@ export function FinanceDashboardPage(): React.ReactElement {
           )}
         </div>
       </div>
+
+      <DailySpending />
 
       <div className="chart-section" style={{ marginTop: 16 }}>
         <div className="chart-title">Top categorias (gastos do mês)</div>
