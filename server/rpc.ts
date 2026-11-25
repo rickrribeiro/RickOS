@@ -210,7 +210,7 @@ import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
 import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
-import { recomputeRecurring } from './services/recurring'
+import { recomputeRecurring, recurringSuggestions } from './services/recurring'
 import { countsInTotals, firstBusinessDay, type TransactionKind } from '../shared/finance'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
@@ -1006,6 +1006,7 @@ ipcMain.handle('transactions:update', async (_, id: number, accountId: number | 
 )
 ipcMain.handle('transactions:delete', async (_, id: number) => afterTxChange(await deleteTransaction(id)))
 ipcMain.handle('transactions:recurringOverrides', () => getRecurringOverrides())
+ipcMain.handle('transactions:recurringSuggestions', () => recurringSuggestions())
 ipcMain.handle('transactions:setRecurring', async (_, key: string, recurring: boolean | null) => {
   await setRecurringOverride(key, recurring)
   return recomputeRecurring()

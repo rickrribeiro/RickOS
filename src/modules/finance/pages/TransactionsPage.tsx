@@ -23,6 +23,7 @@ export function TransactionsPage(): React.ReactElement {
     markTransactionValid,
     setTransactionKind,
     setRecurring,
+    recurringSuggestions,
     importTransactions,
     categoryName,
     defaultAccountId
@@ -47,6 +48,8 @@ export function TransactionsPage(): React.ReactElement {
   const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment' | 'transfer' | 'recurring'>('')
   const [fCategory, setFCategory] = useState<'' | 'none' | number>('')
   const [fText, setFText] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestedKeys = new Set(recurringSuggestions.map((s) => s.key))
   const [fPayment, setFPayment] = useState<string>('') // '' = todas, 'none' = não identificada
   const [allMonths, setAllMonths] = useState(false)
   const [everything, setEverything] = useState<Transaction[] | null>(null) // todas as transações (busca em todos os meses)
@@ -324,6 +327,37 @@ export function TransactionsPage(): React.ReactElement {
         </span>
       </div>
 
+      {recurringSuggestions.length > 0 && (
+        <div className="chart-section" style={{ marginBottom: 8, padding: '10px 14px' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowSuggestions((v) => !v)}
+            title="O app achou padrões de cobrança/entrada mensal. Confirme os que são recorrentes de verdade."
+          >
+            💡 {recurringSuggestions.length} {recurringSuggestions.length === 1 ? 'possível recorrente' : 'possíveis recorrentes'} {showSuggestions ? '▲' : '▼'}
+          </button>
+          {showSuggestions && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Repetem ~todo mês com valor parecido. Ao confirmar, todas as transações do estabelecimento (e as próximas) ficam marcadas como recorrentes.
+              </div>
+              {recurringSuggestions.map((s) => (
+                <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13 }}>
+                  <span style={{ flex: '1 1 200px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.label}>
+                    {s.label}
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {s.type === 'income' ? '+' : '−'}~{formatMoney(s.avgAmount, s.currency)} · {s.count}× · última {s.lastDate.split('-').reverse().join('/')}
+                  </span>
+                  <button className="btn btn-primary btn-sm" onClick={() => setRecurring(s.key, true)}>Confirmar</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setRecurring(s.key, false)}>Não é</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="list-stack">
         {source.length === 0 && <div className="empty-hint">{allMonths ? 'Nenhuma transação.' : 'Nenhuma transação neste mês.'}</div>}
         {source.length > 0 && filtered.length === 0 && <div className="empty-hint">Nenhuma transação com esses filtros.</div>}
@@ -386,12 +420,32 @@ export function TransactionsPage(): React.ReactElement {
                 title="Recorrente (se repete ~todo mês com valor parecido). Clique se não for."
                 onClick={() => {
                   const key = recurringKey(t.description, t.type)
-                  if (key && confirm(`Não é recorrente?\n\nVale para todas as transações de "${t.description}" (inclusive as próximas). Dá para desfazer no Editar.`))
+                  if (key && confirm(`Desmarcar como recorrente?\n\nVale para todas as transações de "${t.description}" (inclusive as próximas). Dá para desfazer no Editar.`))
                     setRecurring(key, false)
                 }}
               >
                 📅 recorrente
               </button>
+            ) : suggestedKeys.has(recurringKey(t.description, t.type)) ? (
+              <span className="project-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Possível recorrente: confirme ou descarte (vale para o estabelecimento)">
+                📅 recorrente?
+                <button
+                  className="btn btn-sm"
+                  style={{ padding: '0 4px', lineHeight: 1.2, color: 'var(--success)', background: 'transparent', border: 'none' }}
+                  title="Confirmar como recorrente"
+                  onClick={() => setRecurring(recurringKey(t.description, t.type), true)}
+                >
+                  ✓
+                </button>
+                <button
+                  className="btn btn-sm"
+                  style={{ padding: '0 4px', lineHeight: 1.2, color: 'var(--danger)', background: 'transparent', border: 'none' }}
+                  title="Não é recorrente"
+                  onClick={() => setRecurring(recurringKey(t.description, t.type), false)}
+                >
+                  ✕
+                </button>
+              </span>
             ) : null}
             {t.pending ? (
               <span className="project-chip" style={{ color: 'var(--warning)' }} title="Pendente no banco: valor e descrição ainda podem mudar">

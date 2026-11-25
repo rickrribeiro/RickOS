@@ -6,9 +6,10 @@ import { transactionKind, PAYMENT_METHODS, recurringKey, type TransactionKind } 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
 export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: () => void }): React.ReactElement {
-  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod, setRecurring } = useFinanceStore()
+  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod, setRecurring, recurringSuggestions } = useFinanceStore()
   // recorrência é por estabelecimento: '' = automático, '1' = sempre, '0' = nunca
   const key = recurringKey(tx.description, tx.type)
+  const suggested = recurringSuggestions.some((s) => s.key === key)
   const [recurringMode, setRecurringMode] = useState<'' | '1' | '0'>('')
   const [recurringLoaded, setRecurringLoaded] = useState<'' | '1' | '0'>('')
   useEffect(() => {
@@ -111,9 +112,9 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
           <div className="editor-field">
             <label>Recorrência</label>
             <select value={recurringMode} onChange={(e) => setRecurringMode(e.target.value as '' | '1' | '0')}>
-              <option value="">Automática (detectada: {tx.recurring ? 'recorrente' : 'não recorrente'})</option>
-              <option value="1">Sempre recorrente</option>
-              <option value="0">Nunca recorrente</option>
+              <option value="">Não decidido{suggested ? ' (sugerida como recorrente)' : ''}</option>
+              <option value="1">Recorrente</option>
+              <option value="0">Não é recorrente</option>
             </select>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Vale para todas as transações deste estabelecimento, inclusive as próximas.</span>
           </div>

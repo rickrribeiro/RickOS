@@ -414,6 +414,7 @@ export function createApi() {
       setPaymentMethod: (id: number, method: string | null) => invoke('transactions:setPaymentMethod', id, method),
       recurringOverrides: () => invoke('transactions:recurringOverrides'),
       setRecurring: (key: string, recurring: boolean | null) => invoke('transactions:setRecurring', key, recurring),
+      recurringSuggestions: () => invoke('transactions:recurringSuggestions'),
       bulk: (rows: unknown[]) => invoke('transactions:bulk', rows)
     },
     budgets: {

@@ -461,6 +461,16 @@ export interface RulePreviewItem {
   ruleId: number
 }
 
+export interface RecurringSuggestion {
+  key: string // recurringKey do estabelecimento
+  label: string // descrição mais recente
+  type: string
+  count: number
+  avgAmount: number
+  currency: string
+  lastDate: string
+}
+
 export interface PluggySyncResult {
   imported: number
   updated: number
@@ -1101,6 +1111,7 @@ declare global {
         setPaymentMethod: (id: number, method: string | null) => Promise<void>
         recurringOverrides: () => Promise<{ key: string; recurring: number }[]>
         setRecurring: (key: string, recurring: boolean | null) => Promise<number>
+        recurringSuggestions: () => Promise<RecurringSuggestion[]>
         bulk: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
       }
       budgets: {
