@@ -1,0 +1,50 @@
+/* Paleta "Dracula" — paleta Dracula no escuro e Alucard, a variante clara oficial. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='dracula'] {
+  --pal-bg: #282a36;
+  --pal-sidebar: #21222c;
+  --pal-surface: #21222c;
+  --pal-elevated: #343746;
+  --pal-user-bubble: #44475a;
+  --pal-border: #44475a;
+  --pal-border-strong: #6272a4; /* derivado */
+  --pal-text: #f8f8f2;
+  --pal-text-2: #c8cbe0;
+  --pal-text-3: #a4acd0;
+  --pal-accent: #bd93f9;
+  --pal-accent-hover: #ff79c6; /* derivado */
+  --pal-selection: #36324a;
+  --pal-primary: #bd93f9;
+  --pal-on-primary: #21222c;
+  --pal-success: #50fa7b;
+  --pal-success-bg: #1e3a2a;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(248, 248, 242, 0.06);
+  --pal-ring: rgba(189, 147, 249, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='dracula'][data-theme='light'] {
+  --pal-bg: #fffbeb;
+  --pal-sidebar: #f5f0dc;
+  --pal-surface: #fffdf5;
+  --pal-elevated: #f5f0dc;
+  --pal-user-bubble: #ece6ce;
+  --pal-border: #ded8c0;
+  --pal-border-strong: #cfcfde; /* derivado */
+  --pal-text: #1f1f1f;
+  --pal-text-2: #4a4636;
+  --pal-text-3: #6c664b;
+  --pal-accent: #644ac9;
+  --pal-accent-hover: #a3144d; /* derivado */
+  --pal-selection: #e8e2f7;
+  --pal-primary: #644ac9;
+  --pal-on-primary: #ffffff;
+  --pal-success: #14710a;
+  --pal-success-bg: #e3f0da;
+  --pal-shadow: #1f1f1f14;
+  --pal-hover: rgba(31, 31, 31, 0.05);
+  --pal-ring: rgba(100, 74, 201, 0.25);
+  --pal-scrim: rgba(31, 31, 31, 0.3);
+  color-scheme: light;
+}
