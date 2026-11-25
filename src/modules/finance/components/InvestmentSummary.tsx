@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useFinanceStore } from '../store/financeStore'
-import { convertToBase, formatMoney, investmentValueAtMonth, monthLabel, shiftMonth } from '../util'
+import { comparableInvestmentDelta, convertToBase, formatMoney, investmentValueAtMonth, monthLabel, shiftMonth } from '../util'
 
 const fmtPct = (n: number): string => `${n >= 0 ? '+' : '−'}${Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
 
@@ -14,19 +14,24 @@ export function InvestmentSummary(): React.ReactElement {
   const [showProv, setShowProv] = useState(false)
 
   const s = useMemo(() => {
-    const prevMonth = shiftMonth(month, -1)
     const totalAt = (m: string): number =>
       investments.reduce((sum, i) => sum + convertToBase(investmentValueAtMonth(investmentHistory, i.id, m) ?? 0, i.currency, base, rates), 0)
-    // há registro no mês anterior? (sem isso a "variação" seria o patrimônio inteiro)
-    const hasPrev = investmentHistory.some((h) => h.month <= prevMonth)
     const now = totalAt(month)
-    const prev = hasPrev ? totalAt(prevMonth) : null
+    // variação só entre investimentos com valor nos dois meses (os que entraram/saíram do registro
+    // não viram variação falsa); fluxos (aportes/resgates) só desses mesmos investimentos
+    const cmp = comparableInvestmentDelta(investments.map((i) => i.id), investmentHistory, month)
+    const prev = cmp ? cmp.prev : null
+    const cmpExternal = new Set(investments.filter((i) => cmp?.ids.includes(i.id) && i.externalId).map((i) => i.externalId as string))
 
     const inMonth = investmentMovements.filter((m) => m.date.slice(0, 7) === month)
-    const sum = (types: string[]): number => inMonth.filter((m) => types.includes(m.type)).reduce((a, m) => a + (m.netAmount ?? m.amount), 0)
+    const flows = inMonth.filter((m) => cmpExternal.has(m.externalInvestmentId))
+    const sum = (types: string[]): number => flows.filter((m) => types.includes(m.type)).reduce((a, m) => a + (m.netAmount ?? m.amount), 0)
+    const sumAll = (types: string[]): number => inMonth.filter((m) => types.includes(m.type)).reduce((a, m) => a + (m.netAmount ?? m.amount), 0)
     const contributions = sum(['BUY'])
     const withdrawals = sum(['SELL', 'AMORTIZATION'])
-    const taxes = sum(['TAX'])
+    const taxes = sumAll(['TAX'])
+    const allContributions = sumAll(['BUY'])
+    const allWithdrawals = sumAll(['SELL', 'AMORTIZATION'])
     const provList = inMonth.filter((m) => m.type === 'INTEREST')
     const dividends = provList.reduce((a, m) => a + (m.netAmount ?? m.amount), 0)
     const byAsset = new Map<string, { kind: string | null; total: number; n: number }>()
@@ -42,7 +47,7 @@ export function InvestmentSummary(): React.ReactElement {
       .filter((m) => m.type === 'INTEREST' && m.date.slice(0, 4) === year && m.date.slice(0, 7) <= month)
       .reduce((a, m) => a + (m.netAmount ?? m.amount), 0)
 
-    const variation = prev != null ? now - prev : null
+    const variation = cmp ? cmp.now - cmp.prev : null
     const appreciation = variation != null ? variation - (contributions - withdrawals) : null
     return {
       now,
@@ -51,7 +56,11 @@ export function InvestmentSummary(): React.ReactElement {
       appreciation,
       contributions,
       withdrawals,
+      allContributions,
+      allWithdrawals,
       taxes,
+      entered: cmp?.entered ?? 0,
+      left: cmp?.left ?? 0,
       dividends,
       dividendsYear,
       year,
@@ -71,8 +80,13 @@ export function InvestmentSummary(): React.ReactElement {
           <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(s.now, base)}</div>
           <div className="stat-card-sub" style={{ color: color(s.variation) }}>
             {s.variation == null
-              ? 'sem registro no mês anterior'
+              ? 'sem base de comparação com o mês anterior'
               : `${signed(s.variation)} vs. ${monthLabel(shiftMonth(month, -1))}${s.prev ? ` (${fmtPct((s.variation / s.prev) * 100)})` : ''}`}
+            {(s.entered > 0 || s.left > 0) && s.variation != null && (
+              <span style={{ display: 'block', color: 'var(--text-muted)' }}>
+                sem contar {[s.entered && `${s.entered} que entraram`, s.left && `${s.left} que saíram`].filter(Boolean).join(' e ')} do registro
+              </span>
+            )}
           </div>
         </div>
         <div className="stat-card" title="Variação descontando o dinheiro que entrou (aportes) e saiu (resgates): o quanto os investimentos renderam ou perderam de fato.">
@@ -82,7 +96,7 @@ export function InvestmentSummary(): React.ReactElement {
           </div>
           <div className="stat-card-sub">
             {s.appreciation == null
-              ? 'aparece a partir do 2º mês registrado'
+              ? 'precisa de investimentos com valor neste mês e no anterior'
               : `variação ${signed(s.variation!)} − aportes ${formatMoney(s.contributions, base)} + resgates ${formatMoney(s.withdrawals, base)}${s.prev ? ` · ${fmtPct((s.appreciation / s.prev) * 100)}` : ''}`}
           </div>
         </div>
@@ -115,9 +129,9 @@ export function InvestmentSummary(): React.ReactElement {
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Aportes e resgates</div>
-          <div className="stat-card-value" style={{ fontSize: 16 }}>{signed(s.contributions - s.withdrawals)}</div>
+          <div className="stat-card-value" style={{ fontSize: 16 }}>{signed(s.allContributions - s.allWithdrawals)}</div>
           <div className="stat-card-sub">
-            aportes {formatMoney(s.contributions, base)} · resgates {formatMoney(s.withdrawals, base)}
+            aportes {formatMoney(s.allContributions, base)} · resgates {formatMoney(s.allWithdrawals, base)}
             {s.taxes > 0 && ` · impostos ${formatMoney(s.taxes, base)}`}
           </div>
         </div>

@@ -169,6 +169,35 @@ export function splitIncome<T extends { type: string; categoryId: number | null 
 }
 
 /**
+ * Variação comparável entre `month` e o mês anterior: só investimentos com valor nos DOIS meses
+ * (os que entraram ou saíram do registro — ex.: histórico manual trocado pelo detalhado do Open
+ * Finance — ficam de fora, senão viram "variação" falsa). Retorna null se nada é comparável.
+ */
+export function comparableInvestmentDelta(
+  ids: number[],
+  history: InvestmentHistory[],
+  month: string
+): { now: number; prev: number; ids: number[]; entered: number; left: number } | null {
+  const prevMonth = shiftMonth(month, -1)
+  let now = 0
+  let prev = 0
+  let entered = 0
+  let left = 0
+  const both: number[] = []
+  for (const id of ids) {
+    const a = investmentValueAtMonth(history, id, month)
+    const b = investmentValueAtMonth(history, id, prevMonth)
+    if (a != null && b != null) {
+      now += a
+      prev += b
+      both.push(id)
+    } else if (a != null) entered++
+    else if (b != null) left++
+  }
+  return both.length ? { now, prev, ids: both, entered, left } : null
+}
+
+/**
  * Value of an investment for a given month, carrying forward the most recent
  * snapshot at or before that month (holdings persist until re-entered). null if
  * the investment had no snapshot yet by then or was closed (encerrado) by then.

@@ -3,7 +3,7 @@ import { Investment, InvestmentHistory } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { InvestmentSummary } from '../components/InvestmentSummary'
-import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth } from '../util'
+import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth, comparableInvestmentDelta } from '../util'
 import { investmentGroup, INVESTMENT_GROUPS, type InvestmentDetails, type InvestmentGroup } from '../../../../shared/finance'
 
 function parseDetails(raw: string | null | undefined): InvestmentDetails | null {
@@ -331,8 +331,12 @@ export function InvestmentsPage(): React.ReactElement {
           const prevMonthKey = shiftMonth(month, -1)
           const val = (i: Investment, m: string): number => investmentValueAtMonth(investmentHistory, i.id, m) ?? 0
           const total = items.reduce((s2, i) => s2 + val(i, month), 0)
-          const hasPrev = investmentHistory.some((h) => h.month <= prevMonthKey)
-          const prevTotal = items.reduce((s2, i) => s2 + val(i, prevMonthKey), 0)
+          // variação do grupo só entre itens com valor nos dois meses
+          const cmpG = comparableInvestmentDelta(
+            [...items, ...closed.map((c) => c.investment).filter((ci) => investmentGroup(ci.type, ci.name) === g.id)].map((i) => i.id),
+            investmentHistory,
+            month
+          )
           const share = grandTotal > 0 ? (total / grandTotal) * 100 : 0
           const open = openGroups.has(g.id)
           return (
@@ -352,7 +356,7 @@ export function InvestmentsPage(): React.ReactElement {
                   </span>
                 </span>
                 {items.length > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{share.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</span>}
-                {hasPrev && items.length > 0 && <DeltaTag prev={prevTotal} curr={total} currency="BRL" />}
+                {cmpG && items.length > 0 && <DeltaTag prev={cmpG.prev} curr={cmpG.now} currency="BRL" />}
                 <span style={{ marginLeft: 'auto', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(total)}</span>
                 <span style={{ width: 16, textAlign: 'center', color: 'var(--text-muted)' }}>{items.length ? (open ? '▲' : '▼') : ''}</span>
               </button>
