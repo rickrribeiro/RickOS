@@ -410,6 +410,7 @@ export function createApi() {
       delete: (id: number) => invoke('transactions:delete', id),
       setIgnored: (id: number, reason: string | null) => invoke('transactions:setIgnored', id, reason),
       setKind: (id: number, kind: 'normal' | 'investment' | 'transfer') => invoke('transactions:setKind', id, kind),
+      setPaymentMethod: (id: number, method: string | null) => invoke('transactions:setPaymentMethod', id, method),
       bulk: (rows: unknown[]) => invoke('transactions:bulk', rows)
     },
     budgets: {

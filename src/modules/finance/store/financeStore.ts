@@ -43,6 +43,7 @@ interface FinanceState {
   removeTransaction: (id: number) => Promise<void>
   markTransactionValid: (id: number) => Promise<void>
   setTransactionKind: (id: number, kind: TransactionKind) => Promise<void>
+  setTransactionPaymentMethod: (id: number, method: string | null) => Promise<void>
   importTransactions: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
   setBudget: (categoryId: number, amount: number) => Promise<void>
   addInvestment: (name: string, type: string | null, amount: number, currency: string) => Promise<void>
@@ -158,6 +159,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   removeTransaction: async (id) => {
     await window.api.transactions.delete(id)
+    await get().refresh()
+  },
+  setTransactionPaymentMethod: async (id, method) => {
+    await window.api.transactions.setPaymentMethod(id, method)
     await get().refresh()
   },
   setTransactionKind: async (id, kind) => {

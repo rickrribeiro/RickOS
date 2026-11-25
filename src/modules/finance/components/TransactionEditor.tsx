@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
 import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
-import { transactionKind, type TransactionKind } from '../../../../shared/finance'
+import { transactionKind, PAYMENT_METHODS, type TransactionKind } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
 export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: () => void }): React.ReactElement {
-  const { categories, accounts, updateTransaction, setTransactionKind } = useFinanceStore()
+  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod } = useFinanceStore()
   const [type, setType] = useState(tx.type)
   const [amount, setAmount] = useState(String(tx.amount))
   const [currency, setCurrency] = useState(tx.currency)
@@ -15,6 +15,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
   const [description, setDescription] = useState(tx.description ?? '')
   const [date, setDate] = useState(tx.date)
   const [kind, setKind] = useState<TransactionKind>(transactionKind(tx))
+  const [payment, setPayment] = useState<string>(tx.paymentMethod ?? '')
 
   async function save(): Promise<void> {
     const v = parseFloat(amount)
@@ -30,6 +31,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
       date
     })
     if (kind !== transactionKind(tx)) await setTransactionKind(tx.id, kind)
+    if (payment !== (tx.paymentMethod ?? '')) await setTransactionPaymentMethod(tx.id, payment || null)
     onClose()
   }
 
@@ -81,6 +83,13 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
         <div className="editor-field">
           <label>Descrição</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <div className="editor-field">
+          <label>Forma de pagamento</label>
+          <select value={payment} onChange={(e) => setPayment(e.target.value)}>
+            <option value="">Não identificada</option>
+            {PAYMENT_METHODS.map((p) => <option key={p.id} value={p.id}>{p.icon} {p.label}</option>)}
+          </select>
         </div>
         <div className="editor-field">
           <label>Natureza</label>

@@ -6,7 +6,7 @@ import { TransactionEditor } from '../components/TransactionEditor'
 import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
-import { detectInvestmentMove, detectOwnTransfer, countsInTotals, normalizeText } from '../../../../shared/finance'
+import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -42,6 +42,7 @@ export function TransactionsPage(): React.ReactElement {
   const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment' | 'transfer'>('')
   const [fCategory, setFCategory] = useState<'' | 'none' | number>('')
   const [fText, setFText] = useState('')
+  const [fPayment, setFPayment] = useState<string>('') // '' = todas, 'none' = não identificada
   const [allMonths, setAllMonths] = useState(false)
   const [everything, setEverything] = useState<Transaction[] | null>(null) // todas as transações (busca em todos os meses)
 
@@ -60,7 +61,7 @@ export function TransactionsPage(): React.ReactElement {
   const matchesText = (t: Transaction): boolean => {
     if (!terms.length) return true
     const hay = normalizeText(
-      [t.description ?? '', categoryName(t.categoryId), t.date, t.date.split('-').reverse().join('/'), t.amount.toFixed(2), t.amount.toFixed(2).replace('.', ',')].join(' ')
+      [t.description ?? '', categoryName(t.categoryId), t.paymentMethod ? paymentMethodLabel(t.paymentMethod) : '', t.date, t.date.split('-').reverse().join('/'), t.amount.toFixed(2), t.amount.toFixed(2).replace('.', ',')].join(' ')
     )
     return terms.every((w) => hay.includes(w))
   }
@@ -70,9 +71,10 @@ export function TransactionsPage(): React.ReactElement {
       (fType === '' ||
         (fType === 'investment' ? !!t.investment : fType === 'transfer' ? !!t.transfer : t.type === fType)) &&
       (fCategory === '' || (fCategory === 'none' ? t.categoryId == null : t.categoryId === fCategory)) &&
+      (fPayment === '' || (fPayment === 'none' ? !t.paymentMethod : t.paymentMethod === fPayment)) &&
       matchesText(t)
   )
-  const filtering = fType !== '' || fCategory !== '' || terms.length > 0
+  const filtering = fType !== '' || fCategory !== '' || fPayment !== '' || terms.length > 0
   const fmtTotals = (items: Transaction[]): string =>
     Object.entries(sumByCurrency(items))
       .map(([c, v]) => formatMoney(v, c))
@@ -142,7 +144,8 @@ export function TransactionsPage(): React.ReactElement {
         description: r.description || null,
         date: r.date,
         investment: detectInvestmentMove(r.description) ? 1 : 0,
-        transfer: !detectInvestmentMove(r.description) && detectOwnTransfer(r.description) ? 1 : 0
+        transfer: !detectInvestmentMove(r.description) && detectOwnTransfer(r.description) ? 1 : 0,
+        paymentMethod: detectPaymentMethod(r.description)
       }))
     )
     if (fileRef.current) fileRef.current.value = ''
@@ -229,7 +232,7 @@ export function TransactionsPage(): React.ReactElement {
           placeholder="🔍 Buscar (descrição, categoria, valor…)"
           value={fText}
           onChange={(e) => setFText(e.target.value)}
-          style={{ flex: '1 1 200px', minWidth: 160 }}
+          style={{ flex: '1 1 340px', minWidth: 160 }}
         />
         <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, whiteSpace: 'nowrap', cursor: 'pointer' }}>
           <input type="checkbox" checked={allMonths} onChange={(e) => setAllMonths(e.target.checked)} />
@@ -267,8 +270,17 @@ export function TransactionsPage(): React.ReactElement {
               </option>
             ))}
         </select>
+        <select value={fPayment} onChange={(e) => setFPayment(e.target.value)}>
+          <option value="">Todas as formas de pagamento</option>
+          {PAYMENT_METHODS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.icon} {p.label}
+            </option>
+          ))}
+          <option value="none">Não identificada</option>
+        </select>
         {filtering && (
-          <button className="btn btn-secondary btn-sm" onClick={() => { setFType(''); setFCategory(''); setFText('') }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setFType(''); setFCategory(''); setFPayment(''); setFText('') }}>
             Limpar filtros
           </button>
         )}
@@ -298,6 +310,11 @@ export function TransactionsPage(): React.ReactElement {
             <span className="due-badge due-future">{allMonths ? t.date.split('-').reverse().join('/') : t.date.slice(5)}</span>
             <span className="list-row-title">{t.description || categoryName(t.categoryId)}</span>
             <span className="project-chip">{categoryName(t.categoryId)}</span>
+            {t.paymentMethod ? (
+              <span className="project-chip" title={paymentMethodLabel(t.paymentMethod)}>
+                {PAYMENT_METHODS.find((p) => p.id === t.paymentMethod)?.icon} {paymentMethodLabel(t.paymentMethod)}
+              </span>
+            ) : null}
             {t.investment ? (
               <button
                 className="project-chip"

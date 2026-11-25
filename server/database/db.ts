@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { SCHEMA } from './schema'
 import { seedAiLibrary } from './aiSeeds'
+import { detectPaymentMethod } from '../../shared/finance'
 
 let db: Database | null = null
 let dbPath: string
@@ -408,6 +409,41 @@ const MIGRATIONS: Migration[] = [
     label: 'Transações: transferência entre contas próprias fora de receitas/gastos',
     run: (db) => {
       try { db.run('ALTER TABLE transactions ADD COLUMN transfer INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+    }
+  },
+  {
+    version: 31,
+    label: 'Transações: forma de pagamento (preenche as existentes pela descrição)',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN paymentMethod TEXT;') } catch { /* exists */ }
+      try {
+        const sel = db.prepare('SELECT id, description FROM transactions WHERE paymentMethod IS NULL')
+        const rows: { id: number; description: string | null }[] = []
+        while (sel.step()) rows.push(sel.getAsObject() as unknown as { id: number; description: string | null })
+        sel.free()
+        const upd = db.prepare('UPDATE transactions SET paymentMethod = ? WHERE id = ?')
+        for (const r of rows) {
+          const pm = detectPaymentMethod(r.description)
+          if (pm) upd.run([pm, r.id])
+        }
+        upd.free()
+      } catch { /* tabela ausente */ }
+    }
+  },
+  {
+    version: 32,
+    label: 'Transações: desfaz "depósito" detectado em nome de loja (regra mais estrita)',
+    run: (db) => {
+      try {
+        const sel = db.prepare("SELECT id, description FROM transactions WHERE paymentMethod = 'deposito' AND externalId IS NULL")
+        const ids: number[] = []
+        while (sel.step()) {
+          const r = sel.getAsObject() as unknown as { id: number; description: string | null }
+          if (detectPaymentMethod(r.description) !== 'deposito') ids.push(r.id)
+        }
+        sel.free()
+        for (const id of ids) db.run('UPDATE transactions SET paymentMethod = NULL WHERE id = ?', [id])
+      } catch { /* tabela ausente */ }
     }
   }
 ]

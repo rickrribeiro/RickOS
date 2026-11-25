@@ -100,3 +100,69 @@ export function detectOwnTransfer(description: string | null | undefined, catego
   if (category && normalizeText(category).startsWith('same person transfer')) return true
   return /\b(transfer[eê]ncia entre contas|entre contas pr[oó]prias|mesma titularidade)\b/i.test(description ?? '')
 }
+
+// ── Forma de pagamento ─────────────────────────────────────────────────────────
+
+export type PaymentMethod = 'credito' | 'debito' | 'pix' | 'ted' | 'boleto' | 'transferencia' | 'saque' | 'deposito'
+
+export const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string }[] = [
+  { id: 'credito', label: 'Cartão de crédito', icon: '💳' },
+  { id: 'debito', label: 'Cartão de débito', icon: '💳' },
+  { id: 'pix', label: 'Pix', icon: '⚡' },
+  { id: 'ted', label: 'TED/DOC', icon: '🏦' },
+  { id: 'boleto', label: 'Boleto', icon: '🧾' },
+  { id: 'transferencia', label: 'Transferência', icon: '🔄' },
+  { id: 'saque', label: 'Saque', icon: '💵' },
+  { id: 'deposito', label: 'Depósito', icon: '📥' }
+]
+
+export function paymentMethodLabel(id: string | null | undefined): string {
+  return PAYMENT_METHODS.find((p) => p.id === id)?.label ?? 'Não identificada'
+}
+
+/** operationType do Open Finance (conta corrente) → forma de pagamento. */
+const OPERATION_TYPE_MAP: Record<string, PaymentMethod> = {
+  PIX: 'pix',
+  TED: 'ted',
+  DOC: 'ted',
+  BOLETO: 'boleto',
+  CONVENIO_ARRECADACAO: 'boleto',
+  CARTAO: 'debito',
+  TRANSFERENCIA_MESMA_INSTITUICAO: 'transferencia',
+  SAQUE: 'saque',
+  DEPOSITO: 'deposito'
+}
+
+/**
+ * Forma de pagamento: conta de cartão de crédito → crédito; senão o que o banco informar
+ * (paymentData.paymentMethod, operationType); por último, pistas da descrição. null = não deu para saber.
+ */
+export function detectPaymentMethod(
+  description: string | null | undefined,
+  hints: { accountType?: string | null; paymentMethod?: string | null; operationType?: string | null } = {}
+): PaymentMethod | null {
+  if (hints.accountType === 'CREDIT') return 'credito'
+  const pm = (hints.paymentMethod ?? '').toUpperCase()
+  if (pm && OPERATION_TYPE_MAP[pm]) return OPERATION_TYPE_MAP[pm]
+  const op = (hints.operationType ?? '').toUpperCase()
+  if (op && OPERATION_TYPE_MAP[op]) return OPERATION_TYPE_MAP[op]
+  const d = normalizeText(description ?? '')
+  if (!d) return null
+  if (/\bpix\b/.test(d)) return 'pix'
+  if (/\bboleto\b/.test(d)) return 'boleto'
+  if (/\b(ted|doc)\b/.test(d)) return 'ted'
+  if (/\b(compra no debito|debito visa|debito master|cartao de debito|compra debito)\b/.test(d)) return 'debito'
+  if (/\bsaque\b/.test(d)) return 'saque'
+  // "depósito" sozinho costuma ser nome de loja (depósito de bebidas); exige contexto bancário
+  if (/\bdeposito (recebido|em conta|em dinheiro|bancario|via|por envelope|identificado)\b/.test(d)) return 'deposito'
+  if (/^transferencia (enviada|recebida)\b/.test(d)) return 'transferencia'
+  // parcela "n/N" só existe em cartão de crédito
+  if (/(?<![\d/])\d{1,2}\s*\/\s*\d{1,2}(?![\d/])/.test(d)) {
+    const m = /(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/.exec(d)!
+    const n = Number(m[1])
+    const tot = Number(m[2])
+    if (n >= 1 && tot >= 2 && n <= tot) return 'credito'
+  }
+  if (/\b(cartao de credito|credito de ")/.test(d)) return 'credito'
+  return null
+}

@@ -90,6 +90,7 @@ import {
   getTransactions,
   setTransactionIgnored,
   setTransactionKind,
+  setTransactionPaymentMethod,
   getFinanceRules,
   createFinanceRule,
   updateFinanceRule,
@@ -946,6 +947,7 @@ ipcMain.handle('transactions:update', (_, id: number, accountId: number | null, 
 )
 ipcMain.handle('transactions:delete', (_, id: number) => deleteTransaction(id))
 ipcMain.handle('transactions:setIgnored', (_, id: number, reason: string | null) => setTransactionIgnored(id, reason))
+ipcMain.handle('transactions:setPaymentMethod', (_, id: number, method: string | null) => setTransactionPaymentMethod(id, method))
 ipcMain.handle('transactions:setKind', (_, id: number, kind: TransactionKind) => setTransactionKind(id, kind))
 ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[]) => bulkInsertTransactions(await categorizeNew(rows)))
 

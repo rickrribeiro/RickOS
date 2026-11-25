@@ -441,6 +441,7 @@ export interface Transaction {
   pending?: number // 1 = pendente no banco; valor/descrição ainda podem mudar
   investment?: number // 1 = aplicação (saída) / resgate (entrada) de investimento: fora de receitas/gastos
   transfer?: number // 1 = transferência entre contas próprias: fora de receitas/gastos
+  paymentMethod?: string | null // credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
 }
 
 export interface RulePreviewItem {
@@ -1080,6 +1081,7 @@ declare global {
         delete: (id: number) => Promise<void>
         setIgnored: (id: number, reason: string | null) => Promise<void>
         setKind: (id: number, kind: TransactionKind) => Promise<void>
+        setPaymentMethod: (id: number, method: string | null) => Promise<void>
         bulk: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
       }
       budgets: {

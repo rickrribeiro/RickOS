@@ -6,7 +6,7 @@ import {
   DbTransaction
 } from '../database/queries'
 import { decodeSecret } from './secrets'
-import { detectInvestmentMove, detectOwnTransfer } from '../../shared/finance'
+import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod } from '../../shared/finance'
 import { categorizeNew } from './financeRules'
 
 const PLUGGY_API = 'https://api.pluggy.ai'
@@ -27,7 +27,8 @@ interface PluggyTransaction {
   type?: string // DEBIT | CREDIT
   status?: string // PENDING | POSTED
   category?: string | null
-  operationType?: string | null // ex.: PAGAMENTO_FATURA
+  operationType?: string | null // ex.: PAGAMENTO_FATURA, PIX, TED, BOLETO, CARTAO…
+  paymentData?: { paymentMethod?: string | null } | null
 }
 
 /**
@@ -235,6 +236,11 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
         date: t.date.slice(0, 10),
         ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null,
         investment: detectInvestmentMove(t.description, t.category) ? 1 : 0,
+        paymentMethod: detectPaymentMethod(t.description, {
+          accountType: acc.type,
+          paymentMethod: t.paymentData?.paymentMethod,
+          operationType: t.operationType
+        }),
         transfer: !detectInvestmentMove(t.description, t.category) && detectOwnTransfer(t.description, t.category) ? 1 : 0,
         externalId: t.id,
         pending: t.status === 'PENDING' ? 1 : 0
@@ -260,7 +266,10 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
   for (const inc of incoming) {
     const cur = byExternal.get(inc.externalId)
     if (cur) {
+      // forma de pagamento: só preenche quando o app ainda não tem (não sobrescreve escolha do usuário)
+      const fillPayment = !cur.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {}
       if (cur.externalSig === inc.externalSig) {
+        if (fillPayment.paymentMethod) await applyExternalTransactionUpdate(cur.id, fillPayment, inc.externalId, inc.externalSig, inc.pending)
         if (!month || inc.date.startsWith(month)) skipped++
         continue
       }
@@ -271,7 +280,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
       } catch {
         prev = null
       }
-      const fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type'>> = {}
+      const fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type' | 'paymentMethod'>> = { ...fillPayment }
       const next = [inc.amount, inc.description, inc.date, inc.type] as const
       ;(['amount', 'description', 'date', 'type'] as const).forEach((k, i) => {
         const bankChanged = !prev || prev[i] !== next[i]
@@ -285,7 +294,13 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
     // importada por versão antiga (sem id): vincula em vez de duplicar
     const old = legacy.get(legacyKey(inc))?.shift()
     if (old) {
-      await applyExternalTransactionUpdate(old.id, {}, inc.externalId, inc.externalSig, inc.pending)
+      await applyExternalTransactionUpdate(
+        old.id,
+        !old.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {},
+        inc.externalId,
+        inc.externalSig,
+        inc.pending
+      )
       skipped++
       continue
     }
