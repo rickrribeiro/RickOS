@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { DailySpending } from '../components/DailySpending'
+import { PendingNotes } from '../components/PendingNotes'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
@@ -189,6 +190,8 @@ export function FinanceDashboardPage(): React.ReactElement {
           )}
         </div>
       </div>
+
+      <PendingNotes />
 
       <DailySpending />
 
