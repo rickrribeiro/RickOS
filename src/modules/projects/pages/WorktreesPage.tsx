@@ -318,7 +318,7 @@ function BranchRow(props: {
 
   async function continueInRunner(): Promise<void> {
     const d = await loadDetails()
-    openInPromptRunner(buildContinuePrompt(b, d, repo.base), b.projectId, `🌿 ${b.branch ?? b.repoName}`)
+    openInPromptRunner(await buildContinuePrompt(b, d, repo.base), b.projectId, `🌿 ${b.branch ?? b.repoName}`)
   }
 
   const meta: React.ReactNode[] = []

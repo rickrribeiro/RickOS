@@ -1,9 +1,6 @@
-/**
- * Home → "Revisão semanal": relatório final (focos, plano por dia, decisão por projeto,
- * inbox/zumbis, hábitos, finanças). Recebe Memória Pessoal (`home.weekly_review`), anexada
- * pelo componente depois deste texto.
- * Usado em: src/modules/home/components/WeeklyReview.tsx. Modelo: `claude_model`.
- */
+import { definirChamada, ex } from '../definicao'
+import { anexo, CLAUDE_MODEL } from '../padroes'
+
 export interface DadosRevisaoSemanal {
   hoje: string
   mes: string
@@ -23,12 +20,25 @@ export interface DadosRevisaoSemanal {
   gastos: number
   orcamento: number
   eventos: { title: string; startTime: string }[]
+  /** Bloco de Memória Pessoal (vazio = sem). */
+  memoria: string
 }
 
-const list = (xs: string[]): string => xs.join('\n') || '(nenhum)'
-
-export function promptRevisaoSemanal(p: DadosRevisaoSemanal): string {
-  return `Você é meu chefe de gabinete fazendo minha REVISÃO SEMANAL. Com base no contexto abaixo, escreva o RELATÓRIO FINAL em Markdown, direto e honesto, com estas seções (curtas, sem repetir o contexto):
+/**
+ * Home → "Revisão semanal": relatório final (focos, plano por dia, decisão por projeto,
+ * inbox/zumbis, hábitos, finanças). Recebe Memória Pessoal (`home.weekly_review`) em `{{memoria}}`.
+ * Usado em: src/modules/home/components/WeeklyReview.tsx.
+ */
+export const homeRevisaoSemanal = definirChamada<DadosRevisaoSemanal>({
+  id: 'home.revisaoSemanal',
+  modulo: 'home',
+  tipo: 'executa',
+  motor: 'claude-code',
+  modelo: CLAUDE_MODEL,
+  effort: null,
+  arquivo: 'home/revisaoSemanal.ts',
+  usadoEm: 'src/modules/home/components/WeeklyReview.tsx',
+  template: `Você é meu chefe de gabinete fazendo minha REVISÃO SEMANAL. Com base no contexto abaixo, escreva o RELATÓRIO FINAL em Markdown, direto e honesto, com estas seções (curtas, sem repetir o contexto):
 ## 🎯 3 focos da semana
 ## 📅 Plano por dia (seg-dom, realista, encaixando os eventos)
 ## 🗂 Projetos — uma decisão por projeto aberto (continuar / pausar com condição de retomada / retomar / focar / concluir / encerrar) e o porquê em 1 linha; no máximo 3 em foco; aponte os estagnados
@@ -37,26 +47,49 @@ export function promptRevisaoSemanal(p: DadosRevisaoSemanal): string {
 ## 💰 Finanças — estou no caminho? 1-2 sugestões
 Omita uma seção se não houver dados. Não invente compromissos que não estão no contexto.
 
-Contexto (hoje é ${p.hoje}):
-Horas trabalhadas nos últimos 7 dias: ${Math.floor(p.minutosTrabalhados / 60)}h ${p.minutosTrabalhados % 60}m
+Contexto (hoje é {{hoje}}):
+Horas trabalhadas nos últimos 7 dias: {{horas}}h {{minutos}}m
 
 Projetos:
-${p.projetos || '(nenhum)'}
+{{projetos}}
 
-Inbox (${p.inbox.length}):
-${list(p.inbox.map((t) => `- ${t}`))}
+Inbox ({{qtdInbox}}):
+{{inbox}}
 
-TODOs abertos há +14 dias (${p.zumbis.length}):
-${list(p.zumbis.map((t) => `- ${t}`))}
+TODOs abertos há +14 dias ({{qtdZumbis}}):
+{{zumbis}}
 
-Tarefas abertas (${p.totalAbertas}, as 20 mais prioritárias):
-${list(p.abertas.map((t) => `- ${t.title}${t.dueDate ? ` (prazo ${t.dueDate})` : ''}`))}
+Tarefas abertas ({{qtdAbertas}}, as 20 mais prioritárias):
+{{abertas}}
 
 Hábitos (últimos 7 dias):
-${list(p.habitos)}
+{{habitos}}
 
-Finanças do mês ${p.mes}: receitas ${p.receitas.toFixed(0)} · gastos ${p.gastos.toFixed(0)} · orçamento ${p.orcamento.toFixed(0)}
+Finanças do mês {{mes}}: receitas {{receitas}} · gastos {{gastos}} · orçamento {{orcamento}}
 
 Eventos dos próximos 7 dias:
-${list(p.eventos.map((e) => `- ${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`))}`
-}
+{{eventos}}{{memoria}}`,
+  preparar: (p) => {
+    const list = (xs: string[]): string => xs.join('\n') || '(nenhum)'
+    return {
+      hoje: String(p.hoje),
+      horas: String(Math.floor(p.minutosTrabalhados / 60)),
+      minutos: String(p.minutosTrabalhados % 60),
+      projetos: String(p.projetos || '(nenhum)'),
+      qtdInbox: String(p.inbox.length),
+      inbox: String(list(p.inbox.map((t) => `- ${t}`))),
+      qtdZumbis: String(p.zumbis.length),
+      zumbis: String(list(p.zumbis.map((t) => `- ${t}`))),
+      qtdAbertas: String(p.totalAbertas),
+      abertas: String(list(p.abertas.map((t) => `- ${t.title}${t.dueDate ? ` (prazo ${t.dueDate})` : ''}`))),
+      habitos: String(list(p.habitos)),
+      mes: String(p.mes),
+      receitas: String(p.receitas.toFixed(0)),
+      gastos: String(p.gastos.toFixed(0)),
+      orcamento: String(p.orcamento.toFixed(0)),
+      memoria: anexo(p.memoria),
+      eventos: String(list(p.eventos.map((e) => `- ${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`)))
+    }
+  },
+  exemplo: { hoje: ex('hoje'), mes: ex('mês'), minutosTrabalhados: 0, projetos: ex('resumo dos projetos'), inbox: [ex('item do inbox')], zumbis: [ex('TODO antigo')], totalAbertas: 1, abertas: [{ title: ex('tarefa'), dueDate: ex('prazo') }], habitos: [`- ${ex('hábito')}: 5/7`], receitas: 0, gastos: 0, orcamento: 0, eventos: [{ title: ex('evento'), startTime: '2026-01-01T09:00' }], memoria: ex('bloco de Memória Pessoal') }
+})

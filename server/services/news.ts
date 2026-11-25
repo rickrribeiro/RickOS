@@ -22,7 +22,8 @@ import {
   type NewsTopic
 } from '../../shared/news'
 import { tt } from '../i18n'
-import { MODELO_NOTICIAS, promptResumoNoticias } from '../../shared/prompts/noticias/resumoCategoria'
+import { MODELO_NOTICIAS } from '../../shared/prompts/noticias/resumoCategoria'
+import { montarChamada } from '../ia/gateway'
 
 export const GEMINI_KEY_SETTING = 'gemini_api_key'
 const CATEGORIES_SETTING = 'news_categories'
@@ -253,10 +254,12 @@ async function summarize(
   const list = items
     .map((it, i) => `[${i + 1}] ${it.title}${it.source ? ` (${it.source})` : ''}\nURL: ${it.link}`)
     .join('\n')
-  const prompt = promptResumoNoticias({ data: targetDate, categoria: category, maxTopicos: MAX_TOPICS_PER_CATEGORY, memoria: memory, manchetes: list })
+  // prompt (padrão ou sobrescrito) e modelo vêm do gateway; o Gemini é chamado aqui pelo schema de resposta
+  const chamada = await montarChamada('noticias.resumo', { data: targetDate, categoria: category, maxTopicos: MAX_TOPICS_PER_CATEGORY, memoria: memory, manchetes: list })
+  const prompt = chamada.prompt
 
   const res = await ai.models.generateContent({
-    model: MODEL,
+    model: chamada.modelo || MODEL,
     contents: prompt,
     config: { responseMimeType: 'application/json', responseSchema: TOPICS_SCHEMA, temperature: 0.3 }
   })

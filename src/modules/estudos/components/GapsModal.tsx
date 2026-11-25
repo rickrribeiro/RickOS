@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react'
 import { StudyTopic, StudyNode } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
 import { t } from '../../../i18n'
-import { promptLacunasRoadmap } from '../../../../shared/prompts/estudos/lacunasRoadmap'
 
 interface Gap {
   title: string
@@ -67,9 +66,8 @@ export function GapsModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
       setGaps(g)
     })
     ;(async () => {
-      const prompt = promptLacunasRoadmap({ topico: topic.name, roadmap: outline(nodes) })
       try {
-        runId.current = await window.api.ai.start({ prompt, chamada: 'estudos.lacunas', save: false, source: 'estudos' })
+        runId.current = await window.api.ai.start({ chamada: 'estudos.lacunas', params: { topico: topic.name, roadmap: outline(nodes) }, save: false, source: 'estudos' })
       } catch (e) {
         setBusy(false)
         setError(e instanceof Error ? e.message : String(e))

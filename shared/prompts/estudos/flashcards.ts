@@ -1,9 +1,20 @@
+import { definirChamada, ex } from '../definicao'
+import { CODEX_MODEL } from '../padroes'
+
 /**
  * Estudos → "Gerar flashcards" de uma anotação (JSON [{front, back}]).
- * Usado em: src/modules/estudos/components/FlashcardPanel.tsx. Modelo: `claude_model`.
+ * Usado em: src/modules/estudos/components/FlashcardPanel.tsx.
  */
-export function promptFlashcards(p: { anotacao: string }): string {
-  return `A partir da anotação em Markdown abaixo, crie flashcards de estudo (pergunta/resposta) concisos e úteis para memorização.
+export const estudosFlashcards = definirChamada<{ anotacao: string }>({
+  id: 'estudos.flashcards',
+  modulo: 'estudos',
+  tipo: 'executa',
+  motor: 'codex',
+  modelo: CODEX_MODEL,
+  effort: null,
+  arquivo: 'estudos/flashcards.ts',
+  usadoEm: 'src/modules/estudos/components/FlashcardPanel.tsx',
+  template: `A partir da anotação em Markdown abaixo, crie flashcards de estudo (pergunta/resposta) concisos e úteis para memorização.
 
 Responda APENAS com um JSON válido (sem markdown, sem texto fora do JSON), um array no formato:
 [{ "front": "pergunta", "back": "resposta" }]
@@ -16,6 +27,8 @@ Regras:
 
 Anotação:
 """
-${p.anotacao}
-"""`
-}
+{{anotacao}}
+"""`,
+  preparar: (p) => ({ anotacao: p.anotacao }),
+  exemplo: { anotacao: ex('anotação') }
+})

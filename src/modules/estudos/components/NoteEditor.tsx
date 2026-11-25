@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
 import { renderMarkdown } from '../markdown'
 import { t, getLocale } from '../../../i18n'
-import { INSTRUCOES_TUTOR, promptTutor, type AcaoTutor } from '../../../../shared/prompts/estudos/tutor'
+import type { AcaoTutor } from '../../../../shared/prompts/estudos/tutor'
 
 function fmt(iso: string | null): string {
   if (!iso) return '—'
@@ -10,13 +10,13 @@ function fmt(iso: string | null): string {
   return isNaN(d.getTime()) ? '—' : d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-const TUTOR_ACTIONS: { key: AcaoTutor; label: string; instruction: string }[] = [
-  { key: 'simple', label: t('estudos.expliqueSimples'), instruction: INSTRUCOES_TUTOR.simple },
-  { key: 'summary', label: t('estudos.resuma'), instruction: INSTRUCOES_TUTOR.summary },
-  { key: 'exercise', label: t('estudos.exercicio'), instruction: INSTRUCOES_TUTOR.exercise },
-  { key: 'gaps', label: t('estudos.oQueFalta'), instruction: INSTRUCOES_TUTOR.gaps },
-  { key: 'socratic', label: t('estudos.tutorSocratico'), instruction: INSTRUCOES_TUTOR.socratic },
-  { key: 'recall', label: t('estudos.revisaoAtiva'), instruction: INSTRUCOES_TUTOR.recall }
+const TUTOR_ACTIONS: { key: AcaoTutor; label: string }[] = [
+  { key: 'simple', label: t('estudos.expliqueSimples') },
+  { key: 'summary', label: t('estudos.resuma') },
+  { key: 'exercise', label: t('estudos.exercicio') },
+  { key: 'gaps', label: t('estudos.oQueFalta') },
+  { key: 'socratic', label: t('estudos.tutorSocratico') },
+  { key: 'recall', label: t('estudos.revisaoAtiva') }
 ]
 
 /** Split-view Markdown note editor (textarea | live preview) with debounced autosave. */
@@ -48,15 +48,14 @@ export function NoteEditor(): React.ReactElement {
     }
   }, [])
 
-  async function runTutor(instruction: string, label: string): Promise<void> {
+  async function runTutor(acao: AcaoTutor, label: string): Promise<void> {
     const content = draft.trim()
     if (!content || tutorRunning) return
     setTutorLabel(label)
     setTutorOut('')
     setTutorRunning(true)
-    const prompt = promptTutor({ instrucao: instruction, conteudo: content })
     try {
-      const rid = await window.api.ai.start({ prompt, chamada: 'estudos.tutor', save: false, source: 'estudos' })
+      const rid = await window.api.ai.start({ chamada: 'estudos.tutor', params: { acao, conteudo: content }, save: false, source: 'estudos' })
       tutorRunId.current = rid
     } catch (e) {
       setTutorRunning(false)
@@ -127,7 +126,7 @@ export function NoteEditor(): React.ReactElement {
             className="btn btn-secondary btn-sm"
             disabled={tutorRunning || !draft.trim()}
             title={draft.trim() ? '' : t('estudos.escrevaUmaAnotacaoPrimeiro')}
-            onClick={() => runTutor(a.instruction, a.label)}
+            onClick={() => runTutor(a.key, a.label)}
           >
             {a.label}
           </button>

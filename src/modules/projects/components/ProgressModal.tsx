@@ -3,7 +3,6 @@ import { Project } from '../../../types'
 import { renderMarkdown } from '../../estudos/markdown'
 import { repoFromUrl } from '../store/githubStore'
 import { t } from '../../../i18n'
-import { promptResumoProgresso } from '../../../../shared/prompts/projetos/resumoProgresso'
 
 type Period = 'week' | 'month' | 'lastMonth'
 const PERIODS: { key: Period; label: string }[] = [
@@ -47,10 +46,8 @@ export function ProgressModal({ projects, onClose }: { projects: Project[]; onCl
       return
     }
     setRunning(true)
-    const model = (await window.api.settings.get('claude_model')) ?? ''
-    const prompt = promptResumoProgresso({ periodo: period, repos })
     try {
-      runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'projetos', projectId: projects.length === 1 ? projects[0].id : null })
+      runId.current = await window.api.ai.start({ chamada: 'projetos.progresso', params: { periodo: period, repos }, save: false, source: 'projetos', projectId: projects.length === 1 ? projects[0].id : null })
     } catch (e) {
       setRunning(false)
       setError(e instanceof Error ? e.message : String(e))

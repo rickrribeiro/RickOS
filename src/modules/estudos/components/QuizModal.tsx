@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { StudyTopic, StudyQuizAttempt } from '../../../types'
 import { t, getLocale } from '../../../i18n'
-import { promptQuiz } from '../../../../shared/prompts/estudos/quiz'
 
 interface Question {
   question: string
@@ -82,9 +81,8 @@ export function QuizModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
     const nodeTitle = (id: number | null): string => (id == null ? topic.name : nodes.find((n) => n.id === id)?.title ?? '')
     const material = topicNotes.map((n) => `## ${nodeTitle(n.nodeId)}\n${n.content}`).join('\n\n')
     setPhase('generating')
-    const prompt = promptQuiz({ topico: topic.name, material: material.slice(0, 12000) })
     try {
-      const rid = await window.api.ai.start({ prompt, chamada: 'estudos.quiz', save: false, source: 'estudos' })
+      const rid = await window.api.ai.start({ chamada: 'estudos.quiz', params: { topico: topic.name, material: material.slice(0, 12000) }, save: false, source: 'estudos' })
       runId.current = rid
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

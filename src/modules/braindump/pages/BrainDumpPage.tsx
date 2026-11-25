@@ -4,7 +4,6 @@ import { useProjectStore } from '../../projects/store/projectStore'
 import { useCalendarStore } from '../../calendar/store/calendarStore'
 import { localDateStr } from '../../../utils/dates'
 import { t as tr } from '../../../i18n'
-import { promptOrganizarBrainDump } from '../../../../shared/prompts/braindump/organizar'
 
 const STATE_KEY = 'rickos:brainDump'
 
@@ -70,10 +69,6 @@ function extractPlan(raw: string): Plan | null {
   } catch {
     return null
   }
-}
-
-function buildPrompt(dump: string): string {
-  return promptOrganizarBrainDump({ hoje: localDateStr(new Date()), despejo: dump })
 }
 
 function fmtClock(sec: number): string {
@@ -182,7 +177,7 @@ export function BrainDumpPage(): React.ReactElement {
     setPlan(null)
     setRunning(true)
     try {
-      const rid = await window.api.ai.start({ prompt: buildPrompt(text), model, save: false, source: 'braindump' })
+      const rid = await window.api.ai.start({ chamada: 'braindump.organizar', params: { hoje: localDateStr(new Date()), despejo: text }, save: false, source: 'braindump' })
       runIdRef.current = rid
       // persist immediately so a reload can reconnect
       localStorage.setItem(STATE_KEY, JSON.stringify({ text, output: '', plan: null, runId: rid }))

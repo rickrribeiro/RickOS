@@ -10,7 +10,6 @@ import { PersonNetworks } from '../../chats/components/PersonNetworks'
 import { TagsModal, TagChip } from '../components/TagsModal'
 import { parseQuery, matches, QUERY_HELP, QUERY_FIELDS, type FieldValues } from '../query'
 import { t as tr, getLocale } from '../../../i18n'
-import { promptRetomarContato } from '../../../../shared/prompts/crm/retomarContato'
 
 /** Days until the next occurrence of a MM-DD / YYYY-MM-DD birthday, or null. */
 function daysToBirthday(bday: string | null): number | null {
@@ -39,15 +38,14 @@ function SuggestModal({ contact, onClose }: { contact: Contact; onClose: () => v
       setOut(ok ? output : error || 'Falha.')
     })
     ;(async () => {
-      const model = (await window.api.settings.get('claude_model')) ?? ''
-      const prompt = promptRetomarContato({
+      const params = {
         nome: contact.name,
         local: [contact.location, contact.state, contact.country].filter(Boolean).join(', '),
         interesses: contact.interests,
         ultimaConversa: contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleDateString(getLocale()) : null,
         contexto: contact.context
-      })
-      runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'crm' })
+      }
+      runId.current = await window.api.ai.start({ chamada: 'crm.retomarContato', params, save: false, source: 'crm' })
     })()
     return () => {
       offChunk()

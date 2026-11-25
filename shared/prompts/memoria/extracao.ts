@@ -1,9 +1,11 @@
+import { definirChamada, ex, type DefinicaoChamada } from '../definicao'
+import { MEM_FAST, MEM_MAIN } from '../padroes'
 import { REGRAS_SEGURANCA_MEMORIA } from './regras'
 
 /**
  * Memória Pessoal → Memory Agent extraindo sugestões de um texto (texto livre, migração,
  * resposta de entrevista, eventos de outros módulos).
- * Usado em: server/memory/agent.ts (`extractFromText`). Modelo: `memory_ai_model(_fast)`.
+ * Usado em: server/memory/agent.ts (`extractFromText`).
  */
 
 /** Formato de resposta das sugestões (também usado pela análise/consolidação). */
@@ -23,7 +25,7 @@ export const REGRAS_EXTRACAO_MEMORIA = `Como decidir:
 
 export const SISTEMA_EXTRACAO_MEMORIA = `Você é o Memory Agent do rickOS: identifica conhecimentos DURADOUROS sobre o usuário para a memória pessoal dele.\n${REGRAS_SEGURANCA_MEMORIA}\n${REGRAS_EXTRACAO_MEMORIA}\n${FORMATO_SUGESTOES_MEMORIA}`
 
-export function promptExtracaoMemoria(p: {
+export interface ParamsExtracaoMemoria {
   /** Contexto extra já sanitizado (ex.: a pergunta respondida numa entrevista); null = sem. */
   contexto: string | null
   categorias: string
@@ -33,20 +35,55 @@ export function promptExtracaoMemoria(p: {
   origem: string
   texto: string
   max: number
-}): string {
-  return `${p.contexto != null ? `Contexto: ${p.contexto}\n\n` : ''}Categorias permitidas:\n${p.categorias}
+}
+
+const base: Omit<DefinicaoChamada<ParamsExtracaoMemoria>, 'id' | 'modelo' | 'usadoEm' | 'exemplo'> = {
+  modulo: 'memoria',
+  tipo: 'executa',
+  motor: 'claude-code',
+  effort: null,
+  arquivo: 'memoria/extracao.ts',
+  sistema: SISTEMA_EXTRACAO_MEMORIA,
+  template: `{{contexto}}Categorias permitidas:\n{{categorias}}
 
 <memorias>
-${p.memorias || '(nenhuma parecida)'}
+{{memorias}}
 </memorias>
 
 <rejeitadas>
-${p.rejeitadas}
+{{rejeitadas}}
 </rejeitadas>
 
-<texto origem="${p.origem}">
-${p.texto}
+<texto origem="{{origem}}">
+{{texto}}
 </texto>
 
-Proponha no máximo ${p.max} sugestões.`
+Proponha no máximo {{max}} sugestões.`,
+  preparar: (p) => ({
+    contexto: String(p.contexto != null ? `Contexto: ${p.contexto}\n\n` : ''),
+    categorias: String(p.categorias),
+    memorias: String(p.memorias || '(nenhuma parecida)'),
+    rejeitadas: String(p.rejeitadas),
+    origem: String(p.origem),
+    texto: String(p.texto),
+    max: String(p.max)
+  })
 }
+
+/** Texto livre, importação de Markdown e migração (modelo principal). */
+export const memoriaExtracaoTexto = definirChamada<ParamsExtracaoMemoria>({
+  ...base,
+  id: 'memoria.extracaoTexto',
+  modelo: MEM_MAIN,
+  usadoEm: 'server/memory/agent.ts (texto livre, importação, migração)',
+  exemplo: { contexto: null, categorias: ex('categorias permitidas'), memorias: `#1 ${ex('memória parecida')}`, rejeitadas: ex('sugestões rejeitadas'), origem: 'text', texto: ex('seu texto'), max: 10 }
+})
+
+/** Produtores de outros módulos e respostas de lacunas (modelo rápido). */
+export const memoriaExtracaoAgente = definirChamada<ParamsExtracaoMemoria>({
+  ...base,
+  id: 'memoria.extracaoAgente',
+  modelo: MEM_FAST,
+  usadoEm: 'server/memory/agent.ts (produtores de outros módulos, respostas de lacunas)',
+  exemplo: { contexto: ex('contexto'), categorias: ex('categorias permitidas'), memorias: '', rejeitadas: ex('sugestões rejeitadas'), origem: 'producer', texto: ex('texto do módulo'), max: 5 }
+})

@@ -1,16 +1,15 @@
 import os from 'os'
 import type { AiSuggestion, AiSuggestRequest, AiSuggestResult, AiSummary, ChatMessage, ChatPriority } from '../../shared/chats'
 import { networkInfo } from '../../shared/chats'
-import { getSetting } from '../database/queries'
-import { runClaude } from '../services/claude'
+import type { MotorIa, ParamsDe } from '../../shared/prompts/catalogo'
+import { montarChamada } from '../ia/gateway'
+import { criarMotor } from '../ia/motores'
 import { loadConfig } from './config'
 import * as repo from './repo'
 import { cachedMessages, getMessages } from './service'
 import type { RemoteMessage } from './providers/types'
 import { tt } from '../i18n'
-import { ESTILOS_RESPOSTA, SISTEMA_MENSAGENS } from '../../shared/prompts/mensagens/sistema'
-import { promptSugerirRespostas } from '../../shared/prompts/mensagens/sugerirRespostas'
-import { promptResumoConversa } from '../../shared/prompts/mensagens/resumo'
+import { ESTILOS_RESPOSTA } from '../../shared/prompts/mensagens/sistema'
 
 /**
  * IA da Central de Mensagens.
@@ -27,21 +26,30 @@ import { promptResumoConversa } from '../../shared/prompts/mensagens/resumo'
  */
 export interface AiEngine {
   readonly id: string
-  complete(system: string, prompt: string, opts: { model?: string }): Promise<string>
+  complete(system: string, prompt: string, opts: { model?: string; motor?: MotorIa; effort?: string }): Promise<string>
 }
 
+/** Padrão: o motor da chamada do catálogo (gateway), sem ferramentas e fora do repositório. */
 export const claudeCliEngine: AiEngine = {
-  id: 'claude-cli',
+  id: 'gateway',
   async complete(system, prompt, opts) {
-    const command = (await getSetting('claude_command')) || 'claude'
-    return runClaude(prompt, command, {
-      model: opts.model || undefined,
+    return criarMotor(opts.motor ?? 'claude-code').executar({
+      prompt,
+      sistema: system,
+      modelo: opts.model,
+      effort: opts.effort,
+      ferramentas: 'nenhuma',
       timeoutMs: 120_000,
       cwd: os.tmpdir(),
-      usage: { source: 'mensagens' },
-      extraArgs: ['--tools', '', '--strict-mcp-config', '--append-system-prompt', system]
+      usage: { source: 'mensagens' }
     })
   }
+}
+
+/** Monta a chamada (prompt padrão ou sobrescrito + motor/modelo) e executa no motor injetável. */
+async function completar<K extends 'mensagens.sugerir' | 'mensagens.resumo'>(chamada: K, params: ParamsDe<K>): Promise<string> {
+  const c = await montarChamada(chamada, params)
+  return engine.complete(c.sistema ?? '', c.prompt, { model: c.modelo, motor: c.motor, effort: c.effort })
 }
 
 let engine: AiEngine = claudeCliEngine
@@ -122,7 +130,7 @@ export async function suggestReplies(req: AiSuggestRequest): Promise<AiSuggestRe
     const perMessage = req.mode === 'per_message' && inbound.length > 0
     const targets = perMessage ? inbound : []
     const template = req.templateId ? await repo.getTemplate(req.templateId) : null
-    const prompt = promptSugerirRespostas({
+    const out = await completar('mensagens.sugerir', {
       conversa: p.type === 'group' ? `grupo "${p.chatTitle}"` : `com ${p.contactName || p.chatTitle}`,
       rede: p.network,
       contextoPessoa: p.contactNotes,
@@ -134,7 +142,6 @@ export async function suggestReplies(req: AiSuggestRequest): Promise<AiSuggestRe
       mensagens: messagesBlock(p),
       alvosPorMensagem: perMessage ? targets.map((t) => t.alias) : null
     })
-    const out = await engine.complete(SISTEMA_MENSAGENS, prompt, { model: cfg.aiModel })
     const parsed = firstJson(out) as { suggestions?: { id?: string; reply?: string; needsReply?: boolean; priority?: string; reason?: string }[] }
     const aliasToId = new Map(p.messages.map((m) => [m.alias, m.id]))
     const suggestions: AiSuggestion[] = (parsed.suggestions ?? []).slice(0, 40).map((s) => ({
@@ -170,13 +177,12 @@ export async function suggestBatch(reqs: AiSuggestRequest[], onResult?: (r: AiSu
 export async function summarize(chatId: number, messageIds: string[], includeNotes: boolean): Promise<AiSummary> {
   const cfg = await loadConfig()
   const p = await prepare(chatId, messageIds, includeNotes)
-  const prompt = promptResumoConversa({
+  const out = await completar('mensagens.resumo', {
     conversa: p.type === 'group' ? `no grupo "${p.chatTitle}"` : `com ${p.contactName || p.chatTitle}`,
     rede: p.network,
     contextoPessoa: p.contactNotes,
     mensagens: messagesBlock(p)
   })
-  const out = await engine.complete(SISTEMA_MENSAGENS, prompt, { model: cfg.aiModel })
   const parsed = firstJson(out) as { summary?: string }
   return { chatId, text: String(parsed.summary ?? '').slice(0, 8000), partial: true, messageCount: p.messages.length }
 }

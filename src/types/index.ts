@@ -1,7 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { IdChamadaIa } from '../../shared/prompts/catalogo'
+import type { IdChamadaIa, ParamsDe } from '../../shared/prompts/catalogo'
 import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
 export type { FinanceRule, InvestmentGroupDef } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
@@ -130,6 +130,14 @@ export interface AppNotificationInput {
   body?: string
   source?: string
   page?: Page | null
+}
+
+/** Configuração salva de uma chamada de IA (null = padrão). */
+export interface AiChamadaConfig {
+  id: string
+  template: string | null
+  sistema: string | null
+  updatedAt: string
 }
 
 export interface AiUsage {
@@ -1198,13 +1206,14 @@ declare global {
         set: (tripId: number, item: string, checked: number) => Promise<void>
       }
       ai: {
-        run: (prompt: string, projectId?: number, model?: string, source?: string) => Promise<string>
-        runStream: (prompt: string, projectId?: number, model?: string, runId?: string, source?: string) => Promise<string>
+        /** Execução única de uma chamada do catálogo (o servidor monta o prompt e escolhe o motor). */
+        executar: <K extends IdChamadaIa>(chamada: K, params: ParamsDe<K>, opts?: { projectId?: number | null; source?: string }) => Promise<string>
         usage: (from: string, to: string) => Promise<AiUsage[]>
-        start: (params: {
-          prompt: string
+        start: <K extends IdChamadaIa>(params: {
+          /** Chamada do catálogo de IA + dados: o servidor monta o prompt e escolhe motor/modelo/effort. */
+          chamada: K
+          params: ParamsDe<K>
           projectId?: number | null
-          model?: string
           agentId?: string | null
           skillIds?: string
           userPrompt?: string
@@ -1212,13 +1221,19 @@ declare global {
           permission?: 'allowlist' | 'execute'
           /** Módulo de origem (contabilidade de tokens). */
           source?: string
-          /** Chamada do catálogo de IA: o servidor escolhe motor/modelo/effort. */
-          chamada?: IdChamadaIa
         }) => Promise<string>
         getRun: (runId: string) => Promise<{ status: 'running' | 'done' | 'error' | 'cancelled'; output: string; error: string | null } | null>
         cancel: (runId: string) => Promise<boolean>
         onChunk: (cb: (runId: string | undefined, text: string) => void) => () => void
         onDone: (cb: (payload: { runId: string; ok: boolean; output: string; error: string | null }) => void) => () => void
+      }
+      /** Catálogo de chamadas de IA: prompt sobrescrito pelo usuário (Configurações → IA). */
+      iaChamadas: {
+        listar: () => Promise<AiChamadaConfig[]>
+        salvarPrompt: (id: IdChamadaIa, template: string | null, sistema: string | null) => Promise<AiChamadaConfig | null>
+        reverterPrompt: (id: IdChamadaIa) => Promise<boolean>
+        /** Só monta o texto (chamadas do tipo 'texto'), já com o prompt sobrescrito, se houver. */
+        montar: <K extends IdChamadaIa>(id: K, params: ParamsDe<K>) => Promise<string>
       }
       claudeSkills: {
         list: (fresh?: boolean) => Promise<ClaudeSkillInfo[]>

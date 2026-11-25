@@ -11,10 +11,9 @@ import { spawn } from 'child_process'
 import os from 'os'
 import path from 'path'
 import { decodeSecret } from './secrets'
-import { runClaude } from './claude'
 import { projectForGithubRepo } from './projectRepos'
 import { tt } from '../i18n'
-import { promptCriarIssue } from '../../shared/prompts/github/criarIssue'
+import { executarChamada } from '../ia/gateway'
 
 const GITHUB_API = 'https://api.github.com'
 
@@ -206,10 +205,9 @@ export async function createIssueViaClaude(id: number): Promise<DbGithubIssue> {
   const command = await claudeCommandForRepo(issue.repo)
   const project = await projectForGithubRepo(issue.repo)
   const body = (issue.body ?? '').replace(/`/g, "'")
-  const prompt = promptCriarIssue({ repo: issue.repo, titulo: issue.title, corpo: body || issue.title })
-
-  const out = await runClaude(prompt, command, {
-    extraArgs: ['--allowedTools', 'Bash(gh:*)'],
+  const out = await executarChamada('github.criarIssue', { repo: issue.repo, titulo: issue.title, corpo: body || issue.title }, {
+    claudeCommand: command,
+    claudeArgs: ['--allowedTools', 'Bash(gh:*)'],
     usage: { source: 'github', projectId: project?.id ?? null }
   })
   const m = out.match(/https?:\/\/github\.com\/[^\s"')]+\/issues\/(\d+)/)

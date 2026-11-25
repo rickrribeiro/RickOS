@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
 import { t, getLocale } from '../../../i18n'
-import { promptFlashcards } from '../../../../shared/prompts/estudos/flashcards'
 
 interface GenCard {
   front: string
@@ -95,9 +94,8 @@ export function FlashcardPanel(): React.ReactElement {
     setGenError('')
     setGenerated(null)
     setGenerating(true)
-    const prompt = promptFlashcards({ anotacao: content })
     try {
-      const rid = await window.api.ai.start({ prompt, chamada: 'estudos.flashcards', save: false, source: 'estudos' })
+      const rid = await window.api.ai.start({ chamada: 'estudos.flashcards', params: { anotacao: content }, save: false, source: 'estudos' })
       runIdRef.current = rid
     } catch (e) {
       setGenerating(false)

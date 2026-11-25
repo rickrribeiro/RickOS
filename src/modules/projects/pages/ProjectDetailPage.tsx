@@ -19,8 +19,6 @@ import { timeAgo, localDateStr } from '../../../utils/dates'
 import { renderMarkdown } from '../../estudos/markdown'
 import '../projects-hub.css'
 import { t as tr, getLocale } from '../../../i18n'
-import { promptPlanoProjeto } from '../../../../shared/prompts/projetos/plano'
-import { promptOndePareiProjeto } from '../../../../shared/prompts/projetos/ondePareiProjeto'
 
 type Tab = 'geral' | 'roadmap' | 'tarefas' | 'codigo' | 'notas' | 'historico'
 const TABS: { key: Tab; label: string }[] = [
@@ -239,7 +237,7 @@ export function ProjectDetailPage(): React.ReactElement {
     try {
       const ctx = await projectContext(project, ov)
       const r = await runJson<AiPlan>(
-        promptPlanoProjeto({ hoje: localDateStr(new Date()), contexto: ctx })
+        'projetos.plano', { hoje: localDateStr(new Date()), contexto: ctx }
       )
       setAiPlan(r)
     } catch (e) {
@@ -255,7 +253,7 @@ export function ProjectDetailPage(): React.ReactElement {
     try {
       const ctx = await projectContext(project, ov)
       const txt = await runText(
-        promptOndePareiProjeto({ contexto: ctx })
+        'projetos.ondePareiProjeto', { contexto: ctx }
       )
       save({ whereLeftOff: txt })
     } catch (e) {

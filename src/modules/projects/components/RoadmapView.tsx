@@ -52,9 +52,9 @@ export function RoadmapView({
     setSelected(next)
   }
 
-  function delegate(): void {
+  async function delegate(): Promise<void> {
     if (!onDelegate || !picked.length) return
-    const d = buildRoadmapDelegation(picked)
+    const d = await buildRoadmapDelegation(picked)
     const todo = picked.filter((r) => r.node.mark === ' ').map((r) => ({ line: r.node.line, expected: r.node.raw.trim() }))
     onDelegate(d.task, d.instructions, d.title, async () => {
       setSelected(new Set())

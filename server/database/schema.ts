@@ -682,6 +682,14 @@ export const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_ai_usage_createdAt ON ai_usage(createdAt);
 
+  -- Configuração por chamada de IA do catálogo (shared/prompts/catalogo.ts). NULL = padrão.
+  CREATE TABLE IF NOT EXISTS ai_chamadas (
+    id TEXT PRIMARY KEY,            -- id da chamada (ex.: 'estudos.quiz')
+    template TEXT,                  -- prompt sobrescrito pelo usuário
+    sistema TEXT,                   -- system prompt sobrescrito
+    updatedAt TEXT NOT NULL
+  );
+
   -- Central de notificações (sino da sidebar): regras, agentes, IA, sistema
   CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

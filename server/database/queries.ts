@@ -2891,6 +2891,33 @@ export async function getAiUsage(from: string, to: string): Promise<DbAiUsage[]>
   )
 }
 
+// ── Chamadas de IA (configuração por chamada do catálogo) ─────────────────────
+export interface DbAiChamada {
+  id: string
+  template: string | null
+  sistema: string | null
+  updatedAt: string
+}
+
+export async function getAiChamadas(): Promise<DbAiChamada[]> {
+  return getAll<DbAiChamada>(await getDb(), 'SELECT * FROM ai_chamadas')
+}
+
+export async function getAiChamada(id: string): Promise<DbAiChamada | null> {
+  return getOne<DbAiChamada>(await getDb(), 'SELECT * FROM ai_chamadas WHERE id = ?', [id])
+}
+
+/** Grava o prompt sobrescrito (null = usar o padrão naquele campo). */
+export async function setAiChamadaPrompt(id: string, template: string | null, sistema: string | null): Promise<void> {
+  const db = await getDb()
+  run(
+    db,
+    `INSERT INTO ai_chamadas (id, template, sistema, updatedAt) VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET template = excluded.template, sistema = excluded.sistema, updatedAt = excluded.updatedAt`,
+    [id, template, sistema, new Date().toISOString()]
+  )
+}
+
 // ── Notificações ──────────────────────────────────────────────────────────────
 export interface DbNotification {
   id: number

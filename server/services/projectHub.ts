@@ -19,14 +19,13 @@ import {
   DbProject,
   DbProjectCycle
 } from '../database/queries'
-import { runClaude } from './claude'
 import { upsertRecurringBlock, deleteRecurringBlock } from './google'
 import { gitQuiet } from './gitscan'
 import { notify } from './notifications'
 import { repoTargets, repoTargetsFrom, localTargets, isWorkspace, RepoTarget } from './projectRepos'
 import { numberRoadmap } from '../../shared/roadmap'
 import { tt } from '../i18n'
-import { promptChangelog } from '../../shared/prompts/projetos/changelog'
+import { executarChamada } from '../ia/gateway'
 
 /**
  * Central de Projetos — visão consolidada de cada projeto: horas (timer), TODOs,
@@ -440,16 +439,16 @@ export async function generateCycleChangelog(cycleId: number, useAi: boolean): P
   if (useAi && commits.length) {
     try {
       const command = p?.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
-      const out = await runClaude(
-        promptChangelog({
+      const out = await executarChamada(
+        'projetos.changelog',
+        {
           ciclo: c.name,
           projeto: p?.name ?? '',
           objetivo: c.goal || null,
           commits: commits.map((x) => `- ${x.date.slice(0, 10)} ${x.repo ? `[${x.repo}] ` : ''}${x.subject}`).join('\n'),
           totalCommits: commits.length
-        }),
-        command,
-        { model: ((await getSetting('claude_model')) || '').trim(), timeoutMs: 180000, usage: { source: 'changelog', projectId: c.projectId } }
+        },
+        { claudeCommand: command, timeoutMs: 180000, usage: { source: 'changelog', projectId: c.projectId } }
       )
       if (out.trim()) md = out.trim()
     } catch {

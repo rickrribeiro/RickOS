@@ -15,7 +15,6 @@ import { SortMode } from '../services/searchStays'
 import { formatMoney } from '../../finance/util'
 import { renderMarkdown } from '../../estudos/markdown'
 import { t as tr } from '../../../i18n'
-import { promptAnaliseHospedagem } from '../../../../shared/prompts/viagens/analiseHospedagem'
 
 const CURRENCIES = ['BRL', 'JPY', 'USD', 'EUR']
 const SORTS: { key: SortMode; label: string }[] = [
@@ -159,13 +158,11 @@ export function StayFinderPage(): React.ReactElement {
     setAiOut('')
     await window.api.settings.set('travel_profile', profile)
     const top = results.slice(0, 8).map((r, i) => `${i + 1}. ${r.title} — ${formatMoney(r.pricePerNight, r.currency)}/noite, ${r.neighborhood ?? '—'}, ⭐${r.rating ?? '?'}, ${r.roomType}, score ${r.score}`).join('\n')
-    const model = (await window.api.settings.get('claude_model')) ?? ''
     // Memória Pessoal (integração aprovada `stays.analysis`): só preferências de hospedagem/viagem; opcional
     const mem = await window.api.memory
       .ctxStays(`${input.city} ${(input.neighborhoods ?? []).join(' ')} ${profile}`)
       .then((r) => r.block, () => '')
-    const prompt = promptAnaliseHospedagem({ memoria: mem, observacoes: profile, cidade: input.city, resultados: top })
-    aiRun.current = await window.api.ai.start({ prompt, model, save: false, source: 'viagens' })
+    aiRun.current = await window.api.ai.start({ chamada: 'viagens.hospedagem', params: { memoria: mem, observacoes: profile, cidade: input.city, resultados: top }, save: false, source: 'viagens' })
   }
 
   async function refreshWatch(w: StayWatch): Promise<void> {

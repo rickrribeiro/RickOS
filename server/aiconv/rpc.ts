@@ -2,7 +2,7 @@ import os from 'os'
 import path from 'path'
 import type { AiConversationPatch, AiImageInput, AiPromptResponse, AiTurn, ConvEffort, ConvListQuery, ConvPermissionMode, TerminalSession } from '../../shared/aiConversations'
 import { CONV_TURNS_PAGE_SIZE, IMAGE_MEDIA_TYPES, MAX_IMAGES_PER_MESSAGE } from '../../shared/aiConversations'
-import { runClaude } from '../services/claude'
+import { executarChamada } from '../ia/gateway'
 import * as gitc from './git'
 import { listClaudeSkills, readSkill, saveSkill, slashCommands } from './claudeSkills'
 import { broadcast } from '../events'
@@ -12,7 +12,6 @@ import type { RunnerDeps } from './runner'
 import { findTranscript, listTerminalSessions, parseTranscript } from './transcripts'
 import { getUsageLimits } from './usageLimits'
 import { tt } from '../i18n'
-import { promptMensagemCommit } from '../../shared/prompts/promptRunner/mensagemCommit'
 
 /**
  * Canais `conv:*` do Prompt Runner (conversas com o Claude CLI). Eventos ao vivo saem
@@ -248,11 +247,11 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     const { dir } = await convDir(id, repoRel)
     const ctx = await gitc.commitContext(dir)
     if (!ctx.trim()) throw new Error(tt('aiconv.nadaParaDescrever'))
-    const out = await runClaude(
-      promptMensagemCommit({ contexto: ctx }),
-      c ? await deps.resolveCommand(c) : 'claude',
-      { model: 'haiku', timeoutMs: 90_000, usage: { source: 'prompt-runner', projectId: c?.projectId ?? null } }
-    )
+    const out = await executarChamada('promptRunner.mensagemCommit', { contexto: ctx }, {
+      claudeCommand: c ? await deps.resolveCommand(c) : 'claude',
+      timeoutMs: 90_000,
+      usage: { source: 'prompt-runner', projectId: c?.projectId ?? null }
+    })
     return out.replace(/^```\w*\n?|```$/g, '').trim()
   })
   /** Apaga o worktree e a branch de uma conversa (e arquiva a conversa). */

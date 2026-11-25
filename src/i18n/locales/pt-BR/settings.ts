@@ -381,5 +381,21 @@ export const settings = {
   'settings.iaChamada.passagens.skyscanner': 'Busca assistida no Skyscanner',
   'settings.iaChamada.viagens.hospedagem': 'Analisar hospedagens',
   'settings.iaChamada.crm.retomarContato': 'Retomar contato',
-  'settings.iaChamada.noticias.resumo': 'Resumo diário de notícias'
+  'settings.iaChamada.noticias.resumo': 'Resumo diário de notícias',
+  'settings.iaPrompt.personalizado': '✏️ Personalizado',
+  'settings.iaPrompt.editar': 'Editar prompt',
+  'settings.iaPrompt.salvar': 'Salvar prompt',
+  'settings.iaPrompt.cancelar': 'Cancelar',
+  'settings.iaPrompt.sistema': 'System prompt',
+  'settings.iaPrompt.prompt': 'Prompt',
+  'settings.iaPrompt.variaveis': 'Variáveis: o app troca cada uma pelos dados reais na hora de chamar a IA.',
+  'settings.iaPrompt.faltando': 'Estas variáveis do padrão não estão no seu texto, então esses dados não vão para a IA: {lista}',
+  'settings.iaPrompt.usarPadrao': 'Carregar o texto padrão',
+  'settings.iaPrompt.reverter': 'Reverter para o padrão',
+  'settings.iaPrompt.confirmarReverter': 'Apagar o prompt personalizado de "{nome}" e voltar a usar o padrão? Isso não pode ser desfeito.',
+  'settings.iaPrompt.salvo': 'Prompt salvo: as próximas execuções já usam este texto.',
+  'settings.iaPrompt.revertido': 'Voltou ao prompt padrão.',
+  'settings.iaPrompt.erro': 'Erro: {msg}',
+  'settings.iaPrompt.exemploAtual': 'Prompt em uso, montado com dados de exemplo:',
+  'settings.iaPrompt.soTexto': 'Só monta o texto; quem executa é o Assistente ou o Prompt Runner.'
 }

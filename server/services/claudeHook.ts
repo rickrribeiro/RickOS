@@ -3,10 +3,9 @@ import os from 'os'
 import path from 'path'
 import { getConfig, dataDir } from '../config'
 import { getProjects, getProject, getSetting, setSetting, patchProject, addProjectEvent, DbProject } from '../database/queries'
-import { runClaude } from './claude'
 import { gitQuiet } from './gitscan'
 import { broadcast } from '../events'
-import { promptOndePareiSessao } from '../../shared/prompts/projetos/ondePareiSessao'
+import { executarChamada } from '../ia/gateway'
 
 /**
  * "Onde parei" automático: um hook SessionEnd do Claude Code (global, em
@@ -247,21 +246,20 @@ async function summarize(projectId: number, payload: SessionPayload): Promise<vo
   const commits = ((await gitQuiet(payload.cwd!, ['log', `--since=${since}`, '--format=%h %s', '-20'])) ?? '').trim()
   const status = ((await gitQuiet(payload.cwd!, ['status', '--short'])) ?? '').trim().split('\n').filter(Boolean)
 
-  const prompt = promptOndePareiSessao({
+  const params = {
     projeto: project.name,
     branch: tr.branch ?? '?',
     pedidos: tr.prompts.slice(-10).map((p, i) => `${i + 1}. ${clip(p.replace(/\s+/g, ' '), 400)}`).join('\n'),
     respostas: tr.replies.slice(-4).map((r) => `- ${clip(r.replace(/\s+/g, ' '), 600)}`).join('\n'),
     commits,
     naoCommitados: status.slice(0, 15).join(', ')
-  })
+  }
 
   const command = project.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
-  const model = (await getSetting(HOOK_MODEL_KEY)) || 'haiku'
   let where = ''
   let next: string | null = null
   try {
-    const out = await runClaude(prompt, command, { model, timeoutMs: 120000, usage: { source: 'onde-parei', projectId } })
+    const out = await executarChamada('projetos.ondePareiSessao', params, { claudeCommand: command, timeoutMs: 120000, usage: { source: 'onde-parei', projectId } })
     const m = out.match(/\{[\s\S]*\}/)
     const j = m ? (JSON.parse(m[0]) as { whereLeftOff?: string; nextStep?: string | null }) : null
     where = (j?.whereLeftOff ?? '').trim()

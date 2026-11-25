@@ -412,7 +412,7 @@ describe('Não interferência', () => {
     for (const f of ['server/services/claude.ts', 'server/flights/ai.ts', 'server/chats/ai.ts', 'server/services/projectHub.ts', 'server/services/delegation.ts', 'server/aiconv/runner.ts'])
       assert.doesNotMatch(read(f), /memory|memoria|memória/i, f)
     const rpc = read('server/rpc.ts')
-    const ctxFn = rpc.slice(rpc.indexOf('async function buildProjectContext'), rpc.indexOf("ipcMain.handle('ai:run'"))
+    const ctxFn = rpc.slice(rpc.indexOf('async function buildProjectContext'), rpc.indexOf("ipcMain.handle('ai:executar'"))
     assert.doesNotMatch(ctxFn, /memory/i)
   })
 

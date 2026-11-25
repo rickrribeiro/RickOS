@@ -1,4 +1,5 @@
 import type { MotorIa } from '../../../shared/prompts/catalogo'
+import type { CliUsage } from '../../services/claude'
 
 /**
  * Contrato de um motor de IA (strategy). Cada motor sabe executar um prompt já montado
@@ -26,6 +27,10 @@ export interface ExecucaoIa {
   claudeArgs?: string[]
   /** Só Claude Code: comando/alias do CLI (conta do projeto). */
   claudeCommand?: string
+  /** Só Claude Code: CLAUDE_CONFIG_DIR desta execução (outra conta). */
+  claudeConfigDir?: string
+  /** Só Claude Code: recebe o uso de tokens (quem registra é o chamador; não use junto com `usage`). */
+  onUsage?: (u: CliUsage) => void
   /** Só Claude Code: modo de permissão no agentic. */
   permissionMode?: 'default' | 'acceptEdits'
   /** Texto ao vivo. */

@@ -212,13 +212,15 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
-  clearNotifications
+  clearNotifications,
+  getAiChamadas,
+  getAiChamada,
+  setAiChamadaPrompt
 } from './database/queries'
 import { setServerLocale, tt } from './i18n'
 import type { NotificationInput, NotificationScope, TodoListFilters } from './database/queries'
 import type { DbTransaction, DbSkill, DbAgent, StudyBundle, DbStayFavorite, DbStayWatch, DbStayPricePoint } from './database/queries'
 import { syncGithubIssues, createIssueViaClaude } from './services/github'
-import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
 import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken, reclassifyInvestmentFlags } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
@@ -255,11 +257,9 @@ import {
 } from './services/gitscan'
 import { getConfig } from './config'
 import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, convDefaultModel } from '../shared/aiConversations'
-import { promptOcrImagem } from '../shared/prompts/inbox/ocrImagem'
 import { promptContextoProjeto } from '../shared/prompts/projetos/contextoProjeto'
-import { promptSistemaConversa } from '../shared/prompts/promptRunner/sistemaConversa'
-import type { IdChamadaIa } from '../shared/prompts/catalogo'
-import { executarChamada } from './ia/gateway'
+import { definicao } from '../shared/prompts/catalogo'
+import { executarChamada, idValido, montarChamada } from './ia/gateway'
 
 /**
  * RPC registry: every `<ns>:<action>` channel the clients can call. The handlers
@@ -640,7 +640,7 @@ async function runScheduledJobs(): Promise<void> {
       await setJobRan(job.id, todayStr) // mark first to avoid double-run if it takes long
       try {
         const command = await resolveClaudeCommand()
-        const out = await runClaude(job.prompt, command, { model: await resolveModel(), timeoutMs: 0, usage: { source: 'agendador' } })
+        const out = await executarChamada('automacoes.agendado', { prompt: job.prompt }, { claudeCommand: command, timeoutMs: 0, usage: { source: 'agendador' } })
         const text = (out || '').trim()
         if (text) {
           await createTodo(`🤖 ${job.name}`, text.slice(0, 4000), 'inbox', 'agent', 1, null, null, 1)
@@ -755,12 +755,11 @@ ipcMain.handle('inbox:ocr', async (_, base64: string, ext: string) => {
   const file = join(dir, `${randomUUID()}.${safeExt}`)
   const b64 = base64.includes(',') ? base64.split(',')[1] : base64
   fs.writeFileSync(file, Buffer.from(b64, 'base64'))
-  const prompt = promptOcrImagem({ arquivo: file })
   try {
     const command = await resolveClaudeCommand()
-    const out = await runClaude(prompt, command, {
-      model: await resolveModel(),
-      extraArgs: ['--allowedTools', 'Read'],
+    const out = await executarChamada('inbox.ocr', { arquivo: file }, {
+      claudeCommand: command,
+      claudeArgs: ['--allowedTools', 'Read'],
       timeoutMs: 180000,
       usage: { source: 'inbox' }
     })
@@ -1336,11 +1335,6 @@ async function resolveClaudeCommand(projectId?: number): Promise<string> {
   return (await getSetting('claude_command')) || 'claude'
 }
 
-/** Effective model: explicit arg → global setting → '' (CLI default). */
-async function resolveModel(model?: string): Promise<string> {
-  return (model || (await getSetting('claude_model')) || '').trim()
-}
-
 /** The project's local path (cwd for the CLI), if configured. */
 async function resolveProjectCwd(projectId?: number | null): Promise<string | undefined> {
   if (projectId == null) return undefined
@@ -1396,12 +1390,30 @@ async function buildProjectContext(projectId?: number | null): Promise<string> {
   })
 }
 
-ipcMain.handle('ai:run', async (_, prompt: string, projectId?: number, model?: string, source?: string) => {
-  return runClaude(prompt, await resolveClaudeCommand(projectId), {
-    model: await resolveModel(model),
-    usage: { source: source || 'outro', projectId: projectId ?? null }
+// Execução única de uma chamada do catálogo (front: runJson/runText). Motor/modelo/prompt pelo gateway.
+ipcMain.handle('ai:executar', async (_, chamada: string, params: unknown, opts?: { projectId?: number | null; source?: string }) => {
+  const projectId = opts?.projectId ?? undefined
+  return executarChamada(idValido(chamada), params as never, {
+    claudeCommand: await resolveClaudeCommand(projectId),
+    usage: { source: opts?.source || 'outro', projectId: projectId ?? null }
   })
 })
+
+// ── Catálogo de chamadas de IA (Configurações → IA) ──
+ipcMain.handle('iaChamadas:listar', () => getAiChamadas())
+/** Prompt sobrescrito. Texto igual ao padrão (ou vazio) = volta a usar o padrão naquele campo. */
+ipcMain.handle('iaChamadas:salvarPrompt', async (_, id: string, template: string | null, sistema: string | null) => {
+  const d = definicao(idValido(id))
+  const limpo = (v: string | null, padrao: string | undefined): string | null => (v == null || !v.trim() || v === padrao ? null : v)
+  await setAiChamadaPrompt(d.id, limpo(template, d.template), limpo(sistema, d.sistema))
+  return getAiChamada(d.id)
+})
+ipcMain.handle('iaChamadas:reverterPrompt', async (_, id: string) => {
+  await setAiChamadaPrompt(idValido(id), null, null)
+  return true
+})
+/** Só monta o texto (chamadas do tipo 'texto' e pré-visualização). */
+ipcMain.handle('iaChamadas:montar', async (_, id: string, params: unknown) => (await montarChamada(idValido(id), params as never)).prompt)
 
 // Uso de tokens do Claude CLI no intervalo [from, to) (ISO).
 ipcMain.handle('ai:usage', (_, from: string, to: string) => getAiUsage(from, to))
@@ -1418,17 +1430,16 @@ const aiRuns = new Map<string, AiRun>()
 
 
 interface AiStartParams {
-  prompt: string
+  /** Chamada do catálogo + dados: o gateway monta o prompt e escolhe motor/modelo/effort. */
+  chamada: string
+  params: unknown
   projectId?: number | null
-  model?: string
   agentId?: string | null
   skillIds?: string
   userPrompt?: string
   save?: boolean // persist an execution in the AI history (default true)
   permission?: 'allowlist' | 'execute' // 'execute' = agentic (roda ferramentas)
   source?: string // módulo de origem, para a contabilidade de tokens
-  /** Chamada do catálogo: motor/modelo/effort vêm do gateway (ignora `model`). */
-  chamada?: IdChamadaIa
 }
 
 // Start a run in the background: returns runId immediately. Output accumulates in main,
@@ -1444,9 +1455,10 @@ ipcMain.handle('ai:start', async (_, params: AiStartParams) => {
     if (Date.now() - startedAt < 60 * 1000) return
     void notify({ title, body, source: 'claude', page: params.save !== false ? 'ai-history' : null })
   }
-  const promptPreview = (params.userPrompt || params.prompt).replace(/\s+/g, ' ').trim().slice(0, 120)
+  const chamada = idValido(params.chamada)
+  const montado = await montarChamada(chamada, params.params as never)
+  const promptPreview = (params.userPrompt || montado.prompt).replace(/\s+/g, ' ').trim().slice(0, 120)
   const command = await resolveClaudeCommand(params.projectId ?? undefined)
-  const model = await resolveModel(params.model)
   const context = await buildProjectContext(params.projectId)
   const cwd = await resolveProjectCwd(params.projectId)
   const agentic = params.permission === 'execute'
@@ -1460,36 +1472,24 @@ ipcMain.handle('ai:start', async (_, params: AiStartParams) => {
     run.kill = kill
   }
   const usage = { source: params.source || 'outro', projectId: params.projectId ?? null }
-  const execucao = params.chamada
-    ? executarChamada(params.chamada, {
-        prompt: context + params.prompt,
-        claudeCommand: command,
-        claudeArgs: extraArgs,
-        cwd,
-        timeoutMs: 0,
-        ferramentas: agentic ? 'agentic' : 'padrao',
-        usage,
-        onChunk,
-        registerChild
-      })
-    : runClaude(context + params.prompt, command, {
-        model,
-        extraArgs, // libera gh/git/arquivos para o Claude executar (ex.: criar issue)
-        cwd, // roda dentro do diretório do projeto, quando configurado
-        timeoutMs: 0, // sem timeout: tarefas podem demorar
-        streamJson: !agentic, // texto/pensamento ao vivo (modo seguro)
-        agentic, // 'executar': roda ferramentas de verdade (bidirecional)
-        usage,
-        onChunk,
-        registerChild
-      })
+  const execucao = executarChamada(chamada, params.params as never, {
+    prefixo: context,
+    claudeCommand: command,
+    claudeArgs: extraArgs, // libera gh/git/arquivos para o Claude executar (ex.: criar issue)
+    cwd, // roda dentro do diretório do projeto, quando configurado
+    timeoutMs: 0, // sem timeout: tarefas podem demorar
+    ferramentas: agentic ? 'agentic' : 'padrao', // 'executar': roda ferramentas de verdade
+    usage,
+    onChunk,
+    registerChild
+  })
   execucao
     .then(async (result) => {
       run.status = 'done'
       run.output = result
       if (params.save !== false) {
         try {
-          await createExecution(params.agentId ?? null, params.skillIds ?? '[]', params.userPrompt ?? '', params.prompt, result)
+          await createExecution(params.agentId ?? null, params.skillIds ?? '[]', params.userPrompt ?? '', montado.prompt, result)
         } catch {
           // saving is best-effort
         }
@@ -1517,24 +1517,6 @@ ipcMain.handle('ai:getRun', (_, runId: string) => {
   return r ? { status: r.status, output: r.output, error: r.error } : null
 })
 
-// One-shot streaming (used by the Assistente page).
-ipcMain.handle('ai:runStream', async (_, prompt: string, projectId?: number, model?: string, runId?: string, source?: string) => {
-  const command = await resolveClaudeCommand(projectId)
-  const context = await buildProjectContext(projectId)
-  const extraArgs = await resolveAllowedToolsArgs()
-  const cwd = await resolveProjectCwd(projectId)
-  return runClaude(context + prompt, command, {
-    model: await resolveModel(model),
-    extraArgs,
-    cwd,
-    streamJson: true, // stream-json carries the token usage at the end
-    usage: { source: source || 'assistente', projectId: projectId ?? null },
-    onChunk: (text) => {
-      broadcast('ai:chunk', { runId, text })
-    }
-  })
-})
-
 // Prompt Runner: conversas com o Claude CLI (canais `conv:*`, server/aiconv/rpc.ts).
 registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   resolveCommand: async (c) => (c.claudeCommand.trim() ? c.claudeCommand.trim() : resolveClaudeCommand(c.projectId ?? undefined)),
@@ -1547,11 +1529,13 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   systemPrompt: async (c) => {
     const agente = c.agentId ? (await getAgents()).find((a) => a.id === c.agentId) ?? null : null
     const all = c.skillIds.length ? await getSkills() : []
-    return promptSistemaConversa({
+    const m = await montarChamada('promptRunner.conversa', {
       contextoProjeto: await buildProjectContext(c.projectId),
       agente,
-      skills: c.skillIds.map((id) => all.find((x) => x.id === id)).filter((x): x is NonNullable<typeof x> => !!x)
+      skills: c.skillIds.map((id) => all.find((x) => x.id === id)).filter((x): x is NonNullable<typeof x> => !!x),
+      mensagem: ''
     })
+    return m.sistema ?? ''
   },
   projectPaths: async () => {
     const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()])

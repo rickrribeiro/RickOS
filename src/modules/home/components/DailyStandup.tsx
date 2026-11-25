@@ -3,7 +3,6 @@ import { renderMarkdown } from '../../estudos/markdown'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
 import { t as tr } from '../../../i18n'
-import { promptBriefingMatinal } from '../../../../shared/prompts/home/briefingMatinal'
 
 const STATE_KEY = 'rickos:dailyStandup'
 
@@ -96,9 +95,8 @@ export function DailyStandup(): React.ReactElement {
     setRunning(true)
     setOpen(true)
     try {
-      const { model, ctx } = JSON.parse(await buildContext())
-      const prompt = promptBriefingMatinal({ contexto: ctx })
-      runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'home' })
+      const { ctx } = JSON.parse(await buildContext()) as { ctx: string }
+      runId.current = await window.api.ai.start({ chamada: 'home.briefing', params: { contexto: ctx }, save: false, source: 'home' })
     } catch (e) {
       setRunning(false)
       setError(e instanceof Error ? e.message : String(e))

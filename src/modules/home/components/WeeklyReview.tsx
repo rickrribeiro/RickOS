@@ -5,7 +5,7 @@ import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/d
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
 import { LAST_REVIEW_KEY } from '../../projects/lib/constants'
 import { t as tr, getLocale } from '../../../i18n'
-import { promptRevisaoSemanal } from '../../../../shared/prompts/home/revisaoSemanal'
+import type { DadosRevisaoSemanal } from '../../../../shared/prompts/home/revisaoSemanal'
 
 /** Último relatório gerado (no servidor: desktop e celular veem o mesmo). */
 const REPORT_KEY = 'weekly_review_report'
@@ -27,8 +27,8 @@ function fmtGenerated(iso: string): string {
 }
 
 /** Coleta o contexto da semana (inbox, TODOs zumbis, projetos, hábitos, finanças, horas,
- *  agenda) e devolve o prompt do relatório final. */
-async function buildPrompt(): Promise<string> {
+ *  agenda): os dados do prompt do relatório final (template em shared/prompts/home/revisaoSemanal.ts). */
+async function buildPrompt(): Promise<Omit<DadosRevisaoSemanal, 'memoria'>> {
   const today = localDateStr(new Date())
   const month = today.slice(0, 7)
   const weekAgo = localDateStr(new Date(Date.now() - 6 * DAY))
@@ -64,7 +64,7 @@ async function buildPrompt(): Promise<string> {
   const budget = budgets.reduce((s, b) => s + b.amount, 0)
   const minutes = stats.reduce((s, r) => s + r.totalMinutes, 0)
 
-  return promptRevisaoSemanal({
+  return {
     hoje: today,
     mes: month,
     minutosTrabalhados: minutes,
@@ -78,7 +78,7 @@ async function buildPrompt(): Promise<string> {
     gastos: expense,
     orcamento: budget,
     eventos: events
-  })
+  }
 }
 
 /** Revisão semanal no dashboard: um botão gera o relatório final, que fica salvo até o próximo. */
@@ -161,14 +161,12 @@ export function WeeklyReview(): React.ReactElement {
     setRunning(true)
     setOpen(true)
     try {
-      const [base, model, mem] = await Promise.all([
+      const [dados, mem] = await Promise.all([
         buildPrompt(),
-        window.api.settings.get('claude_model'),
         // consumer aprovado: objetivos/produtividade/aprendizados; opcional
         window.api.memory.ctxWeeklyReview().then((r) => r.block, () => '')
       ])
-      const prompt = mem ? `${base}\n\n${mem}` : base
-      const rid = await window.api.ai.start({ prompt, model: model ?? '', save: false, source: 'revisao' })
+      const rid = await window.api.ai.start({ chamada: 'home.revisaoSemanal', params: { ...dados, memoria: mem }, save: false, source: 'revisao' })
       runId.current = rid
       await window.api.settings.set(PENDING_KEY, rid)
     } catch (e) {

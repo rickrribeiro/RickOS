@@ -8,7 +8,6 @@ import { timeAgo } from '../../../utils/dates'
 import { runJson } from '../../projects/lib/ai'
 import { isClosed } from '../../projects/lib/constants'
 import { t as tr, getLocale } from '../../../i18n'
-import { promptClassificarInbox } from '../../../../shared/prompts/inbox/classificarProjetos'
 
 type SourceFilter = 'all' | 'ai' | 'manual'
 
@@ -43,7 +42,7 @@ export function InboxPage(): React.ReactElement {
     setAiError('')
     try {
       const r = await runJson<{ items: { id: number; projectId: number | null }[] }>(
-        promptClassificarInbox({ projetos: openProjects, itens: pending }),
+        'inbox.classificar', { projetos: openProjects, itens: pending },
         'inbox'
       )
       const map: Record<number, number> = {}

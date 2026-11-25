@@ -2,7 +2,8 @@ import crypto from 'crypto'
 import type { AiDraft, FlightMonitor, MonitorConfig } from '../../shared/flights'
 import { defaultMonitorConfig, formatMoney, toMinor } from '../../shared/flights'
 import { getSetting } from '../database/queries'
-import { runClaude } from '../services/claude'
+import { executarChamada } from '../ia/gateway'
+import type { ParamsDe } from '../../shared/prompts/catalogo'
 import { todayLocal } from './dates'
 import { estimateGround } from './ground'
 import { getAirport, refCenter, resolveRef, searchPlaces } from './geo'
@@ -11,9 +12,6 @@ import * as repo from './repo'
 import { configErrors, normalizeConfig } from './validate'
 import { fmtMinutes } from '../../shared/flights'
 import { tt } from '../i18n'
-import { promptCriarMonitor } from '../../shared/prompts/passagens/criarMonitor'
-import { promptImportarAlerta } from '../../shared/prompts/passagens/importarAlerta'
-import { promptAnaliseOfertas } from '../../shared/prompts/passagens/analiseOfertas'
 
 /**
  * IA só onde agrega: interpretar linguagem natural, recomendar regiões/aeroportos,
@@ -25,13 +23,9 @@ import { promptAnaliseOfertas } from '../../shared/prompts/passagens/analiseOfer
  */
 const hash = (s: string): string => crypto.createHash('sha256').update(s).digest('hex').slice(0, 24)
 
-async function model(): Promise<string> {
-  return ((await getSetting('flights_ai_model')) ?? 'haiku').trim()
-}
-
-async function ask(prompt: string): Promise<string> {
+async function ask<K extends 'passagens.criarMonitor' | 'passagens.importarAlerta' | 'passagens.analiseOfertas'>(chamada: K, params: ParamsDe<K>): Promise<string> {
   const command = (await getSetting('claude_command')) || 'claude'
-  return runClaude(prompt, command, { model: await model(), timeoutMs: 120_000, usage: { source: 'passagens' } })
+  return executarChamada(chamada, params, { claudeCommand: command, timeoutMs: 120_000, usage: { source: 'passagens' } })
 }
 
 function firstJson(text: string): unknown {
@@ -62,8 +56,7 @@ export async function draftFromText(text: string, currentCurrency = 'BRL'): Prom
   const cached = !!raw
   if (!raw) {
     await spendAi(null, 10)
-    const prompt = promptCriarMonitor({ hoje: today, moeda: currentCurrency, pedido: clean })
-    raw = firstJson(await ask(prompt)) as Obj
+    raw = firstJson(await ask('passagens.criarMonitor', { hoje: today, moeda: currentCurrency, pedido: clean })) as Obj
     await repo.cacheSet(cacheKey, raw, 7 * 86400_000)
   }
   return buildDraft(raw, cached)
@@ -142,8 +135,7 @@ export async function structureImportText(text: string, monitorId: number, aiLim
   let json = await repo.cacheGet<unknown>(cacheKey)
   if (!json) {
     await spendAi(monitorId, aiLimit)
-    const prompt = promptImportarAlerta({ hoje: todayLocal(), texto: clean })
-    json = firstJson(await ask(prompt))
+    json = firstJson(await ask('passagens.importarAlerta', { hoje: todayLocal(), texto: clean }))
     await repo.cacheSet(cacheKey, json, 30 * 86400_000)
   }
   return parseImport(JSON.stringify(json), { source: 'Alerta importado (IA)', verification: 'imported' })
@@ -157,8 +149,7 @@ export async function insights(m: FlightMonitor, rows: string[]): Promise<{ text
   const hit = await repo.cacheGet<string>(cacheKey)
   if (hit) return { text: hit, cached: true }
   await spendAi(m.id, m.config.budget.maxAiCallsPerRun)
-  const prompt = promptAnaliseOfertas({ monitor: m.name, linhas: compact })
-  const text = (await ask(prompt)).trim()
+  const text = (await ask('passagens.analiseOfertas', { monitor: m.name, linhas: compact })).trim()
   await repo.cacheSet(cacheKey, text, 3 * 86400_000)
   return { text, cached: false }
 }

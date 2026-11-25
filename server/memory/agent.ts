@@ -5,9 +5,7 @@ import { SENS_RANK, normText } from '../../shared/memory'
 import { getDb, saveDb } from '../database/db'
 import { getSetting } from '../database/queries'
 import type { MemoryAiOp } from './ai'
-import { callAi, parseJsonObject } from './ai'
-import { promptExtracaoMemoria, SISTEMA_EXTRACAO_MEMORIA } from '../../shared/prompts/memoria/extracao'
-import { promptAnaliseMemoria, SISTEMA_ANALISE_MEMORIA } from '../../shared/prompts/memoria/analise'
+import { callAi, chamadaDeExtracao, parseJsonObject } from './ai'
 import type { ConsumeRule, ProduceRule } from './policy'
 import { categoryAllowed, resolveConsume, resolveProduce, sensitivityAllowed } from './policy'
 import { all, categoriesSync, currentOwner, ensureSeeded, exec, nowIso, one, sha, toMemory, MEM_SELECT, MemoryError } from './repo'
@@ -163,7 +161,7 @@ export async function extractFromText(req: ExtractRequest): Promise<RunStats> {
     // memórias parecidas (dedupe/atualização) — só o que a política de consumo do caso permite
     const existing = consume.ok ? retrieve(db, owner, { rule: consume.rule, query: chunk.text, minRelevance: 0.15 }).selected : []
     const allowedIds = new Set(existing.map((s) => s.memory.id))
-    const prompt = promptExtracaoMemoria({
+    const params = {
       contexto: req.hint ? sanitizeForPrompt(req.hint, 300) : null,
       categorias: categoriesBlock(db, owner, produce.rule),
       memorias: existing.map((s) => `#${s.memory.id} ${s.line}`).join('\n'),
@@ -171,9 +169,9 @@ export async function extractFromText(req: ExtractRequest): Promise<RunStats> {
       origem: req.sourceKind,
       texto: chunk.text.replace(/<\/?texto[^>]*>/gi, ''),
       max: produce.rule.maxSuggestionsPerRun - stats.proposed
-    })
+    }
     stats.calls++
-    const raw = await callAi(req.op, SISTEMA_EXTRACAO_MEMORIA, prompt)
+    const raw = await callAi(req.op, chamadaDeExtracao(req.op), params)
     const parsed = parseJsonObject<{ suggestions?: AiItem[] }>(raw)
     applyItems(db, owner, parsed.suggestions ?? [], produce.rule, stats, {
       sourceKind: req.sourceKind,
@@ -295,9 +293,9 @@ export async function analyzeMemories(useCase: 'memory.analyze' | 'memory.consol
   const list = mems
     .map((m) => `#${m.id} [${cats.get(m.categoryId ?? -1) ?? 'sem-categoria'} · ${m.type}${m.confirmedAt ? ' · confirmada' : ''} · atualizada ${m.updatedAt.slice(0, 10)}] ${sanitizeForPrompt(m.content, 300)}`)
     .join('\n')
-  const prompt = promptAnaliseMemoria({ categorias: categoriesBlock(db, owner, produce.rule), memorias: list, rejeitadas: rejectedHints(db, owner), max: produce.rule.maxSuggestionsPerRun })
+  const params = { categorias: categoriesBlock(db, owner, produce.rule), memorias: list, rejeitadas: rejectedHints(db, owner), max: produce.rule.maxSuggestionsPerRun }
   stats.calls++
-  const raw = await callAi(useCase === 'memory.analyze' ? 'analise' : 'consolidacao', SISTEMA_ANALISE_MEMORIA, prompt)
+  const raw = await callAi(useCase === 'memory.analyze' ? 'analise' : 'consolidacao', 'memoria.analise', params)
   const parsed = parseJsonObject<{ suggestions?: AiItem[] }>(raw)
   const allowedIds = new Set(mems.map((m) => m.id))
   const byId = new Map(mems.map((m) => [m.id, m]))

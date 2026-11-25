@@ -1,29 +1,44 @@
 # Prompts do rickOS
 
-Todo texto enviado a uma IA (Claude CLI ou Gemini) mora aqui, **um arquivo por prompt**, para dar para revisar tudo num lugar só. O código só monta os dados e chama a função do prompt.
+Todo texto enviado a uma IA (Claude Code, Codex ou Gemini) mora aqui, **um arquivo por chamada**, para dar para revisar tudo num lugar só.
 
-* Cada arquivo começa com um comentário: o que o prompt faz, **onde é usado** e qual modelo/configuração usa.
-* Prompt simples = função `promptXxx({ ...dados })` que devolve a string. System prompts e regras fixas = constantes (`SISTEMA_*`, `REGRAS_*`).
+## Como funciona
+
+```
+chamador ──(id + dados)──▶ gateway (server/ia/gateway.ts) ──▶ motor (factory criarMotor: claude-code | codex)
+                              │  lê a config no banco (ai_chamadas)
+                              │  monta o prompt: template padrão OU o sobrescrito pelo usuário
+                              └─ resolve motor / modelo / effort
+```
+
+* **Factory `definirChamada()`** (`definicao.ts`): cada arquivo exporta uma definição com id, módulo, padrões de motor/modelo/effort, o prompt como **template** com variáveis `{{nome}}`, a função `preparar(dados)` (dados do chamador → variáveis) e um `exemplo`.
+* O chamador **nunca** monta o prompt: passa o id e os dados. Servidor: `executarChamada(id, dados, opções)` ou `montarChamada(id, dados)`. Front: `window.api.ai.start({ chamada, params })`, `window.api.ai.executar(...)` (`runJson`/`runText`) ou `window.api.iaChamadas.montar(...)` (chamadas do tipo `texto`).
+* **Prompt sobrescrito**: em Configurações → IA → "Ver onde a IA é usada" → Editar prompt. Fica em `ai_chamadas` (template/sistema); "Reverter para o padrão" apaga. O texto sobrescrito usa as mesmas variáveis do padrão; partes condicionais (ex.: um bloco que só aparece se houver dado) já vêm prontas dentro da variável.
 * Fica em `shared/` porque o servidor e o front usam (os dois tsconfigs incluem `shared/`). Nada de `window`, Node ou i18n aqui: prompts são sempre em **pt-BR**.
-* Os dados (listas, contexto do projeto, mensagens) chegam já recortados pelo chamador. O que é privacidade/orçamento (ex.: só as mensagens selecionadas, limite de caracteres) continua no chamador.
-* **Memória Pessoal**: nenhum prompt daqui recebe memória por conta própria. Os que recebem já estavam aprovados (ver `docs/memoria/integracoes.md`) e o bloco é anexado pelo chamador.
+* Privacidade/orçamento (ex.: só as mensagens selecionadas, limite de caracteres) continua no chamador.
+* **Memória Pessoal**: nenhum prompt daqui busca memória. Os que recebem já estavam aprovados (ver `docs/memoria/integracoes.md`) e o bloco chega como dado (`{{memoria}}`).
+* `registro`: `catalogo.ts` (`DEFINICOES`, `IdChamadaIa`, `ParamsDe<id>`). O guardrail `server/ia/__tests__/guardrails.test.ts` quebra o `npm test` se aparecer chamada de IA fora daqui.
 
-Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs agendados ficam no banco e são editados na UI; as sementes estão em `server/database/aiSeeds.ts`) e o schema de resposta do Gemini (`TOPICS_SCHEMA` em `server/services/news.ts`).
+Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs agendados ficam no banco e são editados na UI; as sementes estão em `server/database/aiSeeds.ts`) e o schema de resposta do Gemini (`TOPICS_SCHEMA` em `server/services/news.ts`). Blocos auxiliares que não são chamadas: `projetos/contextoProjeto.ts`, `projetos/resumoProjeto.ts`, `memoria/blocoContexto.ts`, `memoria/regras.ts`, `mensagens/sistema.ts`, `exemplos.ts`, `padroes.ts`.
 
-## Catálogo (Configurações → IA → "Ver onde a IA é usada")
+## Nova chamada de IA (checklist)
 
-`catalogo.ts` lista **toda** chamada de IA do app: motor (Claude Code / Codex / Gemini), modelo e effort (com a chave de configuração e o padrão) e o prompt montado com dados de exemplo. Chamada nova ou alterada = atualizar a entrada lá e o nome em `src/i18n/locales/<idioma>/settings.ts` (`settings.iaChamada.<id>`).
+1. `shared/prompts/<módulo>/<nome>.ts` com `definirChamada({ id, modulo, tipo, motor, modelo, effort, arquivo, usadoEm, template, preparar, exemplo })`.
+2. Entrada em `DEFINICOES` (`catalogo.ts`) e nome em `settings.iaChamada.<id>` (pt-BR, en, es).
+3. Chamar pelo gateway (nunca `runClaude`/CLI direto) e registrar arquivo → id no `MANIFESTO` do guardrail.
+4. Linha no índice abaixo.
 
 ## Índice
 
 | Arquivo | O que faz | Usado em |
 |---|---|---|
 | **assistente/** | | |
+| `livre.ts` | Texto digitado no Assistente | `src/modules/jarvis/pages/JarvisPage.tsx` |
 | `acoesRapidas.ts` | Botões do Assistente: priorizar tarefas, revisar inbox, planejar a semana*, roteiro de viagem*, resumo semanal, checklist de viagem | `src/modules/jarvis/pages/JarvisPage.tsx` |
+| **automacoes/** | | |
+| `agendado.ts` | Agente agendado (prompt do usuário) | `server/rpc.ts` |
 | **braindump/** | | |
 | `organizar.ts` | Despejo mental → tarefas, projetos, próximos passos e agenda (JSON) | `src/modules/braindump/pages/BrainDumpPage.tsx` |
-| **comum/** | | |
-| `respostaJson.ts` | Sufixo "responda APENAS com JSON" do helper `runJson` | `src/modules/projects/lib/ai.ts` |
 | **crm/** | | |
 | `retomarContato.ts` | 2-3 opções de mensagem para retomar contato | `src/modules/crm/pages/CrmPage.tsx` |
 | **estudos/** | | |
@@ -73,7 +88,7 @@ Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs a
 | `delegarRoadmap.ts` | Tarefa + regras para delegar itens do roadmap | `src/modules/projects/lib/roadmap.ts` |
 | `continuarBranch.ts` | Entregar uma branch a um agente para terminar | `src/modules/projects/git.ts` |
 | **promptRunner/** | | |
-| `sistemaConversa.ts` | System prompt das conversas (contexto do projeto + agente + skills) | `server/rpc.ts` |
+| `sistemaConversa.ts` | Conversas: system prompt (contexto do projeto + agente + skills) | `server/rpc.ts` → `server/aiconv/runner.ts` |
 | `composicao.ts` | Montagem agente → skills → prompt do usuário (modo antigo, sem uso hoje) | `src/modules/ai/compose.ts` |
 | `mensagemCommit.ts` | Sugerir mensagem de commit | `server/aiconv/rpc.ts` |
 | **viagens/** | | |

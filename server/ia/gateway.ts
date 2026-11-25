@@ -1,18 +1,14 @@
-import { CATALOGO_IA, type ChamadaIa, type ConfigIa, type IdChamadaIa, type MotorIa } from '../../shared/prompts/catalogo'
-import { getSetting } from '../database/queries'
+import { definicao, ehIdChamada, type ConfigIa, type IdChamadaIa, type MotorIa, type ParamsDe, type PromptSobrescrito } from '../../shared/prompts/catalogo'
+import { getAiChamada, getSetting } from '../database/queries'
 import { criarMotor, type ExecucaoIa } from './motores'
 
 /**
- * Gateway único de IA: toda execução passa por aqui com o id da chamada do catálogo.
- * Resolve motor/modelo/effort (padrões do catálogo + Configurações) e delega ao motor
- * certo via factory (`criarMotor`).
+ * Gateway único de IA: toda execução passa por aqui com o id da chamada do catálogo e os
+ * DADOS (não o prompt pronto). O gateway:
+ *  1. lê a configuração da chamada no banco (prompt sobrescrito pelo usuário, se houver);
+ *  2. monta o prompt com o template (padrão ou sobrescrito) — `montarChamada`;
+ *  3. resolve motor/modelo/effort e executa pelo motor certo (factory `criarMotor`).
  */
-export function chamada(id: IdChamadaIa): ChamadaIa {
-  const c = CATALOGO_IA.find((x) => x.id === id)
-  if (!c) throw new Error(`Chamada de IA desconhecida: ${id}`)
-  return c
-}
-
 async function valor(cfg: ConfigIa | null): Promise<string> {
   if (!cfg) return ''
   const salvo = cfg.setting ? ((await getSetting(cfg.setting)) ?? '').trim() : ''
@@ -26,12 +22,50 @@ export interface ExecucaoResolvida {
 }
 
 export async function resolverExecucao(id: IdChamadaIa): Promise<ExecucaoResolvida> {
-  const c = chamada(id)
-  return { motor: c.motor, modelo: await valor(c.modelo), effort: await valor(c.effort) }
+  const d = definicao(id)
+  return { motor: d.motor, modelo: await valor(d.modelo), effort: await valor(d.effort) }
 }
 
-/** Executa um prompt já montado na chamada `id`. */
-export async function executarChamada(id: IdChamadaIa, req: Omit<ExecucaoIa, 'modelo' | 'effort'>): Promise<string> {
-  const r = await resolverExecucao(id)
-  return criarMotor(r.motor).executar({ ...req, modelo: r.modelo, effort: r.effort })
+/** Prompt sobrescrito salvo (null = usar o padrão). */
+export async function promptSobrescrito(id: IdChamadaIa): Promise<PromptSobrescrito | null> {
+  const row = await getAiChamada(id)
+  return row && (row.template != null || row.sistema != null) ? { template: row.template, sistema: row.sistema } : null
+}
+
+export interface ChamadaMontada extends ExecucaoResolvida {
+  sistema: string | null
+  prompt: string
+}
+
+/** Monta o prompt (com o sobrescrito, se houver) e resolve motor/modelo/effort. */
+export async function montarChamada<K extends IdChamadaIa>(id: K, params: ParamsDe<K>): Promise<ChamadaMontada> {
+  const [m, exec] = await Promise.all([promptSobrescrito(id).then((s) => definicao(id).montar(params, s)), resolverExecucao(id)])
+  return { ...m, ...exec }
+}
+
+export type OpcoesExecucao = Omit<ExecucaoIa, 'prompt' | 'sistema' | 'modelo' | 'effort'> & {
+  /** Texto antes do prompt montado (ex.: "CONTEXTO DO PROJETO" do Assistente). */
+  prefixo?: string
+  /** Modelo/effort escolhidos pelo chamador para esta execução (ex.: os da conversa). */
+  modelo?: string
+  effort?: string
+}
+
+/** Monta e executa a chamada `id` com os dados `params`. */
+export async function executarChamada<K extends IdChamadaIa>(id: K, params: ParamsDe<K>, opts: OpcoesExecucao = {}): Promise<string> {
+  const c = await montarChamada(id, params)
+  const { prefixo, modelo, effort, ...req } = opts
+  return criarMotor(c.motor).executar({
+    ...req,
+    prompt: (prefixo ?? '') + c.prompt,
+    sistema: c.sistema || undefined,
+    modelo: modelo || c.modelo,
+    effort: effort || c.effort
+  })
+}
+
+/** Valida um id vindo do front (RPC). */
+export function idValido(id: unknown): IdChamadaIa {
+  if (typeof id !== 'string' || !ehIdChamada(id)) throw new Error(`Chamada de IA desconhecida: ${String(id)}`)
+  return id
 }

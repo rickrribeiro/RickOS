@@ -2,7 +2,6 @@ import { GitBranch, GitBranchDetails, GitBranchStatus } from '../../types'
 import { useUIStore } from '../../store/uiStore'
 import { DRAFT_KEY } from '../ai/pages/PromptRunnerPage'
 import { t } from '../../i18n'
-import { promptContinuarBranch } from '../../../shared/prompts/projetos/continuarBranch'
 
 export interface StatusDef {
   id: GitBranchStatus
@@ -59,8 +58,9 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /** Prompt that hands the branch over to an agent to finish the work. */
-export function buildContinuePrompt(b: GitBranch, d: GitBranchDetails | null, base: string): string {
-  return promptContinuarBranch(b, d, base, timeAgo(b.lastCommitAt))
+/** Texto (template em shared/prompts/projetos/continuarBranch.ts, montado no servidor com o sobrescrito, se houver). */
+export function buildContinuePrompt(b: GitBranch, d: GitBranchDetails | null, base: string): Promise<string> {
+  return window.api.iaChamadas.montar('projetos.continuarBranch', { b, d, base, ultimaAtividade: timeAgo(b.lastCommitAt) })
 }
 
 /** Open a new Prompt Runner tab with the given prompt (uses the runner's draft hand-off). */

@@ -4,7 +4,6 @@ import { useProjectStore } from '../store/projectStore'
 import { projectContext, runJson } from '../lib/ai'
 import { SIZES } from '../lib/constants'
 import { t as tr } from '../../../i18n'
-import { promptProximaAcao } from '../../../../shared/prompts/projetos/proximaAcao'
 
 /**
  * Concluir a próxima ação fecha a tarefa dela e já pede a seguinte: uma tarefa aberta do projeto
@@ -47,7 +46,7 @@ export function NextActionModal({ project, mode, onClose }: { project: Project; 
     try {
       const ctx = await projectContext(project, overview[project.id])
       const r = await runJson<{ actions: string[] }>(
-        promptProximaAcao({ acaoConcluida: mode === 'complete' ? `${project.nextAction}` : null, contexto: ctx })
+        'projetos.proximaAcao', { acaoConcluida: mode === 'complete' ? `${project.nextAction}` : null, contexto: ctx }
       )
       setAiIdeas((r.actions ?? []).slice(0, 3))
     } catch (e) {

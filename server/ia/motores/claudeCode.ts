@@ -25,6 +25,8 @@ export const motorClaudeCode: MotorExecutor = {
       streamJson: ferramentas !== 'agentic' && !!req.onChunk,
       onChunk: req.onChunk,
       registerChild: req.registerChild,
+      configDir: req.claudeConfigDir,
+      onUsage: req.onUsage,
       usage: req.usage
     })
   }

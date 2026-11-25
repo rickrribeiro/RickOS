@@ -11,15 +11,13 @@ import {
   addProjectEvent,
   DbProjectDelegation
 } from '../database/queries'
-import { runClaude } from './claude'
 import { gitQuiet, scanGit, createPullRequest } from './gitscan'
 import { notify } from './notifications'
 import { broadcast } from '../events'
 import { repoTargets, localTargets, isWorkspace } from './projectRepos'
 import { createWorkspaceWorktree, readWorkspaceManifest, removeWorkspaceWorktree } from '../aiconv/git'
 import { tt } from '../i18n'
-import { promptDelegacao } from '../../shared/prompts/projetos/delegacao'
-import { promptMontarDelegacao } from '../../shared/prompts/projetos/montarPromptDelegacao'
+import { executarChamada } from '../ia/gateway'
 
 /**
  * "🤖 Delegar": a próxima ação do projeto é executada pelo Claude num worktree
@@ -104,25 +102,24 @@ export async function delegateNextAction(projectId: number, action: string | nul
   await addProjectEvent(projectId, 'delegacao', `🤖 Delegada ao Claude: ${task} (${branch})`)
   changed(projectId)
 
-  const prompt = promptDelegacao({
+  const params = {
     projeto: p,
     tarefa: task,
     instrucoes: instructions,
     branch,
     base,
     reposWorkspace: workspace ? wsRepos : null
-  })
+  }
 
   const command = p.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
-  const model = ((await getSetting('claude_model')) || '').trim()
   const allowed = ['Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(npm run:*)', 'Bash(npx tsc:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(grep:*)', 'Bash(rg:*)', 'Bash(find:*)', ...(workspace ? ['Bash(cd:*)'] : [])]
 
-  runClaude(prompt, command, {
-    model,
+  executarChamada('projetos.delegacao', params, {
+    claudeCommand: command,
     cwd: wtDir,
-    agentic: true,
+    ferramentas: 'agentic',
     permissionMode: 'acceptEdits',
-    extraArgs: ['--allowedTools', allowed.join(',')],
+    claudeArgs: ['--allowedTools', allowed.join(',')],
     timeoutMs: 0,
     usage: { source: 'delegacao', projectId },
     registerChild: (kill) => kills.set(d.id, kill)
@@ -161,15 +158,14 @@ export async function draftDelegationPrompt(projectId: number, action: string | 
   const dir = p.localPath ? path.resolve(expandHome(p.localPath)) : null
   const cwd = dir && fs.existsSync(dir) ? dir : undefined
 
-  const prompt = promptMontarDelegacao({ projeto: p, tarefa: task, instrucoes: instructions, pasta: cwd ?? null })
+  const params = { projeto: p, tarefa: task, instrucoes: instructions, pasta: cwd ?? null }
 
   const command = p.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
-  const model = ((await getSetting('claude_model')) || '').trim()
   const readOnly = ['Read', 'Glob', 'Grep', 'Bash(git log:*)', 'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(ls:*)']
-  const out = await runClaude(prompt, command, {
-    model,
+  const out = await executarChamada('projetos.montarDelegacao', params, {
+    claudeCommand: command,
     cwd,
-    extraArgs: ['--allowedTools', readOnly.join(',')],
+    claudeArgs: ['--allowedTools', readOnly.join(',')],
     timeoutMs: 5 * 60 * 1000,
     usage: { source: 'delegacao', projectId }
   })

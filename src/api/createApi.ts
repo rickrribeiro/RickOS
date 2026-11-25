@@ -7,7 +7,7 @@ import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import { t } from '../i18n'
-import type { IdChamadaIa } from '../../shared/prompts/catalogo'
+import type { IdChamadaIa, ParamsDe } from '../../shared/prompts/catalogo'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -618,24 +618,29 @@ export function createApi() {
         }
       }
     },
+    // Catálogo de chamadas de IA (prompt sobrescrito)
+    iaChamadas: {
+      listar: () => invoke('iaChamadas:listar'),
+      salvarPrompt: (id: IdChamadaIa, template: string | null, sistema: string | null) => invoke('iaChamadas:salvarPrompt', id, template, sistema),
+      reverterPrompt: (id: IdChamadaIa) => invoke<boolean>('iaChamadas:reverterPrompt', id),
+      montar: <K extends IdChamadaIa>(id: K, params: ParamsDe<K>) => invoke<string>('iaChamadas:montar', id, params)
+    },
     // AI (Claude CLI)
     ai: {
-      run: (prompt: string, projectId?: number, model?: string, source?: string) => invoke('ai:run', prompt, projectId, model, source),
-      runStream: (prompt: string, projectId?: number, model?: string, runId?: string, source?: string) =>
-        invoke('ai:runStream', prompt, projectId, model, runId, source),
+      executar: <K extends IdChamadaIa>(chamada: K, params: ParamsDe<K>, opts?: { projectId?: number | null; source?: string }) =>
+        invoke<string>('ai:executar', chamada, params, opts),
       usage: (from: string, to: string) => invoke('ai:usage', from, to),
-      start: (params: {
+      start: <K extends IdChamadaIa>(params: {
+        chamada: K
+        params: ParamsDe<K>
         save?: boolean
-        prompt: string
         projectId?: number | null
-        model?: string
         agentId?: string | null
         skillIds?: string
         userPrompt?: string
         permission?: 'allowlist' | 'execute'
         source?: string
-        chamada?: IdChamadaIa
-      }) => invoke('ai:start', params),
+      }) => invoke<string>('ai:start', params),
       getRun: (runId: string) => invoke('ai:getRun', runId),
       cancel: (runId: string) => invoke('ai:cancel', runId),
       onChunk: (cb: (runId: string | undefined, text: string) => void) =>

@@ -6,13 +6,13 @@ import { useTripStore } from '../../travel/store/tripStore'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import type { ConsumerBlock } from '../../memory/api'
 import { t as tr } from '../../../i18n'
-import { promptChecklistViagem, promptPlanejarSemana, promptPriorizarTarefas, promptResumoSemanal, promptRevisarInbox, promptRoteiroViagem } from '../../../../shared/prompts/assistente/acoesRapidas'
+import type { IdChamadaIa, ParamsDe } from '../../../../shared/prompts/catalogo'
 
 interface QuickAction {
   key: string
   label: string
-  /** `mem` = bloco da Memória Pessoal (integração aprovada); vazio quando nada é relevante. */
-  build: (ctx: Ctx, mem: string) => string
+  /** Monta o texto (no servidor, com o prompt sobrescrito se houver). `mem` = bloco da Memória Pessoal (integração aprovada); vazio quando nada é relevante. */
+  build: (ctx: Ctx, mem: string) => Promise<string>
   /** Só ações aprovadas na matriz de integração consultam a memória (docs/memoria/integracoes.md). */
   memory?: (ctx: Ctx) => Promise<ConsumerBlock>
 }
@@ -27,24 +27,23 @@ interface Ctx {
 
 const RUN_KEY = 'rickos:assistantRun'
 
-const withMemory = (prompt: string, mem: string): string => (mem ? `${prompt}\n\n${mem}` : prompt)
-
 function fmtHours(minutes: number): string {
   return tr('ai.hM', { p0: Math.floor(minutes / 60), p1: minutes % 60 })
 }
+
+/** Monta o texto da ação no servidor (prompt padrão ou o sobrescrito em Configurações → IA). */
+const montar = <K extends IdChamadaIa>(id: K, params: ParamsDe<K>): Promise<string> => window.api.iaChamadas.montar(id, params)
 
 const ACTIONS: QuickAction[] = [
   {
     key: 'prioritize',
     label: tr('ai.priorizarTarefas'),
-    build: (c) =>
-      promptPriorizarTarefas({ tarefas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title) })
+    build: (c) => montar('assistente.priorizar', { tarefas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title) })
   },
   {
     key: 'inbox',
     label: tr('ai.revisarInbox'),
-    build: (c) =>
-      promptRevisarInbox({ itens: c.todos.filter((t) => t.status === 'inbox').map((t) => t.title) })
+    build: (c) => montar('assistente.revisarInbox', { itens: c.todos.filter((t) => t.status === 'inbox').map((t) => t.title) })
   },
   {
     key: 'week',
@@ -54,30 +53,24 @@ const ACTIONS: QuickAction[] = [
         [...c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title), ...c.habitNames].join(' ').slice(0, 1500)
       ),
     build: (c, mem) =>
-      withMemory(
-        promptPlanejarSemana({
-          tarefas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title),
-          habitos: c.habitNames,
-          reunioes: c.events.map((e) => `${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`)
-        }),
-        mem
-      )
+      montar('assistente.planejarSemana', {
+        tarefas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title),
+        habitos: c.habitNames,
+        reunioes: c.events.map((e) => `${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`),
+        memoria: mem
+      })
   },
   {
     key: 'trip',
     label: tr('ai.roteiroDeViagem'),
     memory: (c) => window.api.memory.ctxTripItinerary(c.nextTrip?.destination ?? ''),
-    build: (c, mem) =>
-      withMemory(
-        promptRoteiroViagem({ viagem: c.nextTrip ?? null }),
-        mem
-      )
+    build: (c, mem) => montar('assistente.roteiroViagem', { viagem: c.nextTrip ?? null, memoria: mem })
   },
   {
     key: 'weekly',
     label: tr('ai.resumoSemanal'),
     build: (c) =>
-      promptResumoSemanal({
+      montar('assistente.resumoSemanal', {
         horas: c.weekHours,
         concluidas: c.todos.filter((t) => t.status === 'done').map((t) => t.title),
         abertas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title),
@@ -87,8 +80,7 @@ const ACTIONS: QuickAction[] = [
   {
     key: 'trip-checklist',
     label: tr('ai.checklistDeViagem'),
-    build: (c) =>
-      promptChecklistViagem({ viagem: c.nextTrip ?? null })
+    build: (c) => montar('assistente.checklistViagem', { viagem: c.nextTrip ?? null })
   }
 ]
 
@@ -212,7 +204,7 @@ export function JarvisPage(): React.ReactElement {
     try {
       // main owns the run → it keeps going (and streams) even if we leave the page.
       // save:false → don't clutter the Prompt Runner history with assistant runs.
-      const rid = await window.api.ai.start({ prompt: text, model, save: false, permission, source: 'assistente' })
+      const rid = await window.api.ai.start({ chamada: 'assistente.livre', params: { pedido: text }, save: false, permission, source: 'assistente' })
       runIdRef.current = rid
       setRunId(rid)
     } catch (e) {
@@ -247,7 +239,7 @@ export function JarvisPage(): React.ReactElement {
             onClick={async () => {
               // memória é opcional: se falhar, o atalho funciona como antes
               const mem = a.memory ? await a.memory(ctx).then((m) => m.block, () => '') : ''
-              setPrompt(a.build(ctx, mem))
+              setPrompt(await a.build(ctx, mem))
             }}
           >
             {a.label}

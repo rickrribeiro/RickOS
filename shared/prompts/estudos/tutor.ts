@@ -1,6 +1,10 @@
+import { definirChamada, ex } from '../definicao'
+import { CODEX_MODEL } from '../padroes'
+
 /**
  * Estudos → botões do "Tutor" no editor de anotações (explicar, resumir, exercícios…).
- * Usado em: src/modules/estudos/components/NoteEditor.tsx. Modelo: `claude_model`.
+ * O texto de cada botão entra em `{{instrucao}}`.
+ * Usado em: src/modules/estudos/components/NoteEditor.tsx.
  */
 export type AcaoTutor = 'simple' | 'summary' | 'exercise' | 'gaps' | 'socratic' | 'recall'
 
@@ -13,6 +17,16 @@ export const INSTRUCOES_TUTOR: Record<AcaoTutor, string> = {
   recall: 'Gere de 4 a 6 prompts de RECALL ATIVO a partir do conteúdo abaixo — perguntas abertas do tipo "explique sem olhar", "descreva com suas palavras", "reconstrua o raciocínio". Não inclua as respostas. Foque nos conceitos mais importantes para memória de longo prazo.'
 }
 
-export function promptTutor(p: { instrucao: string; conteudo: string }): string {
-  return `${p.instrucao}\n\nConteúdo (Markdown):\n"""\n${p.conteudo}\n"""`
-}
+export const estudosTutor = definirChamada<{ acao: AcaoTutor; conteudo: string }>({
+  id: 'estudos.tutor',
+  modulo: 'estudos',
+  tipo: 'executa',
+  motor: 'codex',
+  modelo: CODEX_MODEL,
+  effort: null,
+  arquivo: 'estudos/tutor.ts',
+  usadoEm: 'src/modules/estudos/components/NoteEditor.tsx',
+  template: '{{instrucao}}\n\nConteúdo (Markdown):\n"""\n{{conteudo}}\n"""',
+  preparar: (p) => ({ instrucao: INSTRUCOES_TUTOR[p.acao] ?? INSTRUCOES_TUTOR.simple, conteudo: p.conteudo }),
+  exemplo: { acao: 'simple', conteudo: ex('anotação') }
+})

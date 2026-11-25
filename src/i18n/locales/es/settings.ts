@@ -381,5 +381,21 @@ export const settings = {
   'settings.iaChamada.passagens.skyscanner': 'Búsqueda asistida en Skyscanner',
   'settings.iaChamada.viagens.hospedagem': 'Analizar alojamientos',
   'settings.iaChamada.crm.retomarContato': 'Retomar contacto',
-  'settings.iaChamada.noticias.resumo': 'Resumen diario de noticias'
+  'settings.iaChamada.noticias.resumo': 'Resumen diario de noticias',
+  'settings.iaPrompt.personalizado': '✏️ Personalizado',
+  'settings.iaPrompt.editar': 'Editar prompt',
+  'settings.iaPrompt.salvar': 'Guardar prompt',
+  'settings.iaPrompt.cancelar': 'Cancelar',
+  'settings.iaPrompt.sistema': 'System prompt',
+  'settings.iaPrompt.prompt': 'Prompt',
+  'settings.iaPrompt.variaveis': 'Variables: la app reemplaza cada una por los datos reales al llamar a la IA.',
+  'settings.iaPrompt.faltando': 'Estas variables del predeterminado no están en tu texto, así que esos datos no se enviarán a la IA: {lista}',
+  'settings.iaPrompt.usarPadrao': 'Cargar el texto predeterminado',
+  'settings.iaPrompt.reverter': 'Volver al predeterminado',
+  'settings.iaPrompt.confirmarReverter': '¿Borrar el prompt personalizado de "{nome}" y volver al predeterminado? No se puede deshacer.',
+  'settings.iaPrompt.salvo': 'Prompt guardado: las próximas ejecuciones ya usan este texto.',
+  'settings.iaPrompt.revertido': 'Se volvió al prompt predeterminado.',
+  'settings.iaPrompt.erro': 'Error: {msg}',
+  'settings.iaPrompt.exemploAtual': 'Prompt en uso, armado con datos de ejemplo:',
+  'settings.iaPrompt.soTexto': 'Solo arma el texto; lo ejecuta el Asistente o el Prompt Runner.'
 }

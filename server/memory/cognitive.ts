@@ -3,8 +3,6 @@ import type { PersonalMemory, Sensitivity } from '../../shared/memory'
 import { SENS_RANK, normText } from '../../shared/memory'
 import { getDb, saveDb } from '../database/db'
 import { callAi, parseJsonObject } from './ai'
-import { promptLacunasMemoria, sistemaLacunasMemoria } from '../../shared/prompts/memoria/lacunas'
-import { promptEntrevistaMemoria, sistemaEntrevistaMemoria } from '../../shared/prompts/memoria/entrevista'
 import { extractFromText, proposeFromItems, type RunStats } from './agent'
 import { MEMORY_POLICIES, categoryAllowed, resolveConsume, resolveProduce, sensitivityAllowed } from './policy'
 import { MEM_SELECT, MemoryError, all, categoriesSync, currentOwner, ensureSeeded, exec, jparse, lastId, nowIso, one, read, toMemory, tx } from './repo'
@@ -194,7 +192,7 @@ export async function detectGaps(): Promise<{ created: number; calls: number }> 
   const needs = MEMORY_POLICIES.filter((p) => p.consume && !p.useCase.startsWith('memory.'))
     .map((p) => `- ${p.label}${p.approved ? '' : ' (candidata)'}: ${p.purpose} [categorias: ${!p.consume ? '' : p.consume.categories === '*' ? 'todas' : (p.consume.categories as string[]).join(', ')}]`)
     .join('\n')
-  const prompt = promptLacunasMemoria({
+  const params = {
     cobertura: cov.rows.map((r) => `- ${r.slug} (${r.name}): ${r.active} ativas, estado ${r.state}`).join('\n'),
     funcionalidades: needs,
     memorias: mems
@@ -202,9 +200,10 @@ export async function detectGaps(): Promise<{ created: number; calls: number }> 
       .map((m) => `- [${m.catSlug ?? 'sem-categoria'}] ${sanitizeForPrompt(m.title, 120)}`)
       .join('\n'),
     abertas: open.map((g) => `- ${g.topic}`).join('\n'),
-    dispensadas: dismissed.map((g) => `- ${g.topic} (${g.status})`).join('\n')
-  })
-  const raw = await callAi('lacunas', sistemaLacunasMemoria(produce.rule.maxSuggestionsPerRun), prompt)
+    dispensadas: dismissed.map((g) => `- ${g.topic} (${g.status})`).join('\n'),
+    max: produce.rule.maxSuggestionsPerRun
+  }
+  const raw = await callAi('lacunas', 'memoria.lacunas', params)
   const parsed = parseJsonObject<{ gaps?: { topic?: string; category?: string; why?: string; beneficiaries?: string[]; priority?: number; sensitivity?: string; question?: string }[] }>(raw)
   let created = 0
   const cats = categoriesSync(db, owner)
@@ -302,7 +301,7 @@ async function interviewStep(id: number, answer: string | null): Promise<Intervi
   const previousQs = all<{ turns: string }>(db, 'SELECT turns FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 10', [owner])
     .flatMap((r) => jparse<InterviewTurn[]>(r.turns, []))
     .map((t) => t.question)
-  const prompt = promptEntrevistaMemoria({
+  const params = {
     tema: sanitizeForPrompt(iv.topic, 200),
     categoria: cat ? ` (categoria ${cat.slug})` : '',
     categoriasPermitidas: cats.filter((c) => categoryAllowed(produce.rule, c.slug)).map((c) => c.slug).join(', '),
@@ -313,9 +312,10 @@ async function interviewStep(id: number, answer: string | null): Promise<Intervi
       .map((t) => `P: ${t.question}\nR: ${t.skipped ? '(pulou)' : sanitizeForPrompt(t.answer ?? '', 800)}`)
       .join('\n'),
     respondeu: answer != null,
-    temTurnos: iv.turns.length > 0
-  })
-  const raw = await callAi('entrevista', sistemaEntrevistaMemoria(produce.rule.maxSuggestionsPerRun), prompt)
+    temTurnos: iv.turns.length > 0,
+    max: produce.rule.maxSuggestionsPerRun
+  }
+  const raw = await callAi('entrevista', 'memoria.entrevista', params)
   const parsed = parseJsonObject<{ suggestions?: unknown[]; next_question?: string | null; why?: string }>(raw)
   let proposed = 0
   if (answer && last) {

@@ -7,7 +7,7 @@
 
 import { ROADMAP_NUM } from '../../../../shared/roadmap'
 import { t } from '../../../i18n'
-import { promptDelegarRoadmap } from '../../../../shared/prompts/projetos/delegarRoadmap'
+import { tarefaRoadmap } from '../../../../shared/prompts/projetos/delegarRoadmap'
 
 export type RoadmapMark = ' ' | 'x' | '~' | '-'
 
@@ -160,6 +160,9 @@ export function openIds(n: RoadmapNode): string[] {
  * Monta a tarefa e as instruções para delegar vários itens do roadmap de uma vez:
  * em paralelo (subagentes), um commit por item, marcando [x] no arquivo.
  */
-export function buildRoadmapDelegation(rows: RoadmapRow[]): { task: string; instructions: string; title: string } {
-  return promptDelegarRoadmap(rows)
+export async function buildRoadmapDelegation(rows: RoadmapRow[]): Promise<{ task: string; instructions: string; title: string }> {
+  const { task, title } = tarefaRoadmap(rows)
+  // regras: template em shared/prompts/projetos/delegarRoadmap.ts (montado no servidor, com o sobrescrito se houver)
+  const instructions = await window.api.iaChamadas.montar('projetos.delegarRoadmap', { quantidade: rows.length })
+  return { task, instructions, title }
 }

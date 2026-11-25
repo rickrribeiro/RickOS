@@ -5,7 +5,6 @@ import { useProjectStore } from '../store/projectStore'
 import { fmtMinutes } from '../lib/constants'
 import { projectContext, runText } from '../lib/ai'
 import { t } from '../../../i18n'
-import { promptOndePareiTimer } from '../../../../shared/prompts/projetos/ondePareiTimer'
 
 /** Aparece ao encerrar uma sessão do timer vinculada a um projeto: "onde parei" + próximo passo. */
 export function SaveContextModal(): React.ReactElement | null {
@@ -33,7 +32,7 @@ export function SaveContextModal(): React.ReactElement | null {
     try {
       const ctx = await projectContext(project)
       const txt = await runText(
-        promptOndePareiTimer({ minutos: prompt.minutes, tarefa: prompt.taskTitle, contexto: ctx })
+        'projetos.ondePareiTimer', { minutos: prompt.minutes, tarefa: prompt.taskTitle, contexto: ctx }
       )
       setWhere(txt)
     } catch {

@@ -381,5 +381,21 @@ export const settings = {
   'settings.iaChamada.passagens.skyscanner': 'Assisted Skyscanner search',
   'settings.iaChamada.viagens.hospedagem': 'Analyze stays',
   'settings.iaChamada.crm.retomarContato': 'Reconnect with contact',
-  'settings.iaChamada.noticias.resumo': 'Daily news digest'
+  'settings.iaChamada.noticias.resumo': 'Daily news digest',
+  'settings.iaPrompt.personalizado': '✏️ Customized',
+  'settings.iaPrompt.editar': 'Edit prompt',
+  'settings.iaPrompt.salvar': 'Save prompt',
+  'settings.iaPrompt.cancelar': 'Cancel',
+  'settings.iaPrompt.sistema': 'System prompt',
+  'settings.iaPrompt.prompt': 'Prompt',
+  'settings.iaPrompt.variaveis': 'Variables: the app replaces each one with the real data when calling the AI.',
+  'settings.iaPrompt.faltando': 'These default variables are missing from your text, so this data will not be sent to the AI: {lista}',
+  'settings.iaPrompt.usarPadrao': 'Load the default text',
+  'settings.iaPrompt.reverter': 'Revert to default',
+  'settings.iaPrompt.confirmarReverter': 'Delete the custom prompt for "{nome}" and go back to the default? This cannot be undone.',
+  'settings.iaPrompt.salvo': 'Prompt saved: the next runs already use this text.',
+  'settings.iaPrompt.revertido': 'Back to the default prompt.',
+  'settings.iaPrompt.erro': 'Error: {msg}',
+  'settings.iaPrompt.exemploAtual': 'Prompt in use, assembled with sample data:',
+  'settings.iaPrompt.soTexto': 'Only builds the text; the Assistant or the Prompt Runner runs it.'
 }

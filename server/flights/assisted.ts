@@ -6,7 +6,7 @@ import path from 'node:path'
 import { dataDir } from '../config'
 import { getSetting, recordAiUsage } from '../database/queries'
 import { broadcast } from '../events'
-import { runClaude } from '../services/claude'
+import { executarChamada } from '../ia/gateway'
 import { todayLocal } from './dates'
 import { fingerprint } from './evaluate'
 import { displayCity, getAirport } from './geo'
@@ -16,7 +16,7 @@ import * as repo from './repo'
 import { configErrors } from './validate'
 import { scoredOffers } from './views'
 import { tt } from '../i18n'
-import { promptConsultaSkyscanner } from '../../shared/prompts/passagens/consultaSkyscanner'
+import { passagensSkyscanner } from '../../shared/prompts/passagens/consultaSkyscanner'
 
 /**
  * Skyscanner via Claude Code + Chrome — SOB DEMANDA, com o usuário presente.
@@ -184,13 +184,14 @@ export function validatePicks(m: FlightMonitor, picks: unknown): Combo[] {
   return out
 }
 
+/** Dados do prompt da busca no Skyscanner (template em shared/prompts/passagens/consultaSkyscanner.ts). */
+function promptParams(m: FlightMonitor, combos: Combo[]): { adultos: number; moeda: string; bagagemDespachada: boolean; combinacoes: Combo[] } {
+  return { adultos: m.config.passengers.adults, moeda: m.config.currency, bagagemDespachada: m.config.baggage.checked !== 'any', combinacoes: combos }
+}
+
+/** Prompt padrão (sem o sobrescrito do usuário) — usado nos testes. */
 export function buildPrompt(m: FlightMonitor, combos: Combo[]): string {
-  return promptConsultaSkyscanner({
-    adultos: m.config.passengers.adults,
-    moeda: m.config.currency,
-    bagagemDespachada: m.config.baggage.checked !== 'any',
-    combinacoes: combos
-  })
+  return passagensSkyscanner.montar(promptParams(m, combos)).prompt
 }
 
 /** Todos os objetos JSON de primeiro nível no texto (com chaves balanceadas, respeitando strings). */
@@ -433,11 +434,10 @@ export async function startSkyscanner(monitorId: number, picks: SkyPick[] | numb
         let sessionTokens = 0
         let raw: string
         try {
-          raw = await runClaude(buildPrompt(m, chunk), command, {
-            model,
-            streamJson: true,
-            configDir,
-            extraArgs: ['--chrome', '--allowedTools', 'mcp__claude-in-chrome'],
+          raw = await executarChamada('passagens.skyscanner', promptParams(m, chunk), {
+            claudeCommand: command,
+            claudeConfigDir: configDir,
+            claudeArgs: ['--chrome', '--allowedTools', 'mcp__claude-in-chrome'],
             timeoutMs: (4 + 2 * chunk.length) * 60_000,
             registerChild: (kill) => busy && (busy.kill = kill),
             onChunk: (t) => {

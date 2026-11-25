@@ -4,7 +4,6 @@ import { useProjectStore } from '../store/projectStore'
 import { projectContext, runText } from '../lib/ai'
 import { fmtMinutes } from '../lib/constants'
 import { t } from '../../../i18n'
-import { promptRetrospectiva } from '../../../../shared/prompts/projetos/retrospectiva'
 
 const CHECKLIST = [
   t('projects.closing.finishLine'),
@@ -41,7 +40,7 @@ export function ClosingRitualModal({ project, onClose }: { project: Project; onC
     try {
       const ctx = await projectContext(project, ov)
       const txt = await runText(
-        promptRetrospectiva({ foiBem: wentWell, aprendi: learned, fariaDiferente: differently, contexto: ctx })
+        'projetos.retrospectiva', { foiBem: wentWell, aprendi: learned, fariaDiferente: differently, contexto: ctx }
       )
       setAiRetro(txt)
     } catch (e) {
