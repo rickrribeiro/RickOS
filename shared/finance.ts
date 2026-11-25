@@ -279,3 +279,46 @@ export function detectRecurringIds(txs: RecurringCandidate[]): Set<number> {
   }
   return out
 }
+
+// ── Dias úteis (feriados nacionais do Brasil) ──────────────────────────────────
+
+/** Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher). */
+function easter(year: number): Date {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(year, month - 1, day)
+}
+
+const ymd = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** Feriados nacionais (fixos + Carnaval, Sexta-feira Santa e Corpus Christi) como YYYY-MM-DD. */
+export function brazilHolidays(year: number): Set<string> {
+  const fixed = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].map((md) => `${year}-${md}`)
+  const e = easter(year)
+  const shift = (days: number): string => ymd(new Date(e.getFullYear(), e.getMonth(), e.getDate() + days))
+  return new Set([...fixed, shift(-48), shift(-47), shift(-2), shift(60)])
+}
+
+/** Primeiro dia útil (seg–sex, fora feriados nacionais) do mês, como YYYY-MM-DD. */
+export function firstBusinessDay(year: number, month: number): string {
+  const holidays = brazilHolidays(year)
+  for (let day = 1; day <= 31; day++) {
+    const d = new Date(year, month - 1, day)
+    if (d.getMonth() !== month - 1) break
+    const wd = d.getDay()
+    if (wd !== 0 && wd !== 6 && !holidays.has(ymd(d))) return ymd(d)
+  }
+  return ymd(new Date(year, month - 1, 1))
+}

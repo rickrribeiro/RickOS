@@ -19,9 +19,28 @@ import {
   convDefaultModel
 } from '../../../../shared/aiConversations'
 import { AiUsageModal } from '../components/AiUsageModal'
+import { firstBusinessDay } from '../../../../shared/finance'
 import { finishPluggySync } from '../../finance/pluggySync'
 
 const FX_CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
+
+/** Próximo 1º dia útil (este mês, se ainda não passou e não rodou; senão o do mês que vem). */
+function nextInvestmentSync(): string {
+  const now = new Date()
+  const today = now.toLocaleDateString('sv-SE')
+  let y = now.getFullYear()
+  let m = now.getMonth() + 1
+  let d = firstBusinessDay(y, m)
+  if (d < today || d === today) {
+    m += 1
+    if (m > 12) {
+      m = 1
+      y += 1
+    }
+    d = firstBusinessDay(y, m)
+  }
+  return d.split('-').reverse().join('/')
+}
 
 function fmtLastSync(iso?: string): string {
   if (!iso) return 'nunca'
@@ -521,6 +540,22 @@ export function SettingsPage(): React.ReactElement {
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
           Última sincronização: <strong>{fmtLastSync(values['pluggy_last_sync'])}</strong>
         </div>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, marginTop: 12, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={values['pluggy_investments_autosync'] !== '0'}
+            onChange={(e) => void set('pluggy_investments_autosync', e.target.checked ? '1' : '0')}
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            Atualizar investimentos automaticamente no 1º dia útil do mês
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>
+              Próxima: <strong>{nextInvestmentSync()}</strong> · última atualização de investimentos:{' '}
+              <strong>{fmtLastSync(values['pluggy_investments_last_sync'])}</strong>. Se o app estiver desligado no dia, roda assim que ligar
+              (no mesmo mês). Avisa no sino.
+            </span>
+          </span>
+        </label>
       </div>
 
       {connectToken && (

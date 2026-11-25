@@ -211,7 +211,7 @@ import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAcco
 import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
 import { recomputeRecurring } from './services/recurring'
-import { countsInTotals, type TransactionKind } from '../shared/finance'
+import { countsInTotals, firstBusinessDay, type TransactionKind } from '../shared/finance'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
 import { registerMemoryRpc } from './memory/rpc'
@@ -309,6 +309,49 @@ async function maybeDailyGoogleSync(): Promise<void> {
   }
 }
 
+/**
+ * Investimentos do Open Finance: sincroniza sozinho no 1º dia útil do mês (desligável em
+ * Configurações → Open Finance). Se o servidor estava desligado nesse dia, roda assim que ligar,
+ * ainda no mesmo mês. Uma vez por mês; em caso de falha tenta de novo a cada 6h.
+ */
+async function maybeMonthlyInvestmentSync(): Promise<void> {
+  try {
+    if ((await getSetting('pluggy_investments_autosync')) === '0') return
+    if (!(await getSetting('pluggy_item_id'))) return
+    const now = new Date()
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const lastMonth = await getSetting('pluggy_investments_autosync_month')
+    if (lastMonth === month) return
+    // primeira vez: não sincroniza o mês corrente por conta própria — começa no próximo 1º dia útil
+    if (lastMonth == null || lastMonth === '') {
+      await setSetting('pluggy_investments_autosync_month', month)
+      return
+    }
+    if (now.toLocaleDateString('sv-SE') < firstBusinessDay(now.getFullYear(), now.getMonth() + 1)) return
+    const lastErr = await getSetting('pluggy_investments_autosync_error_at')
+    if (lastErr && Date.now() - Date.parse(lastErr) < 6 * 3600 * 1000) return
+    const r = await syncPluggyInvestments()
+    await setSetting('pluggy_investments_autosync_month', month)
+    await setSetting('pluggy_investments_last_sync', new Date().toISOString())
+    await setSetting('pluggy_investments_autosync_error_at', '')
+    const extra = r.vanished.length ? ` · ${r.vanished.length} não aparecem mais no banco (abra Investimentos para decidir)` : ''
+    await notify({
+      title: '📈 Investimentos atualizados',
+      body: `Open Finance: ${r.created} novos, ${r.updated} atualizados, ${r.closed} encerrados${extra}.`,
+      source: 'automacao',
+      page: 'investments'
+    })
+  } catch (e) {
+    await setSetting('pluggy_investments_autosync_error_at', new Date().toISOString())
+    await notify({
+      title: '📈 Falha ao atualizar investimentos',
+      body: e instanceof Error ? e.message : String(e),
+      source: 'automacao',
+      page: 'settings'
+    })
+  }
+}
+
 let schedulerStarted = false
 /** Background engines (rules, scheduled agents, Google sync) — run while the server is up. */
 export function startScheduler(): void {
@@ -327,6 +370,9 @@ export function startScheduler(): void {
   setTimeout(() => void checkProjectRadar().catch(() => undefined), 60000)
   void recoverDelegations().catch(() => undefined)
   void recoverConversations().catch((e) => console.error('[prompt-runner] recuperação', e))
+  // Finanças: investimentos do Open Finance no 1º dia útil do mês (checa de hora em hora).
+  setTimeout(() => void maybeMonthlyInvestmentSync(), 90_000)
+  setInterval(() => void maybeMonthlyInvestmentSync(), 60 * 60 * 1000)
   // Finanças: recorrência é derivada das transações — recalcula no boot (cobre a migração e regras novas).
   setTimeout(() => void recomputeRecurring().catch((e) => console.error('[recorrência]', e)), 5000)
   setInterval(() => void checkProjectRadar().catch(() => undefined), 60 * 60 * 1000)
