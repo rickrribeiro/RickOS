@@ -50,6 +50,7 @@ interface FinanceState {
   setInvestmentValue: (investmentId: number, month: string, amount: number) => Promise<void>
   removeInvestment: (id: number) => Promise<void>
   closeInvestment: (id: number, month: string) => Promise<void>
+  renameInvestment: (id: number, name: string) => Promise<void>
 
   categoryName: (id: number | null) => string
   categoryColor: (id: number | null) => string
@@ -192,6 +193,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   removeInvestment: async (id) => {
     await window.api.investments.delete(id)
+    await get().refresh()
+  },
+  renameInvestment: async (id, name) => {
+    await window.api.investments.rename(id, name)
     await get().refresh()
   },
   closeInvestment: async (id, month) => {

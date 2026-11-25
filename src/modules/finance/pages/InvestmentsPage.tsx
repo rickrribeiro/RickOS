@@ -3,6 +3,30 @@ import { Investment, InvestmentHistory } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth } from '../util'
+import type { InvestmentDetails } from '../../../../shared/finance'
+
+function parseDetails(raw: string | null | undefined): InvestmentDetails | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as InvestmentDetails
+  } catch {
+    return null
+  }
+}
+
+/** "CDB · 100% CDI · vence 05/2027 · bruto R$ 1.234 · IR R$ 12" — para diferenciar investimentos de nome igual. */
+function detailsLine(inv: Investment): string | null {
+  const d = parseDetails(inv.details)
+  if (!d) return null
+  const parts: string[] = []
+  if (d.code && d.code !== inv.name) parts.push(d.code)
+  if (d.rateText) parts.push(d.rateText)
+  if (d.dueDate) parts.push(`vence ${d.dueDate.slice(5, 7)}/${d.dueDate.slice(0, 4)}`)
+  if (d.quantity != null && !['CDB', 'LCI', 'LCA', 'Tesouro'].includes(d.kind)) parts.push(`${d.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} cotas`)
+  if (d.gross != null && d.incomeTax) parts.push(`bruto ${formatMoney(d.gross, inv.currency)} · IR ${formatMoney(d.incomeTax, inv.currency)}`)
+  if (d.iof) parts.push(`IOF ${formatMoney(d.iof, inv.currency)}`)
+  return parts.join(' · ') || null
+}
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -32,9 +56,11 @@ function InvestmentRow({
   prevValue,
   isExplicit,
   onSave,
-  onRemove
+  onRemove,
+  onRename
 }: {
   investment: Investment
+  onRename: (name: string) => void
   value: number | null // carried-forward value for the month (null if none yet)
   prevValue: number | null // carried-forward value for the previous month
   isExplicit: boolean // true if there's a snapshot for this exact month
@@ -55,9 +81,35 @@ function InvestmentRow({
   }
 
   return (
-    <div className="list-row">
-      <span className="list-row-title">{investment.name}</span>
+    <div className="list-row" style={{ flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: '1 1 220px' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span className="list-row-title" style={{ flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={investment.externalName ?? investment.name}>
+            {investment.name}
+          </span>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '0 6px', flexShrink: 0, alignSelf: 'center', lineHeight: 1.4 }}
+            title="Renomear (ex.: nome da caixinha)"
+            onClick={() => {
+              const n = prompt('Nome do investimento:', investment.name)?.trim()
+              if (n && n !== investment.name) onRename(n)
+            }}
+          >
+            ✎
+          </button>
+        </span>
+        {detailsLine(investment) && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{detailsLine(investment)}</span>}
+      </div>
       {investment.type && <span className="project-chip">{investment.type}</span>}
+      {investment.externalId && (
+        <span
+          className="project-chip"
+          title={`Sincronizado do Open Finance${parseDetails(investment.details)?.syncedAt ? ' em ' + new Date(parseDetails(investment.details)!.syncedAt).toLocaleString('pt-BR') : ''}${investment.externalName && investment.externalName !== investment.name ? ` · nome no banco: ${investment.externalName}` : ''}`}
+        >
+          🏦
+        </span>
+      )}
       <span style={{ fontSize: 11, color: isExplicit ? 'var(--success)' : 'var(--text-muted)' }}>
         {isExplicit ? '● registrado' : value != null ? 'mantido' : 'sem valor'}
       </span>
@@ -134,8 +186,41 @@ function ClosedRow({
 }
 
 export function InvestmentsPage(): React.ReactElement {
-  const { investments, investmentHistory, month, refresh, addInvestment, setInvestmentValue, removeInvestment, closeInvestment } =
+  const { investments, investmentHistory, month, refresh, addInvestment, setInvestmentValue, removeInvestment, closeInvestment, renameInvestment } =
     useFinanceStore()
+  const [pluggyReady, setPluggyReady] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  useEffect(() => {
+    window.api.pluggy.status().then(setPluggyReady).catch(() => setPluggyReady(false))
+  }, [])
+
+  async function syncFromBank(): Promise<void> {
+    setSyncBusy(true)
+    setSyncMsg(null)
+    try {
+      const r = await window.api.pluggy.syncInvestments()
+      let closedGone = 0
+      if (r.vanished.length) {
+        const list = r.vanished.slice(0, 10).map((v) => `• ${v.name}`).join('\n')
+        const more = r.vanished.length > 10 ? `\n… e mais ${r.vanished.length - 10}` : ''
+        if (confirm(`${r.vanished.length} investimento(s) não aparecem mais no banco:\n\n${list}${more}\n\nEncerrar a partir deste mês?`)) {
+          const cur = new Date()
+          const m = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`
+          for (const v of r.vanished) await window.api.investments.close(v.id, m)
+          closedGone = r.vanished.length
+        }
+      }
+      await refresh()
+      const parts = [`${r.created} novos`, `${r.updated} atualizados`, `${r.closed + closedGone} encerrados`]
+      setSyncMsg({ text: `Open Finance: ${parts.join(', ')}. Valores registrados no mês atual.`, ok: true })
+    } catch (e) {
+      setSyncMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
+    } finally {
+      setSyncBusy(false)
+    }
+  }
   const [name, setName] = useState('')
   const [type, setType] = useState('')
   const [amount, setAmount] = useState('')
@@ -223,6 +308,14 @@ export function InvestmentsPage(): React.ReactElement {
             + Adicionar
           </button>
         </div>
+        {pluggyReady && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+            <button className="btn btn-secondary btn-sm" onClick={syncFromBank} disabled={syncBusy} title="Busca seus investimentos no banco (Pluggy) e registra o saldo líquido no mês atual">
+              {syncBusy ? 'Atualizando…' : '🏦 Atualizar do Open Finance'}
+            </button>
+            {syncMsg && <span style={{ fontSize: 12, color: syncMsg.ok ? 'var(--success)' : 'var(--danger)' }}>{syncMsg.text}</span>}
+          </div>
+        )}
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
           Registre o valor de cada investimento mês a mês (navegue pelos meses acima). Meses sem
           registro mantêm o último valor conhecido. ✕ encerra o investimento a partir do mês exibido;
@@ -245,6 +338,7 @@ export function InvestmentsPage(): React.ReactElement {
               isExplicit={explicit}
               onSave={(v) => setInvestmentValue(i.id, month, v)}
               onRemove={() => handleClose(i)}
+              onRename={(n) => renameInvestment(i.id, n)}
             />
           )
         })}

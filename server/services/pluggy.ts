@@ -3,10 +3,23 @@ import {
   getTransactions,
   bulkInsertTransactions,
   applyExternalTransactionUpdate,
-  DbTransaction
+  DbTransaction,
+  getInvestments,
+  createInvestment,
+  setInvestmentValue,
+  closeInvestment,
+  setInvestmentExternal,
+  getInvestmentLatest
 } from '../database/queries'
 import { decodeSecret } from './secrets'
-import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod } from '../../shared/finance'
+import {
+  detectInvestmentMove,
+  detectOwnTransfer,
+  detectPaymentMethod,
+  pluggyInvestmentKind,
+  pluggyRateText,
+  type InvestmentDetails
+} from '../../shared/finance'
 import { categorizeNew } from './financeRules'
 
 const PLUGGY_API = 'https://api.pluggy.ai'
@@ -319,4 +332,122 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
 /** Whether Pluggy credentials + item are configured. */
 export async function pluggyConfigured(): Promise<boolean> {
   return !!(await getSetting('pluggy_client_id')) && !!(await getSetting('pluggy_item_id'))
+}
+
+// ── Investimentos (Open Finance) ──────────────────────────────────────────────
+
+interface PluggyInvestment {
+  id: string
+  name: string
+  type?: string | null
+  subtype?: string | null
+  status?: string | null // ACTIVE | PENDING | TOTAL_WITHDRAWAL
+  balance: number // líquido (após IR/IOF)
+  amount?: number | null // bruto
+  amountWithdrawal?: number | null
+  taxes?: number | null // IR
+  taxes2?: number | null // IOF
+  currencyCode?: string | null
+  quantity?: number | null
+  code?: string | null
+  rate?: number | null
+  rateType?: string | null
+  fixedAnnualRate?: number | null
+  dueDate?: string | null
+  issuer?: string | null
+}
+
+export interface PluggyInvestmentSyncResult {
+  created: number
+  updated: number
+  closed: number
+  /** vinculados e ativos no app, mas que o banco não devolveu mais — o usuário decide se encerra */
+  vanished: { id: number; name: string }[]
+}
+
+const monthKey = (d = new Date()): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
+/**
+ * Sincroniza os investimentos do item com a tela de Investimentos, pelo id do Pluggy:
+ *  - novo e ativo → cria, com o saldo líquido registrado no mês atual;
+ *  - já vinculado → atualiza detalhes (e o nome, se o usuário não renomeou) e o valor do mês atual;
+ *  - resgatado (TOTAL_WITHDRAWAL) → encerra a partir do mês atual (resgatados nunca vistos não são criados).
+ * Investimentos cadastrados à mão não são tocados. Os que sumiram do banco só voltam em `vanished`.
+ */
+export async function syncPluggyInvestments(): Promise<PluggyInvestmentSyncResult> {
+  const itemId = (await getSetting('pluggy_item_id')) ?? ''
+  if (!itemId) throw new Error('Configure o Item ID do Pluggy (banco conectado) em Configurações.')
+  const key = await apiKey()
+
+  const remote: PluggyInvestment[] = []
+  for (let page = 1; page <= 50; page++) {
+    const r = await get<{ results: PluggyInvestment[]; totalPages?: number }>(
+      `/investments?itemId=${encodeURIComponent(itemId)}&pageSize=500&page=${page}`,
+      key
+    )
+    remote.push(...(r.results ?? []))
+    if (!r.totalPages || page >= r.totalPages) break
+  }
+
+  const month = monthKey()
+  const now = new Date().toISOString()
+  const local = await getInvestments()
+  const byExternal = new Map(local.filter((i) => i.externalId).map((i) => [i.externalId as string, i]))
+  const seen = new Set<string>()
+  let created = 0
+  let updated = 0
+  let closed = 0
+
+  for (const inv of remote) {
+    seen.add(inv.id)
+    const kind = pluggyInvestmentKind(inv.type, inv.subtype)
+    const details: InvestmentDetails = {
+      source: 'pluggy',
+      kind,
+      rateText: pluggyRateText(inv.rate, inv.rateType, inv.fixedAnnualRate),
+      dueDate: inv.dueDate ? inv.dueDate.slice(0, 10) : null,
+      issuer: inv.issuer ?? null,
+      gross: inv.amount ?? null,
+      incomeTax: inv.taxes ?? null,
+      iof: inv.taxes2 ?? null,
+      withdrawable: inv.amountWithdrawal ?? null,
+      quantity: inv.quantity ?? null,
+      code: inv.code ?? null,
+      syncedAt: now
+    }
+    const value = Math.round((inv.balance ?? 0) * 100) / 100
+    const withdrawn = inv.status === 'TOTAL_WITHDRAWAL'
+    const cur = byExternal.get(inv.id)
+
+    if (!cur) {
+      if (withdrawn || value <= 0) continue // resgatado antes de começar a sincronizar: não cria
+      const createdInv = await createInvestment(inv.name, kind, value, (inv.currencyCode || 'BRL').toUpperCase(), month)
+      await setInvestmentExternal(createdInv.id, inv.id, inv.name, JSON.stringify(details), kind)
+      created++
+      continue
+    }
+
+    const renamed = cur.externalName != null && cur.name !== cur.externalName
+    await setInvestmentExternal(cur.id, inv.id, inv.name, JSON.stringify(details), kind, renamed ? undefined : inv.name)
+    const latest = await getInvestmentLatest(cur.id)
+    if (withdrawn || value <= 0) {
+      if (latest && !latest.closed) {
+        await closeInvestment(cur.id, month)
+        closed++
+      }
+      continue
+    }
+    if (!latest || latest.closed || latest.month !== month || Math.abs(latest.amount - value) > 0.004) {
+      await setInvestmentValue(cur.id, month, value) // reabre se estava encerrado
+      updated++
+    }
+  }
+
+  const vanished: { id: number; name: string }[] = []
+  for (const inv of local) {
+    if (!inv.externalId || seen.has(inv.externalId)) continue
+    const latest = await getInvestmentLatest(inv.id)
+    if (latest && !latest.closed) vanished.push({ id: inv.id, name: inv.name })
+  }
+  return { created, updated, closed, vanished }
 }

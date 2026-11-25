@@ -476,6 +476,16 @@ export interface Investment {
   type: string | null
   amount: number
   currency: string
+  externalId?: string | null // id no Pluggy (sincronizado do Open Finance)
+  externalName?: string | null // nome como o banco mandou
+  details?: string | null // JSON InvestmentDetails
+}
+
+export interface PluggyInvestmentSyncResult {
+  created: number
+  updated: number
+  closed: number
+  vanished: { id: number; name: string }[]
 }
 export interface InvestmentHistory {
   id: number
@@ -1095,8 +1105,10 @@ declare global {
         setValue: (investmentId: number, month: string, amount: number) => Promise<void>
         delete: (id: number) => Promise<void>
         close: (id: number, month: string) => Promise<void>
+        rename: (id: number, name: string) => Promise<void>
       }
       pluggy: {
+        syncInvestments: () => Promise<PluggyInvestmentSyncResult>
         sync: (month?: string) => Promise<PluggySyncResult>
         status: () => Promise<boolean>
         connectToken: () => Promise<string>

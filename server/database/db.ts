@@ -445,6 +445,15 @@ const MIGRATIONS: Migration[] = [
         for (const id of ids) db.run('UPDATE transactions SET paymentMethod = NULL WHERE id = ?', [id])
       } catch { /* tabela ausente */ }
     }
+  },
+  {
+    version: 33,
+    label: 'Investimentos: vínculo com o Open Finance (id externo, nome original e detalhes)',
+    run: (db) => {
+      try { db.run('ALTER TABLE investments ADD COLUMN externalId TEXT;') } catch { /* exists */ }
+      try { db.run('ALTER TABLE investments ADD COLUMN externalName TEXT;') } catch { /* exists */ }
+      try { db.run('ALTER TABLE investments ADD COLUMN details TEXT;') } catch { /* exists */ }
+    }
   }
 ]
 

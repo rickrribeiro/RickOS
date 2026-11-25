@@ -109,6 +109,7 @@ import {
   setInvestmentValue,
   deleteInvestment,
   closeInvestment,
+  renameInvestment,
   getTrips,
   createTrip,
   updateTrip,
@@ -204,7 +205,7 @@ import type { DbTransaction, DbSkill, DbAgent, StudyBundle, DbStayFavorite, DbSt
 import { syncGithubIssues, createIssueViaClaude } from './services/github'
 import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
-import { syncPluggy, pluggyConfigured, createConnectToken } from './services/pluggy'
+import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
 import { countsInTotals, type TransactionKind } from '../shared/finance'
 import { registerFlightRpc } from './flights/rpc'
@@ -970,6 +971,7 @@ ipcMain.handle('investments:create', (_, name: string, type: string | null, amou
 ipcMain.handle('investments:setValue', (_, investmentId: number, month: string, amount: number) => setInvestmentValue(investmentId, month, amount))
 ipcMain.handle('investments:delete', (_, id: number) => deleteInvestment(id))
 ipcMain.handle('investments:close', (_, id: number, month: string) => closeInvestment(id, month))
+ipcMain.handle('investments:rename', (_, id: number, name: string) => renameInvestment(id, name))
 
 // ── IPC: Open Finance (Pluggy) ────────────────────────────────────────────────
 
@@ -979,6 +981,11 @@ ipcMain.handle('pluggy:sync', async (_, month?: string) => {
   return r
 })
 ipcMain.handle('pluggy:status', () => pluggyConfigured())
+ipcMain.handle('pluggy:syncInvestments', async () => {
+  const r = await syncPluggyInvestments()
+  await setSetting('pluggy_investments_last_sync', new Date().toISOString())
+  return r
+})
 ipcMain.handle('pluggy:connectToken', () => createConnectToken())
 
 // ── IPC: Travel ───────────────────────────────────────────────────────────────

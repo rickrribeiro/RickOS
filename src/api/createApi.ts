@@ -423,10 +423,12 @@ export function createApi() {
       create: (name: string, type: string | null, amount: number, currency: string, month?: string) => invoke('investments:create', name, type, amount, currency, month),
       setValue: (investmentId: number, month: string, amount: number) => invoke('investments:setValue', investmentId, month, amount),
       delete: (id: number) => invoke('investments:delete', id),
-      close: (id: number, month: string) => invoke('investments:close', id, month)
+      close: (id: number, month: string) => invoke('investments:close', id, month),
+      rename: (id: number, name: string) => invoke('investments:rename', id, name)
     },
     pluggy: {
       sync: (month?: string) => invoke('pluggy:sync', month),
+      syncInvestments: () => invoke('pluggy:syncInvestments'),
       status: () => invoke('pluggy:status'),
       connectToken: () => invoke('pluggy:connectToken')
     },

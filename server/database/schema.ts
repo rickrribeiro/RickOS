@@ -208,7 +208,10 @@ export const SCHEMA = `
     name TEXT NOT NULL,
     type TEXT,
     amount REAL NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'BRL'
+    currency TEXT NOT NULL DEFAULT 'BRL',
+    externalId TEXT,                        -- id do investimento no Pluggy (Open Finance)
+    externalName TEXT,                      -- nome como o banco mandou (renomear no app não é sobrescrito)
+    details TEXT                            -- JSON InvestmentDetails (tipo, taxa, vencimento, bruto, IR/IOF…)
   );
 
   -- Monthly value snapshot per investment (YYYY-MM). One row per (investmentId, month).

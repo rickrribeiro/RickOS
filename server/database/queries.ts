@@ -1210,6 +1210,9 @@ export interface DbInvestment {
   type: string | null
   amount: number
   currency: string
+  externalId?: string | null
+  externalName?: string | null
+  details?: string | null // JSON InvestmentDetails
 }
 export interface DbInvestmentHistory {
   id: number
@@ -1480,6 +1483,28 @@ export async function closeInvestment(id: number, month: string): Promise<void> 
   }
   run(db, 'INSERT INTO investment_history (investmentId, month, amount, closed) VALUES (?, ?, 0, 1)', [id, month])
   syncInvestmentLatest(db, id)
+}
+export async function renameInvestment(id: number, name: string): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE investments SET name = ? WHERE id = ?', [name, id])
+}
+/** Vincula/atualiza o investimento com o Open Finance. `name` só muda se o usuário não renomeou. */
+export async function setInvestmentExternal(
+  id: number,
+  externalId: string,
+  externalName: string,
+  details: string,
+  type: string,
+  name?: string
+): Promise<void> {
+  const db = await getDb()
+  if (name) run(db, 'UPDATE investments SET name = ? WHERE id = ?', [name, id])
+  run(db, 'UPDATE investments SET externalId = ?, externalName = ?, details = ?, type = ? WHERE id = ?', [externalId, externalName, details, type, id])
+}
+/** Registro mais recente do investimento (para saber valor atual / se está encerrado). */
+export async function getInvestmentLatest(id: number): Promise<DbInvestmentHistory | null> {
+  const db = await getDb()
+  return getOne<DbInvestmentHistory>(db, 'SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1', [id]) ?? null
 }
 /** Exclui o investimento de todos os meses. */
 export async function deleteInvestment(id: number): Promise<void> {

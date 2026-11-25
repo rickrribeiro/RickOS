@@ -166,3 +166,44 @@ export function detectPaymentMethod(
   if (/\b(cartao de credito|credito de ")/.test(d)) return 'credito'
   return null
 }
+
+// ── Investimentos do Open Finance ──────────────────────────────────────────────
+
+/** Detalhes guardados de um investimento sincronizado do Open Finance (Pluggy). */
+export interface InvestmentDetails {
+  source: 'pluggy'
+  kind: string // tipo amigável: CDB, Tesouro, Fundo, Ação, FII…
+  rateText: string | null // ex.: "100% CDI", "12,5% a.a."
+  dueDate: string | null // YYYY-MM-DD
+  issuer: string | null
+  gross: number | null // valor bruto (antes de IR/IOF)
+  incomeTax: number | null // IR
+  iof: number | null
+  withdrawable: number | null // disponível para resgate
+  quantity: number | null
+  code: string | null // ticker
+  syncedAt: string // ISO
+}
+
+const PLUGGY_KIND: Record<string, string> = {
+  CDB: 'CDB', LCI: 'LCI', LCA: 'LCA', LC: 'LC', CRI: 'CRI', CRA: 'CRA', LIG: 'LIG', LF: 'LF', DEBENTURES: 'Debênture', TREASURY: 'Tesouro',
+  RETIREMENT: 'Previdência', PGBL: 'PGBL', VGBL: 'VGBL',
+  INVESTMENT_FUND: 'Fundo', STOCK_FUND: 'Fundo de ações', MULTIMARKET_FUND: 'Fundo multimercado', EXCHANGE_FUND: 'Fundo cambial',
+  FIXED_INCOME_FUND: 'Fundo de renda fixa', FIP_FUND: 'FIP', OFFSHORE_FUND: 'Fundo offshore', ETF_FUND: 'Fundo de ETF',
+  STOCK: 'Ação', BDR: 'BDR', REAL_ESTATE_FUND: 'FII', DERIVATIVES: 'Derivativo', OPTION: 'Opção', ETF: 'ETF', STRUCTURED_NOTE: 'COE'
+}
+
+export function pluggyInvestmentKind(type: string | null | undefined, subtype: string | null | undefined): string {
+  return PLUGGY_KIND[subtype ?? ''] ?? PLUGGY_KIND[type ?? ''] ?? (type === 'FIXED_INCOME' ? 'Renda fixa' : 'Investimento')
+}
+
+/** "100% CDI", "IPCA + 6% a.a.", "12,5% a.a." — a partir de rate/rateType/fixedAnnualRate. */
+export function pluggyRateText(rate: number | null | undefined, rateType: string | null | undefined, fixedAnnualRate: number | null | undefined): string | null {
+  const fmt = (n: number): string => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  if (rateType && rate != null) {
+    if (rateType === 'IPCA' || rateType === 'IGPM') return `${rateType}${fixedAnnualRate ? ` + ${fmt(fixedAnnualRate)}% a.a.` : ''}`
+    return `${fmt(rate)}% ${rateType}`
+  }
+  if (fixedAnnualRate != null) return `${fmt(fixedAnnualRate)}% a.a.`
+  return null
+}
