@@ -110,6 +110,37 @@ export function chargesInBase(
   return { total: byKind.iof + byKind.juros + byKind.multa, count, byKind }
 }
 
+/** Parcela "n/N" na descrição (ex.: "Airbnb * Hm984 5/6", "Pag*Tripcom 2/3"). null se não for parcelada. */
+export function installmentOf(description: string | null): { n: number; total: number } | null {
+  const m = /(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/.exec(description ?? '')
+  if (!m) return null
+  const n = Number(m[1])
+  const total = Number(m[2])
+  return n >= 1 && total >= 2 && n <= total ? { n, total } : null
+}
+
+/**
+ * Fatura inicial do mês: parcelas (2ª em diante) de compras feitas em meses anteriores que caem
+ * neste mês — o quanto a fatura já começa antes de qualquer compra nova. Encargos (ex.: IOF de
+ * uma compra parcelada) ficam de fora.
+ */
+export function startingBillInBase(
+  items: { type: string; description: string | null; amount: number; currency: string }[],
+  base: string,
+  rates: Record<string, number>
+): { total: number; count: number } {
+  let total = 0
+  let count = 0
+  for (const t of items) {
+    if (t.type !== 'expense' || chargeKind(t)) continue
+    const inst = installmentOf(t.description)
+    if (!inst || inst.n < 2) continue
+    total += convertToBase(t.amount, t.currency, base, rates)
+    count++
+  }
+  return { total, count }
+}
+
 /**
  * Value of an investment for a given month, carrying forward the most recent
  * snapshot at or before that month (holdings persist until re-entered). null if

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
-import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, formatMoneyCompact } from '../util'
+import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
   const { accounts, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
@@ -57,6 +57,15 @@ export function FinanceDashboardPage(): React.ReactElement {
   const incomeBase = sumInBase(income, base, rates)
   const expenseBase = sumInBase(expense, base, rates)
   const netBase = incomeBase - expenseBase
+
+  // Fatura inicial: parcelas de compras anteriores que já caem neste mês (e no próximo)
+  const startingBill = startingBillInBase(transactions, base, rates)
+  const nextMonth = shiftMonth(month, 1)
+  const startingNext = startingBillInBase(
+    allTransactions.filter((t) => t.date.slice(0, 7) === nextMonth),
+    base,
+    rates
+  )
 
   // Encargos (IOF, juros, multa): mês selecionado e ano corrente do mês selecionado
   const chargesMonth = chargesInBase(transactions, base, rates)
@@ -118,6 +127,17 @@ export function FinanceDashboardPage(): React.ReactElement {
             {formatMoney(netBase, base)}
           </div>
           <div className="stat-card-sub">receitas {formatMoney(incomeBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">Fatura inicial do mês</div>
+          <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(startingBill.total, base)}</div>
+          <div className="stat-card-sub">
+            {startingBill.count} {startingBill.count === 1 ? 'parcela' : 'parcelas'} de compras anteriores
+            {expenseBase > 0 && startingBill.total > 0 && ` · ${Math.round((startingBill.total / expenseBase) * 100)}% dos gastos`}
+          </div>
+          <div className="stat-card-sub" style={{ color: 'var(--text-muted)' }}>
+            {monthLabel(nextMonth)} já começa com {formatMoney(startingNext.total, base)}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Encargos do mês</div>
