@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { formatMoney, monthLabel, shiftMonth, convertToBase, currentMonth } from '../util'
+import { CategoryCharts } from '../components/CategoryCharts'
 
 /** Intervalo de meses inclusivo (YYYY-MM). */
 interface Period {
@@ -226,6 +227,8 @@ export function ReportsPage(): React.ReactElement {
           </table>
         </div>
       </div>
+
+      <CategoryCharts transactions={allTransactions} period={pa} periodLabel={`Período A · ${periodLabel(pa)}`} />
 
       <div className="chart-section" style={{ marginTop: 16 }}>
         <div className="chart-title">
