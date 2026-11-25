@@ -1,0 +1,50 @@
+/* Paleta "Sépia" — papel antigo e tinta marrom; o escuro é café. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='sepia'] {
+  --pal-bg: #1e1812;
+  --pal-sidebar: #17120d;
+  --pal-surface: #272019;
+  --pal-elevated: #2f271f;
+  --pal-user-bubble: #362c22;
+  --pal-border: #3d3228;
+  --pal-border-strong: #504336; /* derivado */
+  --pal-text: #efe3cf;
+  --pal-text-2: #bfae95;
+  --pal-text-3: #ad9c84;
+  --pal-accent: #e3a86b;
+  --pal-accent-hover: #edbe8c; /* derivado */
+  --pal-selection: #3a2b1d;
+  --pal-primary: #d9a066;
+  --pal-on-primary: #2a1a0a;
+  --pal-success: #b3cf9f;
+  --pal-success-bg: #263220;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(239, 227, 207, 0.06);
+  --pal-ring: rgba(227, 168, 107, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='sepia'][data-theme='light'] {
+  --pal-bg: #f4ecdd;
+  --pal-sidebar: #eadfcb;
+  --pal-surface: #fbf6ec;
+  --pal-elevated: #efe5d3;
+  --pal-user-bubble: #e9dcc6;
+  --pal-border: #d9c9ae;
+  --pal-border-strong: #c4b091; /* derivado */
+  --pal-text: #3b2a1a;
+  --pal-text-2: #6b5640;
+  --pal-text-3: #725c45;
+  --pal-accent: #8b4a1c;
+  --pal-accent-hover: #723c15; /* derivado */
+  --pal-selection: #edd9bd;
+  --pal-primary: #7a4a26;
+  --pal-on-primary: #fff8ee;
+  --pal-success: #3f6b3a;
+  --pal-success-bg: #e3ebd3;
+  --pal-shadow: #3b2a1a14;
+  --pal-hover: rgba(59, 42, 26, 0.05);
+  --pal-ring: rgba(139, 74, 28, 0.25);
+  --pal-scrim: rgba(59, 42, 26, 0.3);
+  color-scheme: light;
+}
