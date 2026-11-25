@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
-import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, formatMoneyCompact } from '../util'
+import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
-  const { accounts, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
+  const { accounts, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
     useFinanceStore()
 
   useEffect(() => {
@@ -14,6 +14,8 @@ export function FinanceDashboardPage(): React.ReactElement {
   const income = transactions.filter((t) => t.type === 'income')
   const expense = transactions.filter((t) => t.type === 'expense')
   const incomeByCur = sumByCurrency(income)
+  // salário fixo (categorias de receita marcadas como fixas) × entradas extras
+  const { fixed: fixedIncome, extra: extraIncome } = splitIncome(income, categories)
   const expenseByCur = sumByCurrency(expense)
   // aplicações/resgates: fora de receitas/gastos, mostrados à parte
   const redemptionsByCur = sumByCurrency(investmentMoves.filter((t) => t.type === 'income'))
@@ -102,6 +104,22 @@ export function FinanceDashboardPage(): React.ReactElement {
               + resgates de investimento {money(redemptionsByCur)}
             </div>
           )}
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">Salário fixo</div>
+          <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{money(sumByCurrency(fixedIncome))}</div>
+          <div className="stat-card-sub">
+            {fixedIncome.length === 0
+              ? 'nada recebido em categoria fixa'
+              : `${fixedIncome.length} ${fixedIncome.length === 1 ? 'entrada' : 'entradas'} · ${categories.filter((c) => c.fixedIncome).map((c) => c.name).join(', ')}`}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">Entradas extras</div>
+          <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{money(sumByCurrency(extraIncome))}</div>
+          <div className="stat-card-sub">
+            {extraIncome.length} {extraIncome.length === 1 ? 'entrada' : 'entradas'} fora do salário
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Gastos do mês</div>

@@ -38,6 +38,7 @@ interface FinanceState {
   addCategory: (name: string, type: string, color: string) => Promise<void>
   removeCategory: (id: number) => Promise<void>
   updateCategory: (id: number, name: string, color: string) => Promise<void>
+  setCategoryFixedIncome: (id: number, fixed: boolean) => Promise<void>
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>
   updateTransaction: (t: Transaction) => Promise<void>
   removeTransaction: (id: number) => Promise<void>
@@ -140,6 +141,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   addCategory: async (name, type, color) => {
     await window.api.categories.create(name, type, color)
+    await get().refresh()
+  },
+  setCategoryFixedIncome: async (id, fixed) => {
+    await window.api.categories.setFixedIncome(id, fixed)
     await get().refresh()
   },
   updateCategory: async (id, name, color) => {

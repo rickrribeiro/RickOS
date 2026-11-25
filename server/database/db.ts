@@ -454,6 +454,14 @@ const MIGRATIONS: Migration[] = [
       try { db.run('ALTER TABLE investments ADD COLUMN externalName TEXT;') } catch { /* exists */ }
       try { db.run('ALTER TABLE investments ADD COLUMN details TEXT;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 34,
+    label: 'Categorias: receita fixa (salário) × extra; "Salário" já marcada',
+    run: (db) => {
+      try { db.run('ALTER TABLE categories ADD COLUMN fixedIncome INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+      try { db.run("UPDATE categories SET fixedIncome = 1 WHERE id = 1 AND type = 'income';") } catch { /* tabela ausente */ }
+    }
   }
 ]
 

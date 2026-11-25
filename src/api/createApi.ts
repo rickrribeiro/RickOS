@@ -399,6 +399,7 @@ export function createApi() {
       getAll: () => invoke('categories:getAll'),
       create: (name: string, type: string, color: string) => invoke('categories:create', name, type, color),
       update: (id: number, name: string, color: string) => invoke('categories:update', id, name, color),
+      setFixedIncome: (id: number, fixed: boolean) => invoke('categories:setFixedIncome', id, fixed),
       delete: (id: number) => invoke('categories:delete', id)
     },
     transactions: {

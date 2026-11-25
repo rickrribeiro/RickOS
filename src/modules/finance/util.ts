@@ -141,6 +141,22 @@ export function startingBillInBase(
   return { total, count }
 }
 
+/** Receita fixa (categoria marcada como fixa, ex.: Salário) × extra (todo o resto, inclusive sem categoria). */
+export function splitIncome<T extends { type: string; categoryId: number | null }>(
+  items: T[],
+  categories: { id: number; fixedIncome?: number }[]
+): { fixed: T[]; extra: T[] } {
+  const fixedIds = new Set(categories.filter((c) => c.fixedIncome).map((c) => c.id))
+  const fixed: T[] = []
+  const extra: T[] = []
+  for (const t of items) {
+    if (t.type !== 'income') continue
+    if (t.categoryId != null && fixedIds.has(t.categoryId)) fixed.push(t)
+    else extra.push(t)
+  }
+  return { fixed, extra }
+}
+
 /**
  * Value of an investment for a given month, carrying forward the most recent
  * snapshot at or before that month (holdings persist until re-entered). null if

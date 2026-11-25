@@ -425,6 +425,7 @@ export interface Category {
   name: string
   type: string // income | expense
   color: string
+  fixedIncome?: number // receita: 1 = fixa (salário), 0 = extra
 }
 
 export interface Transaction {
@@ -1082,6 +1083,7 @@ declare global {
         getAll: () => Promise<Category[]>
         create: (name: string, type: string, color: string) => Promise<Category>
         update: (id: number, name: string, color: string) => Promise<void>
+        setFixedIncome: (id: number, fixed: boolean) => Promise<void>
         delete: (id: number) => Promise<void>
       }
       transactions: {

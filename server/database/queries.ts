@@ -1180,6 +1180,7 @@ export interface DbCategory {
   name: string
   type: string
   color: string
+  fixedIncome?: number // receita: 1 = fixa (salário), 0 = extra
 }
 export interface DbTransaction {
   id: number
@@ -1254,6 +1255,10 @@ export async function createCategory(name: string, type: string, color: string):
 export async function updateCategory(id: number, name: string, color: string): Promise<void> {
   const db = await getDb()
   run(db, 'UPDATE categories SET name = ?, color = ? WHERE id = ?', [name, color, id])
+}
+export async function setCategoryFixedIncome(id: number, fixed: boolean): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE categories SET fixedIncome = ? WHERE id = ?', [fixed ? 1 : 0, id])
 }
 /** Exclui a categoria; transações dela ficam sem categoria e as metas e regras dela somem. */
 export async function deleteCategory(id: number): Promise<void> {

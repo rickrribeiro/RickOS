@@ -20,7 +20,7 @@ function CategoryRow({
   budget: number | null // null = receita (sem meta)
   txCount: number
 }): React.ReactElement {
-  const { setBudget, updateCategory, removeCategory } = useFinanceStore()
+  const { setBudget, updateCategory, removeCategory, setCategoryFixedIncome } = useFinanceStore()
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(category.name)
@@ -63,6 +63,15 @@ function CategoryRow({
           <>
             <span className="priority-dot" style={{ background: category.color }} />
             <span className="list-row-title">{category.name}</span>
+            {!isExpense && (
+              <label
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                title="Receita fixa entra como salário; as outras receitas contam como entrada extra"
+              >
+                <input type="checkbox" checked={!!category.fixedIncome} onChange={(e) => setCategoryFixedIncome(category.id, e.target.checked)} />
+                fixa (salário)
+              </label>
+            )}
             <span style={{ fontSize: 13, color: over ? 'var(--danger)' : 'var(--text-secondary)' }}>
               {formatMoney(total)}
               {isExpense && <> / {budget && budget > 0 ? formatMoney(budget) : '—'} {over && '⚠'}</>}

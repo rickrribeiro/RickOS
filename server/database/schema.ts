@@ -165,7 +165,8 @@ export const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'expense',   -- income | expense
-    color TEXT NOT NULL DEFAULT '#6366f1'
+    color TEXT NOT NULL DEFAULT '#6366f1',
+    fixedIncome INTEGER NOT NULL DEFAULT 0  -- receita: 1 = fixa (salário); 0 = extra
   );
 
   CREATE TABLE IF NOT EXISTS transactions (
