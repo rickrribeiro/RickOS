@@ -9,6 +9,7 @@ import type { ChatLabel, PersonNetwork } from '../../../../shared/chats'
 import { PersonNetworks } from '../../chats/components/PersonNetworks'
 import { TagsModal, TagChip } from '../components/TagsModal'
 import { parseQuery, matches, QUERY_HELP, QUERY_FIELDS, type FieldValues } from '../query'
+import { t as tr, getLocale } from '../../../i18n'
 
 /** Days until the next occurrence of a MM-DD / YYYY-MM-DD birthday, or null. */
 function daysToBirthday(bday: string | null): number | null {
@@ -43,7 +44,7 @@ function SuggestModal({ contact, onClose }: { contact: Contact; onClose: () => v
 Nome: ${contact.name}
 Local: ${[contact.location, contact.state, contact.country].filter(Boolean).join(', ') || '—'}
 Interesses: ${contact.interests ?? '—'}
-Última conversa: ${contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleDateString('pt-BR') : '—'}
+Última conversa: ${contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleDateString(getLocale()) : '—'}
 Contexto: ${contact.context ?? '—'}`
       runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'crm' })
     })()
@@ -57,11 +58,11 @@ Contexto: ${contact.context ?? '—'}`
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 440, maxWidth: 600 }}>
-        <h2>✨ Mensagens para {contact.name}</h2>
+        <h2>{tr('crm.mensagensPara')} {contact.name}</h2>
         <pre className="ai-output" style={{ maxHeight: 320 }}>{out || (running ? 'Pensando…' : '')}</pre>
         <div className="modal-actions">
-          {!running && out && <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard.writeText(out)}>Copiar</button>}
-          <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+          {!running && out && <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard.writeText(out)}>{tr('crm.copiar')}</button>}
+          <button className="btn btn-primary btn-sm" onClick={onClose}>{tr('crm.fechar')}</button>
         </div>
       </div>
     </div>
@@ -172,13 +173,13 @@ export function CrmPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🤝 Pessoas</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('crm.pessoas')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {isFiltering ? `${filtered.length} de ${contacts.length} contatos` : `${contacts.length} contatos`} · {attentionCount} precisam de atenção
+            {isFiltering ? tr('crm.deContatos', { count: filtered.length, count2: contacts.length }) : tr('crm.contatos', { count: contacts.length })} {tr('crm.precisamDeAtencao', { attentionCount })}
           </p>
           {parsed.unknown.length > 0 && (
             <p style={{ fontSize: 12, color: 'var(--warning)' }}>
-              Campo desconhecido: {parsed.unknown.join(', ')} (ignorado). Veja o ⓘ.
+              {tr('crm.campoDesconhecido')} {parsed.unknown.join(', ')} {tr('crm.ignoradoVejaO')}
             </p>
           )}
         </div>
@@ -187,28 +188,27 @@ export function CrmPage(): React.ReactElement {
             <input
               value={nameFilter}
               onChange={(e) => setNameFilter(e.target.value)}
-              placeholder="🔍 Buscar ou cidade=null…"
-              title="Texto livre ou expressões (campo=valor). Veja o ⓘ."
+              placeholder={tr('crm.buscarOuCidadeNull')}
+              title={tr('crm.textoLivreOuExpressoesCampo')}
               style={{ minWidth: 180, flex: 1 }}
             />
             <button
               type="button"
               className="crm-help-btn"
-              aria-label="Ajuda das expressões de busca"
+              aria-label={tr('crm.ajudaDasExpressoesDeBusca')}
               aria-expanded={showHelp}
               onClick={(e) => {
                 e.stopPropagation()
                 setShowHelp((v) => !v)
               }}
             >
-              i
+              {tr('crm.i')}
             </button>
             {showHelp && (
               <div className="crm-help-pop" onClick={(e) => e.stopPropagation()}>
-                <strong>Busca por expressões</strong>
+                <strong>{tr('crm.buscaPorExpressoes')}</strong>
                 <p>
-                  Palavras soltas procuram em nome, cidade, país, estado, interesses, contexto e tags. Termos separados por espaço
-                  precisam valer todos. Clique num exemplo para usar.
+                  {tr('crm.palavrasSoltasProcuramEmNome')}
                 </p>
                 <div className="crm-help-list">
                   {QUERY_HELP.map((h) => (
@@ -226,43 +226,43 @@ export function CrmPage(): React.ReactElement {
                   ))}
                 </div>
                 <p>
-                  <code>=</code> contém · <code>!=</code> não contém · <code>null</code> vazio. Campos: {QUERY_FIELDS}.
+                  <code>=</code> {tr('crm.contem')} <code>!=</code> {tr('crm.naoContem')} <code>null</code> {tr('crm.vazioCampos', { QUERY_FIELDS })}
                 </p>
               </div>
             )}
           </div>
           {countries.length > 0 && (
-            <select value={countryFilter} onChange={(e) => onCountryFilterChange(e.target.value)} title="Filtrar por país">
-              <option value="">🌎 Todos os países</option>
+            <select value={countryFilter} onChange={(e) => onCountryFilterChange(e.target.value)} title={tr('crm.filtrarPorPais')}>
+              <option value="">{tr('crm.todosOsPaises')}</option>
               {countries.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
           )}
           {countryFilter === BRAZIL && brStates.length > 0 && (
-            <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} title="Filtrar por estado">
-              <option value="">📍 Todos os estados</option>
+            <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} title={tr('crm.filtrarPorEstado')}>
+              <option value="">{tr('crm.todosOsEstados')}</option>
               {brStates.map((uf) => (
                 <option key={uf} value={uf}>{uf} — {ufLabel(uf)}</option>
               ))}
             </select>
           )}
           {labels.length > 0 && (
-            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value ? Number(e.target.value) : '')} title="Filtrar por tag">
-              <option value="">🏷 Todas as tags</option>
+            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value ? Number(e.target.value) : '')} title={tr('crm.filtrarPorTag')}>
+              <option value="">{tr('crm.todasAsTags')}</option>
               {labels.map((l) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => setManagingTags(true)}>🏷 Tags</button>
-          <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>＋ Pessoa</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setManagingTags(true)}>{tr('crm.tags2')}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{tr('crm.pessoa2')}</button>
         </div>
       </div>
 
       <div className="list-stack">
-        {contacts.length === 0 && <div className="empty-hint">Nenhuma pessoa. Adicione quem você quer manter por perto.</div>}
-        {contacts.length > 0 && sorted.length === 0 && <div className="empty-hint">Nenhum contato para os filtros selecionados.</div>}
+        {contacts.length === 0 && <div className="empty-hint">{tr('crm.nenhumaPessoaAdicioneQuemVoce')}</div>}
+        {contacts.length > 0 && sorted.length === 0 && <div className="empty-hint">{tr('crm.nenhumContatoParaOsFiltros')}</div>}
         {sorted.map((c) => {
           const bd = daysToBirthday(c.birthday)
           const attention = needsAttention(c)
@@ -274,24 +274,24 @@ export function CrmPage(): React.ReactElement {
                   {(tagMap[c.id] ?? []).map((t) => (
                     <TagChip key={t.id} tag={t} />
                   ))}
-                  {c.priority === 'alta' && <span className="due-badge due-overdue">prioridade alta</span>}
+                  {c.priority === 'alta' && <span className="due-badge due-overdue">{tr('crm.prioridadeAlta')}</span>}
                   <PersonNetworks items={nets[c.id] ?? []} />
                   {c.location && <span className="project-chip">📍 {c.location}</span>}
                   {c.country && <span className="project-chip">🌎 {c.country}{c.state ? ` / ${c.state}` : ''}</span>}
-                  {bd !== null && bd <= 7 && <span className="due-badge due-today">🎂 {bd === 0 ? 'hoje!' : `em ${bd}d`}</span>}
+                  {bd !== null && bd <= 7 && <span className="due-badge due-today">🎂 {bd === 0 ? tr('crm.hoje') : tr('crm.emD', { bd })}</span>}
                   {c.nextFollowUp && <span className={`due-badge ${c.nextFollowUp <= today ? 'due-overdue' : 'due-future'}`}>↩ {c.nextFollowUp}</span>}
                 </div>
                 {c.interests && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>💡 {c.interests}</div>}
                 {c.context && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{c.context}</div>}
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {c.lastContactAt ? `última conversa há ${timeAgo(c.lastContactAt)}` : 'sem conversa registrada'}
+                  {c.lastContactAt ? tr('crm.ultimaConversaHa', { p0: timeAgo(c.lastContactAt) }) : tr('crm.semConversaRegistrada')}
                 </div>
               </div>
               <div className="list-row-actions" style={{ flexShrink: 0 }}>
-                <button className="btn btn-primary btn-sm" onClick={() => setSuggest(c)} title="Sugerir mensagem com IA">✨ Msg</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => log(c.id)} title="Registrar que conversei hoje">✓ Falei</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(c)}>Editar</button>
-                <button className="btn btn-danger btn-sm" onClick={() => window.confirm(`Remover ${c.name}?`) && remove(c.id)}>✕</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setSuggest(c)} title={tr('crm.sugerirMensagemComIa')}>{tr('crm.msg')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => log(c.id)} title={tr('crm.registrarQueConverseiHoje')}>{tr('crm.falei')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(c)}>{tr('crm.editar')}</button>
+                <button className="btn btn-danger btn-sm" onClick={() => window.confirm(tr('crm.remover2', { name: c.name })) && remove(c.id)}>✕</button>
               </div>
             </div>
           )

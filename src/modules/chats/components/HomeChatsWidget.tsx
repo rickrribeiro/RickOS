@@ -3,6 +3,7 @@ import type { ChatCounts, RadarItem } from '../../../../shared/chats'
 import { openChat, openChatsWith, useChatsStore } from '../store/chatsStore'
 import { RADAR_ICON } from './RadarView'
 import '../chats.css'
+import { t } from '../../../i18n'
 
 /**
  * Widget opcional da Home. Some com o módulo desligado ou com o widget desativado em
@@ -42,27 +43,27 @@ export function HomeChatsWidget(): React.ReactElement | null {
 
   return (
     <>
-      <h3 className="dash-heading">Central de Mensagens</h3>
+      <h3 className="dash-heading">{t('chats.centralDeMensagens')}</h3>
       <div className="chats-widget-grid">
         <button className="stat-card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => openChatsWith({ state: 'unread', sort: 'recent' })}>
-          <div className="stat-card-label">Não lidas</div>
+          <div className="stat-card-label">{t('chats.naoLidas3')}</div>
           <div className="stat-card-value">{counts.unreadChats}</div>
-          <div className="stat-card-sub">conversas · {counts.unreadMessages} mensagens</div>
+          <div className="stat-card-sub">{t('chats.conversasMensagens', { unreadMessages: counts.unreadMessages })}</div>
         </button>
         <button className="stat-card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => openChatsWith({ state: 'needs_reply' })}>
-          <div className="stat-card-label">Possivelmente pendentes</div>
+          <div className="stat-card-label">{t('chats.possivelmentePendentes')}</div>
           <div className="stat-card-value">{counts.needsReply}</div>
-          <div className="stat-card-sub">conversas sem resposta sua</div>
+          <div className="stat-card-sub">{t('chats.conversasSemRespostaSua')}</div>
         </button>
         <button className="stat-card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => openChatsWith({ state: 'mentions', type: 'group', sort: 'recent' })}>
-          <div className="stat-card-label">Menções em grupos</div>
+          <div className="stat-card-label">{t('chats.mencoesEmGrupos')}</div>
           <div className="stat-card-value">{counts.mentionsEstimated ? '~' : ''}{counts.mentionCount}</div>
-          <div className="stat-card-sub">em {counts.mentionChats} grupo(s){counts.mentionsEstimated ? ' · com estimativa' : ''}</div>
+          <div className="stat-card-sub">{t('chats.emGrupoS', { mentionChats: counts.mentionChats })}{counts.mentionsEstimated ? t('chats.comEstimativa') : ''}</div>
         </button>
         <button className="stat-card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => openChatsWith({ state: 'high' })}>
-          <div className="stat-card-label">Prioridade alta</div>
+          <div className="stat-card-label">{t('chats.prioridadeAlta')}</div>
           <div className="stat-card-value">{counts.high}</div>
-          <div className="stat-card-sub">conversas</div>
+          <div className="stat-card-sub">{t('chats.conversas')}</div>
         </button>
       </div>
       {alerts.length > 0 && (
@@ -75,8 +76,8 @@ export function HomeChatsWidget(): React.ReactElement | null {
         </div>
       )}
       <div className="chats-row" style={{ marginTop: 10 }}>
-        <button className="btn btn-primary btn-sm" onClick={() => (useChatsStore.setState({ triageMode: 'backlog' }), openChatsWith({ state: 'needs_reply' }, 'triage'))}>🧹 Organizar inbox</button>
-        <button className="btn btn-secondary btn-sm" onClick={() => openChatsWith({ state: 'high' })}>🔥 Ver prioritárias</button>
+        <button className="btn btn-primary btn-sm" onClick={() => (useChatsStore.setState({ triageMode: 'backlog' }), openChatsWith({ state: 'needs_reply' }, 'triage'))}>{t('chats.organizarInbox')}</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => openChatsWith({ state: 'high' })}>{t('chats.verPrioritarias')}</button>
       </div>
     </>
   )

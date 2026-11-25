@@ -1,4 +1,5 @@
 import { norm } from './geo'
+import { t as tr } from '../../i18n'
 
 /**
  * Busca por expressões na lista de Pessoas.
@@ -95,20 +96,20 @@ export function matches(parsed: ParsedQuery, values: FieldValues): boolean {
 
 /** Exemplos do tooltip (clicar aplica na busca). */
 export const QUERY_HELP: { expr: string; desc: string }[] = [
-  { expr: 'cidade=null', desc: 'sem cidade preenchida' },
-  { expr: 'pais=null', desc: 'sem país' },
-  { expr: 'aniversario=null', desc: 'sem aniversário' },
-  { expr: 'tag=null', desc: 'sem nenhuma tag' },
-  { expr: 'cidade!=null', desc: 'com cidade preenchida' },
-  { expr: 'cidade=goiania', desc: 'cidade contém "goiania" (ignora acento)' },
-  { expr: 'cidade="sao paulo"', desc: 'valor com espaço vai entre aspas' },
-  { expr: 'pais!=brasil', desc: 'fora do Brasil' },
-  { expr: 'estado=GO', desc: 'UF ou nome do estado' },
-  { expr: 'tag=jogos', desc: 'com a tag Jogos' },
-  { expr: 'aniversario=11-', desc: 'aniversário em novembro (MM-DD)' },
-  { expr: 'conversa=null', desc: 'nunca registrei conversa' },
-  { expr: 'prioridade=alta vip=sim', desc: 'vários termos: todos precisam valer' },
-  { expr: 'rede=null', desc: 'sem conversa vinculada na Central de Mensagens' }
+  { expr: 'cidade=null', desc: tr('crm.semCidadePreenchida') },
+  { expr: 'pais=null', desc: tr('crm.semPais') },
+  { expr: 'aniversario=null', desc: tr('crm.semAniversario') },
+  { expr: 'tag=null', desc: tr('crm.semNenhumaTag') },
+  { expr: 'cidade!=null', desc: tr('crm.comCidadePreenchida') },
+  { expr: 'cidade=goiania', desc: tr('crm.cidadeContemGoianiaIgnoraAcento') },
+  { expr: 'cidade="sao paulo"', desc: tr('crm.valorComEspacoVaiEntre') },
+  { expr: 'pais!=brasil', desc: tr('crm.foraDoBrasil') },
+  { expr: 'estado=GO', desc: tr('crm.ufOuNomeDoEstado') },
+  { expr: 'tag=jogos', desc: tr('crm.comATagJogos') },
+  { expr: 'aniversario=11-', desc: tr('crm.aniversarioEmNovembroMmDd') },
+  { expr: 'conversa=null', desc: tr('crm.nuncaRegistreiConversa') },
+  { expr: 'prioridade=alta vip=sim', desc: tr('crm.variosTermosTodosPrecisamValer') },
+  { expr: 'rede=null', desc: tr('crm.semConversaVinculadaNaCentral') }
 ]
 
 export const QUERY_FIELDS =

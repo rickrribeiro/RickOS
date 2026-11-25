@@ -2,14 +2,15 @@ import React, { useEffect, useState } from 'react'
 import type { AiStyle, AiSuggestion, AiSummary, ChatMessage, ChatSummary, ChatTemplate } from '../../../../shared/chats'
 import { AI_STYLE_LABELS } from '../../../../shared/chats'
 import { ConfirmSend } from './ChatView'
+import { t as tr } from '../../../i18n'
 
 const LANGS = [
-  { v: '', l: 'Idioma da conversa' },
-  { v: 'português do Brasil', l: 'Português' },
-  { v: 'inglês', l: 'Inglês' },
-  { v: 'espanhol', l: 'Espanhol' },
-  { v: 'francês', l: 'Francês' },
-  { v: 'italiano', l: 'Italiano' }
+  { v: '', l: tr('chats.lang.conversa') },
+  { v: 'português do Brasil', l: tr('chats.lang.pt') },
+  { v: 'inglês', l: tr('chats.lang.en') },
+  { v: 'espanhol', l: tr('chats.lang.es') },
+  { v: 'francês', l: tr('chats.lang.fr') },
+  { v: 'italiano', l: tr('chats.lang.it') }
 ]
 
 interface Card extends AiSuggestion {
@@ -103,7 +104,7 @@ export function AiPanel({
       cs.map((c) => {
         if (c.key !== card.key) return c
         const s = r.suggestions[0]
-        if (r.error || !s) return { ...c, busy: false, error: r.error ?? 'Sem sugestão.' }
+        if (r.error || !s) return { ...c, busy: false, error: r.error ?? tr('chats.semSugestao') }
         return { ...c, ...s, key: c.key, text: s.reply, busy: false }
       })
     )
@@ -132,54 +133,54 @@ export function AiPanel({
   return (
     <div className="chats-ai">
       <div className="chats-ai-head">
-        <b>{mode === 'suggest' ? '✨ Sugestões de resposta' : '📝 Resumo'}</b>
+        <b>{mode === 'suggest' ? tr('chats.sugestoesDeResposta') : tr('chats.resumo')}</b>
         <span style={{ color: 'var(--text-muted)' }}>
-          {messages.length} mensage{messages.length === 1 ? 'm' : 'ns'} selecionada{messages.length === 1 ? '' : 's'}: só elas vão para a IA
+          {tr('chats.mensagensSelecionadas', { count: messages.length })}{tr('chats.soElasVaoParaA')}
         </span>
         <span style={{ flex: 1 }} />
-        <button className="chats-x" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">✕</button>
+        <button className="chats-x" onClick={onClose} title={tr('chats.fecharEsc')} aria-label={tr('chats.fechar')}>✕</button>
       </div>
 
       {mode === 'suggest' ? (
         <div className="chats-row" style={{ marginBottom: 8 }}>
-          <select value={style} onChange={(e) => setStyle(e.target.value as AiStyle)} aria-label="Estilo">
+          <select value={style} onChange={(e) => setStyle(e.target.value as AiStyle)} aria-label={tr('chats.estilo')}>
             {(Object.keys(AI_STYLE_LABELS) as AiStyle[]).map((s) => (
               <option key={s} value={s}>{AI_STYLE_LABELS[s]}</option>
             ))}
           </select>
-          <select value={perMessage ? 'per' : 'one'} onChange={(e) => setPerMessage(e.target.value === 'per')} aria-label="Modo">
-            <option value="per">Uma por mensagem</option>
-            <option value="one">Uma para o conjunto</option>
+          <select value={perMessage ? 'per' : 'one'} onChange={(e) => setPerMessage(e.target.value === 'per')} aria-label={tr('chats.modo')}>
+            <option value="per">{tr('chats.umaPorMensagem')}</option>
+            <option value="one">{tr('chats.umaParaOConjunto')}</option>
           </select>
-          <select value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Idioma">
+          <select value={lang} onChange={(e) => setLang(e.target.value)} aria-label={tr('chats.idioma')}>
             {LANGS.map((l) => (
               <option key={l.v} value={l.v}>{l.l}</option>
             ))}
           </select>
           {templates.length > 0 && (
-            <select value={templateId ?? ''} onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)} aria-label="Modelo">
-              <option value="">Sem modelo</option>
+            <select value={templateId ?? ''} onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : null)} aria-label={tr('chats.modelo')}>
+              <option value="">{tr('chats.semModelo')}</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>⚡ {t.title}</option>
               ))}
             </select>
           )}
-          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Instrução extra (ex.: recusar com educação)" style={{ flex: 1, minWidth: 160 }} />
+          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={tr('chats.instrucaoExtraExRecusarCom')} style={{ flex: 1, minWidth: 160 }} />
           {chat.contactId && (
-            <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }} title="Envia também as notas/contexto da pessoa no CRM">
-              <input type="checkbox" checked={notes} onChange={(e) => setNotes(e.target.checked)} /> incluir notas da pessoa
+            <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }} title={tr('chats.enviaTambemAsNotasContexto')}>
+              <input type="checkbox" checked={notes} onChange={(e) => setNotes(e.target.checked)} /> {tr('chats.incluirNotasDaPessoa')}
             </label>
           )}
-          <button className="btn btn-primary btn-sm" disabled={busy || !ids.length} onClick={() => void generate()}>{busy ? 'Gerando…' : cards.length ? 'Gerar de novo' : 'Gerar'}</button>
+          <button className="btn btn-primary btn-sm" disabled={busy || !ids.length} onClick={() => void generate()}>{busy ? tr('chats.gerando') : cards.length ? tr('chats.gerarDeNovo') : tr('chats.gerar')}</button>
         </div>
       ) : (
         <div className="chats-row" style={{ marginBottom: 8 }}>
           {chat.contactId && (
             <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }}>
-              <input type="checkbox" checked={notes} onChange={(e) => setNotes(e.target.checked)} /> incluir notas da pessoa
+              <input type="checkbox" checked={notes} onChange={(e) => setNotes(e.target.checked)} /> {tr('chats.incluirNotasDaPessoa')}
             </label>
           )}
-          <button className="btn btn-primary btn-sm" disabled={busy || !ids.length} onClick={() => void summarize()}>{busy ? 'Resumindo…' : summary ? 'Resumir de novo' : 'Resumir'}</button>
+          <button className="btn btn-primary btn-sm" disabled={busy || !ids.length} onClick={() => void summarize()}>{busy ? tr('chats.resumindo') : summary ? tr('chats.resumirDeNovo') : tr('chats.resumir')}</button>
         </div>
       )}
 
@@ -188,12 +189,12 @@ export function AiPanel({
       {summary && (
         <div className="chats-ai-card">
           <div className="chats-ai-reason" style={{ marginBottom: 6 }}>
-            Resumo de {summary.messageCount} mensage{summary.messageCount === 1 ? 'm' : 'ns'} selecionada{summary.messageCount === 1 ? '' : 's'}: é um trecho, não necessariamente a conversa inteira. Itens marcados “(inferência)” são deduções da IA.
+            {tr('chats.resumoDeMensagens', { count: summary.messageCount })}{tr('chats.eUmTrechoNaoNecessariamente')}
           </div>
           <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary.text}</div>
           <div className="chats-ai-actions">
-            <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(summary.text)}>Copiar</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => void window.api.chats.setNotes(chat.id, [chat.notes, summary.text].filter(Boolean).join('\n\n'))}>Salvar nas notas da conversa</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(summary.text)}>{tr('chats.copiar')}</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => void window.api.chats.setNotes(chat.id, [chat.notes, summary.text].filter(Boolean).join('\n\n'))}>{tr('chats.salvarNasNotasDaConversa')}</button>
           </div>
         </div>
       )}
@@ -204,16 +205,16 @@ export function AiPanel({
         return (
           <div className="chats-ai-card" key={c.key} style={done ? { opacity: 0.55 } : undefined}>
             {quoted && <div className="chats-ai-quote">↩ {quoted.senderName}: {quoted.text}</div>}
-            {c.needsReply === false && <div className="chats-ai-reason">A IA acha que esta mensagem talvez não precise de resposta.</div>}
+            {c.needsReply === false && <div className="chats-ai-reason">{tr('chats.aIaAchaQueEsta')}</div>}
             <textarea rows={Math.min(8, Math.max(2, Math.ceil(c.text.length / 60)))} value={c.text} onChange={(e) => setCards((cs) => cs.map((x) => (x.key === c.key ? { ...x, text: e.target.value } : x)))} />
             {c.error && <div className="chats-msg err">{c.error}</div>}
             <div className="chats-ai-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => onUse(c.text)} title="Coloca o texto no campo de resposta para editar">Usar no campo</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(c.text)}>Copiar</button>
-              <button className="btn btn-secondary btn-sm" disabled={c.busy} onClick={() => void regenerate(c)}>{c.busy ? '…' : '↻ Regenerar'}</button>
-              <button className="btn btn-primary btn-sm" disabled={!canSend || !c.text.trim() || done} onClick={() => setConfirm(c)}>{done ? '✓ Enviada' : 'Enviar…'}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onUse(c.text)} title={tr('chats.colocaOTextoNoCampo')}>{tr('chats.usarNoCampo')}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(c.text)}>{tr('chats.copiar')}</button>
+              <button className="btn btn-secondary btn-sm" disabled={c.busy} onClick={() => void regenerate(c)}>{c.busy ? '…' : tr('chats.regenerar')}</button>
+              <button className="btn btn-primary btn-sm" disabled={!canSend || !c.text.trim() || done} onClick={() => setConfirm(c)}>{done ? tr('chats.enviada') : tr('chats.enviar')}</button>
               {c.priority && c.priority !== 'normal' && (
-                <button className="chats-linkbtn" onClick={() => void window.api.chats.setPriority([chat.id], c.priority)} title="Aplicar a prioridade sugerida pela IA">prioridade sugerida: {c.priority}</button>
+                <button className="chats-linkbtn" onClick={() => void window.api.chats.setPriority([chat.id], c.priority)} title={tr('chats.aplicarAPrioridadeSugeridaPela')}>{tr('chats.prioridadeSugerida')} {c.priority}</button>
               )}
               {c.reason && <span className="chats-ai-reason">{c.reason}</span>}
             </div>

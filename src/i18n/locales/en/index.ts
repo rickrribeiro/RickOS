@@ -13,6 +13,8 @@ import { todo } from './todo'
 import { braindump } from './braindump'
 import { goals } from './goals'
 import { automations } from './automations'
+import { chats } from './chats'
+import { crm } from './crm'
 
 export const en: Messages = {
   ...common,
@@ -28,5 +30,7 @@ export const en: Messages = {
   ...todo,
   ...braindump,
   ...goals,
-  ...automations
+  ...automations,
+  ...chats,
+  ...crm
 }

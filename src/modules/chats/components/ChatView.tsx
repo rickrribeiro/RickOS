@@ -7,6 +7,7 @@ import { useChatsStore } from '../store/chatsStore'
 import { PinButton, SnoozeMenu, StateMenu } from './actions'
 import { AiPanel } from './AiPanel'
 import { Avatar, Popover } from './ui'
+import { t as tr, getLocale } from '../../../i18n'
 
 let cfgCache: { markReadOnOpen: boolean } | null = null
 
@@ -16,12 +17,12 @@ const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 
 /** Lê a imagem colada/arrastada/escolhida. Nada sai do navegador até você clicar em Enviar. */
 async function readImage(f: File): Promise<PendingImage> {
-  if (!IMAGE_TYPES.includes(f.type)) throw new Error('Formato não suportado: envie JPEG, PNG, GIF ou WebP.')
-  if (f.size > MAX_SEND_IMAGE_BYTES) throw new Error('Imagem grande demais (máx. 15 MB).')
+  if (!IMAGE_TYPES.includes(f.type)) throw new Error(tr('chats.formatoNaoSuportado'))
+  if (f.size > MAX_SEND_IMAGE_BYTES) throw new Error(tr('chats.imagemGrandeDemais'))
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const r = new FileReader()
     r.onload = () => resolve(String(r.result))
-    r.onerror = () => reject(new Error('Não foi possível ler a imagem.'))
+    r.onerror = () => reject(new Error(tr('chats.naoFoiPossivelLerImagem')))
     r.readAsDataURL(f)
   })
   const name = f.name && f.name !== 'image.png' ? f.name : `imagem-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
@@ -37,7 +38,7 @@ function dayLabel(iso: string): string {
   y.setDate(y.getDate() - 1)
   if (d.toDateString() === today.toDateString()) return 'Hoje'
   if (d.toDateString() === y.toDateString()) return 'Ontem'
-  return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
+  return d.toLocaleDateString(getLocale(), { weekday: 'long', day: '2-digit', month: 'long', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
 }
 
 export function ConfirmSend({ chat, text, onCancel, onConfirm, busy }: { chat: ChatSummary; text: string; onCancel: () => void; onConfirm: () => void; busy?: boolean }): React.ReactElement {
@@ -51,14 +52,14 @@ export function ConfirmSend({ chat, text, onCancel, onConfirm, busy }: { chat: C
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%' }}>
-        <h2>Enviar mensagem?</h2>
+        <h2>{tr('chats.enviarMensagem')}</h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          Para <b>{chat.contactName || chat.title}</b> no {networkInfo(chat.network).icon} {networkInfo(chat.network).label}
+          {tr('chats.para')} <b>{chat.contactName || chat.title}</b> {tr('chats.no2', { icon: networkInfo(chat.network).icon, label: networkInfo(chat.network).label })}
         </p>
         <div className="chats-bubble" style={{ maxWidth: '100%', margin: '8px 0' }}>{text}</div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onCancel}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={onConfirm} disabled={busy} autoFocus>{busy ? 'Enviando…' : 'Confirmar envio'}</button>
+          <button className="btn btn-secondary btn-sm" onClick={onCancel}>{tr('chats.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={onConfirm} disabled={busy} autoFocus>{busy ? tr('chats.enviando') : tr('chats.confirmarEnvio')}</button>
         </div>
       </div>
     </div>
@@ -80,20 +81,20 @@ function TodoModal({ chat, message, onClose }: { chat: ChatSummary; message: Cha
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, width: '100%' }}>
-        <h2>☑ Criar tarefa</h2>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Vai para o TODO, vinculada a esta conversa{chat.contactName ? ` e a ${chat.contactName}` : ''}.</p>
+        <h2>{tr('chats.criarTarefa')}</h2>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('chats.vaiParaOTodoVinculada')}{chat.contactName ? tr('chats.eA', { contactName: chat.contactName }) : ''}.</p>
         <div className="editor-field">
-          <label>Título</label>
+          <label>{tr('chats.titulo')}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
         <div className="editor-field">
-          <label>Prazo (opcional)</label>
+          <label>{tr('chats.prazoOpcional')}</label>
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
         {err && <div className="chats-msg err">{err}</div>}
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={() => void save()}>Criar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('chats.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => void save()}>{tr('chats.criar')}</button>
         </div>
       </div>
     </div>
@@ -124,17 +125,17 @@ function DeleteModal({ chat, message, onClose, onDone }: { chat: ChatSummary; me
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%' }}>
-        <h2>Apagar mensagem?</h2>
+        <h2>{tr('chats.apagarMensagem')}</h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          Em <b>{chat.contactName || chat.title}</b> no {networkInfo(chat.network).icon} {networkInfo(chat.network).label}. Não dá para desfazer.
+          {tr('chats.em')} <b>{chat.contactName || chat.title}</b> {tr('chats.noNaoDaParaDesfazer', { icon: networkInfo(chat.network).icon, label: networkInfo(chat.network).label })}
         </p>
-        <div className="chats-bubble" style={{ maxWidth: '100%', margin: '8px 0' }}>{message.text || <i>(sem texto)</i>}</div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>"Para todos" depende da rede (algumas só permitem por um tempo depois do envio). Se a rede recusar, nada é apagado e o motivo aparece aqui.</p>
+        <div className="chats-bubble" style={{ maxWidth: '100%', margin: '8px 0' }}>{message.text || <i>{tr('chats.semTexto')}</i>}</div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('chats.paraTodosDependeDaRede')}</p>
         {err && <div className="chats-msg err">{err}</div>}
         <div className="modal-actions" style={{ flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>Cancelar</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => void run(false)} disabled={busy}>Apagar só para mim</button>
-          <button className="btn btn-danger btn-sm" onClick={() => void run(true)} disabled={busy} autoFocus>{busy ? 'Apagando…' : 'Apagar para todos'}</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>{tr('chats.cancelar')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => void run(false)} disabled={busy}>{tr('chats.apagarSoParaMim')}</button>
+          <button className="btn btn-danger btn-sm" onClick={() => void run(true)} disabled={busy} autoFocus>{busy ? tr('chats.apagando') : tr('chats.apagarParaTodos')}</button>
         </div>
       </div>
     </div>
@@ -361,35 +362,35 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
   return (
     <>
       <div className="chats-view-head">
-        <button className="btn btn-secondary btn-sm chats-back" onClick={() => setPane('list')} aria-label="Voltar">←</button>
+        <button className="btn btn-secondary btn-sm chats-back" onClick={() => setPane('list')} aria-label={tr('chats.voltar')}>←</button>
         <Avatar chat={chat} size={34} />
         <div className="chats-view-title">
           <b>{chat.contactName && chat.contactName !== chat.title ? `${chat.contactName} · ${chat.title}` : chat.title}</b>
           <span>
             {n.icon} {n.label}
-            {chat.type === 'group' && chat.participantCount ? ` · ${chat.participantCount} participantes` : ''}
+            {chat.type === 'group' && chat.participantCount ? tr('chats.participantes', { participantCount: chat.participantCount }) : ''}
             {chat.peerHandle ? ` · ${chat.peerHandle}` : ''}
           </span>
         </div>
         <div className="chats-view-actions">
-          {hasMention && <button className="btn btn-secondary btn-sm" onClick={() => void gotoMention()} title="Ir para a menção">@ Ir p/ menção</button>}
+          {hasMention && <button className="btn btn-secondary btn-sm" onClick={() => void gotoMention()} title={tr('chats.irParaAMencao')}>{tr('chats.irPMencao')}</button>}
           {status?.capabilities.markAsRead && (chat.unreadCount ?? 0) > 0 && (
-            <button className="btn btn-secondary btn-sm" disabled={offline || chat.stale} onClick={() => void window.api.chats.markRead(chat.id, true).then(refreshActive)}>✓ Marcar lida</button>
+            <button className="btn btn-secondary btn-sm" disabled={offline || chat.stale} onClick={() => void window.api.chats.markRead(chat.id, true).then(refreshActive)}>{tr('chats.marcarLida')}</button>
           )}
           {status?.capabilities.markAsUnread && (chat.unreadCount ?? 0) === 0 && (
-            <button className="btn btn-secondary btn-sm" disabled={offline || chat.stale} onClick={() => void window.api.chats.markRead(chat.id, false).then(refreshActive)}>● Não lida</button>
+            <button className="btn btn-secondary btn-sm" disabled={offline || chat.stale} onClick={() => void window.api.chats.markRead(chat.id, false).then(refreshActive)}>{tr('chats.naoLida')}</button>
           )}
           <PinButton ids={[chat.id]} pinned={!!chat.pinnedAt} compact />
-          <StateMenu ids={[chat.id]} label="Estado" />
+          <StateMenu ids={[chat.id]} label={tr('chats.estado')} />
           <SnoozeMenu ids={[chat.id]} current={chat.snoozeUntil} />
-          <button className="btn btn-secondary btn-sm" onClick={() => (picking ? (setPicking(false), setPicked([])) : setPicking(true))}>{picking ? 'Cancelar seleção' : '☑ Selecionar'}</button>
-          <button className="btn btn-secondary btn-sm chats-info-btn" onClick={() => setDetailOpen(!detailOpen)} title="Pessoa, tags, notas">ℹ️ Detalhes</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => (picking ? (setPicking(false), setPicked([])) : setPicking(true))}>{picking ? tr('chats.cancelarSelecao') : tr('chats.selecionar2')}</button>
+          <button className="btn btn-secondary btn-sm chats-info-btn" onClick={() => setDetailOpen(!detailOpen)} title={tr('chats.pessoaTagsNotas')}>{tr('chats.detalhes2')}</button>
         </div>
       </div>
 
-      {chat.stale && <div className="chats-notice warn">Esta conversa é de um provedor/conta inativo: dados podem estar desatualizados e o envio está bloqueado.</div>}
-      {!chat.stale && offline && <div className="chats-notice warn">Provedor indisponível: mostrando o que estiver em cache. Envio e ações remotas ficam bloqueados.</div>}
-      {page?.fromCache && <div className="chats-notice">Mensagens do cache local (podem estar desatualizadas).</div>}
+      {chat.stale && <div className="chats-notice warn">{tr('chats.estaConversaEDeUm')}</div>}
+      {!chat.stale && offline && <div className="chats-notice warn">{tr('chats.provedorIndisponivelMostrandoOQue')}</div>}
+      {page?.fromCache && <div className="chats-notice">{tr('chats.mensagensDoCacheLocalPodem')}</div>}
 
       <div className="chats-messages" ref={listRef} onScroll={(e) => {
         const el = e.currentTarget
@@ -397,15 +398,15 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
       }}>
         {page?.cursor && (
           <div style={{ textAlign: 'center' }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => void older()}>Carregar mais antigas</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => void older()}>{tr('chats.carregarMaisAntigas')}</button>
           </div>
         )}
         {page && !page.cursor && items.length > 0 && page.partialHistory && (
-          <div className="chats-day">Início do histórico disponível no provedor (pode haver mensagens mais antigas fora do alcance)</div>
+          <div className="chats-day">{tr('chats.inicioDoHistoricoDisponivelNo')}</div>
         )}
-        {loading && items.length === 0 && <div className="chats-empty">Carregando mensagens…</div>}
-        {err && <div className="chats-empty">Não foi possível carregar: {err}</div>}
-        {!loading && !err && items.length === 0 && <div className="chats-empty">Nenhuma mensagem disponível.</div>}
+        {loading && items.length === 0 && <div className="chats-empty">{tr('chats.carregandoMensagens')}</div>}
+        {err && <div className="chats-empty">{tr('chats.naoFoiPossivelCarregar')} {err}</div>}
+        {!loading && !err && items.length === 0 && <div className="chats-empty">{tr('chats.nenhumaMensagemDisponivel')}</div>}
         {items.map((m) => {
           const d = new Date(m.timestamp).toDateString()
           const showDay = d !== lastDay
@@ -415,15 +416,15 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
             <React.Fragment key={m.id}>
               {showDay && <div className="chats-day">{dayLabel(m.timestamp)}</div>}
               <div className={`chats-msgrow ${m.isMine ? 'mine' : ''}`} id={`msg-${m.id}`}>
-                {picking && <input type="checkbox" className="chats-msgsel" checked={picked.includes(m.id)} onChange={() => togglePick(m.id)} aria-label="Selecionar mensagem" />}
+                {picking && <input type="checkbox" className="chats-msgsel" checked={picked.includes(m.id)} onChange={() => togglePick(m.id)} aria-label={tr('chats.selecionarMensagem')} />}
                 <div
                   className={`chats-bubble ${m.mentionsMe ? 'mention' : ''} ${picked.includes(m.id) ? 'picked' : ''} ${flash === m.id ? 'flash' : ''} ${editing?.id === m.id ? 'editing' : ''}`}
                   onClick={picking ? () => togglePick(m.id) : undefined}
                 >
                   {chat.type === 'group' && !m.isMine && <div className="chats-sender">{m.senderName}</div>}
-                  {ref && <div className="chats-reply-ref">↩ {ref.isMine ? 'Você' : ref.senderName}: {ref.text.slice(0, 80)}</div>}
+                  {ref && <div className="chats-reply-ref">↩ {ref.isMine ? tr('chats.voce') : ref.senderName}: {ref.text.slice(0, 80)}</div>}
                   {m.deleted ? (
-                    <i style={{ color: 'var(--text-muted)' }}>Mensagem apagada</i>
+                    <i style={{ color: 'var(--text-muted)' }}>{tr('chats.mensagemApagada')}</i>
                   ) : editing?.id === m.id ? (
                     <div className="chats-edit" onClick={(e) => e.stopPropagation()}>
                       <textarea
@@ -441,9 +442,9 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
                       />
                       {editErr && <div className="chats-msg err" style={{ margin: 0 }}>{editErr}</div>}
                       <div className="chats-edit-actions">
-                        <span>A edição aparece para todos na conversa.</span>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(null)} disabled={editBusy}>Cancelar</button>
-                        <button className="btn btn-primary btn-sm" onClick={() => void saveEdit()} disabled={editBusy || !editing.text.trim()}>{editBusy ? 'Salvando…' : 'Salvar edição'}</button>
+                        <span>{tr('chats.aEdicaoApareceParaTodos')}</span>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(null)} disabled={editBusy}>{tr('chats.cancelar')}</button>
+                        <button className="btn btn-primary btn-sm" onClick={() => void saveEdit()} disabled={editBusy || !editing.text.trim()}>{editBusy ? tr('chats.salvando') : tr('chats.salvarEdicao')}</button>
                       </div>
                     </div>
                   ) : (
@@ -452,11 +453,11 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
                   {m.attachments.map((a, i) => (
                     <div className="chats-attach" key={i}>
                       {a.url && a.type === 'image' ? (
-                        <a href={authedUrl(a.url)} target="_blank" rel="noreferrer"><img src={authedUrl(a.url)} alt={a.fileName ?? 'imagem'} loading="lazy" /></a>
+                        <a href={authedUrl(a.url)} target="_blank" rel="noreferrer"><img src={authedUrl(a.url)} alt={a.fileName ?? tr('chats.imagem')} loading="lazy" /></a>
                       ) : a.url ? (
                         <a href={authedUrl(a.url)} target="_blank" rel="noreferrer">📎 {a.fileName ?? a.type}</a>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>📎 {a.fileName ?? a.type} (indisponível)</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{tr('chats.indisponivel', { p0: a.fileName ?? a.type })}</span>
                       )}
                     </div>
                   ))}
@@ -464,19 +465,19 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
                     <div className="chats-reactions">{m.reactions.map((r) => <span key={r.emoji}>{r.emoji}{r.count > 1 ? ` ${r.count}` : ''}</span>)}</div>
                   )}
                   <div className="chats-bubble-meta">
-                    {m.mentionsMe && <span title={m.mentionEstimated ? 'Estimativa (texto cita seu nome)' : 'Menciona você'}>{m.mentionEstimated ? '~@' : '@'} você</span>}
-                    {m.edited && <span>editada</span>}
-                    <span>{new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    {m.mentionsMe && <span title={m.mentionEstimated ? tr('chats.estimativaTextoCitaSeuNome') : tr('chats.mencionaVoce')}>{m.mentionEstimated ? '~@' : '@'} {tr('chats.voce2')}</span>}
+                    {m.edited && <span>{tr('chats.editada')}</span>}
+                    <span>{new Date(m.timestamp).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   {!picking && !m.deleted && editing?.id !== m.id && (
                     <div className="chats-msg-menu">
-                      {status?.capabilities.replyTo && <button title="Responder a esta" onClick={() => setReplyTo(m)}>↩</button>}
-                      <button title="Selecionar" onClick={() => (setPicking(true), setPicked([m.id]))}>☑</button>
-                      <button title="Criar tarefa" onClick={() => setTodoFor(m)}>✓ tarefa</button>
+                      {status?.capabilities.replyTo && <button title={tr('chats.responderAEsta')} onClick={() => setReplyTo(m)}>↩</button>}
+                      <button title={tr('chats.selecionar3')} onClick={() => (setPicking(true), setPicked([m.id]))}>☑</button>
+                      <button title={tr('chats.criarTarefa2')} onClick={() => setTodoFor(m)}>{tr('chats.tarefa')}</button>
                       {m.isMine && !m.pending && canEdit && m.text && m.attachments.length === 0 && (
-                        <button title="Editar mensagem" onClick={() => (setEditErr(null), setEditing({ id: m.id, text: m.text }))}>✎ editar</button>
+                        <button title={tr('chats.editarMensagem')} onClick={() => (setEditErr(null), setEditing({ id: m.id, text: m.text }))}>{tr('chats.editar2')}</button>
                       )}
-                      {m.isMine && !m.pending && canDelete && <button title="Apagar mensagem" onClick={() => setDeleting(m)}>🗑 apagar</button>}
+                      {m.isMine && !m.pending && canDelete && <button title={tr('chats.apagarMensagem2')} onClick={() => setDeleting(m)}>{tr('chats.apagar')}</button>}
                     </div>
                   )}
                 </div>
@@ -488,15 +489,15 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
 
       {(picking || picked.length > 0) && (
         <div className="chats-selbar">
-          <b>{picked.length} selecionada{picked.length === 1 ? '' : 's'}</b>
-          <button className="btn btn-primary btn-sm" disabled={!picked.length} onClick={() => setAi('suggest')}>✨ Gerar sugestões</button>
-          <button className="btn btn-secondary btn-sm" disabled={!picked.length} onClick={() => setAi('summary')}>📝 Resumir</button>
-          <button className="btn btn-secondary btn-sm" disabled={picked.length !== 1} onClick={() => setTodoFor(pickedMsgs[0] ?? null)}>☑ Tarefa</button>
+          <b>{tr('chats.nSelecionadas', { count: picked.length })}</b>
+          <button className="btn btn-primary btn-sm" disabled={!picked.length} onClick={() => setAi('suggest')}>{tr('chats.gerarSugestoes')}</button>
+          <button className="btn btn-secondary btn-sm" disabled={!picked.length} onClick={() => setAi('summary')}>{tr('chats.resumir2')}</button>
+          <button className="btn btn-secondary btn-sm" disabled={picked.length !== 1} onClick={() => setTodoFor(pickedMsgs[0] ?? null)}>{tr('chats.tarefa2')}</button>
           <span style={{ flex: 1 }} />
-          <button className="chats-linkbtn" onClick={pickSinceMyLast}>desde minha última resposta</button>
-          <button className="chats-linkbtn" onClick={() => setPicked(items.slice(-5).map((m) => m.id))}>últimas 5</button>
-          <button className="chats-linkbtn" onClick={() => setPicked([])}>limpar</button>
-          <button className="chats-x" onClick={() => (setPicking(false), setPicked([]), setAi(null))} title="Fechar seleção (Esc)" aria-label="Fechar seleção">✕</button>
+          <button className="chats-linkbtn" onClick={pickSinceMyLast}>{tr('chats.desdeMinhaUltimaResposta')}</button>
+          <button className="chats-linkbtn" onClick={() => setPicked(items.slice(-5).map((m) => m.id))}>{tr('chats.ultimas5')}</button>
+          <button className="chats-linkbtn" onClick={() => setPicked([])}>{tr('chats.limpar2')}</button>
+          <button className="chats-x" onClick={() => (setPicking(false), setPicked([]), setAi(null))} title={tr('chats.fecharSelecaoEsc')} aria-label={tr('chats.fecharSelecao')}>✕</button>
         </div>
       )}
 
@@ -532,17 +533,17 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
       >
         {image && (
           <div className="chats-outimg">
-            <img src={image.url} alt="Imagem para enviar" />
+            <img src={image.url} alt={tr('chats.imagemParaEnviar')} />
             <div className="chats-outimg-info">
               <b>{image.fileName}</b>
-              <span>{kb(image.size)} · {text.trim() ? 'o texto vai como legenda' : 'sem legenda'} · só sai quando você clicar em Enviar</span>
+              <span>{kb(image.size)} · {text.trim() ? tr('chats.oTextoVaiComoLegenda') : tr('chats.semLegenda')} {tr('chats.soSaiQuandoVoceClicar')}</span>
             </div>
-            <button className="chats-x" onClick={() => setImage(null)} title="Remover imagem" aria-label="Remover imagem">✕</button>
+            <button className="chats-x" onClick={() => setImage(null)} title={tr('chats.removerImagem')} aria-label={tr('chats.removerImagem')}>✕</button>
           </div>
         )}
         {replyTo && (
           <div className="chats-replying">
-            ↩ Respondendo a {replyTo.isMine ? 'você' : replyTo.senderName}: <i>{replyTo.text.slice(0, 60)}</i>
+            {tr('chats.respondendoA')} {replyTo.isMine ? tr('chats.voce2') : replyTo.senderName}: <i>{replyTo.text.slice(0, 60)}</i>
             <button className="chats-linkbtn" onClick={() => setReplyTo(null)}>✕</button>
           </div>
         )}
@@ -559,7 +560,7 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
                 void attach(f)
               }
             }}
-            placeholder={canSend ? (image ? 'Legenda (opcional)… (Ctrl/⌘+Enter envia)' : `Escreva uma resposta… (Ctrl/⌘+Enter envia${canImage ? '; cole uma imagem com Ctrl/⌘+V' : ''})`) : 'Envio indisponível agora (provedor offline ou conversa inativa)'}
+            placeholder={canSend ? (image ? tr('chats.legendaOpcionalCtrlEnterEnvia') : tr('chats.escrevaUmaRespostaCtrlEnter', { p0: canImage ? '; cole uma imagem com Ctrl/⌘+V' : '' })) : tr('chats.envioIndisponivelAgoraProvedorOffline')}
             rows={2}
             disabled={!canSend}
             onKeyDown={(e) => {
@@ -569,10 +570,10 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
               }
             }}
           />
-          <button className="btn btn-primary" disabled={!canSend || (!text.trim() && !image) || sending} onClick={() => void sendComposer()}>{sending ? '…' : 'Enviar'}</button>
+          <button className="btn btn-primary" disabled={!canSend || (!text.trim() && !image) || sending} onClick={() => void sendComposer()}>{sending ? '…' : tr('chats.enviar2')}</button>
         </div>
         <div className="chats-composer-tools">
-          <Popover label="⚡ Respostas rápidas" className="btn btn-secondary btn-sm" align="left" up>
+          <Popover label={tr('chats.respostasRapidas')} className="btn btn-secondary btn-sm" align="left" up>
             {(close) => (
               <TemplatesList
                 templates={templates}
@@ -584,10 +585,10 @@ export function ChatView({ chat }: { chat: ChatSummary }): React.ReactElement {
               />
             )}
           </Popover>
-          <button className="btn btn-secondary btn-sm" onClick={pickSinceMyLast} title="Seleciona as mensagens recebidas desde sua última resposta">✨ Sugerir resposta</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setTodoFor(null)}>☑ Tarefa</button>
+          <button className="btn btn-secondary btn-sm" onClick={pickSinceMyLast} title={tr('chats.selecionaAsMensagensRecebidasDesde')}>{tr('chats.sugerirResposta')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setTodoFor(null)}>{tr('chats.tarefa2')}</button>
           {canImage && (
-            <button className="btn btn-secondary btn-sm" onClick={() => void pickFile(IMAGE_TYPES.join(',')).then(attach)} title="Escolher imagem (ou cole com Ctrl/⌘+V, ou arraste para cá)">📎 Imagem</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => void pickFile(IMAGE_TYPES.join(',')).then(attach)} title={tr('chats.escolherImagemOuColeCom')}>{tr('chats.imagem2')}</button>
           )}
         </div>
       </div>
@@ -613,7 +614,7 @@ function TemplatesList({ templates, onLoad, onPick }: { templates: ChatTemplate[
   useEffect(onLoad, [])
   return (
     <>
-      {templates.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 6 }}>Crie modelos em Configurações → Mensagens → IA → Respostas rápidas.</div>}
+      {templates.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 6 }}>{tr('chats.crieModelosEmConfiguracoesMensagens')}</div>}
       {templates.map((t) => (
         <button key={t.id} className="opt" onClick={() => onPick(t)} title={t.body}>{t.title}</button>
       ))}

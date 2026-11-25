@@ -3,6 +3,7 @@ import type { ChatLabel, ChatPriority, ManualReplyState } from '../../../../shar
 import { REPLY_STATE_LABELS } from '../../../../shared/chats'
 import { useChatsStore } from '../store/chatsStore'
 import { Popover, quickDates, toLocalInput } from './ui'
+import { t } from '../../../i18n'
 
 const after = (): void => {
   void useChatsStore.getState().refreshCounts()
@@ -20,26 +21,26 @@ export function SnoozeMenu({ ids, label = '⏰ Lembrar', className, current }: {
     after()
   }
   return (
-    <Popover label={label} className={className} title="Adiar e lembrar de responder">
+    <Popover label={label} className={className} title={t('chats.adiarELembrarDeResponder')}>
       {(close) => (
         <>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px' }}>Some do radar até lá e lembra você</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px' }}>{t('chats.someDoRadarAteLa')}</div>
           {quickDates().map((q) => (
             <button key={q.label} className="opt" onClick={() => void apply(q.iso, close)}>{q.label}</button>
           ))}
           <div className="sep" />
           <div style={{ padding: '4px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input type="datetime-local" value={custom} onChange={(e) => setCustom(e.target.value)} />
-            <input placeholder="Nota (opcional): ex. responder sobre a vaga" value={note} onChange={(e) => setNote(e.target.value)} />
+            <input placeholder={t('chats.notaOpcionalExResponderSobre')} value={note} onChange={(e) => setNote(e.target.value)} />
             <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input type="checkbox" checked={reopen} onChange={(e) => setReopen(e.target.checked)} /> Reabrir se chegar mensagem nova
+              <input type="checkbox" checked={reopen} onChange={(e) => setReopen(e.target.checked)} /> {t('chats.reabrirSeChegarMensagemNova')}
             </label>
-            <button className="btn btn-primary btn-sm" disabled={!custom} onClick={() => void apply(new Date(custom).toISOString(), close)}>Definir</button>
+            <button className="btn btn-primary btn-sm" disabled={!custom} onClick={() => void apply(new Date(custom).toISOString(), close)}>{t('chats.definir')}</button>
           </div>
           {current && (
             <>
               <div className="sep" />
-              <button className="opt" onClick={() => void apply(null, close)}>✕ Remover lembrete/adiamento</button>
+              <button className="opt" onClick={() => void apply(null, close)}>{t('chats.removerLembreteAdiamento')}</button>
             </>
           )}
         </>
@@ -56,7 +57,7 @@ export function PinButton({ ids, pinned, compact }: { ids: number[]; pinned: boo
       className={`btn btn-secondary btn-sm chats-pin-btn${pinned ? ' on' : ''}`}
       disabled={!ids.length}
       onClick={() => void window.api.chats.pin(ids, !pinned).then(after)}
-      title={pinned ? 'Desafixar do topo da lista' : 'Fixar no topo da lista (só no rickOS)'}
+      title={pinned ? t('chats.desafixarDoTopoDaLista') : t('chats.fixarNoTopoDaLista')}
       aria-pressed={pinned}
     >
       📌{compact ? '' : ` ${label}`}
@@ -68,7 +69,7 @@ const STATES: (Exclude<ManualReplyState, null>)[] = ['needs_reply', 'waiting', '
 
 export function StateMenu({ ids, label = 'Estado', className }: { ids: number[]; label?: string; className?: string }): React.ReactElement {
   return (
-    <Popover label={label} className={className} title="Corrigir a classificação">
+    <Popover label={label} className={className} title={t('chats.corrigirAClassificacao')}>
       {(close) => (
         <>
           {STATES.map((s) => (
@@ -87,7 +88,7 @@ export function StateMenu({ ids, label = 'Estado', className }: { ids: number[];
             </button>
           ))}
           <div className="sep" />
-          <button className="opt" onClick={() => void window.api.chats.setState(ids, 'auto').then(() => (close(), after()))}>🤖 Voltar ao automático</button>
+          <button className="opt" onClick={() => void window.api.chats.setState(ids, 'auto').then(() => (close(), after()))}>{t('chats.voltarAoAutomatico')}</button>
         </>
       )}
     </Popover>
@@ -99,7 +100,7 @@ export function PriorityMenu({ ids, label = 'Prioridade', className }: { ids: nu
     ['alta', '▲ Alta'],
     ['normal', '● Normal'],
     ['baixa', '▼ Baixa'],
-    [null, '🤖 Automática (sugerida)']
+    [null, t('chats.automaticaSugeridaOpcao')]
   ]
   return (
     <Popover label={label} className={className}>
@@ -153,9 +154,9 @@ export function LabelMenu({
     <Popover label={label} className={className}>
       {() => (
         <>
-          {ids.length > 1 && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px' }}>Aplicar a {ids.length} itens</div>}
+          {ids.length > 1 && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px' }}>{t('chats.aplicarAItens', { count: ids.length })}</div>}
           <div className="chats-pick-list">
-            {labels.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 6 }}>Nenhuma tag ainda.</div>}
+            {labels.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 6 }}>{t('chats.nenhumaTagAinda')}</div>}
             {labels.map((l) => (
               <label key={l.id} className="chats-pick">
                 <input type="checkbox" checked={has.has(l.id)} onChange={() => void toggle(l)} />
@@ -165,16 +166,16 @@ export function LabelMenu({
             ))}
           </div>
           {ids.length > 1 && current.length === 0 && labels.length > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px' }}>Em lote, marcar adiciona. Para remover, abra cada conversa.</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px' }}>{t('chats.emLoteMarcarAdicionaPara')}</div>
           )}
           <div className="sep" />
           <div style={{ display: 'flex', gap: 4, padding: '0 4px', alignItems: 'center' }}>
-            <input placeholder="Nova tag" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} style={{ flex: 1, minWidth: 0 }} />
+            <input placeholder={t('chats.novaTag')} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} style={{ flex: 1, minWidth: 0 }} />
             <button className="btn btn-primary btn-sm" onClick={() => void create()}>＋</button>
           </div>
           <div style={{ display: 'flex', gap: 4, padding: '6px 4px 2px' }}>
             {COLORS.map((c) => (
-              <button key={c} onClick={() => setColor(c)} aria-label={`cor ${c}`} style={{ width: 18, height: 18, borderRadius: 4, background: c, border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border)', cursor: 'pointer' }} />
+              <button key={c} onClick={() => setColor(c)} aria-label={t('chats.cor', { c })} style={{ width: 18, height: 18, borderRadius: 4, background: c, border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border)', cursor: 'pointer' }} />
             ))}
           </div>
         </>

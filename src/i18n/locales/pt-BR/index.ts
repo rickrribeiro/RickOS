@@ -12,6 +12,8 @@ import { goals } from './goals'
 import { habits } from './habits'
 import { automations } from './automations'
 import { memory } from './memory'
+import { crm } from './crm'
+import { chats } from './chats'
 
 /** Dicionário de referência. Cada módulo tem seu arquivo, com chaves prefixadas (`todo.*`, `finance.*`…). */
 export const ptBR = {
@@ -28,7 +30,9 @@ export const ptBR = {
   ...goals,
   ...habits,
   ...automations,
-  ...memory
+  ...memory,
+  ...crm,
+  ...chats
 }
 
 export type MessageKey = keyof typeof ptBR

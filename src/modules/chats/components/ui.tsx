@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { ChatLabel, ChatPriority, ChatSummary, ReplyState } from '../../../../shared/chats'
 import { networkInfo, REPLY_STATE_LABELS } from '../../../../shared/chats'
 import { authedUrl } from '../../../api/transport'
+import { t, getLocale } from '../../../i18n'
 
 export function initials(name: string): string {
   const parts = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/)
@@ -31,11 +32,11 @@ export function shortTime(iso: string | null): string {
   const d = new Date(iso)
   const now = new Date()
   const days = Math.floor((now.getTime() - d.getTime()) / 86400_000)
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })
   if (days < 1) return 'ontem'
-  if (days < 7) return d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
-  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  if (days < 7) return d.toLocaleDateString(getLocale(), { weekday: 'short' }).replace('.', '')
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' })
+  return d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 export function agoDays(iso: string | null): string {
@@ -51,7 +52,7 @@ export function agoDays(iso: string | null): string {
 export function StatePill({ state, source }: { state: ReplyState; source?: 'manual' | 'auto' }): React.ReactElement | null {
   if (state === 'none') return null
   return (
-    <span className={`chats-state ${state}`} title={source === 'manual' ? 'Definido por você' : 'Classificação automática'}>
+    <span className={`chats-state ${state}`} title={source === 'manual' ? t('chats.definidoPorVoce') : t('chats.classificacaoAutomatica')}>
       {REPLY_STATE_LABELS[state]}
       {source === 'manual' ? ' ✓' : ''}
     </span>
@@ -73,7 +74,7 @@ export function LabelChips({ labels, max = 3 }: { labels: ChatLabel[]; max?: num
 
 export function PrioMark({ p }: { p: ChatPriority | null }): React.ReactElement | null {
   if (!p || p === 'normal') return null
-  return <span className={`chats-prio ${p}`}>{p === 'alta' ? '▲ alta' : '▼ baixa'}</span>
+  return <span className={`chats-prio ${p}`}>{p === 'alta' ? t('chats.alta3') : t('chats.baixa')}</span>
 }
 
 /** Botão + menu flutuante que fecha ao clicar fora/Esc. */
@@ -139,12 +140,12 @@ export function quickDates(): { label: string; iso: string }[] {
     return d.toISOString()
   }
   return [
-    { label: 'Daqui a 3 horas', iso: laterToday.toISOString() },
-    { label: 'Amanhã 9h', iso: at(1, 9) },
-    { label: 'Daqui a 3 dias', iso: at(3, 9) },
-    { label: 'Próxima segunda', iso: nextMonday() },
-    { label: 'Daqui a 1 semana', iso: at(7, 9) },
-    { label: 'Daqui a 1 mês', iso: at(30, 9) }
+    { label: t('chats.daquiA3Horas'), iso: laterToday.toISOString() },
+    { label: t('chats.amanha9h'), iso: at(1, 9) },
+    { label: t('chats.daquiA3Dias'), iso: at(3, 9) },
+    { label: t('chats.proximaSegunda'), iso: nextMonday() },
+    { label: t('chats.daquiA1Semana'), iso: at(7, 9) },
+    { label: t('chats.daquiA1Mes'), iso: at(30, 9) }
   ]
 }
 

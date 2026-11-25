@@ -1,14 +1,15 @@
 import React from 'react'
 import type { ChatsStatus } from '../../../../shared/chats'
+import { t } from '../../../i18n'
 
 const LABEL: Record<ChatsStatus['state'], { text: string; cls: string }> = {
-  disabled: { text: 'Desativado', cls: 'muted' },
-  unconfigured: { text: 'Falta configurar', cls: 'warn' },
-  idle: { text: 'Conectado', cls: 'ok' },
-  connected: { text: 'Conectado · tempo real', cls: 'ok' },
-  syncing: { text: 'Sincronizando…', cls: 'info' },
-  offline: { text: 'Desconectado', cls: 'warn' },
-  error: { text: 'Erro', cls: 'err' }
+  disabled: { text: t('chats.desativado'), cls: 'muted' },
+  unconfigured: { text: t('chats.faltaConfigurar'), cls: 'warn' },
+  idle: { text: t('chats.conectado'), cls: 'ok' },
+  connected: { text: t('chats.conectadoTempoReal'), cls: 'ok' },
+  syncing: { text: t('chats.sincronizando'), cls: 'info' },
+  offline: { text: t('chats.desconectado'), cls: 'warn' },
+  error: { text: t('chats.erro'), cls: 'err' }
 }
 
 export function StatusBadge({ status, compact }: { status: ChatsStatus; compact?: boolean }): React.ReactElement {
@@ -17,7 +18,7 @@ export function StatusBadge({ status, compact }: { status: ChatsStatus; compact?
     <span className={`chats-status ${l.cls}`} title={status.message ?? status.lastError ?? undefined}>
       <span className="dot" />
       {compact ? null : l.text}
-      {status.demo && <span className="chats-demo-tag">DEMO</span>}
+      {status.demo && <span className="chats-demo-tag">{t('chats.demo')}</span>}
     </span>
   )
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import type { ChatFilter, RadarItem, RadarView as Radar } from '../../../../shared/chats'
 import { useUIStore } from '../../../store/uiStore'
 import { openChat, useChatsStore } from '../store/chatsStore'
+import { t } from '../../../i18n'
 
 export const RADAR_ICON: Record<RadarItem['kind'], string> = {
   reminder_due: '⏰',
@@ -57,31 +58,31 @@ export function RadarView(): React.ReactElement {
     <div className="chats-radar">
       {counts && (
         <div className="chats-radar-grid">
-          {stat('Preciso responder', counts.needsReply, 'conversas', { state: 'needs_reply' })}
-          {stat('Menções em grupos', `${counts.mentionsEstimated ? '~' : ''}${counts.mentionCount}`, `${counts.mentionChats} grupo(s)${counts.mentionsEstimated ? ' · inclui estimativa' : ''}`, { state: 'mentions', type: 'group' })}
-          {stat('Prioridade alta', counts.high, 'pendentes', { state: 'high' })}
-          {stat('Aguardando resposta', counts.waiting, 'de outras pessoas', { state: 'waiting', sort: 'recent' })}
-          {stat('Lembretes vencidos', counts.remindersDue, `${counts.snoozed} adiada(s)`, { state: 'reminders' })}
-          {stat('Não lidas', counts.unreadChats, `${counts.unreadMessages} mensagens`, { state: 'unread', sort: 'recent' })}
+          {stat(t('chats.radar.precisoResponder'), counts.needsReply, t('chats.radar.conversas'), { state: 'needs_reply' })}
+          {stat(t('chats.radar.mencoes'), `${counts.mentionsEstimated ? '~' : ''}${counts.mentionCount}`, `${t('chats.radar.grupos', { n: counts.mentionChats })}${counts.mentionsEstimated ? t('chats.radar.estimativa') : ''}`, { state: 'mentions', type: 'group' })}
+          {stat(t('chats.radar.prioridadeAlta'), counts.high, t('chats.radar.pendentes'), { state: 'high' })}
+          {stat(t('chats.radar.aguardando'), counts.waiting, t('chats.radar.outrasPessoas'), { state: 'waiting', sort: 'recent' })}
+          {stat(t('chats.radar.lembretes'), counts.remindersDue, t('chats.radar.adiadas', { n: counts.snoozed }), { state: 'reminders' })}
+          {stat(t('chats.radar.naoLidas'), counts.unreadChats, t('chats.radar.mensagens', { n: counts.unreadMessages }), { state: 'unread', sort: 'recent' })}
         </div>
       )}
 
       <div className="chats-row" style={{ marginBottom: 12, justifyContent: 'space-between' }}>
-        <h3 className="dash-heading" style={{ margin: 0 }}>Conversas precisando de atenção</h3>
+        <h3 className="dash-heading" style={{ margin: 0 }}>{t('chats.conversasPrecisandoDeAtencao')}</h3>
         <div className="chats-row">
-          <button className="btn btn-secondary btn-sm" onClick={() => useChatsStore.setState({ tab: 'triage', triageMode: 'daily' })}>☕ Revisão diária</button>
-          <button className="btn btn-primary btn-sm" onClick={() => useChatsStore.setState({ tab: 'triage', triageMode: 'backlog' })}>🧹 Organizar inbox</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => useChatsStore.setState({ tab: 'triage', triageMode: 'daily' })}>{t('chats.revisaoDiaria')}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => useChatsStore.setState({ tab: 'triage', triageMode: 'backlog' })}>{t('chats.organizarInbox')}</button>
         </div>
       </div>
 
       {radar && radar.items.length === 0 && (
-        <div className="empty-hint">Nada pedindo atenção agora. 🎉 Use a Triagem quando quiser organizar o backlog, sem pressa.</div>
+        <div className="empty-hint">{t('chats.nadaPedindoAtencaoAgoraUse')}</div>
       )}
       {radar?.items.map((i, idx) => (
         <div key={`${i.kind}-${i.chatId ?? i.contactId ?? idx}`} className="chats-radar-item" onClick={() => onItem(i)} role="button" tabIndex={0}>
           <span className="ic">{RADAR_ICON[i.kind]}</span>
           <span className="tx">{i.text}</span>
-          <span className="chats-mini">abrir →</span>
+          <span className="chats-mini">{t('chats.abrir')}</span>
         </div>
       ))}
       {radar && radar.summary.length > 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12 }}>{radar.summary.join(' · ')}</p>}

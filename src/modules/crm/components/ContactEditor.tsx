@@ -5,6 +5,7 @@ import { COUNTRIES, BRAZIL_STATES, BRAZIL, norm } from '../geo'
 import type { ChatLabel, PersonNetwork } from '../../../../shared/chats'
 import { PersonNetworks } from '../../chats/components/PersonNetworks'
 import { TagChip } from './TagsModal'
+import { t as tr } from '../../../i18n'
 
 /** Campo de país com busca por texto (sem acentos): digita, filtra a lista e escolhe. */
 function CountryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }): React.ReactElement {
@@ -55,7 +56,7 @@ function CountryPicker({ value, onChange }: { value: string; onChange: (v: strin
     <div style={{ position: 'relative' }}>
       <input
         value={query}
-        placeholder="Digite para buscar…"
+        placeholder={tr('crm.digiteParaBuscar')}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0) }}
         onFocus={(e) => { e.target.select(); setOpen(true); setActive(Math.max(0, COUNTRIES.indexOf(value))) }}
         onBlur={onBlur}
@@ -70,7 +71,7 @@ function CountryPicker({ value, onChange }: { value: string; onChange: (v: strin
             border: '1px solid var(--border)', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)'
           }}
         >
-          {options.length === 0 && <div style={{ padding: '6px 10px', fontSize: 13, color: 'var(--text-secondary)' }}>Nenhum país encontrado</div>}
+          {options.length === 0 && <div style={{ padding: '6px 10px', fontSize: 13, color: 'var(--text-secondary)' }}>{tr('crm.nenhumPaisEncontrado')}</div>}
           {options.map((c, i) => (
             <div
               key={c}
@@ -170,49 +171,49 @@ export function ContactEditor({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 420, maxWidth: 560 }}>
-        <h2>{contact ? 'Editar contato' : 'Nova pessoa'}</h2>
+        <h2>{contact ? tr('crm.editarContato') : tr('crm.novaPessoa')}</h2>
         {networks.length > 0 && (
           <div className="editor-field">
-            <label>Redes</label>
+            <label>{tr('crm.redes')}</label>
             <PersonNetworks items={networks} variant="rows" onNavigate={onClose} />
           </div>
         )}
         <div className="editor-row">
           <div className="editor-field">
-            <label>Nome</label>
+            <label>{tr('crm.nome')}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
           <div className="editor-field">
-            <label>Cidade</label>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="ex: Lisboa" />
+            <label>{tr('crm.cidade')}</label>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={tr('crm.exLisboa')} />
           </div>
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>País</label>
+            <label>{tr('crm.pais')}</label>
             <CountryPicker value={country} onChange={onCountryChange} />
           </div>
           <div className="editor-field">
-            <label>Estado {isBrazil ? '(UF)' : ''}</label>
+            <label>{tr('crm.estado')} {isBrazil ? tr('crm.uf') : ''}</label>
             {isBrazil ? (
               <select value={state} onChange={(e) => setState(e.target.value)}>
-                <option value="">— Selecione —</option>
+                <option value="">{tr('crm.selecione')}</option>
                 {BRAZIL_STATES.map((s) => (
                   <option key={s.uf} value={s.uf}>{s.uf} — {s.name}</option>
                 ))}
               </select>
             ) : (
-              <input value={state} onChange={(e) => setState(e.target.value)} placeholder="ex: Califórnia" />
+              <input value={state} onChange={(e) => setState(e.target.value)} placeholder={tr('crm.exCalifornia')} />
             )}
           </div>
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Aniversário</label>
-            <input value={birthday} onChange={(e) => setBirthday(e.target.value)} placeholder="MM-DD ou AAAA-MM-DD" />
+            <label>{tr('crm.aniversario')}</label>
+            <input value={birthday} onChange={(e) => setBirthday(e.target.value)} placeholder={tr('crm.mmDdOuAaaaMm')} />
           </div>
           <div className="editor-field">
-            <label>Próximo follow-up</label>
+            <label>{tr('crm.proximoFollowUp')}</label>
             {/* vazio = sem data. O Safari mostra a data de hoje num <input type="date"> vazio,
                 então o campo só aparece quando há data ou quando o usuário pede para definir. */}
             {nextFollowUp || pickingDate ? (
@@ -231,58 +232,58 @@ export function ContactEditor({
                     setNextFollowUp('')
                     setPickingDate(false)
                   }}
-                  title="Remover o follow-up"
+                  title={tr('crm.removerOFollowUp')}
                 >
-                  {nextFollowUp ? 'Limpar' : 'Cancelar'}
+                  {nextFollowUp ? tr('crm.limpar') : tr('crm.cancelar')}
                 </button>
               </div>
             ) : (
               <button type="button" className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setPickingDate(true)}>
-                Sem follow-up · ＋ Definir data
+                {tr('crm.semFollowUpDefinirData')}
               </button>
             )}
           </div>
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Prioridade do relacionamento</label>
+            <label>{tr('crm.prioridadeDoRelacionamento')}</label>
             <select value={priority} onChange={(e) => setPriority(e.target.value as 'alta' | 'normal' | 'baixa')}>
-              <option value="alta">Alta</option>
-              <option value="normal">Normal</option>
-              <option value="baixa">Baixa</option>
+              <option value="alta">{tr('crm.alta')}</option>
+              <option value="normal">{tr('crm.normal')}</option>
+              <option value="baixa">{tr('crm.baixa')}</option>
             </select>
           </div>
           <div className="editor-field" style={{ justifyContent: 'flex-end' }}>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', textTransform: 'none', letterSpacing: 0, fontSize: 13, color: 'var(--text-primary)' }}>
-              <input type="checkbox" checked={vip} onChange={(e) => setVip(e.target.checked)} style={{ width: 'auto' }} /> ⭐ VIP (não deixar esquecer)
+              <input type="checkbox" checked={vip} onChange={(e) => setVip(e.target.checked)} style={{ width: 'auto' }} /> {tr('crm.vipNaoDeixarEsquecer')}
             </label>
           </div>
         </div>
         <div className="editor-field">
           <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Tags</span>
+            <span>{tr('crm.tags')}</span>
             {onManageTags && (
-              <button type="button" className="crm-linkbtn" onClick={onManageTags}>gerenciar</button>
+              <button type="button" className="crm-linkbtn" onClick={onManageTags}>{tr('crm.gerenciar')}</button>
             )}
           </label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {labels.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Nenhuma tag criada.</span>}
+            {labels.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('crm.nenhumaTagCriada')}</span>}
             {labels.map((l) => (
               <TagChip key={l.id} tag={l} active={tagIds.has(l.id)} onClick={() => toggleTag(l.id)} />
             ))}
           </div>
         </div>
         <div className="editor-field">
-          <label>Interesses</label>
-          <input value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="ex: escalada, vinho natural, IA" />
+          <label>{tr('crm.interesses')}</label>
+          <input value={interests} onChange={(e) => setInterests(e.target.value)} placeholder={tr('crm.exEscaladaVinhoNaturalIa')} />
         </div>
         <div className="editor-field">
-          <label>Contexto (o que está rolando na vida dela)</label>
-          <textarea rows={4} value={context} onChange={(e) => setContext(e.target.value)} placeholder="ex: faria um exame semana passada; mudou de emprego; procurando apê em Berlim…" />
+          <label>{tr('crm.contextoOQueEstaRolando')}</label>
+          <textarea rows={4} value={context} onChange={(e) => setContext(e.target.value)} placeholder={tr('crm.exFariaUmExameSemana')} />
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('crm.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{tr('crm.salvar')}</button>
         </div>
       </div>
     </div>

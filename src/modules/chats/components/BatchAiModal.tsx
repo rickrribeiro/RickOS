@@ -3,6 +3,7 @@ import type { AiStyle, AiSuggestResult, ChatMessage, ChatSummary } from '../../.
 import { AI_STYLE_LABELS, networkInfo } from '../../../../shared/chats'
 import { openChat, useChatsStore } from '../store/chatsStore'
 import { ConfirmSend } from './ChatView'
+import { t as tr } from '../../../i18n'
 
 interface Row {
   chat: ChatSummary
@@ -95,10 +96,9 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: '100%', maxHeight: '90dvh', overflowY: 'auto' }}>
-        <h2>✨ Sugestões para {rows.length} conversa{rows.length === 1 ? '' : 's'}</h2>
+        <h2>{tr('chats.sugestoesParaConversa', { count: rows.length })}</h2>
         <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Vão para a IA só as mensagens marcadas abaixo ({totalMsgs} no total), as recebidas desde a sua última resposta. Nada é
-          enviado sem você confirmar, conversa por conversa.
+          {tr('chats.vaoParaAIaSo', { totalMsgs })}
         </p>
         <textarea
           className="chats-guide"
@@ -106,16 +106,16 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
           maxLength={500}
           value={guide}
           onChange={(e) => setGuide(e.target.value)}
-          placeholder="Orientação para a IA (opcional), ex.: não recusar; agradecer e dizer que tenho interesse em conversar."
-          aria-label="Orientação para todas as conversas"
+          placeholder={tr('chats.orientacaoParaAIaOpcional')}
+          aria-label={tr('chats.orientacaoParaTodasAsConversas')}
         />
         <div className="chats-row" style={{ marginBottom: 10 }}>
-          <select value={style} onChange={(e) => setStyle(e.target.value as AiStyle)} aria-label="Estilo">
+          <select value={style} onChange={(e) => setStyle(e.target.value as AiStyle)} aria-label={tr('chats.estilo')}>
             {(Object.keys(AI_STYLE_LABELS) as AiStyle[]).map((s) => (
               <option key={s} value={s}>{AI_STYLE_LABELS[s]}</option>
             ))}
           </select>
-          <button className="btn btn-primary btn-sm" disabled={running || !totalMsgs} onClick={() => void generate()}>{running ? 'Gerando…' : 'Gerar sugestões'}</button>
+          <button className="btn btn-primary btn-sm" disabled={running || !totalMsgs} onClick={() => void generate()}>{running ? tr('chats.gerando') : tr('chats.gerarSugestoes2')}</button>
         </div>
         {rows.map((r) => (
           <div key={r.chat.id} className="chats-ai-card" style={r.sent ? { opacity: 0.55 } : undefined}>
@@ -123,10 +123,10 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
               <b style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {networkInfo(r.chat.network).icon} {r.chat.contactName || r.chat.title}
               </b>
-              <button className="chats-linkbtn" onClick={() => (openChat(r.chat.id), onClose())}>abrir conversa</button>
+              <button className="chats-linkbtn" onClick={() => (openChat(r.chat.id), onClose())}>{tr('chats.abrirConversa')}</button>
             </div>
-            {r.loading && <div className="chats-ai-reason">Carregando mensagens pendentes…</div>}
-            {!r.loading && r.messages.length === 0 && !r.error && <div className="chats-ai-reason">Sem mensagens recebidas pendentes nesta conversa.</div>}
+            {r.loading && <div className="chats-ai-reason">{tr('chats.carregandoMensagensPendentes')}</div>}
+            {!r.loading && r.messages.length === 0 && !r.error && <div className="chats-ai-reason">{tr('chats.semMensagensRecebidasPendentesNesta')}</div>}
             {r.messages.map((m) => (
               <label key={m.id} className="chats-pick" style={{ alignItems: 'flex-start' }}>
                 <input
@@ -135,14 +135,14 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
                   onChange={() => patch(r.chat.id, { picked: r.picked.includes(m.id) ? r.picked.filter((x) => x !== m.id) : [...r.picked, m.id] })}
                 />
                 <span className="chats-batch-msg">
-                  <b>{m.senderName}:</b> {m.text || '[anexo]'}
+                  <b>{m.senderName}:</b> {m.text || tr('chats.anexo')}
                 </span>
               </label>
             ))}
-            {r.generating && <div className="chats-ai-reason">Gerando…</div>}
+            {r.generating && <div className="chats-ai-reason">{tr('chats.gerando')}</div>}
             {r.error && (
               <div className="chats-msg err">
-                {r.error} <button className="chats-linkbtn" onClick={() => void generate(r)}>tentar de novo</button>
+                {r.error} <button className="chats-linkbtn" onClick={() => void generate(r)}>{tr('chats.tentarDeNovo')}</button>
               </div>
             )}
             {r.result && !r.error && (
@@ -157,12 +157,12 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') void generate(r)
                     }}
-                    placeholder="Orientar só esta conversa…"
-                    aria-label="Orientação só para esta conversa"
+                    placeholder={tr('chats.orientarSoEstaConversa')}
+                    aria-label={tr('chats.orientacaoSoParaEstaConversa')}
                   />
-                  <button className="btn btn-secondary btn-sm" onClick={() => void generate(r)} disabled={r.generating}>↻ Regenerar</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(r.text)}>Copiar</button>
-                  <button className="btn btn-primary btn-sm" disabled={!r.text.trim() || r.sent || r.chat.stale} onClick={() => setConfirm(r)}>{r.sent ? '✓ Enviada' : 'Enviar…'}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => void generate(r)} disabled={r.generating}>{tr('chats.regenerar')}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard?.writeText(r.text)}>{tr('chats.copiar')}</button>
+                  <button className="btn btn-primary btn-sm" disabled={!r.text.trim() || r.sent || r.chat.stale} onClick={() => setConfirm(r)}>{r.sent ? tr('chats.enviada') : tr('chats.enviar')}</button>
                   {r.result.suggestions[0]?.reason && <span className="chats-ai-reason">{r.result.suggestions[0].reason}</span>}
                 </div>
               </>
@@ -170,7 +170,7 @@ export function BatchAiModal({ chatIds, onClose }: { chatIds: number[]; onClose:
           </div>
         ))}
         <div className="modal-actions">
-          <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+          <button className="btn btn-primary btn-sm" onClick={onClose}>{tr('chats.fechar')}</button>
         </div>
         {confirm && <ConfirmSend chat={confirm.chat} text={confirm.text} busy={sending} onCancel={() => setConfirm(null)} onConfirm={() => void send(confirm)} />}
       </div>

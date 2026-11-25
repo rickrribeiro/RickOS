@@ -7,13 +7,14 @@ import { BatchAiModal } from './BatchAiModal'
 import { agoDays, Avatar, LabelChips, PrioMark, StatePill } from './ui'
 
 import type { TriageMode as Mode } from '../store/chatsStore'
+import { t } from '../../../i18n'
 
 const MODES: { id: Mode; label: string; filter: ChatFilter }[] = [
-  { id: 'backlog', label: '✍️ Preciso responder', filter: { state: 'needs_reply', sort: 'priority' } },
-  { id: 'daily', label: '☕ Revisão diária', filter: { state: 'needs_reply', sort: 'priority' } },
-  { id: 'mentions', label: '@ Menções', filter: { state: 'mentions', type: 'group', sort: 'recent' } },
-  { id: 'unread', label: '📭 Não lidas', filter: { state: 'unread', sort: 'priority' } },
-  { id: 'professional', label: '💼 Oportunidades', filter: { state: 'needs_reply', sort: 'priority' } }
+  { id: 'backlog', label: t('chats.precisoResponder'), filter: { state: 'needs_reply', sort: 'priority' } },
+  { id: 'daily', label: t('chats.revisaoDiaria'), filter: { state: 'needs_reply', sort: 'priority' } },
+  { id: 'mentions', label: t('chats.mencoes'), filter: { state: 'mentions', type: 'group', sort: 'recent' } },
+  { id: 'unread', label: t('chats.naoLidas'), filter: { state: 'unread', sort: 'priority' } },
+  { id: 'professional', label: t('chats.oportunidades'), filter: { state: 'needs_reply', sort: 'priority' } }
 ]
 
 /**
@@ -75,7 +76,7 @@ export function TriageView(): React.ReactElement {
 
   async function quick(ids: number[], action: 'resolved' | 'none'): Promise<void> {
     await window.api.chats.setState(ids, action)
-    mark(ids, action === 'resolved' ? '✅ resolvida' : '🚫 não precisa')
+    mark(ids, action === 'resolved' ? t('chats.resolvidaMark') : t('chats.naoPrecisaMark'))
   }
 
   function next(): void {
@@ -106,38 +107,38 @@ export function TriageView(): React.ReactElement {
       </div>
       <div className="chats-triage-head">
         {mode !== 'daily' ? (
-          <select value={size} onChange={(e) => setSize(Number(e.target.value))} aria-label="Tamanho do lote">
-            <option value={10}>Lotes de 10</option>
-            <option value={20}>Lotes de 20</option>
-            <option value={50}>Lotes de 50</option>
+          <select value={size} onChange={(e) => setSize(Number(e.target.value))} aria-label={t('chats.tamanhoDoLote')}>
+            <option value={10}>{t('chats.lotesDe10')}</option>
+            <option value={20}>{t('chats.lotesDe20')}</option>
+            <option value={50}>{t('chats.lotesDe50')}</option>
           </select>
         ) : (
-          <span className="chats-mini">As {daily} conversas mais importantes de hoje. Sem obrigação de zerar a inbox.</span>
+          <span className="chats-mini">{t('chats.asConversasMaisImportantesDe', { daily })}</span>
         )}
-        <div className="chats-progress" title={`${doneCount} de ${batch.length} decididas neste lote`}><div style={{ width: `${pct}%` }} /></div>
-        <span className="chats-mini">{doneCount}/{batch.length} no lote · {total} na fila · {processed.length} hoje</span>
-        <button className="btn btn-primary btn-sm" onClick={next} disabled={loading}>Próximo lote →</button>
+        <div className="chats-progress" title={t('chats.deDecididasNesteLote', { doneCount, count: batch.length })}><div style={{ width: `${pct}%` }} /></div>
+        <span className="chats-mini">{doneCount}{t('chats.noLoteNaFilaHoje', { count: batch.length, total, count2: processed.length })}</span>
+        <button className="btn btn-primary btn-sm" onClick={next} disabled={loading}>{t('chats.proximoLote')}</button>
       </div>
 
       {mode === 'professional' && profLabels.length === 0 && (
-        <div className="chats-notice" style={{ margin: '0 0 10px' }}>Marque conversas ou pessoas com uma tag profissional (ex.: “Recrutadores”, “Clientes”; dá para ajustar em Configurações → Mensagens).</div>
+        <div className="chats-notice" style={{ margin: '0 0 10px' }}>{t('chats.marqueConversasOuPessoasCom')}</div>
       )}
 
       {selected.length > 0 && (
         <div className="chats-bulkbar" style={{ borderRadius: 'var(--radius)', marginBottom: 10 }}>
-          <b>{selected.length} selecionada(s)</b>
-          <button className="btn btn-secondary btn-sm" onClick={() => void quick(selected, 'resolved')}>✅ Resolver</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => void quick(selected, 'none')}>🚫 Não precisa</button>
+          <b>{selected.length} {t('chats.selecionadaS')}</b>
+          <button className="btn btn-secondary btn-sm" onClick={() => void quick(selected, 'resolved')}>{t('chats.resolver')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => void quick(selected, 'none')}>{t('chats.naoPrecisa')}</button>
           <SnoozeMenu ids={selected} />
           <LabelMenu ids={selected} />
           <PriorityMenu ids={selected} />
-          <button className="btn btn-primary btn-sm" onClick={() => setAi(selected)}>✨ Sugestões IA</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setSelected([])}>Limpar</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setAi(selected)}>{t('chats.sugestoesIa')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setSelected([])}>{t('chats.limpar')}</button>
         </div>
       )}
 
-      {loading && batch.length === 0 && <div className="chats-empty">Carregando…</div>}
-      {!loading && batch.length === 0 && <div className="empty-hint">Fila vazia para este modo. 🎉</div>}
+      {loading && batch.length === 0 && <div className="chats-empty">{t('chats.carregando')}</div>}
+      {!loading && batch.length === 0 && <div className="empty-hint">{t('chats.filaVaziaParaEsteModo')}</div>}
 
       {batch.map((c) => {
         const isDone = !!done[c.id]
@@ -145,24 +146,24 @@ export function TriageView(): React.ReactElement {
         return (
           <div key={c.id} className={`chats-triage-card ${isDone ? 'done' : ''}`}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <input type="checkbox" checked={selected.includes(c.id)} onChange={() => setSelected((s) => (s.includes(c.id) ? s.filter((x) => x !== c.id) : [...s, c.id]))} aria-label={`Selecionar ${c.title}`} />
+              <input type="checkbox" checked={selected.includes(c.id)} onChange={() => setSelected((s) => (s.includes(c.id) ? s.filter((x) => x !== c.id) : [...s, c.id]))} aria-label={t('chats.selecionar', { title: c.title })} />
               <Avatar chat={c} size={42} />
             </div>
             <div className="chats-triage-main">
               <div className="chats-row">
                 <b style={{ fontSize: 15 }}>{c.contactName || c.title}</b>
-                <span className="chats-mini">{networkInfo(c.network).label}{c.type === 'group' ? ' · grupo' : ''}</span>
-                <span className="chats-mini">· {agoDays(c.lastActivity)} atrás</span>
+                <span className="chats-mini">{networkInfo(c.network).label}{c.type === 'group' ? t('chats.grupo') : ''}</span>
+                <span className="chats-mini">{t('chats.atras', { p0: agoDays(c.lastActivity) })}</span>
                 {(c.unreadCount ?? 0) > 0 && <span className="chats-unread">{c.unreadCount}</span>}
                 {mentions && <span className={`chats-mention ${c.mentionsEstimated ? 'est' : ''}`}>{c.mentionsEstimated ? '~' : ''}@{c.unreadMentions}</span>}
               </div>
-              <div className="chats-triage-preview">{c.lastMessagePreview ? `${c.lastMessageFromMe ? 'Você: ' : c.type === 'group' && c.lastMessageSender ? `${c.lastMessageSender}: ` : ''}${c.lastMessagePreview}` : <i>sem prévia</i>}</div>
+              <div className="chats-triage-preview">{c.lastMessagePreview ? `${c.lastMessageFromMe ? t('chats.voceSender') : c.type === 'group' && c.lastMessageSender ? `${c.lastMessageSender}: ` : ''}${c.lastMessagePreview}` : <i>{t('chats.semPrevia')}</i>}</div>
               <div className="chats-item-meta">
                 <StatePill state={c.replyState} source={c.replyStateSource} />
-                {c.pendingSince && c.replyState === 'needs_reply' && <span className="chats-mini">esperando há {agoDays(c.pendingSince)}</span>}
-                {c.contactName ? <span className="chats-mini">👤 {c.contactName}</span> : c.type === 'single' && <span className="chats-mini">sem pessoa vinculada</span>}
+                {c.pendingSince && c.replyState === 'needs_reply' && <span className="chats-mini">{t('chats.esperandoHa')} {agoDays(c.pendingSince)}</span>}
+                {c.contactName ? <span className="chats-mini">👤 {c.contactName}</span> : c.type === 'single' && <span className="chats-mini">{t('chats.semPessoaVinculada')}</span>}
                 <PrioMark p={c.priority} />
-                {!c.priority && c.suggestedPriority !== 'normal' && <span className="chats-mini" title="Sugestão automática">sugerida: {c.suggestedPriority}</span>}
+                {!c.priority && c.suggestedPriority !== 'normal' && <span className="chats-mini" title={t('chats.sugestaoAutomatica')}>{t('chats.sugerida')} {c.suggestedPriority}</span>}
                 <LabelChips labels={c.labels} />
                 {c.replyReason && <span className="chats-mini" style={{ whiteSpace: 'normal' }}>· {c.replyReason}</span>}
               </div>
@@ -170,17 +171,17 @@ export function TriageView(): React.ReactElement {
                 <div className="chats-mini" style={{ marginTop: 8 }}>{done[c.id]}</div>
               ) : (
                 <div className="chats-triage-actions">
-                  <button className="btn btn-primary btn-sm" onClick={() => (setTab('inbox'), void open(c.id))}>Responder</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setAi([c.id])}>✨ IA</button>
-                  <SnoozeMenu ids={[c.id]} label="⏰ Depois" />
-                  <button className="btn btn-secondary btn-sm" onClick={() => void quick([c.id], 'resolved')}>✅ Resolvida</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => void quick([c.id], 'none')}>🚫 Não precisa</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => (setTab('inbox'), void open(c.id))}>{t('chats.responder')}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setAi([c.id])}>{t('chats.ia')}</button>
+                  <SnoozeMenu ids={[c.id]} label={t('chats.depois')} />
+                  <button className="btn btn-secondary btn-sm" onClick={() => void quick([c.id], 'resolved')}>{t('chats.resolvida')}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => void quick([c.id], 'none')}>{t('chats.naoPrecisa')}</button>
                   {c.type === 'single' && !c.contactId && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => (setTab('inbox'), void open(c.id), setDetailOpen(true))}>👤 Vincular</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => (setTab('inbox'), void open(c.id), setDetailOpen(true))}>{t('chats.vincular')}</button>
                   )}
                   <LabelMenu ids={[c.id]} current={c.labels} />
                   <StateMenu ids={[c.id]} label="⋯" />
-                  <button className="chats-linkbtn" onClick={() => mark([c.id], '⏭ pulada')}>pular</button>
+                  <button className="chats-linkbtn" onClick={() => mark([c.id], '⏭ pulada')}>{t('chats.pular')}</button>
                 </div>
               )}
             </div>
@@ -190,7 +191,7 @@ export function TriageView(): React.ReactElement {
 
       {batch.length > 0 && doneCount === batch.length && (
         <div className="chats-empty">
-          Lote concluído! <button className="btn btn-primary btn-sm" onClick={next}>Próximo lote →</button> <button className="chats-linkbtn" onClick={() => setTab('radar')}>ou parar por hoje</button>
+          {t('chats.loteConcluido')} <button className="btn btn-primary btn-sm" onClick={next}>{t('chats.proximoLote')}</button> <button className="chats-linkbtn" onClick={() => setTab('radar')}>{t('chats.ouPararPorHoje')}</button>
         </div>
       )}
 

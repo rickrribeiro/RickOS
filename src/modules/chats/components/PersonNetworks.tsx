@@ -4,6 +4,7 @@ import { networkInfo, peerLink } from '../../../../shared/chats'
 import { openExternal } from '../../../api/createApi'
 import { openChat } from '../store/chatsStore'
 import '../chats.css'
+import { t } from '../../../i18n'
 
 /**
  * Redes de uma pessoa: "📸 @usuario", "🟢 Nome salvo · +55…". Clicar abre a conversa na Central
@@ -23,14 +24,14 @@ export function PersonNetworks({ items, variant = 'chips', onNavigate }: { items
         const p = peerLink(n.network, n.handle, n.title)
         return (
           <span key={n.chatId} className={`person-net${n.pending ? ' pending' : ''}`}>
-            <button type="button" className="person-net-main" onClick={() => go(n.chatId)} title={`Abrir a conversa no rickOS${n.pending ? ' (esperando sua resposta)' : ''}`}>
+            <button type="button" className="person-net-main" onClick={() => go(n.chatId)} title={t('chats.abrirAConversaNoRickos', { p0: n.pending ? ' (esperando sua resposta)' : '' })}>
               <span aria-hidden>{info.icon}</span>
               {variant === 'rows' && <b>{info.label}</b>}
               <span className="person-net-label">{p.label || info.label}</span>
-              {n.pending && <span title="Esperando sua resposta">✍️</span>}
+              {n.pending && <span title={t('chats.esperandoSuaResposta')}>✍️</span>}
             </button>
             {p.url && (
-              <button type="button" className="person-net-ext" onClick={() => openExternal(p.url!)} title={p.urlLabel ?? 'Abrir no app'} aria-label={p.urlLabel ?? 'Abrir no app'}>
+              <button type="button" className="person-net-ext" onClick={() => openExternal(p.url!)} title={p.urlLabel ?? t('chats.abrirNoApp')} aria-label={p.urlLabel ?? t('chats.abrirNoApp')}>
                 ↗
               </button>
             )}

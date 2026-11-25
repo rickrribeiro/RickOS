@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import type { ChatLabel } from '../../../../shared/chats'
+import { t } from '../../../i18n'
 
 export const TAG_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#06b6d4', '#6366f1', '#a855f7', '#ec4899', '#64748b']
 
@@ -29,7 +30,7 @@ export function TagsModal({ labels, onChanged, onClose }: { labels: ChatLabel[];
     const n = name.trim()
     if (!n) return
     if (labels.some((l) => l.name.toLocaleLowerCase() === n.toLocaleLowerCase())) {
-      setError('Já existe uma tag com esse nome.')
+      setError(t('crm.jaExisteUmaTagCom'))
       return
     }
     try {
@@ -47,7 +48,7 @@ export function TagsModal({ labels, onChanged, onClose }: { labels: ChatLabel[];
       l.contactCount ? `${l.contactCount} pessoa(s)` : '',
       l.chatCount ? `${l.chatCount} conversa(s)` : ''
     ].filter(Boolean)
-    const msg = uses.length ? `Remover a tag "${l.name}"? Ela sai de ${uses.join(' e ')}.` : `Remover a tag "${l.name}"?`
+    const msg = uses.length ? t('crm.removerTagUsos', { name: l.name, uses: uses.join(t('crm.listaE')) }) : t('crm.removerTag', { name: l.name })
     if (!window.confirm(msg)) return
     await window.api.chats.deleteLabel(l.id)
     await onChanged()
@@ -56,34 +57,34 @@ export function TagsModal({ labels, onChanged, onClose }: { labels: ChatLabel[];
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 360, maxWidth: 480 }}>
-        <h3 style={{ marginBottom: 4 }}>🏷 Tags</h3>
+        <h3 style={{ marginBottom: 4 }}>{t('crm.tags2')}</h3>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-          As mesmas tags valem para pessoas e para conversas da Central de Mensagens.
+          {t('crm.asMesmasTagsValemPara')}
         </p>
 
         <div className="crm-tags-list">
-          {labels.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Nenhuma tag ainda.</div>}
+          {labels.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('crm.nenhumaTagAinda')}</div>}
           {labels.map((l) => (
             <div key={l.id} className="crm-tags-row">
               <TagChip tag={l} />
               <span style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>
-                {l.contactCount ? `${l.contactCount} pessoa${l.contactCount > 1 ? 's' : ''}` : 'sem pessoas'}
+                {l.contactCount ? t('crm.pessoa', { count: l.contactCount }) : t('crm.semPessoas')}
               </span>
-              <button type="button" className="btn btn-danger btn-sm" onClick={() => void remove(l)} title={`Remover "${l.name}"`}>✕</button>
+              <button type="button" className="btn btn-danger btn-sm" onClick={() => void remove(l)} title={t('crm.remover', { name: l.name })}>✕</button>
             </div>
           ))}
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
           <input
-            placeholder="Nova tag"
+            placeholder={t('crm.novaTag')}
             value={name}
             maxLength={40}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void add()}
             style={{ flex: 1, minWidth: 0 }}
           />
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void add()}>＋ Adicionar</button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => void add()}>{t('crm.adicionar')}</button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {TAG_COLORS.map((c) => (
@@ -91,7 +92,7 @@ export function TagsModal({ labels, onChanged, onClose }: { labels: ChatLabel[];
               key={c}
               type="button"
               onClick={() => setColor(c)}
-              aria-label={`cor ${c}`}
+              aria-label={t('crm.cor', { c })}
               style={{ width: 22, height: 22, borderRadius: 4, background: c, cursor: 'pointer', border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border)' }}
             />
           ))}
@@ -99,7 +100,7 @@ export function TagsModal({ labels, onChanged, onClose }: { labels: ChatLabel[];
         {error && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{error}</div>}
 
         <div className="modal-actions">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Fechar</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>{t('crm.fechar')}</button>
         </div>
       </div>
     </div>

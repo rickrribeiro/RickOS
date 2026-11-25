@@ -4,10 +4,11 @@ import { useChatsStore } from '../store/chatsStore'
 import { LabelMenu, PinButton, PriorityMenu, SnoozeMenu, StateMenu } from './actions'
 import { BatchAiModal } from './BatchAiModal'
 import { agoDays, Avatar, LabelChips, PrioMark, shortTime, StatePill } from './ui'
+import { t } from '../../../i18n'
 
 function preview(c: ChatSummary): string {
-  if (!c.lastMessagePreview) return c.stale ? 'Provedor inativo — dados podem estar desatualizados' : ''
-  if (c.lastMessageFromMe) return `Você: ${c.lastMessagePreview}`
+  if (!c.lastMessagePreview) return c.stale ? t('chats.provedorInativo') : ''
+  if (c.lastMessageFromMe) return `${t('chats.voceSender')}${c.lastMessagePreview}`
   if (c.type === 'group' && c.lastMessageSender) return `${c.lastMessageSender}: ${c.lastMessagePreview}`
   return c.lastMessagePreview
 }
@@ -32,37 +33,37 @@ export function ChatItem({ c, active, selected, selecting, onOpen, onToggle }: {
   ].join(' ')
   return (
     <div className={cls} onClick={selecting ? onToggle : onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
-      {selecting && <input type="checkbox" className="chats-check" checked={selected} onChange={onToggle} onClick={(e) => e.stopPropagation()} aria-label={`Selecionar ${c.title}`} />}
+      {selecting && <input type="checkbox" className="chats-check" checked={selected} onChange={onToggle} onClick={(e) => e.stopPropagation()} aria-label={t('chats.selecionar', { title: c.title })} />}
       <Avatar chat={c} />
       <div className="chats-item-main">
         <div className="chats-item-top">
           <span className="chats-item-title">{c.contactName && c.contactName !== c.title ? `${c.contactName}` : c.title}</span>
           <span className="chats-item-time">
-            {c.pinnedAt && <span className="chats-pin" title="Fixada no topo">📌</span>}
+            {c.pinnedAt && <span className="chats-pin" title={t('chats.fixadaNoTopo')}>📌</span>}
             {shortTime(c.lastActivity)}
           </span>
         </div>
         <div className="chats-item-preview">{preview(c)}</div>
         <div className="chats-item-meta">
           <StatePill state={c.replyState} source={c.replyStateSource} />
-          {c.reopened && <span className="chats-state needs_reply">Reaberta</span>}
-          {c.reminderDue && <span className="chats-state needs_reply">⏰ Lembrete</span>}
-          {c.replyState === 'needs_reply' && c.pendingSince && <span className="chats-mini" title="Esperando resposta há">⌛ {agoDays(c.pendingSince)}</span>}
-          {c.contactId && <span className="chats-mini" title={`Vinculada a ${c.contactName}`}>👤</span>}
-          {c.contactVip && <span className="chats-mini" title="Pessoa VIP">⭐</span>}
+          {c.reopened && <span className="chats-state needs_reply">{t('chats.reaberta')}</span>}
+          {c.reminderDue && <span className="chats-state needs_reply">{t('chats.lembrete2')}</span>}
+          {c.replyState === 'needs_reply' && c.pendingSince && <span className="chats-mini" title={t('chats.esperandoRespostaHa')}>⌛ {agoDays(c.pendingSince)}</span>}
+          {c.contactId && <span className="chats-mini" title={t('chats.vinculadaA', { contactName: c.contactName })}>👤</span>}
+          {c.contactVip && <span className="chats-mini" title={t('chats.pessoaVip')}>⭐</span>}
           <PrioMark p={c.priority} />
           <LabelChips labels={c.labels} max={2} />
           {c.todoCount > 0 && <span className="chats-mini">☑ {c.todoCount}</span>}
-          {c.isMuted && <span className="chats-mini" title="Silenciada">🔕</span>}
+          {c.isMuted && <span className="chats-mini" title={t('chats.silenciada2')}>🔕</span>}
         </div>
       </div>
       <div className="chats-badges">
         {mentions && (
-          <span className={`chats-mention ${c.mentionsEstimated ? 'est' : ''}`} title={c.mentionsEstimated ? 'Estimativa local (o provedor não informa menções)' : 'Menções não lidas a você'}>
+          <span className={`chats-mention ${c.mentionsEstimated ? 'est' : ''}`} title={c.mentionsEstimated ? t('chats.estimativaLocalOProvedorNao') : t('chats.mencoesNaoLidasAVoce')}>
             {c.mentionsEstimated ? '~' : ''}@{c.unreadMentions}
           </span>
         )}
-        {(c.unreadCount ?? 0) > 0 && <span className={`chats-unread ${c.isMuted ? 'muted' : ''}`} title="Mensagens não lidas">{c.unreadCount! > 999 ? '999+' : c.unreadCount}</span>}
+        {(c.unreadCount ?? 0) > 0 && <span className={`chats-unread ${c.isMuted ? 'muted' : ''}`} title={t('chats.mensagensNaoLidas')}>{c.unreadCount! > 999 ? '999+' : c.unreadCount}</span>}
       </div>
     </div>
   )
@@ -84,32 +85,32 @@ export function ChatList(): React.ReactElement {
     <>
       {sel ? (
         <div className="chats-bulkbar">
-          <b>{selected.length} selecionada{selected.length === 1 ? '' : 's'}</b>
-          <button className="chats-linkbtn" onClick={() => selectMany(items.map((i) => i.id))}>todas visíveis</button>
+          <b>{t('chats.nSelecionadas', { count: selected.length })}</b>
+          <button className="chats-linkbtn" onClick={() => selectMany(items.map((i) => i.id))}>{t('chats.todasVisiveis')}</button>
           {selected.length > 0 && (
             <>
-              <StateMenu ids={selected} label="Estado" />
-              <SnoozeMenu ids={selected} label="⏰ Lembrar" />
-              <PriorityMenu ids={selected} label="Prioridade" />
+              <StateMenu ids={selected} label={t('chats.estado')} />
+              <SnoozeMenu ids={selected} label={t('chats.lembrar2')} />
+              <PriorityMenu ids={selected} label={t('chats.prioridade')} />
               <PinButton ids={selected} pinned={selected.every((id) => !!items.find((i) => i.id === id)?.pinnedAt)} />
-              <LabelMenu ids={selected} label="🏷 Tags" />
-              <button className="btn btn-secondary btn-sm" onClick={() => void window.api.chats.reviewMentions(selected)} title="Marcar menções como revisadas">@✓</button>
-              <button className="btn btn-primary btn-sm" onClick={() => setBatch(true)} title="Uma sugestão por conversa, revisando antes o que vai para a IA">✨ Sugestões IA</button>
+              <LabelMenu ids={selected} label={t('chats.tags')} />
+              <button className="btn btn-secondary btn-sm" onClick={() => void window.api.chats.reviewMentions(selected)} title={t('chats.marcarMencoesComoRevisadas2')}>@✓</button>
+              <button className="btn btn-primary btn-sm" onClick={() => setBatch(true)} title={t('chats.umaSugestaoPorConversaRevisando')}>{t('chats.sugestoesIa')}</button>
             </>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => (clearSelection(), setSelecting(false))}>Cancelar</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => (clearSelection(), setSelecting(false))}>{t('chats.cancelar')}</button>
         </div>
       ) : (
         <div className="chats-filter-meta" style={{ padding: '4px 12px' }}>
           <span />
-          <button className="chats-linkbtn" onClick={() => setSelecting(true)}>Selecionar várias</button>
+          <button className="chats-linkbtn" onClick={() => setSelecting(true)}>{t('chats.selecionarVarias')}</button>
         </div>
       )}
       <div className="chats-list" ref={ref} onScroll={onScroll}>
-        {error && <div className="chats-empty">Erro ao carregar: {error}</div>}
+        {error && <div className="chats-empty">{t('chats.erroAoCarregar')} {error}</div>}
         {!error && items.length === 0 && !loading && (
           <div className="chats-empty">
-            {status?.state === 'syncing' ? 'Sincronizando conversas…' : 'Nenhuma conversa para estes filtros.'}
+            {status?.state === 'syncing' ? t('chats.sincronizandoConversas') : t('chats.nenhumaConversaParaEstesFiltros')}
           </div>
         )}
         {items.map((c) => (
@@ -117,7 +118,7 @@ export function ChatList(): React.ReactElement {
         ))}
         {hasMore && (
           <div className="chats-loadmore">
-            <button className="btn btn-secondary btn-sm" disabled={loading} onClick={() => void loadMore()}>{loading ? 'Carregando…' : 'Carregar mais'}</button>
+            <button className="btn btn-secondary btn-sm" disabled={loading} onClick={() => void loadMore()}>{loading ? t('chats.carregando') : t('chats.carregarMais')}</button>
           </div>
         )}
       </div>
