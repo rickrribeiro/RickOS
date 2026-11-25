@@ -93,6 +93,8 @@ import {
   setTransactionKind,
   resetFinanceImportedData,
   getAccountBalanceHistory,
+  getAccountReservedHistory,
+  setAccountReserved,
   getInvestmentMovements,
   setTransactionPaymentMethod,
   setRecurringOverride,
@@ -1077,6 +1079,8 @@ ipcMain.handle('pluggy:sync', async (_, month?: string) => {
 })
 ipcMain.handle('pluggy:status', () => pluggyConfigured())
 ipcMain.handle('accounts:balanceHistory', () => getAccountBalanceHistory())
+ipcMain.handle('accounts:reservedHistory', () => getAccountReservedHistory())
+ipcMain.handle('accounts:setReserved', (_, accountId: number, month: string, amount: number) => setAccountReserved(accountId, month, amount))
 /** Manutenção: recalcula a marcação de investimento das transações importadas com o detector atual. */
 ipcMain.handle('pluggy:reclassifyInvestments', async () => afterTxChange(await reclassifyInvestmentFlags()))
 ipcMain.handle('pluggy:syncInvestments', async () => {

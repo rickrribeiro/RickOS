@@ -1369,6 +1369,23 @@ export async function getInvestmentMovements(): Promise<DbInvestmentMovement[]> 
   const db = await getDb()
   return getAll<DbInvestmentMovement>(db, 'SELECT * FROM investment_movements ORDER BY date')
 }
+/**
+ * Saldo separado da conta (dinheiro reservado que o banco não manda pelo Open Finance), por mês.
+ * Mês sem registro herda o último valor anterior (ver `reservedAtMonth` no front).
+ */
+export async function getAccountReservedHistory(): Promise<{ accountId: number; month: string; amount: number; updatedAt: string }[]> {
+  const db = await getDb()
+  return getAll(db, 'SELECT accountId, month, amount, updatedAt FROM account_reserved_history ORDER BY month')
+}
+export async function setAccountReserved(accountId: number, month: string, amount: number): Promise<void> {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`)
+  const db = await getDb()
+  run(
+    db,
+    'INSERT INTO account_reserved_history (accountId, month, amount, updatedAt) VALUES (?, ?, ?, ?) ON CONFLICT(accountId, month) DO UPDATE SET amount = excluded.amount, updatedAt = excluded.updatedAt',
+    [accountId, month, amount, new Date().toISOString()]
+  )
+}
 export async function getAccountBalanceHistory(): Promise<{ accountId: number; month: string; balance: number; syncedAt: string }[]> {
   const db = await getDb()
   return getAll(db, 'SELECT accountId, month, balance, syncedAt FROM account_balance_history ORDER BY month')

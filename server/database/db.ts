@@ -552,6 +552,21 @@ const MIGRATIONS: Migration[] = [
         db.run('ALTER TABLE investments ADD COLUMN groupKey TEXT')
       } catch { /* exists */ }
     }
+  },
+  {
+    version: 42,
+    label: 'Contas: saldo separado (manual, por mês) — o Open Finance do Nubank não manda',
+    run: (db) => {
+      try {
+        db.run(`CREATE TABLE IF NOT EXISTS account_reserved_history (
+          accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+          month TEXT NOT NULL,
+          amount REAL NOT NULL,
+          updatedAt TEXT NOT NULL,
+          PRIMARY KEY (accountId, month)
+        );`)
+      } catch { /* exists */ }
+    }
   }
 ]
 

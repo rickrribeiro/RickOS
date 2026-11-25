@@ -386,7 +386,9 @@ export function createApi() {
       delete: (id: number) => invoke('accounts:delete', id)
     },
     accountsHistory: {
-      balances: () => invoke('accounts:balanceHistory')
+      balances: () => invoke('accounts:balanceHistory'),
+      reserved: () => invoke('accounts:reservedHistory'),
+      setReserved: (accountId: number, month: string, amount: number) => invoke('accounts:setReserved', accountId, month, amount)
     },
     financeRules: {
       getAll: () => invoke('financeRules:getAll'),

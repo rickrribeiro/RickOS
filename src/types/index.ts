@@ -422,6 +422,14 @@ export interface Account {
   syncedAt?: string | null // última atualização do saldo pelo Open Finance
 }
 
+/** Saldo separado da conta num mês (manual; o Open Finance não manda). */
+export interface AccountReserved {
+  accountId: number
+  month: string
+  amount: number
+  updatedAt: string
+}
+
 export interface Category {
   id: number
   name: string
@@ -1103,6 +1111,8 @@ declare global {
       }
       accountsHistory: {
         balances: () => Promise<{ accountId: number; month: string; balance: number; syncedAt: string }[]>
+        reserved: () => Promise<AccountReserved[]>
+        setReserved: (accountId: number, month: string, amount: number) => Promise<void>
       }
       financeRules: {
         getAll: () => Promise<FinanceRule[]>

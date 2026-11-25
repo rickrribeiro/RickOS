@@ -1,12 +1,90 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { DailySpending } from '../components/DailySpending'
 import { PendingNotes } from '../components/PendingNotes'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
 
+/**
+ * Saldo separado da conta (o Open Finance do Nubank sinaliza que existe, mas manda a lista vazia):
+ * valor manual por mês, editado in-line. Mês sem registro herda o último valor anterior.
+ */
+function ReservedLine({
+  amount,
+  explicit,
+  currency,
+  onSave
+}: {
+  amount: number | null
+  explicit: boolean
+  currency: string
+  onSave: (v: number) => void
+}): React.ReactElement {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  function start(): void {
+    setDraft(amount != null ? String(amount) : '')
+    setEditing(true)
+  }
+  function commit(): void {
+    setEditing(false)
+    const v = parseFloat(draft.replace(',', '.'))
+    if (draft.trim() === '' || isNaN(v) || v === amount) return
+    onSave(Math.round(v * 100) / 100)
+  }
+
+  if (editing) {
+    return (
+      <div className="stat-card-sub" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        🔒 separado:
+        <input
+          autoFocus
+          type="number"
+          step="0.01"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          title="Enter salva · Esc cancela · vale a partir deste mês"
+          style={{ width: 100, fontSize: 12, padding: '1px 4px' }}
+        />
+      </div>
+    )
+  }
+  if (amount == null || amount === 0) {
+    return (
+      <button
+        className="stat-card-sub"
+        onClick={start}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', textAlign: 'left', font: 'inherit', fontSize: 12 }}
+        title="Dinheiro separado na conta (o Open Finance não manda esse valor)"
+      >
+        + saldo separado
+      </button>
+    )
+  }
+  return (
+    <div className="stat-card-sub">
+      🔒 separado: {formatMoney(amount, currency)}
+      {!explicit && <span title="Sem registro neste mês — mantém o último valor informado"> (mantido)</span>}{' '}
+      <button
+        onClick={start}
+        style={{ background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', color: 'var(--text-muted)', font: 'inherit' }}
+        title="Editar o saldo separado deste mês"
+      >
+        ✎
+      </button>
+    </div>
+  )
+}
+
 export function FinanceDashboardPage(): React.ReactElement {
-  const { accounts, accountBalances, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
+  const { accounts, accountBalances, accountReserved, setAccountReserved, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
     useFinanceStore()
 
   useEffect(() => {
@@ -30,8 +108,16 @@ export function FinanceDashboardPage(): React.ReactElement {
     const h = accountBalances.find((x) => x.accountId === a.id && x.month === month)
     return { a, balance: h ? h.balance : null, syncedAt: h ? h.syncedAt : null }
   })
+  // saldo separado (manual): último registro até o mês selecionado
+  const reservedOf = (accountId: number): { amount: number | null; explicit: boolean } => {
+    let best: { month: string; amount: number } | null = null
+    for (const r of accountReserved) if (r.accountId === accountId && r.month <= month && (!best || r.month > best.month)) best = r
+    return { amount: best ? best.amount : null, explicit: best?.month === month }
+  }
   const balByCur: Record<string, number> = {}
-  for (const { a, balance } of accountMonth) balByCur[a.currency] = (balByCur[a.currency] ?? 0) + (balance ?? 0)
+  for (const { a, balance } of accountMonth) {
+    balByCur[a.currency] = (balByCur[a.currency] ?? 0) + (balance ?? 0) + (reservedOf(a.id).amount ?? 0)
+  }
 
   // top expense categories this month (BRL-agnostic, sum absolute amounts)
   const byCat: Record<number, number> = {}
@@ -106,16 +192,28 @@ export function FinanceDashboardPage(): React.ReactElement {
         <div className="stat-card">
           <div className="stat-card-label">Saldo total (contas)</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{money(balByCur)}</div>
-          {accountMonth.map(({ a, balance, syncedAt }) => (
-            <div key={a.id} className="stat-card-sub">
-              {a.externalId ? '🏦 ' : ''}
-              {a.name}
-              {accounts.length > 1 && balance != null && ` · ${formatMoney(balance, a.currency)}`}
-              {balance == null
-                ? ' · sem registro de saldo neste mês'
-                : syncedAt && ` · atualizado ${new Date(syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
-            </div>
-          ))}
+          {accountMonth.map(({ a, balance, syncedAt }) => {
+            const reserved = reservedOf(a.id)
+            const hasReserved = (reserved.amount ?? 0) !== 0
+            return (
+              <React.Fragment key={a.id}>
+                <div className="stat-card-sub">
+                  {a.externalId ? '🏦 ' : ''}
+                  {a.name}
+                  {(accounts.length > 1 || hasReserved) && balance != null && ` · ${hasReserved ? 'em conta ' : ''}${formatMoney(balance, a.currency)}`}
+                  {balance == null
+                    ? ' · sem registro de saldo neste mês'
+                    : syncedAt && ` · atualizado ${new Date(syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                </div>
+                <ReservedLine
+                  amount={reserved.amount}
+                  explicit={reserved.explicit}
+                  currency={a.currency}
+                  onSave={(v) => setAccountReserved(a.id, v)}
+                />
+              </React.Fragment>
+            )
+          })}
           {accounts.length === 0 && <div className="stat-card-sub">importe do Open Finance para trazer o saldo da conta</div>}
         </div>
         <div className="stat-card">
