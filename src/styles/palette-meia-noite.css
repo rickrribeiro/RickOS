@@ -1,0 +1,50 @@
+/* Paleta "Meia-noite dourada" — azul-marinho com destaque dourado. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='meia-noite'] {
+  --pal-bg: #0e1322;
+  --pal-sidebar: #0a0e1a;
+  --pal-surface: #151c30;
+  --pal-elevated: #1c2440;
+  --pal-user-bubble: #212a47;
+  --pal-border: #2a3352;
+  --pal-border-strong: #3b4670; /* derivado */
+  --pal-text: #f1eee4;
+  --pal-text-2: #b5b9c8;
+  --pal-text-3: #a2a7b8;
+  --pal-accent: #e6c25a;
+  --pal-accent-hover: #f0d483; /* derivado */
+  --pal-selection: #2c2a22;
+  --pal-primary: #d9b44a;
+  --pal-on-primary: #1e1704;
+  --pal-success: #9fd8b5;
+  --pal-success-bg: #16302a;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(241, 238, 228, 0.06);
+  --pal-ring: rgba(230, 194, 90, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='meia-noite'][data-theme='light'] {
+  --pal-bg: #f7f6f1;
+  --pal-sidebar: #eceae1;
+  --pal-surface: #ffffff;
+  --pal-elevated: #f1efe7;
+  --pal-user-bubble: #eae7dc;
+  --pal-border: #d9d5c6;
+  --pal-border-strong: #c1bba6; /* derivado */
+  --pal-text: #141b33;
+  --pal-text-2: #4a5068;
+  --pal-text-3: #545a72;
+  --pal-accent: #7d5e05;
+  --pal-accent-hover: #654c04; /* derivado */
+  --pal-selection: #f4ecd2;
+  --pal-primary: #1c2548;
+  --pal-on-primary: #f5de9a;
+  --pal-success: #2e6b45;
+  --pal-success-bg: #e1f0e5;
+  --pal-shadow: #141b3314;
+  --pal-hover: rgba(20, 27, 51, 0.05);
+  --pal-ring: rgba(125, 94, 5, 0.25);
+  --pal-scrim: rgba(20, 27, 51, 0.3);
+  color-scheme: light;
+}
