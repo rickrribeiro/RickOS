@@ -52,7 +52,8 @@ import { JarvisPage } from './modules/jarvis/pages/JarvisPage'
 import { Page } from './types'
 import { AuthGate } from './components/AuthGate'
 import { NotificationBell, UnreadDot } from './components/NotificationBell'
-import { lastTab, rememberTab, tabGroupOf, visibleNavGroups } from './navigation'
+import { groupLabel, itemLabel, lastTab, rememberTab, tabGroupOf, visibleNavGroups } from './navigation'
+import { t } from './i18n'
 import { useModuleStore } from './store/moduleStore'
 import { useNavStyleStore } from './store/navStyleStore'
 import { Icon } from './icons/Icon'
@@ -152,7 +153,7 @@ export default function App(): React.ReactElement {
   }, [])
 
   const tabsMode = useNavStyleStore((st) => st.navStyle) === 'tabs'
-  const labeledGroups = navGroups.filter((g) => g.label).map((g) => g.label)
+  const labeledGroups = navGroups.filter((g) => g.key).map((g) => g.key)
   const tabGroup = tabsMode ? tabGroupOf(currentPage, navGroups) : undefined
   useEffect(() => {
     if (tabGroup) rememberTab(tabGroup, currentPage)
@@ -246,7 +247,7 @@ export default function App(): React.ReactElement {
   return (
     <AuthGate>
     <div className={`app ${navOpen ? 'nav-open' : ''}`}>
-      <button className="mobile-menu-btn" onClick={() => setNavOpen((v) => !v)} aria-label="Abrir menu">
+      <button className="mobile-menu-btn" onClick={() => setNavOpen((v) => !v)} aria-label={t('shell.openMenu')}>
         ☰
         <UnreadDot />
       </button>
@@ -262,32 +263,32 @@ export default function App(): React.ReactElement {
           <button
             className="collapse-all-btn"
             onClick={toggleAll}
-            title={allCollapsed ? 'Expandir todos os grupos' : 'Colapsar todos os grupos'}
+            title={t(allCollapsed ? 'shell.expandAllGroups' : 'shell.collapseAllGroups')}
           >
-            {allCollapsed ? '⊞ Expandir tudo' : '⊟ Colapsar tudo'}
+            {allCollapsed ? `⊞ ${t('shell.expandAll')}` : `⊟ ${t('shell.collapseAll')}`}
           </button>
           )}
           {navGroups.map((group, gi) => {
-            if (tabsMode && group.label) {
-              const expanded = !!expandedTabs[group.label]
+            if (tabsMode && group.key) {
+              const expanded = !!expandedTabs[group.key]
               return (
-                <div className="nav-group nav-group-tabbed" key={group.label}>
+                <div className="nav-group nav-group-tabbed" key={group.key}>
                   <div className="nav-module-row">
                     <button
                       className={`nav-btn nav-module-btn ${tabGroup === group ? 'active' : ''}`}
                       onClick={() => setPage(lastTab(group))}
-                      title={group.items.map((i) => i.label).join(' · ')}
+                      title={group.items.map(itemLabel).join(' · ')}
                     >
                       <span className="nav-icon">{group.groupIcon && <Icon name={group.groupIcon} />}</span>
-                      <span className="nav-label">{group.label}</span>
+                      <span className="nav-label">{groupLabel(group)}</span>
                       {group.items.some((i) => i.id === 'ai-runner') && <RunnerNavBadge compact />}
                     </button>
                     <button
                       className="nav-module-toggle"
-                      onClick={() => toggleTabGroup(group.label)}
+                      onClick={() => toggleTabGroup(group.key)}
                       aria-expanded={expanded}
-                      aria-label={`${expanded ? 'Ocultar' : 'Mostrar'} páginas de ${group.label}`}
-                      title={expanded ? 'Ocultar páginas' : 'Mostrar páginas'}
+                      aria-label={t(expanded ? 'shell.hidePagesOf' : 'shell.showPagesOf', { module: groupLabel(group) })}
+                      title={t(expanded ? 'shell.hidePages' : 'shell.showPages')}
                     >
                       <svg className={`nav-module-chevron ${expanded ? 'open' : ''}`} width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
                         <path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -302,7 +303,7 @@ export default function App(): React.ReactElement {
                             className={`nav-btn ${currentPage === item.id ? 'active' : ''}`}
                             onClick={() => setPage(item.id)}
                           >
-                            <span className="nav-label">{item.label}</span>
+                            <span className="nav-label">{itemLabel(item)}</span>
                             {item.id === 'ai-runner' && <RunnerNavBadge />}
                           </button>
                         </li>
@@ -312,19 +313,19 @@ export default function App(): React.ReactElement {
                 </div>
               )
             }
-            const collapsible = !!group.label
-            const isCollapsed = collapsible && collapsed[group.label]
+            const collapsible = !!group.key
+            const isCollapsed = collapsible && collapsed[group.key]
             return (
-              <div className="nav-group" key={group.label || `g${gi}`}>
+              <div className="nav-group" key={group.key || `g${gi}`}>
                 {collapsible && (
                   <button
                     className="nav-group-label"
-                    onClick={() => toggleGroup(group.label)}
+                    onClick={() => toggleGroup(group.key)}
                     aria-expanded={!isCollapsed}
                   >
                     <span className={`nav-group-chevron ${isCollapsed ? 'collapsed' : ''}`}>▾</span>
                     {group.groupIcon && <span className="nav-group-icon"><Icon name={group.groupIcon} /></span>}
-                    <span>{group.label}</span>
+                    <span>{groupLabel(group)}</span>
                     {isCollapsed && group.items.some((i) => i.id === 'ai-runner') && <RunnerNavBadge compact />}
                   </button>
                 )}
@@ -336,8 +337,8 @@ export default function App(): React.ReactElement {
                           className={`nav-btn ${currentPage === item.id ? 'active' : ''}`}
                           onClick={() => setPage(item.id)}
                         >
-                          {!group.label && <span className="nav-icon"><Icon name={item.icon} /></span>}
-                          <span className="nav-label">{item.label}</span>
+                          {!group.key && <span className="nav-icon"><Icon name={item.icon} /></span>}
+                          <span className="nav-label">{itemLabel(item)}</span>
                           {item.id === 'ai-runner' && <RunnerNavBadge />}
                         </button>
                       </li>
@@ -349,34 +350,34 @@ export default function App(): React.ReactElement {
           })}
         </div>
         <div className="sidebar-shortcuts">
-          <div className="shortcut-hint">Ctrl+Space: Stop</div>
-          <div className="shortcut-hint">Ctrl+Shift+Space: Capture</div>
-          <div className="shortcut-hint">Ctrl+1-4: Navigate</div>
+          <div className="shortcut-hint">Ctrl+Space: {t('shell.shortcut.stop')}</div>
+          <div className="shortcut-hint">Ctrl+Shift+Space: {t('shell.shortcut.capture')}</div>
+          <div className="shortcut-hint">Ctrl+1-4: {t('shell.shortcut.navigate')}</div>
         </div>
         <div className="sidebar-footer">
           <button
             className="nav-btn export-btn"
             onClick={() => setExportOpen(true)}
-            title="Exportar backup (local ou Google Drive)"
+            title={t('shell.exportDbTitle')}
             style={{ marginTop: '8px' }}
           >
             <span className="nav-icon">💾</span>
-            <span className="nav-label">Export DB</span>
+            <span className="nav-label">{t('shell.exportDb')}</span>
           </button>
           <button
             className="nav-btn export-btn"
             onClick={async () => {
               const confirmed = window.confirm(
-                'This will replace ALL current data with the imported snapshot. Continue?'
+                t('shell.importDbConfirm')
               )
               if (!confirmed) return
               await window.api.app.importDb()
             }}
-            title="Import Database Snapshot"
+            title={t('shell.importDbTitle')}
             style={{ marginTop: '4px' }}
           >
             <span className="nav-icon">📂</span>
-            <span className="nav-label">Import DB</span>
+            <span className="nav-label">{t('shell.importDb')}</span>
           </button>
         </div>
       </nav>
@@ -386,7 +387,7 @@ export default function App(): React.ReactElement {
         <ActiveTask />
         <div className="page-content">
           {tabGroup && (
-            <div className="module-tabs" role="tablist" aria-label={tabGroup.label}>
+            <div className="module-tabs" role="tablist" aria-label={groupLabel(tabGroup)}>
               {tabGroup.items.map((item) => (
                 <button
                   key={item.id}
@@ -396,7 +397,7 @@ export default function App(): React.ReactElement {
                   onClick={() => setPage(item.id)}
                 >
                   <span className="module-tab-icon"><Icon name={item.icon} /></span>
-                  {item.label}
+                  {itemLabel(item)}
                   {item.id === 'ai-runner' && <RunnerNavBadge />}
                 </button>
               ))}

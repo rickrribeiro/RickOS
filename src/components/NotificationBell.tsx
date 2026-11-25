@@ -4,25 +4,26 @@ import { useNotificationStore, wireNotifications, isClaudeNotification } from '.
 import { useUIStore } from '../store/uiStore'
 import { AppNotification } from '../types'
 import { isNotificationSoundOn, playNotificationSound, setNotificationSoundOn } from '../utils/notificationSound'
+import { fmtDate, t, type MessageKey } from '../i18n'
 
-const SOURCE_LABEL: Record<string, string> = {
-  automacao: 'Automação',
-  agendador: 'Agente agendado',
-  ia: 'IA',
-  claude: 'Prompt Runner',
-  sistema: 'Sistema'
+const SOURCE_LABEL: Record<string, MessageKey> = {
+  automacao: 'notif.source.automacao',
+  agendador: 'notif.source.agendador',
+  ia: 'notif.source.ia',
+  claude: 'notif.source.claude',
+  sistema: 'notif.source.sistema'
 }
 
 function timeAgo(iso: string): string {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime())
   const min = Math.floor(diff / 60000)
-  if (min < 1) return 'agora'
-  if (min < 60) return `${min} min`
+  if (min < 1) return t('time.now')
+  if (min < 60) return t('time.minutes', { n: min })
   const h = Math.floor(min / 60)
-  if (h < 24) return `${h} h`
+  if (h < 24) return t('time.hours', { n: h })
   const d = Math.floor(h / 24)
-  if (d < 7) return `${d} d`
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  if (d < 7) return t('time.days', { n: d })
+  return fmtDate(iso, { day: '2-digit', month: '2-digit' })
 }
 
 /** Sino ao lado do logo: badge de não lidas + painel com a central de notificações. */
@@ -56,8 +57,8 @@ export function NotificationBell(): React.ReactElement {
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent): void => {
-      const t = e.target as Node
-      if (panelRef.current?.contains(t) || btnRef.current?.contains(t)) return
+      const target = e.target as Node
+      if (panelRef.current?.contains(target) || btnRef.current?.contains(target)) return
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent): void => {
@@ -96,8 +97,8 @@ export function NotificationBell(): React.ReactElement {
         ref={btnRef}
         className={`notif-bell ${open ? 'open' : ''}`}
         onClick={() => setOpen((v) => !v)}
-        title={unread ? `${unread} notificação(ões) não lida(s)` : 'Notificações'}
-        aria-label="Notificações"
+        title={unread ? t('notif.unreadTitle', { count: unread }) : t('notif.title')}
+        aria-label={t('notif.title')}
         aria-expanded={open}
       >
         <span aria-hidden>🔔</span>
@@ -105,14 +106,14 @@ export function NotificationBell(): React.ReactElement {
       </button>
 
       {open && createPortal(
-        <div ref={panelRef} className="notif-panel" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="Notificações">
+        <div ref={panelRef} className="notif-panel" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label={t('notif.title')}>
           <div className="notif-head">
-            <strong>Notificações</strong>
+            <strong>{t('notif.title')}</strong>
             <span className="notif-head-actions">
               <button
                 className="notif-link notif-sound"
-                title={soundOn ? 'Som ligado neste aparelho (clique para silenciar)' : 'Som desligado neste aparelho'}
-                aria-label={soundOn ? 'Desligar som das notificações' : 'Ligar som das notificações'}
+                title={t(soundOn ? 'notif.soundOnTitle' : 'notif.soundOffTitle')}
+                aria-label={t(soundOn ? 'notif.soundOff' : 'notif.soundOn')}
                 onClick={() => {
                   const next = !soundOn
                   setNotificationSoundOn(next)
@@ -123,16 +124,16 @@ export function NotificationBell(): React.ReactElement {
                 {soundOn ? '🔊' : '🔇'}
               </button>
               <button className="notif-link" onClick={() => void markAllRead(scope)} disabled={!scopedUnread}>
-                Marcar todas como lidas
+                {t('notif.markAllRead')}
               </button>
             </span>
           </div>
           <div className="notif-tabs">
             <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
-              Todas
+              {t('notif.tab.all')}
             </button>
             <button className={filter === 'unread' ? 'active' : ''} onClick={() => setFilter('unread')}>
-              Não lidas{unreadOther ? ` (${unreadOther})` : ''}
+              {t('notif.tab.unread')}{unreadOther ? ` (${unreadOther})` : ''}
             </button>
             <button className={filter === 'claude' ? 'active' : ''} onClick={() => setFilter('claude')}>
               Claude{unreadClaude ? ` (${unreadClaude})` : ''}
@@ -140,15 +141,15 @@ export function NotificationBell(): React.ReactElement {
           </div>
 
           <div className="notif-list">
-            {!loaded && <div className="notif-empty">Carregando…</div>}
+            {!loaded && <div className="notif-empty">{t('common.loading')}</div>}
             {loaded && visible.length === 0 && (
               <div className="notif-empty">
                 <div style={{ fontSize: 28 }}>🔕</div>
                 {filter === 'unread'
-                  ? 'Nada pendente por aqui.'
+                  ? t('notif.emptyUnread')
                   : filter === 'claude'
-                    ? 'Nenhum aviso do Prompt Runner.'
-                    : 'Nenhuma notificação ainda.'}
+                    ? t('notif.emptyClaude')
+                    : t('notif.empty')}
               </div>
             )}
             {visible.map((n) => (
@@ -162,12 +163,12 @@ export function NotificationBell(): React.ReactElement {
                   <div className="notif-title">{n.title}</div>
                   {n.body && <div className="notif-text">{n.body}</div>}
                   <div className="notif-meta">
-                    {isClaudeNotification(n) ? SOURCE_LABEL.claude : SOURCE_LABEL[n.source] ?? n.source} · {timeAgo(n.createdAt)}
+                    {isClaudeNotification(n) ? t(SOURCE_LABEL.claude) : SOURCE_LABEL[n.source] ? t(SOURCE_LABEL[n.source]) : n.source} · {timeAgo(n.createdAt)}
                   </div>
                 </div>
                 <div className="notif-actions">
                   <button
-                    title={n.readAt ? 'Marcar como não lida' : 'Marcar como lida'}
+                    title={t(n.readAt ? 'notif.markUnread' : 'notif.markRead')}
                     onClick={(e) => {
                       e.stopPropagation()
                       void markRead(n.id, !n.readAt)
@@ -176,7 +177,7 @@ export function NotificationBell(): React.ReactElement {
                     {n.readAt ? '●' : '✓'}
                   </button>
                   <button
-                    title="Remover"
+                    title={t('notif.remove')}
                     onClick={(e) => {
                       e.stopPropagation()
                       void remove(n.id)
@@ -192,16 +193,15 @@ export function NotificationBell(): React.ReactElement {
           {scoped.length > 0 && (
             <div className="notif-foot">
               <button className="notif-link" onClick={() => void clear(true, scope)} disabled={!hasRead}>
-                Limpar lidas
+                {t('notif.clearRead')}
               </button>
               <button
                 className="notif-link danger"
                 onClick={() => {
-                  const what = scope === 'claude' ? 'todos os avisos do Claude' : 'todas as notificações (exceto as do Claude)'
-                  if (window.confirm(`Apagar ${what}?`)) void clear(false, scope)
+                  if (window.confirm(t(scope === 'claude' ? 'notif.confirmDeleteClaude' : 'notif.confirmDeleteOther'))) void clear(false, scope)
                 }}
               >
-                Apagar todas
+                {t('notif.deleteAll')}
               </button>
             </div>
           )}
@@ -215,5 +215,5 @@ export function NotificationBell(): React.ReactElement {
 /** Pontinho no botão ☰ do celular quando há notificações não lidas. */
 export function UnreadDot(): React.ReactElement | null {
   const unread = useNotificationStore((s) => s.unread)
-  return unread > 0 ? <span className="notif-menu-dot" aria-label={`${unread} não lidas`} /> : null
+  return unread > 0 ? <span className="notif-menu-dot" aria-label={t('notif.unreadShort', { count: unread })} /> : null
 }

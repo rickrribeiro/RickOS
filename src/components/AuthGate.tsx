@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { UNAUTHORIZED_EVENT, checkAuth, setToken, getToken } from '../api/transport'
+import { t } from '../i18n'
 
 /**
  * When the server requires a token (RICKOS_TOKEN, e.g. when exposed to the phone),
@@ -22,25 +23,25 @@ export function AuthGate({ children }: { children: React.ReactNode }): React.Rea
     e.preventDefault()
     setToken(value.trim())
     if (await checkAuth()) window.location.reload()
-    else setError('Token inválido.')
+    else setError(t('auth.invalidToken'))
   }
 
   return (
     <div className="auth-gate">
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-logo">🧭 RickOS</div>
-        <p className="auth-hint">Este servidor exige um token de acesso.</p>
+        <p className="auth-hint">{t('auth.hint')}</p>
         <input
           className="input"
           type="password"
           autoFocus
-          placeholder="Cole o token (RICKOS_TOKEN)"
+          placeholder={t('auth.placeholder')}
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
         {error && <div className="auth-error">{error}</div>}
         <button className="btn btn-primary" type="submit" disabled={!value.trim()}>
-          Entrar
+          {t('auth.signIn')}
         </button>
       </form>
     </div>

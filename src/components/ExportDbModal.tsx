@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { ExportDbResult } from '../types'
 import { openExternal } from '../api/createApi'
+import { fmtNumber, t } from '../i18n'
 
 /** Bytes → B, KB, MB ou GB (base 1024). */
 function formatBytes(bytes: number): string {
@@ -11,7 +12,7 @@ function formatBytes(bytes: number): string {
     v /= 1024
     i++
   }
-  return `${i === 0 ? v : v.toFixed(v < 10 ? 2 : 1).replace('.', ',')} ${units[i]}`
+  return `${i === 0 ? v : fmtNumber(v, { maximumFractionDigits: v < 10 ? 2 : 1, minimumFractionDigits: v < 10 ? 2 : 1 })} ${units[i]}`
 }
 
 /** Export DB: escolher entre Google Drive, salvar no dispositivo ou cancelar. */
@@ -64,34 +65,34 @@ export function ExportDbModal({ onClose }: { onClose: () => void }): React.React
   return (
     <div className="modal-overlay" onClick={() => !busy && onClose()}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>💾 Exportar backup</h2>
+        <h2>💾 {t('export.title')}</h2>
         <p className="export-db-size">
-          Tamanho do banco: <strong>{size == null ? '…' : formatBytes(size)}</strong>
+          {t('export.dbSize')} <strong>{size == null ? '…' : formatBytes(size)}</strong>
         </p>
 
         {result?.ok ? (
           <>
-            <p style={{ fontSize: 14 }}>✅ {result.message || 'Backup exportado.'}</p>
+            <p style={{ fontSize: 14 }}>✅ {result.message || t('export.done')}</p>
             <div className="modal-actions">
               {result.link && (
-                <button className="btn btn-secondary" onClick={() => openExternal(result.link!)}>Abrir no Drive</button>
+                <button className="btn btn-secondary" onClick={() => openExternal(result.link!)}>{t('export.openDrive')}</button>
               )}
-              <button className="btn btn-primary" onClick={onClose}>Fechar</button>
+              <button className="btn btn-primary" onClick={onClose}>{t('common.close')}</button>
             </div>
           </>
         ) : (
           <>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
-              Onde salvar o arquivo do banco (.sqlite)?
+              {t('export.where')}
             </p>
 
             <div className="export-db-options">
               <div className="export-db-option">
                 <button className="btn btn-primary" disabled={!hasDrive || !!busy} onClick={() => run('drive')}>
-                  {busy === 'drive' ? 'Enviando…' : '☁️ Google Drive'}
+                  {busy === 'drive' ? t('export.sending') : '☁️ Google Drive'}
                 </button>
                 {accounts == null ? (
-                  <span className="export-db-hint">carregando contas…</span>
+                  <span className="export-db-hint">{t('export.loadingAccounts')}</span>
                 ) : hasDrive ? (
                   accounts.length > 1 ? (
                     <select value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!busy}>
@@ -101,24 +102,24 @@ export function ExportDbModal({ onClose }: { onClose: () => void }): React.React
                     <span className="export-db-hint">{accounts[0]}</span>
                   )
                 ) : (
-                  <span className="export-db-hint">conecte uma conta Google em Configurações</span>
+                  <span className="export-db-hint">{t('export.connectGoogle')}</span>
                 )}
               </div>
 
               <div className="export-db-option">
                 <button className="btn btn-primary" disabled={!!busy} onClick={() => run('device')}>
-                  {busy === 'device' ? 'Salvando…' : '📥 Baixar no dispositivo'}
+                  {busy === 'device' ? t('export.saving') : `📥 ${t('export.download')}`}
                 </button>
-                <span className="export-db-hint">você escolhe a pasta</span>
+                <span className="export-db-hint">{t('export.chooseFolder')}</span>
               </div>
             </div>
 
             {result?.error && (
-              <p style={{ fontSize: 13, color: 'var(--danger)', marginTop: 12 }}>Falha ao exportar: {result.error}</p>
+              <p style={{ fontSize: 13, color: 'var(--danger)', marginTop: 12 }}>{t('export.failed', { error: result.error })}</p>
             )}
 
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={onClose} disabled={!!busy}>Cancelar</button>
+              <button className="btn btn-secondary" onClick={onClose} disabled={!!busy}>{t('common.cancel')}</button>
             </div>
           </>
         )}

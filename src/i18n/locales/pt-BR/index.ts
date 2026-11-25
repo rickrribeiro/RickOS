@@ -1,10 +1,14 @@
 import { common } from './common'
+import { nav } from './nav'
 import { settings } from './settings'
+import { shell } from './shell'
 
 /** Dicionário de referência. Cada módulo tem seu arquivo, com chaves prefixadas (`todo.*`, `finance.*`…). */
 export const ptBR = {
   ...common,
-  ...settings
+  ...nav,
+  ...settings,
+  ...shell
 }
 
 export type MessageKey = keyof typeof ptBR

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { NAV_GROUPS, groupKey, isToggleable } from '../../../navigation'
+import { NAV_GROUPS, groupKey, groupLabel, isToggleable, itemLabel } from '../../../navigation'
+import { t } from '../../../i18n'
 import { useModuleStore } from '../../../store/moduleStore'
 import { Icon } from '../../../icons/Icon'
 
@@ -10,17 +11,18 @@ export function ModulesSection(): React.ReactElement {
   const hidden = useModuleStore((s) => s.hidden)
   const [open, setOpen] = useState(false)
   const active = TOGGLEABLE.filter((g) => !hidden.includes(groupKey(g))).length
-  const hiddenPages = TOGGLEABLE.filter((g) => g.label && !hidden.includes(groupKey(g)))
+  const hiddenPages = TOGGLEABLE.filter((g) => g.key && !hidden.includes(groupKey(g)))
     .flatMap((g) => g.items)
     .filter((i) => hidden.includes(i.id)).length
 
   return (
     <div className="chart-section" style={{ maxWidth: 560 }}>
-      <div className="chart-title">🧩 Módulos</div>
+      <div className="chart-title">🧩 {t('settings.modules.title')}</div>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '6px 0 10px' }}>
-        {active} de {TOGGLEABLE.length} ativos{hiddenPages > 0 && ` · ${hiddenPages} página${hiddenPages > 1 ? 's' : ''} oculta${hiddenPages > 1 ? 's' : ''}`}. Módulos desativados somem da barra lateral (os dados continuam salvos).
+        {t('settings.modules.activeCount', { active, total: TOGGLEABLE.length })}
+        {hiddenPages > 0 && ` · ${t('settings.modules.hiddenPages', { count: hiddenPages })}`}. {t('settings.modules.hint')}
       </p>
-      <button className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}>Escolher módulos</button>
+      <button className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}>{t('settings.modules.choose')}</button>
       {open && <ModulesModal onClose={() => setOpen(false)} />}
     </div>
   )
@@ -51,15 +53,15 @@ function ModulesModal({ onClose }: { onClose: () => void }): React.ReactElement 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>🧩 Módulos</h2>
+        <h2>🧩 {t('settings.modules.title')}</h2>
         <div className="modules-list">
           {TOGGLEABLE.map((g) => {
             const key = groupKey(g)
             const on = !draft.includes(key)
             const icon = g.groupIcon ?? g.items[0].icon
-            const name = g.label || g.items[0].label
+            const name = groupLabel(g) || itemLabel(g.items[0])
             const visible = g.items.filter((i) => !draft.includes(i.id)).length
-            const partial = on && g.label && visible < g.items.length
+            const partial = on && g.key && visible < g.items.length
             const isOpen = !!expanded[key]
             return (
               <div key={key} className="modules-group">
@@ -71,20 +73,20 @@ function ModulesModal({ onClose }: { onClose: () => void }): React.ReactElement 
                       {name}
                       {partial && <span className="modules-count"> {visible}/{g.items.length}</span>}
                     </span>
-                    {g.label && (
+                    {g.key && (
                       <span className="modules-pages">
-                        {g.items.filter((i) => !draft.includes(i.id)).map((i) => i.label).join(' · ') || 'nenhuma página'}
+                        {g.items.filter((i) => !draft.includes(i.id)).map(itemLabel).join(' · ') || t('settings.modules.noPages')}
                       </span>
                     )}
                   </label>
-                  {g.label && g.items.length > 1 && (
+                  {g.key && g.items.length > 1 && (
                     <button
                       type="button"
                       className="modules-expand"
                       onClick={() => setExpanded((e) => ({ ...e, [key]: !e[key] }))}
                       aria-expanded={isOpen}
-                      aria-label={`${isOpen ? 'Recolher' : 'Expandir'} páginas de ${name}`}
-                      title={isOpen ? 'Recolher páginas' : 'Escolher páginas'}
+                      aria-label={t(isOpen ? 'settings.modules.collapsePagesOf' : 'settings.modules.expandPagesOf', { module: name })}
+                      title={t(isOpen ? 'settings.modules.collapsePages' : 'settings.modules.choosePages')}
                     >
                       <svg className={`modules-chevron${isOpen ? ' open' : ''}`} width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
                         <path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -100,7 +102,7 @@ function ModulesModal({ onClose }: { onClose: () => void }): React.ReactElement 
                         <label key={i.id} className={`modules-subrow${pageOn ? '' : ' off'}`}>
                           <input type="checkbox" checked={pageOn} disabled={!on} onChange={() => toggle(i.id)} />
                           <span className="modules-icon"><Icon name={i.icon} /></span>
-                          <span>{i.label}</span>
+                          <span>{itemLabel(i)}</span>
                         </label>
                       )
                     })}
@@ -111,10 +113,10 @@ function ModulesModal({ onClose }: { onClose: () => void }): React.ReactElement 
           })}
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={() => setDraft([])}>Ativar todos</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setDraft([])}>{t('settings.modules.enableAll')}</button>
           <span style={{ flex: 1 }} />
-          <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="btn btn-primary" onClick={save}>{t('common.save')}</button>
         </div>
       </div>
     </div>
