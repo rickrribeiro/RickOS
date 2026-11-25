@@ -2,6 +2,7 @@ import { GitBranch, GitBranchDetails, GitBranchStatus } from '../../types'
 import { useUIStore } from '../../store/uiStore'
 import { DRAFT_KEY } from '../ai/pages/PromptRunnerPage'
 import { t } from '../../i18n'
+import { promptContinuarBranch } from '../../../shared/prompts/projetos/continuarBranch'
 
 export interface StatusDef {
   id: GitBranchStatus
@@ -59,28 +60,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 /** Prompt that hands the branch over to an agent to finish the work. */
 export function buildContinuePrompt(b: GitBranch, d: GitBranchDetails | null, base: string): string {
-  const lines = [
-    '### CONTINUAR TRABALHO EM UMA BRANCH',
-    `Repositório: ${b.repoName} (${b.repoPath})`,
-    `Branch: ${b.branch ?? '(HEAD destacado)'} — base de comparação: ${base}`
-  ]
-  if (b.worktreePath) lines.push(`Worktree: ${b.worktreePath}  ← trabalhe DENTRO desta pasta (cd nela antes de qualquer comando).`)
-  lines.push(`Estado: ${b.ahead} commit(s) à frente, ${b.behind} atrás da base; última atividade há ${timeAgo(b.lastCommitAt)}.`)
-  if ((b.localOnly ?? 0) > 0) lines.push(`${b.localOnly} commit(s) ainda não foram enviados a nenhum remoto.`)
-  if (b.pr) lines.push(`PR #${b.pr.number} (${b.pr.state}): ${b.pr.title} — ${b.pr.url}`)
-  if (d?.commits.length) {
-    lines.push('', 'Commits já feitos nesta branch:')
-    for (const c of d.commits.slice(0, 30)) lines.push(`- ${c.hash} ${c.subject}`)
-  }
-  if (d?.files.length) {
-    lines.push('', 'Mudanças ainda não commitadas na worktree:')
-    for (const f of d.files.slice(0, 40)) lines.push(`- [${f.status}] ${f.path}`)
-  }
-  lines.push(
-    '',
-    'Tarefa: entenda o que estava sendo feito (leia os commits e o diff contra a base), termine o trabalho, rode os testes/typecheck do projeto, faça commit e me diga o que falta para abrir/atualizar a PR.'
-  )
-  return lines.join('\n')
+  return promptContinuarBranch(b, d, base, timeAgo(b.lastCommitAt))
 }
 
 /** Open a new Prompt Runner tab with the given prompt (uses the runner's draft hand-off). */

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { StudyTopic, StudyQuizAttempt } from '../../../types'
 import { t, getLocale } from '../../../i18n'
+import { promptQuiz } from '../../../../shared/prompts/estudos/quiz'
 
 interface Question {
   question: string
@@ -83,17 +84,7 @@ export function QuizModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
     const nodeTitle = (id: number | null): string => (id == null ? topic.name : nodes.find((n) => n.id === id)?.title ?? '')
     const material = topicNotes.map((n) => `## ${nodeTitle(n.nodeId)}\n${n.content}`).join('\n\n')
     setPhase('generating')
-    const prompt = `Crie um quiz de múltipla escolha para testar meu conhecimento sobre "${topic.name}", com base APENAS no material abaixo.
-
-Responda APENAS com JSON válido (sem markdown, sem texto fora do JSON), um array no formato:
-[{ "question": "…", "options": ["a","b","c","d"], "answerIndex": 0 }]
-
-Regras: 5 a 8 questões; 4 alternativas cada; uma única correta (answerIndex 0-based); perguntas claras e sem ambiguidade.
-
-Material:
-"""
-${material.slice(0, 12000)}
-"""`
+    const prompt = promptQuiz({ topico: topic.name, material: material.slice(0, 12000) })
     try {
       const rid = await window.api.ai.start({ prompt, model, save: false, source: 'estudos' })
       runId.current = rid

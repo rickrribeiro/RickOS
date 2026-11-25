@@ -5,7 +5,9 @@ import { SENS_RANK, normText } from '../../shared/memory'
 import { getDb, saveDb } from '../database/db'
 import { getSetting } from '../database/queries'
 import type { MemoryAiOp } from './ai'
-import { SAFETY, callAi, parseJsonObject } from './ai'
+import { callAi, parseJsonObject } from './ai'
+import { promptExtracaoMemoria, SISTEMA_EXTRACAO_MEMORIA } from '../../shared/prompts/memoria/extracao'
+import { promptAnaliseMemoria, SISTEMA_ANALISE_MEMORIA } from '../../shared/prompts/memoria/analise'
 import type { ConsumeRule, ProduceRule } from './policy'
 import { categoryAllowed, resolveConsume, resolveProduce, sensitivityAllowed } from './policy'
 import { all, categoriesSync, currentOwner, ensureSeeded, exec, nowIso, one, sha, toMemory, MEM_SELECT, MemoryError } from './repo'
@@ -135,20 +137,6 @@ function toSuggestion(item: AiItem, base: { sourceKind: string; sourceRef: strin
   }
 }
 
-const EXTRACT_FORMAT = `Formato de resposta:
-{"suggestions":[{"op":"CREATE|UPDATE|MERGE|ARCHIVE|RESOLVE|ASK","title":"curto","content":"uma única ideia, em 1ª pessoa","category":"slug","type":"FACT|PREFERENCE|GOAL|CONSTRAINT|HABIT|INSTRUCTION|EXPERIENCE|LEARNING|INFERENCE","tags":["..."],"importance":1-5,"stability":"permanent|stable|evolving|transient","sensitivity":"NORMAL|PRIVATE|RESTRICTED","explicit":true|false,"confidence":0-1,"rationale":"por que vale lembrar","benefit":"onde ajuda no futuro","evidence":"trecho LITERAL do texto","targetIds":[ids de <memorias> afetadas],"occurredAt":"YYYY-MM-DD|null","validUntil":"YYYY-MM-DD|null","question":"só para ASK"}]}
-Se nada no texto valer a pena, responda {"suggestions":[]} — isso é um resultado CORRETO e frequente.`
-
-const EXTRACT_RULES = `Como decidir:
-- Memória atômica = UMA ideia. "Gosto de café e de anime" vira duas.
-- Só conhecimento DURADOURO e útil no futuro sobre a pessoa. Ignore fatos triviais, tarefas, compromissos pontuais, estados passageiros ("hoje estou cansado") e informação operacional.
-- Já existe em <memorias>? Não crie de novo. Se o texto ATUALIZA uma memória, use UPDATE com targetIds. Se CONTRADIZ, use RESOLVE com as duas (ou mais) memórias e proponha a resolução no content. Diferencie contradição real de preferência que depende do contexto ou de mudança natural no tempo.
-- explicit=true só quando o usuário DISSE aquilo; dedução sua = explicit=false e type INFERENCE.
-- Saúde, finanças, relacionamentos, dados de terceiros: sensitivity PRIVATE ou RESTRICTED. Na dúvida, não sugira.
-- Use ASK quando faltar algo importante ou houver ambiguidade (máx. 2 perguntas).
-- Não repita o que já foi rejeitado (lista em <rejeitadas>), salvo evidência nova clara.
-- Use apenas os slugs de categoria listados.`
-
 export interface ExtractRequest {
   useCase: string
   text: string
@@ -175,24 +163,17 @@ export async function extractFromText(req: ExtractRequest): Promise<RunStats> {
     // memórias parecidas (dedupe/atualização) — só o que a política de consumo do caso permite
     const existing = consume.ok ? retrieve(db, owner, { rule: consume.rule, query: chunk.text, minRelevance: 0.15 }).selected : []
     const allowedIds = new Set(existing.map((s) => s.memory.id))
-    const prompt = `${req.hint ? `Contexto: ${sanitizeForPrompt(req.hint, 300)}\n\n` : ''}Categorias permitidas:\n${categoriesBlock(db, owner, produce.rule)}
-
-<memorias>
-${existing.map((s) => `#${s.memory.id} ${s.line}`).join('\n') || '(nenhuma parecida)'}
-</memorias>
-
-<rejeitadas>
-${rejectedHints(db, owner)}
-</rejeitadas>
-
-<texto origem="${req.sourceKind}">
-${chunk.text.replace(/<\/?texto[^>]*>/gi, '')}
-</texto>
-
-Proponha no máximo ${produce.rule.maxSuggestionsPerRun - stats.proposed} sugestões.`
-    const system = `Você é o Memory Agent do rickOS: identifica conhecimentos DURADOUROS sobre o usuário para a memória pessoal dele.\n${SAFETY}\n${EXTRACT_RULES}\n${EXTRACT_FORMAT}`
+    const prompt = promptExtracaoMemoria({
+      contexto: req.hint ? sanitizeForPrompt(req.hint, 300) : null,
+      categorias: categoriesBlock(db, owner, produce.rule),
+      memorias: existing.map((s) => `#${s.memory.id} ${s.line}`).join('\n'),
+      rejeitadas: rejectedHints(db, owner),
+      origem: req.sourceKind,
+      texto: chunk.text.replace(/<\/?texto[^>]*>/gi, ''),
+      max: produce.rule.maxSuggestionsPerRun - stats.proposed
+    })
     stats.calls++
-    const raw = await callAi(req.op, system, prompt)
+    const raw = await callAi(req.op, SISTEMA_EXTRACAO_MEMORIA, prompt)
     const parsed = parseJsonObject<{ suggestions?: AiItem[] }>(raw)
     applyItems(db, owner, parsed.suggestions ?? [], produce.rule, stats, {
       sourceKind: req.sourceKind,
@@ -285,15 +266,6 @@ export function similarClusters(mems: ReturnType<typeof toMemory>[], threshold =
   return [...groups.values()].filter((g) => g.length > 1)
 }
 
-const ANALYZE_RULES = `Analise as memórias e proponha APENAS o que melhora a qualidade:
-- MERGE: memórias redundantes/semelhantes → uma memória consolidada (targetIds = as originais). As originais não são apagadas, ficam como "substituídas".
-- CREATE com type LEARNING ou INFERENCE (explicit=false): padrão comportamental que várias memórias sustentam (targetIds = as que sustentam). É hipótese, não fato.
-- RESOLVE: contradição real (targetIds = as conflitantes). Não trate como contradição preferências que dependem de contexto, escopo ou período; nesses casos não sugira nada.
-- UPDATE: memória que ficou incompleta/ambígua diante de outra.
-- ARCHIVE: só para memória claramente obsoleta pelas próprias memórias.
-- ASK: confirmação de objetivo antigo ou informação ambígua importante.
-Nunca reescreva memórias confirmadas sem motivo claro. Menos é mais: zero sugestões é uma resposta válida.`
-
 /** "Analisar minhas memórias" (manual) e consolidação periódica. */
 export async function analyzeMemories(useCase: 'memory.analyze' | 'memory.consolidation'): Promise<RunStats & { skipped?: string }> {
   const owner = currentOwner()
@@ -323,10 +295,9 @@ export async function analyzeMemories(useCase: 'memory.analyze' | 'memory.consol
   const list = mems
     .map((m) => `#${m.id} [${cats.get(m.categoryId ?? -1) ?? 'sem-categoria'} · ${m.type}${m.confirmedAt ? ' · confirmada' : ''} · atualizada ${m.updatedAt.slice(0, 10)}] ${sanitizeForPrompt(m.content, 300)}`)
     .join('\n')
-  const prompt = `Categorias permitidas:\n${categoriesBlock(db, owner, produce.rule)}\n\n<memorias>\n${list}\n</memorias>\n\n<rejeitadas>\n${rejectedHints(db, owner)}\n</rejeitadas>\n\nProponha no máximo ${produce.rule.maxSuggestionsPerRun} sugestões.`
-  const system = `Você é o Memory Agent do rickOS revisando a memória pessoal do usuário.\n${SAFETY}\n${ANALYZE_RULES}\n${EXTRACT_FORMAT}\nNo campo "evidence" cite o(s) #id que sustentam a sugestão.`
+  const prompt = promptAnaliseMemoria({ categorias: categoriesBlock(db, owner, produce.rule), memorias: list, rejeitadas: rejectedHints(db, owner), max: produce.rule.maxSuggestionsPerRun })
   stats.calls++
-  const raw = await callAi(useCase === 'memory.analyze' ? 'analise' : 'consolidacao', system, prompt)
+  const raw = await callAi(useCase === 'memory.analyze' ? 'analise' : 'consolidacao', SISTEMA_ANALISE_MEMORIA, prompt)
   const parsed = parseJsonObject<{ suggestions?: AiItem[] }>(raw)
   const allowedIds = new Set(mems.map((m) => m.id))
   const byId = new Map(mems.map((m) => [m.id, m]))

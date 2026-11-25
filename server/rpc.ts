@@ -255,6 +255,8 @@ import {
 } from './services/gitscan'
 import { getConfig } from './config'
 import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, convDefaultModel } from '../shared/aiConversations'
+import { promptOcrImagem } from '../shared/prompts/inbox/ocrImagem'
+import { promptContextoProjeto } from '../shared/prompts/projetos/contextoProjeto'
 
 /**
  * RPC registry: every `<ns>:<action>` channel the clients can call. The handlers
@@ -750,17 +752,7 @@ ipcMain.handle('inbox:ocr', async (_, base64: string, ext: string) => {
   const file = join(dir, `${randomUUID()}.${safeExt}`)
   const b64 = base64.includes(',') ? base64.split(',')[1] : base64
   fs.writeFileSync(file, Buffer.from(b64, 'base64'))
-  const prompt = `Você recebeu o caminho de uma imagem: ${file}
-Use a ferramenta Read para abrir a imagem e extraia as informações em JSON.
-Responda APENAS com JSON válido (sem markdown, sem texto fora do JSON), no formato:
-{ "title": string, "amount": number|null, "currency": string|null, "date": "YYYY-MM-DD"|null, "link": string|null, "note": string|null }
-Regras:
-- "title": tarefa/assunto curto e acionável que resume a imagem (comece com um verbo quando fizer sentido).
-- "amount"/"currency": se houver valor monetário (boleto, comprovante, recibo).
-- "date": se houver uma data relevante (vencimento, evento) — formato YYYY-MM-DD.
-- "link": URL visível na imagem.
-- "note": detalhes úteis (ex.: itens de um quadro branco, linha digitável do boleto).
-- Campos ausentes = null.`
+  const prompt = promptOcrImagem({ arquivo: file })
   try {
     const command = await resolveClaudeCommand()
     const out = await runClaude(prompt, command, {
@@ -1389,37 +1381,16 @@ async function buildProjectContext(projectId?: number | null): Promise<string> {
   if (projectId == null) return ''
   const p = (await getProjects()).find((x) => x.id === projectId)
   if (!p) return ''
-  const slug = parseRepoSlug(p.githubRepoUrl)
   const hasLocal = !!(p.localPath && p.localPath.trim() && fs.existsSync(p.localPath.trim()))
-  const lines = ['### CONTEXTO DO PROJETO', `Projeto: ${p.name}`]
-  if (p.description) lines.push(`Descrição: ${p.description}`)
   const targets = await repoTargets(p)
-  if (isWorkspace(targets)) {
-    // workspace: a pasta raiz NÃO é um repositório; cada subpasta abaixo é um repo próprio
-    lines.push(
-      hasLocal
-        ? `Diretório de trabalho: ${p.localPath!.trim()} (pasta raiz do workspace; você já está rodando DENTRO dela).`
-        : 'Projeto com vários repositórios (sem pasta local configurada).',
-      'Esta pasta raiz não é um repositório git. Repositórios do projeto:',
-      ...targets.map((t) => `- ${t.name}: ./${t.rel}${t.slug ? ` (GitHub ${t.slug})` : ''}`),
-      'Rode git dentro da subpasta do repositório certo (git -C <pasta> …) e, no gh, sempre use --repo <owner/name> do repositório afetado.'
-    )
-    return lines.join('\n') + '\n\n'
-  }
-  if (p.githubRepoUrl) lines.push(`Repositório GitHub: ${p.githubRepoUrl}`)
-  if (hasLocal) {
-    lines.push(
-      `Diretório de trabalho: ${p.localPath!.trim()} (você já está rodando DENTRO desta pasta do projeto).`,
-      'Use o repositório desta pasta normalmente (git/gh sem --repo, pois o remote já é o do projeto).'
-    )
-  } else if (slug) {
-    lines.push(
-      `Repositório de destino para git/gh: ${slug}`,
-      `IMPORTANTE: sempre use --repo ${slug} nos comandos gh (ex.: gh issue create --repo ${slug} ...).`,
-      'NÃO use o remote da pasta atual — o diretório de trabalho é o app RickOS, não este projeto.'
-    )
-  }
-  return lines.join('\n') + '\n\n'
+  return promptContextoProjeto({
+    nome: p.name,
+    descricao: p.description || null,
+    githubUrl: p.githubRepoUrl || null,
+    slug: parseRepoSlug(p.githubRepoUrl),
+    pastaLocal: hasLocal ? p.localPath!.trim() : null,
+    workspace: isWorkspace(targets) ? targets.map((t) => ({ name: t.name, rel: t.rel, slug: t.slug ?? null })) : null
+  })
 }
 
 ipcMain.handle('ai:run', async (_, prompt: string, projectId?: number, model?: string, source?: string) => {

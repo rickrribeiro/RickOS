@@ -3,6 +3,7 @@ import { renderMarkdown } from '../../estudos/markdown'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
 import { t as tr } from '../../../i18n'
+import { promptBriefingMatinal } from '../../../../shared/prompts/home/briefingMatinal'
 
 const STATE_KEY = 'rickos:dailyStandup'
 
@@ -96,15 +97,7 @@ export function DailyStandup(): React.ReactElement {
     setOpen(true)
     try {
       const { model, ctx } = JSON.parse(await buildContext())
-      const prompt = `Você é meu chefe de gabinete. Com base no contexto do meu dia abaixo, escreva um BRIEFING MATINAL curto e acionável em Markdown:
-1. Um resumo executivo de 2-3 linhas (o que exige atenção hoje).
-2. As 3 prioridades do dia (o que realmente importa) — use as próximas ações dos projetos EM FOCO e o "foco de hoje" se houver.
-3. Uma agenda sugerida em blocos de tempo (time-boxed) para hoje, encaixando tarefas, revisões de flashcards e eventos.
-4. Projetos esquecidos ou com alerta que pedem uma decisão rápida (1 linha cada, só se houver).
-Seja direto e realista. Não invente compromissos que não estão no contexto.
-
-Contexto:
-${ctx}`
+      const prompt = promptBriefingMatinal({ contexto: ctx })
       runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'home' })
     } catch (e) {
       setRunning(false)

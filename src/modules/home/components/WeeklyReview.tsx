@@ -5,6 +5,7 @@ import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/d
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
 import { LAST_REVIEW_KEY } from '../../projects/lib/constants'
 import { t as tr, getLocale } from '../../../i18n'
+import { promptRevisaoSemanal } from '../../../../shared/prompts/home/revisaoSemanal'
 
 /** Último relatório gerado (no servidor: desktop e celular veem o mesmo). */
 const REPORT_KEY = 'weekly_review_report'
@@ -62,39 +63,22 @@ async function buildPrompt(): Promise<string> {
   const income = counted.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const budget = budgets.reduce((s, b) => s + b.amount, 0)
   const minutes = stats.reduce((s, r) => s + r.totalMinutes, 0)
-  const list = (xs: string[]): string => xs.join('\n') || '(nenhum)'
 
-  return `Você é meu chefe de gabinete fazendo minha REVISÃO SEMANAL. Com base no contexto abaixo, escreva o RELATÓRIO FINAL em Markdown, direto e honesto, com estas seções (curtas, sem repetir o contexto):
-## 🎯 3 focos da semana
-## 📅 Plano por dia (seg-dom, realista, encaixando os eventos)
-## 🗂 Projetos — uma decisão por projeto aberto (continuar / pausar com condição de retomada / retomar / focar / concluir / encerrar) e o porquê em 1 linha; no máximo 3 em foco; aponte os estagnados
-## 📥 Inbox e TODOs zumbis — ação curta para cada (virar tarefa com prazo, fazer agora, reescrever menor, reagendar ou matar)
-## 🔥 Hábitos — o que vai bem, o mais frágil e 1 ajuste
-## 💰 Finanças — estou no caminho? 1-2 sugestões
-Omita uma seção se não houver dados. Não invente compromissos que não estão no contexto.
-
-Contexto (hoje é ${today}):
-Horas trabalhadas nos últimos 7 dias: ${Math.floor(minutes / 60)}h ${minutes % 60}m
-
-Projetos:
-${digest || '(nenhum)'}
-
-Inbox (${inbox.length}):
-${list(inbox.map((t) => `- ${t.title}`))}
-
-TODOs abertos há +14 dias (${zombies.length}):
-${list(zombies.map((t) => `- ${t.title}`))}
-
-Tarefas abertas (${open.length}, as 20 mais prioritárias):
-${list([...open].sort((a, b) => b.priority - a.priority).slice(0, 20).map((t) => `- ${t.title}${t.dueDate ? ` (prazo ${t.dueDate})` : ''}`))}
-
-Hábitos (últimos 7 dias):
-${list(habitLines)}
-
-Finanças do mês ${month}: receitas ${income.toFixed(0)} · gastos ${expense.toFixed(0)} · orçamento ${budget.toFixed(0)}
-
-Eventos dos próximos 7 dias:
-${list(events.map((e) => `- ${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`))}`
+  return promptRevisaoSemanal({
+    hoje: today,
+    mes: month,
+    minutosTrabalhados: minutes,
+    projetos: digest,
+    inbox: inbox.map((t) => t.title),
+    zumbis: zombies.map((t) => t.title),
+    totalAbertas: open.length,
+    abertas: [...open].sort((a, b) => b.priority - a.priority).slice(0, 20),
+    habitos: habitLines,
+    receitas: income,
+    gastos: expense,
+    orcamento: budget,
+    eventos: events
+  })
 }
 
 /** Revisão semanal no dashboard: um botão gera o relatório final, que fica salvo até o próximo. */

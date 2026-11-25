@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { StudyTopic, StudyNode } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
 import { t } from '../../../i18n'
+import { promptLacunasRoadmap } from '../../../../shared/prompts/estudos/lacunasRoadmap'
 
 interface Gap {
   title: string
@@ -67,15 +68,7 @@ export function GapsModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
     })
     ;(async () => {
       const m = (await window.api.settings.get('claude_model')) ?? ''
-      const prompt = `Você é um mentor de estudos. Abaixo está o roadmap do tópico "${topic.name}".
-Analise a sequência e aponte PRÉ-REQUISITOS ou tópicos importantes que estão FALTANDO (lacunas) para dominar o assunto — coisas que não aparecem no roadmap mas deveriam.
-
-Responda APENAS com JSON válido (sem markdown), um array:
-[{ "title": "item faltando", "reason": "por que é importante / onde encaixa" }]
-Regras: 3 a 8 itens; títulos curtos e acionáveis; não repita itens que já estão no roadmap.
-
-Roadmap atual:
-${outline(nodes)}`
+      const prompt = promptLacunasRoadmap({ topico: topic.name, roadmap: outline(nodes) })
       try {
         runId.current = await window.api.ai.start({ prompt, model: m, save: false, source: 'estudos' })
       } catch (e) {

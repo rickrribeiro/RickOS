@@ -8,6 +8,7 @@ import { timeAgo } from '../../../utils/dates'
 import { runJson } from '../../projects/lib/ai'
 import { isClosed } from '../../projects/lib/constants'
 import { t as tr, getLocale } from '../../../i18n'
+import { promptClassificarInbox } from '../../../../shared/prompts/inbox/classificarProjetos'
 
 type SourceFilter = 'all' | 'ai' | 'manual'
 
@@ -42,11 +43,7 @@ export function InboxPage(): React.ReactElement {
     setAiError('')
     try {
       const r = await runJson<{ items: { id: number; projectId: number | null }[] }>(
-        `Classifique cada item do meu inbox no projeto mais provável, ou null se não for de nenhum projeto (compras, lembretes pessoais etc.). Seja conservador.
-Projetos: ${openProjects.map((p) => `${p.id}=${p.name}${p.description ? ` (${p.description})` : ''}`).join('; ')}
-Itens:
-${pending.map((t) => `${t.id}: ${t.title}${t.notes ? ` — ${t.notes}` : ''}`).join('\n')}
-Formato: {"items": [{"id": 1, "projectId": 2}]}`,
+        promptClassificarInbox({ projetos: openProjects, itens: pending }),
         'inbox'
       )
       const map: Record<number, number> = {}

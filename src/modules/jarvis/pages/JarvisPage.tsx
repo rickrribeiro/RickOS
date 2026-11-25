@@ -6,6 +6,7 @@ import { useTripStore } from '../../travel/store/tripStore'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import type { ConsumerBlock } from '../../memory/api'
 import { t as tr } from '../../../i18n'
+import { promptChecklistViagem, promptPlanejarSemana, promptPriorizarTarefas, promptResumoSemanal, promptRevisarInbox, promptRoteiroViagem } from '../../../../shared/prompts/assistente/acoesRapidas'
 
 interface QuickAction {
   key: string
@@ -28,8 +29,6 @@ const RUN_KEY = 'rickos:assistantRun'
 
 const withMemory = (prompt: string, mem: string): string => (mem ? `${prompt}\n\n${mem}` : prompt)
 
-const list = (items: string[]): string => items.map((t) => `- ${t}`).join('\n') || '(nenhum)'
-
 function fmtHours(minutes: number): string {
   return tr('ai.hM', { p0: Math.floor(minutes / 60), p1: minutes % 60 })
 }
@@ -39,17 +38,13 @@ const ACTIONS: QuickAction[] = [
     key: 'prioritize',
     label: tr('ai.priorizarTarefas'),
     build: (c) =>
-      `Você é meu assistente de produtividade. Priorize as tarefas abaixo (mais importante primeiro), explicando brevemente o porquê:\n\n${list(
-        c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title)
-      )}`
+      promptPriorizarTarefas({ tarefas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title) })
   },
   {
     key: 'inbox',
     label: tr('ai.revisarInbox'),
     build: (c) =>
-      `Revise minha inbox e sugira, para cada item, se vira tarefa, projeto, viagem ou financeiro, e a próxima ação:\n\n${list(
-        c.todos.filter((t) => t.status === 'inbox').map((t) => t.title)
-      )}`
+      promptRevisarInbox({ itens: c.todos.filter((t) => t.status === 'inbox').map((t) => t.title) })
   },
   {
     key: 'week',
@@ -60,11 +55,11 @@ const ACTIONS: QuickAction[] = [
       ),
     build: (c, mem) =>
       withMemory(
-        `Monte um plano de semana equilibrado a partir de:\n\nTarefas abertas:\n${list(
-        c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title)
-      )}\n\nHábitos:\n${list(c.habitNames)}\n\nReuniões:\n${list(
-        c.events.map((e) => `${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`)
-      )}`,
+        promptPlanejarSemana({
+          tarefas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title),
+          habitos: c.habitNames,
+          reunioes: c.events.map((e) => `${e.title} (${e.startTime.slice(0, 16).replace('T', ' ')})`)
+        }),
         mem
       )
   },
@@ -74,9 +69,7 @@ const ACTIONS: QuickAction[] = [
     memory: (c) => window.api.memory.ctxTripItinerary(c.nextTrip?.destination ?? ''),
     build: (c, mem) =>
       withMemory(
-        c.nextTrip
-          ? `Crie um roteiro para uma viagem a ${c.nextTrip.destination}${c.nextTrip.startDate ? ` (a partir de ${c.nextTrip.startDate})` : ''}.`
-          : 'Sugira um destino de viagem para mim.',
+        promptRoteiroViagem({ viagem: c.nextTrip ?? null }),
         mem
       )
   },
@@ -84,21 +77,18 @@ const ACTIONS: QuickAction[] = [
     key: 'weekly',
     label: tr('ai.resumoSemanal'),
     build: (c) =>
-      `Faça um resumo da minha semana e sugira ajustes para a próxima.\n\nHoras trabalhadas: ${c.weekHours}\n\nTarefas concluídas:\n${list(
-        c.todos.filter((t) => t.status === 'done').map((t) => t.title)
-      )}\n\nTarefas em aberto:\n${list(
-        c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title)
-      )}\n\nHábitos monitorados:\n${list(c.habitNames)}`
+      promptResumoSemanal({
+        horas: c.weekHours,
+        concluidas: c.todos.filter((t) => t.status === 'done').map((t) => t.title),
+        abertas: c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title),
+        habitos: c.habitNames
+      })
   },
   {
     key: 'trip-checklist',
     label: tr('ai.checklistDeViagem'),
     build: (c) =>
-      c.nextTrip
-        ? `Monte um checklist completo de preparação para a viagem a ${c.nextTrip.destination}${
-            c.nextTrip.startDate ? ` (${c.nextTrip.startDate}${c.nextTrip.endDate ? ` a ${c.nextTrip.endDate}` : ''})` : ''
-          }: documentos, bagagem, saúde/seguro, finanças/câmbio e itens específicos do destino.`
-        : 'Monte um checklist genérico de preparação de viagem internacional (documentos, bagagem, saúde, finanças).'
+      promptChecklistViagem({ viagem: c.nextTrip ?? null })
   }
 ]
 

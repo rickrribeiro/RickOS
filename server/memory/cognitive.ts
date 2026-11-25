@@ -2,7 +2,9 @@ import type { Database } from 'sql.js'
 import type { PersonalMemory, Sensitivity } from '../../shared/memory'
 import { SENS_RANK, normText } from '../../shared/memory'
 import { getDb, saveDb } from '../database/db'
-import { SAFETY, callAi, parseJsonObject } from './ai'
+import { callAi, parseJsonObject } from './ai'
+import { promptLacunasMemoria, sistemaLacunasMemoria } from '../../shared/prompts/memoria/lacunas'
+import { promptEntrevistaMemoria, sistemaEntrevistaMemoria } from '../../shared/prompts/memoria/entrevista'
 import { extractFromText, proposeFromItems, type RunStats } from './agent'
 import { MEMORY_POLICIES, categoryAllowed, resolveConsume, resolveProduce, sensitivityAllowed } from './policy'
 import { MEM_SELECT, MemoryError, all, categoriesSync, currentOwner, ensureSeeded, exec, jparse, lastId, nowIso, one, read, toMemory, tx } from './repo'
@@ -192,25 +194,17 @@ export async function detectGaps(): Promise<{ created: number; calls: number }> 
   const needs = MEMORY_POLICIES.filter((p) => p.consume && !p.useCase.startsWith('memory.'))
     .map((p) => `- ${p.label}${p.approved ? '' : ' (candidata)'}: ${p.purpose} [categorias: ${!p.consume ? '' : p.consume.categories === '*' ? 'todas' : (p.consume.categories as string[]).join(', ')}]`)
     .join('\n')
-  const prompt = `Cobertura atual por categoria:\n${cov.rows.map((r) => `- ${r.slug} (${r.name}): ${r.active} ativas, estado ${r.state}`).join('\n')}
-
-Funcionalidades que usariam memória:\n${needs}
-
-<memorias>\n${mems
-    .slice(0, consume.rule.maxItems)
-    .map((m) => `- [${m.catSlug ?? 'sem-categoria'}] ${sanitizeForPrompt(m.title, 120)}`)
-    .join('\n')}\n</memorias>
-
-Lacunas já abertas (não repita):\n${open.map((g) => `- ${g.topic}`).join('\n') || '(nenhuma)'}
-Lacunas dispensadas/respondidas (não repita):\n${dismissed.map((g) => `- ${g.topic} (${g.status})`).join('\n') || '(nenhuma)'}`
-  const system = `Você identifica LACUNAS relevantes no conhecimento pessoal do usuário.
-${SAFETY}
-- Só lacunas que melhorariam de verdade alguma funcionalidade listada ou objetivos conhecidos. Nada aleatório, nada para "encher" o perfil.
-- Não pergunte sobre saúde, finanças detalhadas, sexualidade, religião, política ou terceiros, a menos que já exista contexto do usuário nisso — e mesmo assim marque sensitivity PRIVATE.
-- Perguntas curtas, abertas, naturais.
-- Máximo ${produce.rule.maxSuggestionsPerRun} lacunas. Zero é válido.
-Formato: {"gaps":[{"topic":"curto","category":"slug","why":"por que ajudaria","beneficiaries":["funcionalidade"],"priority":1-3,"sensitivity":"NORMAL|PRIVATE","question":"pergunta"}]}`
-  const raw = await callAi('lacunas', system, prompt)
+  const prompt = promptLacunasMemoria({
+    cobertura: cov.rows.map((r) => `- ${r.slug} (${r.name}): ${r.active} ativas, estado ${r.state}`).join('\n'),
+    funcionalidades: needs,
+    memorias: mems
+      .slice(0, consume.rule.maxItems)
+      .map((m) => `- [${m.catSlug ?? 'sem-categoria'}] ${sanitizeForPrompt(m.title, 120)}`)
+      .join('\n'),
+    abertas: open.map((g) => `- ${g.topic}`).join('\n'),
+    dispensadas: dismissed.map((g) => `- ${g.topic} (${g.status})`).join('\n')
+  })
+  const raw = await callAi('lacunas', sistemaLacunasMemoria(produce.rule.maxSuggestionsPerRun), prompt)
   const parsed = parseJsonObject<{ gaps?: { topic?: string; category?: string; why?: string; beneficiaries?: string[]; priority?: number; sensitivity?: string; question?: string }[] }>(raw)
   let created = 0
   const cats = categoriesSync(db, owner)
@@ -292,16 +286,6 @@ export async function listInterviews(): Promise<Interview[]> {
   return read((db) => all<{ id: number }>(db, 'SELECT id FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 20', [owner]).map((r) => interviewSync(db, owner, Number(r.id))!))
 }
 
-const INTERVIEW_SYSTEM = (max: number): string => `Você conduz uma conversa leve e natural ("Me conheça melhor") para entender melhor o usuário.
-${SAFETY}
-- Uma pergunta por vez, curta, aberta, contextualizada no que ele já contou. Pode ser complementar à resposta anterior.
-- Nunca repita perguntas já feitas nem pergunte o que <memorias> já responde.
-- Se a resposta for ambígua, peça esclarecimento.
-- Não force temas sensíveis (saúde, finanças, relacionamentos, religião, política). Se o usuário pular, mude de assunto.
-- Extraia da ÚLTIMA resposta apenas conhecimentos duradouros (máx. ${max}), com evidence = trecho literal da resposta. explicit=true só para o que ele disse.
-- Se o tema se esgotou, next_question = null.
-Formato: {"suggestions":[{"op":"CREATE|UPDATE","title":"","content":"","category":"slug","type":"FACT|PREFERENCE|GOAL|CONSTRAINT|HABIT|INSTRUCTION|EXPERIENCE|LEARNING|INFERENCE","tags":[],"importance":1-5,"stability":"permanent|stable|evolving|transient","sensitivity":"NORMAL|PRIVATE|RESTRICTED","explicit":true,"confidence":0-1,"rationale":"","benefit":"","evidence":"","targetIds":[]}],"next_question":"…"|null,"why":"por que essa pergunta"}`
-
 async function interviewStep(id: number, answer: string | null): Promise<Interview> {
   const owner = currentOwner()
   const consume = await resolveConsume('memory.interview')
@@ -318,19 +302,20 @@ async function interviewStep(id: number, answer: string | null): Promise<Intervi
   const previousQs = all<{ turns: string }>(db, 'SELECT turns FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 10', [owner])
     .flatMap((r) => jparse<InterviewTurn[]>(r.turns, []))
     .map((t) => t.question)
-  const prompt = `Tema: ${sanitizeForPrompt(iv.topic, 200)}${cat ? ` (categoria ${cat.slug})` : ''}
-Categorias permitidas: ${cats.filter((c) => categoryAllowed(produce.rule, c.slug)).map((c) => c.slug).join(', ')}
-
-<memorias>\n${known.map((s) => `#${s.memory.id} ${s.line}`).join('\n') || '(nada ainda)'}\n</memorias>
-
-Perguntas já feitas (não repita):\n${previousQs.slice(0, 40).map((q) => `- ${q}`).join('\n') || '(nenhuma)'}
-
-<respostas>\n${iv.turns
-    .slice(-6)
-    .map((t) => `P: ${t.question}\nR: ${t.skipped ? '(pulou)' : sanitizeForPrompt(t.answer ?? '', 800)}`)
-    .join('\n')}\n</respostas>
-${answer == null ? (iv.turns.length ? 'O usuário pulou a última pergunta. Faça outra, de outro ângulo.' : 'Faça a primeira pergunta.') : 'Analise a última resposta e faça a próxima pergunta.'}`
-  const raw = await callAi('entrevista', INTERVIEW_SYSTEM(produce.rule.maxSuggestionsPerRun), prompt)
+  const prompt = promptEntrevistaMemoria({
+    tema: sanitizeForPrompt(iv.topic, 200),
+    categoria: cat ? ` (categoria ${cat.slug})` : '',
+    categoriasPermitidas: cats.filter((c) => categoryAllowed(produce.rule, c.slug)).map((c) => c.slug).join(', '),
+    memorias: known.map((s) => `#${s.memory.id} ${s.line}`).join('\n'),
+    perguntasFeitas: previousQs.slice(0, 40).map((q) => `- ${q}`).join('\n'),
+    respostas: iv.turns
+      .slice(-6)
+      .map((t) => `P: ${t.question}\nR: ${t.skipped ? '(pulou)' : sanitizeForPrompt(t.answer ?? '', 800)}`)
+      .join('\n'),
+    respondeu: answer != null,
+    temTurnos: iv.turns.length > 0
+  })
+  const raw = await callAi('entrevista', sistemaEntrevistaMemoria(produce.rule.maxSuggestionsPerRun), prompt)
   const parsed = parseJsonObject<{ suggestions?: unknown[]; next_question?: string | null; why?: string }>(raw)
   let proposed = 0
   if (answer && last) {

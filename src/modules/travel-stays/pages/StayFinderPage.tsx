@@ -15,6 +15,7 @@ import { SortMode } from '../services/searchStays'
 import { formatMoney } from '../../finance/util'
 import { renderMarkdown } from '../../estudos/markdown'
 import { t as tr } from '../../../i18n'
+import { promptAnaliseHospedagem } from '../../../../shared/prompts/viagens/analiseHospedagem'
 
 const CURRENCIES = ['BRL', 'JPY', 'USD', 'EUR']
 const SORTS: { key: SortMode; label: string }[] = [
@@ -163,8 +164,7 @@ export function StayFinderPage(): React.ReactElement {
     const mem = await window.api.memory
       .ctxStays(`${input.city} ${(input.neighborhoods ?? []).join(' ')} ${profile}`)
       .then((r) => r.block, () => '')
-    const notes = profile.trim() ? `Observações para esta busca:\n${profile.trim()}\n\n` : ''
-    const prompt = `${mem ? `${mem}\n\n` : ''}${notes}Resultados de hospedagem em ${input.city}:\n${top}\n\nAnalise e explique em português quais são as 3 MELHORES opções para mim e por quê. Seja direto.`
+    const prompt = promptAnaliseHospedagem({ memoria: mem, observacoes: profile, cidade: input.city, resultados: top })
     aiRun.current = await window.api.ai.start({ prompt, model, save: false, source: 'viagens' })
   }
 

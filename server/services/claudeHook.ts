@@ -6,6 +6,7 @@ import { getProjects, getProject, getSetting, setSetting, patchProject, addProje
 import { runClaude } from './claude'
 import { gitQuiet } from './gitscan'
 import { broadcast } from '../events'
+import { promptOndePareiSessao } from '../../shared/prompts/projetos/ondePareiSessao'
 
 /**
  * "Onde parei" automático: um hook SessionEnd do Claude Code (global, em
@@ -246,19 +247,14 @@ async function summarize(projectId: number, payload: SessionPayload): Promise<vo
   const commits = ((await gitQuiet(payload.cwd!, ['log', `--since=${since}`, '--format=%h %s', '-20'])) ?? '').trim()
   const status = ((await gitQuiet(payload.cwd!, ['status', '--short'])) ?? '').trim().split('\n').filter(Boolean)
 
-  const prompt = `[rickos:onde-parei] Resuma esta sessão de programação com o Claude Code no projeto "${project.name}" para eu retomar depois.
-Responda APENAS com JSON: {"whereLeftOff": "2-4 frases em primeira pessoa: o que foi feito, o estado atual, o detalhe que eu esqueceria", "nextStep": "a próxima ação concreta, curta (ou null)"}
-
-Branch: ${tr.branch ?? '?'}
-Pedidos que fiz (em ordem):
-${tr.prompts.slice(-10).map((p, i) => `${i + 1}. ${clip(p.replace(/\s+/g, ' '), 400)}`).join('\n')}
-
-Últimas respostas do Claude:
-${tr.replies.slice(-4).map((r) => `- ${clip(r.replace(/\s+/g, ' '), 600)}`).join('\n')}
-
-Commits durante a sessão:
-${commits || '(nenhum)'}
-Arquivos não commitados: ${status.length ? status.slice(0, 15).join(', ') : '(nenhum)'}`
+  const prompt = promptOndePareiSessao({
+    projeto: project.name,
+    branch: tr.branch ?? '?',
+    pedidos: tr.prompts.slice(-10).map((p, i) => `${i + 1}. ${clip(p.replace(/\s+/g, ' '), 400)}`).join('\n'),
+    respostas: tr.replies.slice(-4).map((r) => `- ${clip(r.replace(/\s+/g, ' '), 600)}`).join('\n'),
+    commits,
+    naoCommitados: status.slice(0, 15).join(', ')
+  })
 
   const command = project.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
   const model = (await getSetting(HOOK_MODEL_KEY)) || 'haiku'

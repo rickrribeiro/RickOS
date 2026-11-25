@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import type { AiDraft, FlightMonitor, MonitorConfig } from '../../shared/flights'
-import { defaultMonitorConfig, formatMoney, REGIONS, toMinor } from '../../shared/flights'
+import { defaultMonitorConfig, formatMoney, toMinor } from '../../shared/flights'
 import { getSetting } from '../database/queries'
 import { runClaude } from '../services/claude'
 import { todayLocal } from './dates'
@@ -11,6 +11,9 @@ import * as repo from './repo'
 import { configErrors, normalizeConfig } from './validate'
 import { fmtMinutes } from '../../shared/flights'
 import { tt } from '../i18n'
+import { promptCriarMonitor } from '../../shared/prompts/passagens/criarMonitor'
+import { promptImportarAlerta } from '../../shared/prompts/passagens/importarAlerta'
+import { promptAnaliseOfertas } from '../../shared/prompts/passagens/analiseOfertas'
 
 /**
  * IA só onde agrega: interpretar linguagem natural, recomendar regiões/aeroportos,
@@ -48,26 +51,6 @@ async function spendAi(monitorId: number | null, limit: number): Promise<void> {
   await repo.cacheSet(key, n + 1, 36 * 3600_000)
 }
 
-const DRAFT_SCHEMA = `{
- "name": "nome curto",
- "origins": [{"kind":"region|country|state|city|airport","code":"..."}],
- "destinations": [{"kind":"...","code":"..."}],
- "originExclude": ["IATA"], "destinationExclude": ["IATA"],
- "tripType": "oneway|roundtrip",
- "windows": [{"mode":"range","from":"YYYY-MM-DD","to":"YYYY-MM-DD"} | {"mode":"exact","date":"YYYY-MM-DD"} | {"mode":"flex","date":"YYYY-MM-DD","flexDays":3} | {"mode":"month","month":"YYYY-MM"}],
- "returnWindows": [], "minStayDays": null, "maxStayDays": null,
- "adults": 1, "children": 0, "infants": 0, "cabin": "economy|premium_economy|business|first",
- "checkedBag": "required|preferred|any", "checkedCount": 1, "carryOn": "required|preferred|any",
- "maxStops": null, "maxDurationHours": null,
- "forbiddenConnectionCountries": ["ISO2"], "forbidSelfTransfer": false, "forbidAirportChange": false,
- "maxPrice": null | {"amount": 4000, "currency": "BRL"},
- "strategy": "value|price|total_cost|duration|door_to_door|stops",
- "currency": "BRL",
- "groundAlternatives": [{"airport":"IATA alternativo","toCity":"cidade final"}],
- "explanations": ["≤ 6 frases curtas: por que cada origem/destino/alternativa"],
- "questions": ["o que ficou indefinido e vale perguntar"]
-}`
-
 type Obj = Record<string, unknown>
 
 export async function draftFromText(text: string, currentCurrency = 'BRL'): Promise<AiDraft> {
@@ -79,16 +62,7 @@ export async function draftFromText(text: string, currentCurrency = 'BRL'): Prom
   const cached = !!raw
   if (!raw) {
     await spendAi(null, 10)
-    const prompt = [
-      'Você converte um pedido de monitoramento de passagens aéreas em JSON estruturado.',
-      `Hoje é ${today}. Datas sem ano = próxima ocorrência futura. Moeda padrão: ${currentCurrency}.`,
-      `Regiões disponíveis (use kind "region" e este code): ${REGIONS.map((r) => `${r.id}=${r.label}`).join('; ')}.`,
-      'Países: ISO 3166-1 alpha-2 (kind "country"). Estados: ISO 3166-2, ex. BR-BA (kind "state"). Aeroportos: só códigos IATA REAIS de aeroportos com voos comerciais.',
-      'Se o usuário não definiu países, recomende os de maior oferta de voos (hubs) e explique. Para destino com aeroportos alternativos razoáveis por terra, liste em groundAlternatives.',
-      'Não invente distâncias, preços nem regras de visto. Responda APENAS o JSON, sem cercas de código, neste formato:',
-      DRAFT_SCHEMA,
-      `Pedido: """${clean}"""`
-    ].join('\n')
+    const prompt = promptCriarMonitor({ hoje: today, moeda: currentCurrency, pedido: clean })
     raw = firstJson(await ask(prompt)) as Obj
     await repo.cacheSet(cacheKey, raw, 7 * 86400_000)
   }
@@ -168,12 +142,7 @@ export async function structureImportText(text: string, monitorId: number, aiLim
   let json = await repo.cacheGet<unknown>(cacheKey)
   if (!json) {
     await spendAi(monitorId, aiLimit)
-    const prompt = [
-      'Extraia as ofertas de passagem do texto abaixo (alerta de preço / e-mail / anotação). NÃO invente dados ausentes: omita o campo.',
-      'Responda APENAS um array JSON: [{"origin":"IATA","destination":"IATA","depart":"YYYY-MM-DDTHH:MM","arrive":"...","price":123.45,"currency":"BRL","stops":0,"carrier":"IATA","flight":"123","checked_bags":null,"link":"https://...","source":"nome da fonte","observed_at":"YYYY-MM-DD"}]',
-      `Hoje é ${todayLocal()}.`,
-      `Texto: """${clean}"""`
-    ].join('\n')
+    const prompt = promptImportarAlerta({ hoje: todayLocal(), texto: clean })
     json = firstJson(await ask(prompt))
     await repo.cacheSet(cacheKey, json, 30 * 86400_000)
   }
@@ -188,12 +157,7 @@ export async function insights(m: FlightMonitor, rows: string[]): Promise<{ text
   const hit = await repo.cacheGet<string>(cacheKey)
   if (hit) return { text: hit, cached: true }
   await spendAi(m.id, m.config.budget.maxAiCallsPerRun)
-  const prompt = [
-    `Monitoramento "${m.name}". Abaixo, as melhores opções JÁ filtradas e ordenadas pelo sistema (não reordene nem recalcule números).`,
-    'Em até 6 bullets curtos em pt-BR: trade-offs relevantes (preço × duração × conexões × aeroporto de chegada), riscos (self-transfer, conexões curtas, dados não verificados) e o que vale revalidar. Não afirme regras de visto/trânsito; diga "verifique" quando relevante.',
-    'Formato das linhas: id | rota | partida | preço | custo total (status) | duração | conexões | bagagem | fonte',
-    compact
-  ].join('\n')
+  const prompt = promptAnaliseOfertas({ monitor: m.name, linhas: compact })
   const text = (await ask(prompt)).trim()
   await repo.cacheSet(cacheKey, text, 3 * 86400_000)
   return { text, cached: false }

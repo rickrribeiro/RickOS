@@ -44,6 +44,7 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `server/aiconv/` | Prompt Runner: conversas com o Claude CLI (`--resume`, ramificação com `--fork-session`), permissões/perguntas via `--permission-prompt-tool stdio`, fila, imagens, worktree por conversa e mudanças/commit/PR (`git.ts`), importação de sessões do terminal (`~/.claude*/projects`), skills/comandos do Claude Code do usuário e dos projetos (`claudeSkills.ts`) |
 | `server/memory/` | **Memória Pessoal**: memórias atômicas, Inbox de sugestões, Memory Agent, `getMemoryContext` (única saída de memória para IA) e política deny-by-default em `policy.ts` (ver `docs/memoria/README.md`) |
 | `shared/` | tipos/helpers puros compartilhados entre servidor e front (incluído nos dois tsconfigs) |
+| `shared/prompts/` | **todos os prompts de IA**, um arquivo por prompt, agrupados por módulo; índice em `shared/prompts/README.md` |
 | `server/events.ts` | `broadcast(canal, payload)` → SSE |
 | `server/config.ts` | variáveis `RICKOS_*` (data dir, porta, host, token, URL pública) |
 | `electron/main` | janela, atalho global, notificações nativas; sobe o servidor ou reusa um já rodando |
@@ -78,6 +79,7 @@ Molde simples para copiar: `todos` / `habits`.
 * Efeitos colaterais (CLI, rede, arquivos) ficam em `server/`, que não importa nada de Electron.
 * Servidor → clientes: `broadcast()` no servidor + `subscribe()` de `src/api/transport.ts`. Os canais estão listados em `server/events.ts`.
 * sql.js **não aceita parâmetros em `db.exec`**: use `getAll`/`getOne`/`run` (prepare/step).
+* **Prompt de IA nunca fica cru no código**: crie `shared/prompts/<módulo>/<nome>.ts` (comentário no topo com o que faz, onde é usado e o modelo) e adicione a linha no índice `shared/prompts/README.md`. O chamador só junta os dados e chama `promptXxx({ … })`.
 * **Nova IA não consome nem produz Memória Pessoal por padrão.** Nunca injete memória em `runClaude`, `ai:*` ou `buildProjectContext`. Integração = política em `server/memory/policy.ts` + aprovação do usuário + canal dedicado em `server/memory/integrations.ts` chamando `getMemoryContext` (ver `docs/memoria/README.md` e `docs/memoria/integracoes.md`).
 * **Sempre que adicionar ou alterar uma funcionalidade de IA, PERGUNTE ao usuário se ele quer integrá-la à Memória Pessoal** (consumir contexto pessoal, produzir sugestões, ambos ou nenhum), explicando o benefício e o custo em tokens. Sem resposta afirmativa, não integre.
 * Credenciais: chaves em `SENSITIVE_KEYS` (`server/services/secrets.ts`) são criptografadas com AES-GCM ao salvar. Nunca logue nem commite segredos.

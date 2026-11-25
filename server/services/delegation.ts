@@ -18,6 +18,8 @@ import { broadcast } from '../events'
 import { repoTargets, localTargets, isWorkspace } from './projectRepos'
 import { createWorkspaceWorktree, readWorkspaceManifest, removeWorkspaceWorktree } from '../aiconv/git'
 import { tt } from '../i18n'
+import { promptDelegacao } from '../../shared/prompts/projetos/delegacao'
+import { promptMontarDelegacao } from '../../shared/prompts/projetos/montarPromptDelegacao'
 
 /**
  * "🤖 Delegar": a próxima ação do projeto é executada pelo Claude num worktree
@@ -102,27 +104,14 @@ export async function delegateNextAction(projectId: number, action: string | nul
   await addProjectEvent(projectId, 'delegacao', `🤖 Delegada ao Claude: ${task} (${branch})`)
   changed(projectId)
 
-  const prompt = `[rickos:delegacao] Você é um engenheiro trabalhando sozinho no projeto "${p.name}".
-${
-    workspace
-      ? `Você está numa cópia ISOLADA do workspace do projeto. A pasta raiz NÃO é um repositório; cada subpasta abaixo é um git worktree na branch "${branch}":
-${wsRepos.map((r) => `- ${r.name}: ./${r.rel} (criada a partir de "${r.baseRef}")`).join('\n')}
-Pode editar à vontade nesses repositórios. Para git, entre no repo certo (cd <pasta> && git …).`
-      : `Você está num git worktree ISOLADO, na branch "${branch}" (criada a partir de "${base}"). Pode editar à vontade aqui.`
-  }
-
-TAREFA (a próxima ação do projeto):
-${task}
-${instructions?.trim() ? `\nInstruções adicionais:\n${instructions.trim()}\n` : ''}
-Contexto do projeto:
-${p.description ? `- Descrição: ${p.description}\n` : ''}${p.finishLine ? `- Linha de chegada: ${p.finishLine}\n` : ''}${p.scope ? `- Escopo atual: ${p.scope}\n` : ''}${p.whereLeftOff ? `- Onde parei: ${p.whereLeftOff}\n` : ''}
-Regras:
-- Leia o CLAUDE.md / README ${workspace ? 'da raiz e dos repositórios' : 'do repositório'} antes de mudar algo e siga as convenções.
-- Faça a menor mudança que conclua a tarefa. Rode o typecheck/testes se existirem.
-- Faça commits pequenos com mensagens claras NESTA branch${workspace ? ' (em cada repositório que mudar)' : ''}. NÃO faça push, NÃO abra PR, NÃO mexa fora deste diretório.
-- Se a tarefa for ambígua ou grande demais, faça a parte segura e explique o resto.
-
-No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O que falta / dúvidas**.`
+  const prompt = promptDelegacao({
+    projeto: p,
+    tarefa: task,
+    instrucoes: instructions,
+    branch,
+    base,
+    reposWorkspace: workspace ? wsRepos : null
+  })
 
   const command = p.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
   const model = ((await getSetting('claude_model')) || '').trim()
@@ -172,23 +161,7 @@ export async function draftDelegationPrompt(projectId: number, action: string | 
   const dir = p.localPath ? path.resolve(expandHome(p.localPath)) : null
   const cwd = dir && fs.existsSync(dir) ? dir : undefined
 
-  const prompt = `[rickos:delegacao-prompt] Você vai PREPARAR um prompt para outro agente (Claude Code) executar uma tarefa no projeto "${p.name}". NÃO execute a tarefa e NÃO altere nenhum arquivo: só leia o que precisar.
-
-TAREFA:
-${task}
-${instructions?.trim() ? `\nInstruções do usuário:\n${instructions.trim()}\n` : ''}
-Contexto do projeto:
-${p.description ? `- Descrição: ${p.description}\n` : ''}${p.finishLine ? `- Linha de chegada: ${p.finishLine}\n` : ''}${p.scope ? `- Escopo atual: ${p.scope}\n` : ''}${p.whereLeftOff ? `- Onde parei: ${p.whereLeftOff}\n` : ''}${cwd ? `- Você está na pasta do repositório: ${cwd}\n` : '- Não há pasta local do projeto: baseie-se só no contexto acima.\n'}
-Como trabalhar:
-1. ${cwd ? 'Dê uma olhada rápida no repositório (CLAUDE.md/README, estrutura, arquivos ligados à tarefa) para entender onde a mudança entra.' : 'Pense no que a tarefa exige.'} Seja objetivo: não precisa ler tudo.
-2. Escreva o prompt final para o agente executor, em pt-BR, contendo:
-   - **Objetivo**: o que deve ficar pronto (critério de pronto verificável).
-   - **Contexto**: arquivos/módulos relevantes que você encontrou (com caminhos), convenções do repo a seguir.
-   - **Passos sugeridos**: um plano curto.
-   - **Restrições**: o que não mexer; fazer a menor mudança que resolva; rodar typecheck/testes se existirem; commits pequenos; não fazer push.
-   - **Dúvidas em aberto**: o que ficou ambíguo (o executor deve perguntar antes de decidir).
-   IMPORTANTE: o executor vai rodar numa cópia do repositório (git worktree) em OUTRA pasta. Use SEMPRE caminhos relativos à raiz do repositório (ex.: \`src/app.ts\`), nunca o caminho absoluto desta pasta, e não mande ele trocar de diretório.
-3. Responda APENAS com o prompt final em Markdown, sem introdução nem comentários seus.`
+  const prompt = promptMontarDelegacao({ projeto: p, tarefa: task, instrucoes: instructions, pasta: cwd ?? null })
 
   const command = p.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
   const model = ((await getSetting('claude_model')) || '').trim()

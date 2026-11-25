@@ -26,6 +26,7 @@ import { notify } from './notifications'
 import { repoTargets, repoTargetsFrom, localTargets, isWorkspace, RepoTarget } from './projectRepos'
 import { numberRoadmap } from '../../shared/roadmap'
 import { tt } from '../i18n'
+import { promptChangelog } from '../../shared/prompts/projetos/changelog'
 
 /**
  * Central de Projetos — visão consolidada de cada projeto: horas (timer), TODOs,
@@ -440,11 +441,13 @@ export async function generateCycleChangelog(cycleId: number, useAi: boolean): P
     try {
       const command = p?.claudeCommand?.trim() || (await getSetting('claude_command')) || 'claude'
       const out = await runClaude(
-        `[rickos:changelog] Escreva o CHANGELOG da versão/ciclo "${c.name}" do projeto "${p?.name ?? ''}"${c.goal ? ` (objetivo: ${c.goal})` : ''} a partir dos commits abaixo.
-Markdown, em português, voltado a quem USA o produto: comece com "## ${c.name}" e 1 frase de destaque; depois seções curtas (✨ Novidades, ⚡ Melhorias, 🐛 Correções) com bullets claros. Junte commits repetidos, ignore ruído (merges, builds, "wip", atualizações de dist). Não invente nada. Responda só o Markdown.
-
-Commits (${commits.length}):
-${commits.map((x) => `- ${x.date.slice(0, 10)} ${x.repo ? `[${x.repo}] ` : ''}${x.subject}`).join('\n')}`,
+        promptChangelog({
+          ciclo: c.name,
+          projeto: p?.name ?? '',
+          objetivo: c.goal || null,
+          commits: commits.map((x) => `- ${x.date.slice(0, 10)} ${x.repo ? `[${x.repo}] ` : ''}${x.subject}`).join('\n'),
+          totalCommits: commits.length
+        }),
         command,
         { model: ((await getSetting('claude_model')) || '').trim(), timeoutMs: 180000, usage: { source: 'changelog', projectId: c.projectId } }
       )

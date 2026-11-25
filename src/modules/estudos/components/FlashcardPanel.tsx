@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
 import { t, getLocale } from '../../../i18n'
+import { promptFlashcards } from '../../../../shared/prompts/estudos/flashcards'
 
 interface GenCard {
   front: string
@@ -96,21 +97,7 @@ export function FlashcardPanel(): React.ReactElement {
     setGenError('')
     setGenerated(null)
     setGenerating(true)
-    const prompt = `A partir da anotação em Markdown abaixo, crie flashcards de estudo (pergunta/resposta) concisos e úteis para memorização.
-
-Responda APENAS com um JSON válido (sem markdown, sem texto fora do JSON), um array no formato:
-[{ "front": "pergunta", "back": "resposta" }]
-
-Regras:
-- COBERTURA COMPLETA guiada pelo CONTEÚDO (não pelo tamanho do texto): gere UM flashcard para CADA termo, conceito, definição, comando, fato ou passo distinto que apareça na anotação. Percorra a nota inteira, seção por seção.
-- Notas curtas/resumidas de termos costumam ter MUITOS itens em pouco texto — gere um cartão por termo mesmo assim. Notas longas e explicativas podem ter menos conceitos — não invente cartões redundantes só para encher.
-- Sem mínimo nem máximo artificial: a quantidade certa é "quantos conceitos distintos existem". Não resuma nem selecione só alguns; não repita.
-- Frente = pergunta/estímulo claro; verso = resposta objetiva.
-
-Anotação:
-"""
-${content}
-"""`
+    const prompt = promptFlashcards({ anotacao: content })
     try {
       const rid = await window.api.ai.start({ prompt, model, save: false, source: 'estudos' })
       runIdRef.current = rid

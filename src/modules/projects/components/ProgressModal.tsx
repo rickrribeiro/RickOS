@@ -3,6 +3,7 @@ import { Project } from '../../../types'
 import { renderMarkdown } from '../../estudos/markdown'
 import { repoFromUrl } from '../store/githubStore'
 import { t } from '../../../i18n'
+import { promptResumoProgresso } from '../../../../shared/prompts/projetos/resumoProgresso'
 
 type Period = 'week' | 'month' | 'lastMonth'
 const PERIODS: { key: Period; label: string }[] = [
@@ -47,18 +48,7 @@ export function ProgressModal({ projects, onClose }: { projects: Project[]; onCl
     }
     setRunning(true)
     const model = (await window.api.settings.get('claude_model')) ?? ''
-    const periodDesc =
-      period === 'week' ? 'os últimos 7 dias' : period === 'month' ? 'o mês atual' : 'o mês passado'
-    const prompt = `Você é meu assistente de engenharia. Gere um RESUMO DE PROGRESSO em Markdown cobrindo ${periodDesc}, com base nos meus commits, PRs e issues.
-
-Use a ferramenta gh (GitHub CLI) para coletar os dados destes repositórios: ${repos.join(', ')}.
-Sugestões de comandos: \`gh search commits --author=@me --repo=<repo> --created=<intervalo>\`, \`gh pr list\`, \`gh issue list --repo=<repo> --state=all\`. Descubra o intervalo de datas de ${periodDesc}.
-
-Estruture o resumo em Markdown:
-1. **Visão geral** (2-3 linhas: ritmo e destaques).
-2. **Por repositório**: principais commits/PRs e issues abertas/fechadas.
-3. **O que ficou pendente** e uma sugestão de foco.
-Seja factual — use apenas o que o gh retornar. Se um repositório não existir ou o gh falhar, apenas mencione e siga.`
+    const prompt = promptResumoProgresso({ periodo: period, repos })
     try {
       runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'projetos', projectId: projects.length === 1 ? projects[0].id : null })
     } catch (e) {

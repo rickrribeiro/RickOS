@@ -1,11 +1,13 @@
 import type { Project, ProjectMilestone, ProjectOverview, Todo } from '../../../types'
 import { statusLabel, stageLabel, fmtMinutes } from './constants'
 import { t } from '../../../i18n'
+import { SUFIXO_RESPOSTA_JSON } from '../../../../shared/prompts/comum/respostaJson'
+import { promptResumoProjeto } from '../../../../shared/prompts/projetos/resumoProjeto'
 
 /** Roda o Claude local e devolve o primeiro objeto/array JSON da resposta. */
 export async function runJson<T>(prompt: string, source = 'projetos'): Promise<T> {
   const out = await window.api.ai.run(
-    `${prompt}\n\nResponda APENAS com JSON válido, sem texto antes ou depois, sem cercas de código.`,
+    `${prompt}${SUFIXO_RESPOSTA_JSON}`,
     undefined,
     undefined,
     source
@@ -37,21 +39,15 @@ export async function projectContext(p: Project, ov?: ProjectOverview | null): P
   ])
   const ms = milestones.filter((m: ProjectMilestone) => m.projectId === p.id)
   const pt = todos.filter((t: Todo) => t.projectId === p.id)
-  const lines = [
-    `Projeto: ${p.name} (${statusLabel(p.status)}, ${p.area}${p.stage ? `, estágio ${stageLabel(p.stage)}` : ''})`,
-    p.description ? `Descrição: ${p.description}` : '',
-    p.finishLine ? `Linha de chegada (pronto quando…): ${p.finishLine}` : 'Linha de chegada: (não definida)',
-    p.scope ? `Escopo da entrega atual: ${p.scope}` : '',
-    p.futureIdeas ? `Melhorias futuras: ${p.futureIdeas}` : '',
-    p.nextAction ? `Próxima ação: ${p.nextAction}` : 'Próxima ação: (nenhuma)',
-    p.whereLeftOff ? `Onde parei (${p.whereLeftOffAt?.slice(0, 10) ?? ''}): ${p.whereLeftOff}` : '',
-    p.blocker ? `Bloqueio: ${p.blocker}${p.blockerNeed ? ` — precisa: ${p.blockerNeed}` : ''}` : '',
-    ov ? `Horas: ${fmtMinutes(ov.minutesTotal)} no total, ${fmtMinutes(ov.minutes7d)} nos últimos 7 dias. Última atividade: ${ov.lastActivityAt?.slice(0, 10) ?? 'nunca'}.` : '',
-    ms.length ? `Marcos:\n${ms.map((m) => `- [${m.doneAt ? 'x' : ' '}] ${m.title}${m.targetDate ? ` (alvo ${m.targetDate})` : ''}`).join('\n')}` : 'Marcos: (nenhum)',
-    pt.length ? `Tarefas:\n${pt.slice(0, 25).map((t) => `- [${t.status === 'done' ? 'x' : ' '}] ${t.title}`).join('\n')}` : '',
-    commits.length ? `Commits recentes:\n${commits.map((c) => `- ${c.date.slice(0, 10)} ${c.subject}`).join('\n')}` : '',
-    tasks.length ? `Sessões no timer:\n${tasks.map((t) => `- ${t.startTime.slice(0, 10)} ${t.title}`).join('\n')}` : '',
-    events.length ? `Histórico recente:\n${events.map((e) => `- ${e.createdAt.slice(0, 10)} ${e.kind}: ${e.text ?? `${e.fromStatus ?? ''} → ${e.toStatus ?? ''}`}`).join('\n')}` : ''
-  ]
-  return lines.filter(Boolean).join('\n')
+  return promptResumoProjeto({
+    p,
+    situacao: statusLabel(p.status),
+    estagio: p.stage ? stageLabel(p.stage) : null,
+    horas: ov ? { total: fmtMinutes(ov.minutesTotal), ultimos7d: fmtMinutes(ov.minutes7d), ultimaAtividade: ov.lastActivityAt?.slice(0, 10) ?? 'nunca' } : null,
+    marcos: ms,
+    tarefas: pt.map((t) => ({ title: t.title, done: t.status === 'done' })),
+    commits,
+    sessoes: tasks,
+    eventos: events
+  })
 }

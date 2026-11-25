@@ -5,6 +5,7 @@ import { useProjectStore } from '../store/projectStore'
 import { fmtMinutes } from '../lib/constants'
 import { projectContext, runText } from '../lib/ai'
 import { t } from '../../../i18n'
+import { promptOndePareiTimer } from '../../../../shared/prompts/projetos/ondePareiTimer'
 
 /** Aparece ao encerrar uma sessão do timer vinculada a um projeto: "onde parei" + próximo passo. */
 export function SaveContextModal(): React.ReactElement | null {
@@ -32,7 +33,7 @@ export function SaveContextModal(): React.ReactElement | null {
     try {
       const ctx = await projectContext(project)
       const txt = await runText(
-        `Acabei uma sessão de ${prompt.minutes} min em "${prompt.taskTitle}". Escreva um "ONDE PAREI" de 2-3 frases, em primeira pessoa, para eu retomar rápido amanhã (o que estava fazendo, estado atual, detalhe que eu esqueceria). Use os commits e o histórico recentes. Só o texto.\n\n${ctx}`
+        promptOndePareiTimer({ minutos: prompt.minutes, tarefa: prompt.taskTitle, contexto: ctx })
       )
       setWhere(txt)
     } catch {

@@ -4,6 +4,7 @@ import { useProjectStore } from '../store/projectStore'
 import { projectContext, runText } from '../lib/ai'
 import { fmtMinutes } from '../lib/constants'
 import { t } from '../../../i18n'
+import { promptRetrospectiva } from '../../../../shared/prompts/projetos/retrospectiva'
 
 const CHECKLIST = [
   t('projects.closing.finishLine'),
@@ -40,7 +41,7 @@ export function ClosingRitualModal({ project, onClose }: { project: Project; onC
     try {
       const ctx = await projectContext(project, ov)
       const txt = await runText(
-        `Estou concluindo este projeto. Escreva uma RETROSPECTIVA curta em Markdown com: "O que foi entregue", "O que funcionou", "O que aprendi", "O que faria diferente" e "Números" (horas, duração). Seja específico usando o contexto, sem inventar fatos.\n\nMinhas notas:\n- Foi bem: ${wentWell || '(sem notas)'}\n- Aprendi: ${learned || '(sem notas)'}\n- Faria diferente: ${differently || '(sem notas)'}\n\nContexto:\n${ctx}`
+        promptRetrospectiva({ foiBem: wentWell, aprendi: learned, fariaDiferente: differently, contexto: ctx })
       )
       setAiRetro(txt)
     } catch (e) {

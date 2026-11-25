@@ -19,6 +19,8 @@ import { timeAgo, localDateStr } from '../../../utils/dates'
 import { renderMarkdown } from '../../estudos/markdown'
 import '../projects-hub.css'
 import { t as tr, getLocale } from '../../../i18n'
+import { promptPlanoProjeto } from '../../../../shared/prompts/projetos/plano'
+import { promptOndePareiProjeto } from '../../../../shared/prompts/projetos/ondePareiProjeto'
 
 type Tab = 'geral' | 'roadmap' | 'tarefas' | 'codigo' | 'notas' | 'historico'
 const TABS: { key: Tab; label: string }[] = [
@@ -237,15 +239,7 @@ export function ProjectDetailPage(): React.ReactElement {
     try {
       const ctx = await projectContext(project, ov)
       const r = await runJson<AiPlan>(
-        `Você é meu gerente de projetos pessoal. Para o projeto abaixo, proponha um plano enxuto para TERMINAR a entrega atual:
-- finishLine: frase "Pronto quando…" objetiva e verificável
-- scope: o escopo mínimo da entrega atual (lista curta, com hífens)
-- futureIdeas: o que fica para depois (lista curta, com hífens)
-- milestones: 3 a 5 marcos em ordem, cada um {"title": "...", "targetDate": "YYYY-MM-DD" ou null} (hoje é ${localDateStr(new Date())})
-- nextAction: a próxima ação concreta (25-90 min)
-Formato: {"finishLine": "...", "scope": "...", "futureIdeas": "...", "milestones": [...], "nextAction": "..."}
-
-${ctx}`
+        promptPlanoProjeto({ hoje: localDateStr(new Date()), contexto: ctx })
       )
       setAiPlan(r)
     } catch (e) {
@@ -261,7 +255,7 @@ ${ctx}`
     try {
       const ctx = await projectContext(project, ov)
       const txt = await runText(
-        `Com base nas atividades recentes (commits, sessões no timer, tarefas e histórico), escreva um "ONDE PAREI" de 2-4 frases em primeira pessoa para eu retomar este projeto rapidamente: o que foi feito por último, o estado atual e o próximo passo natural. Só o texto.\n\n${ctx}`
+        promptOndePareiProjeto({ contexto: ctx })
       )
       save({ whereLeftOff: txt })
     } catch (e) {

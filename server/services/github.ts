@@ -14,6 +14,7 @@ import { decodeSecret } from './secrets'
 import { runClaude } from './claude'
 import { projectForGithubRepo } from './projectRepos'
 import { tt } from '../i18n'
+import { promptCriarIssue } from '../../shared/prompts/github/criarIssue'
 
 const GITHUB_API = 'https://api.github.com'
 
@@ -205,11 +206,7 @@ export async function createIssueViaClaude(id: number): Promise<DbGithubIssue> {
   const command = await claudeCommandForRepo(issue.repo)
   const project = await projectForGithubRepo(issue.repo)
   const body = (issue.body ?? '').replace(/`/g, "'")
-  const prompt =
-    `Crie uma issue no GitHub no repositório ${issue.repo} usando o gh CLI ` +
-    `(gh issue create --repo ${issue.repo} --title <título> --body <corpo>). ` +
-    `Título: "${issue.title}". Corpo: "${body || issue.title}". ` +
-    `Ao final, imprima APENAS a URL da issue criada (ex.: https://github.com/${issue.repo}/issues/N).`
+  const prompt = promptCriarIssue({ repo: issue.repo, titulo: issue.title, corpo: body || issue.title })
 
   const out = await runClaude(prompt, command, {
     extraArgs: ['--allowedTools', 'Bash(gh:*)'],

@@ -22,6 +22,7 @@ import {
   type NewsTopic
 } from '../../shared/news'
 import { tt } from '../i18n'
+import { promptResumoNoticias } from '../../shared/prompts/noticias/resumoCategoria'
 
 export const GEMINI_KEY_SETTING = 'gemini_api_key'
 const CATEGORIES_SETTING = 'news_categories'
@@ -252,21 +253,7 @@ async function summarize(
   const list = items
     .map((it, i) => `[${i + 1}] ${it.title}${it.source ? ` (${it.source})` : ''}\nURL: ${it.link}`)
     .join('\n')
-  const prompt = [
-    `Você é um editor de notícias. Abaixo estão manchetes do Google Notícias publicadas em ${targetDate}, categoria "${category}".`,
-    `Selecione as até ${MAX_TOPICS_PER_CATEGORY} notícias mais relevantes (junte manchetes sobre o mesmo fato num só tópico) e resuma cada uma em pt-BR, de forma objetiva e factual, sem opinião.`,
-    'Use só a informação das manchetes; não invente detalhes. Para cada tópico, informe o número [n] e a URL exata da notícia de origem.',
-    `Use "${category}" no campo categoria.`,
-    ...(memory
-      ? [
-          '',
-          'Contexto pessoal do leitor, use SÓ para desempatar a seleção a favor do que interessa a ele (sem deixar de fora fatos de grande relevância geral). Não mencione esse contexto no resumo:',
-          memory
-        ]
-      : []),
-    '',
-    list
-  ].join('\n')
+  const prompt = promptResumoNoticias({ data: targetDate, categoria: category, maxTopicos: MAX_TOPICS_PER_CATEGORY, memoria: memory, manchetes: list })
 
   const res = await ai.models.generateContent({
     model: MODEL,

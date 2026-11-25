@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
 import { renderMarkdown } from '../markdown'
 import { t, getLocale } from '../../../i18n'
+import { INSTRUCOES_TUTOR, promptTutor, type AcaoTutor } from '../../../../shared/prompts/estudos/tutor'
 
 function fmt(iso: string | null): string {
   if (!iso) return '—'
@@ -9,13 +10,13 @@ function fmt(iso: string | null): string {
   return isNaN(d.getTime()) ? '—' : d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-const TUTOR_ACTIONS: { key: string; label: string; instruction: string }[] = [
-  { key: 'simple', label: t('estudos.expliqueSimples'), instruction: 'Explique o conteúdo abaixo de forma simples, como se eu tivesse 12 anos, com analogias.' },
-  { key: 'summary', label: t('estudos.resuma'), instruction: 'Resuma o conteúdo abaixo em no máximo 5 bullets objetivos.' },
-  { key: 'exercise', label: t('estudos.exercicio'), instruction: 'Crie 2 a 3 exercícios práticos (com a resposta ao final) sobre o conteúdo abaixo.' },
-  { key: 'gaps', label: t('estudos.oQueFalta'), instruction: 'Aponte lacunas e pontos que eu deveria estudar a seguir a partir do conteúdo abaixo.' },
-  { key: 'socratic', label: t('estudos.tutorSocratico'), instruction: 'Aja como um tutor socrático. NÃO dê respostas nem explicações: apenas faça de 4 a 6 perguntas graduais (da mais básica à mais profunda) que me levem a raciocinar e descobrir sozinho o conteúdo abaixo. Numere as perguntas.' },
-  { key: 'recall', label: t('estudos.revisaoAtiva'), instruction: 'Gere de 4 a 6 prompts de RECALL ATIVO a partir do conteúdo abaixo — perguntas abertas do tipo "explique sem olhar", "descreva com suas palavras", "reconstrua o raciocínio". Não inclua as respostas. Foque nos conceitos mais importantes para memória de longo prazo.' }
+const TUTOR_ACTIONS: { key: AcaoTutor; label: string; instruction: string }[] = [
+  { key: 'simple', label: t('estudos.expliqueSimples'), instruction: INSTRUCOES_TUTOR.simple },
+  { key: 'summary', label: t('estudos.resuma'), instruction: INSTRUCOES_TUTOR.summary },
+  { key: 'exercise', label: t('estudos.exercicio'), instruction: INSTRUCOES_TUTOR.exercise },
+  { key: 'gaps', label: t('estudos.oQueFalta'), instruction: INSTRUCOES_TUTOR.gaps },
+  { key: 'socratic', label: t('estudos.tutorSocratico'), instruction: INSTRUCOES_TUTOR.socratic },
+  { key: 'recall', label: t('estudos.revisaoAtiva'), instruction: INSTRUCOES_TUTOR.recall }
 ]
 
 /** Split-view Markdown note editor (textarea | live preview) with debounced autosave. */
@@ -55,7 +56,7 @@ export function NoteEditor(): React.ReactElement {
     setTutorLabel(label)
     setTutorOut('')
     setTutorRunning(true)
-    const prompt = `${instruction}\n\nConteúdo (Markdown):\n"""\n${content}\n"""`
+    const prompt = promptTutor({ instrucao: instruction, conteudo: content })
     try {
       const rid = await window.api.ai.start({ prompt, model, save: false, source: 'estudos' })
       tutorRunId.current = rid

@@ -10,6 +10,7 @@ import { PersonNetworks } from '../../chats/components/PersonNetworks'
 import { TagsModal, TagChip } from '../components/TagsModal'
 import { parseQuery, matches, QUERY_HELP, QUERY_FIELDS, type FieldValues } from '../query'
 import { t as tr, getLocale } from '../../../i18n'
+import { promptRetomarContato } from '../../../../shared/prompts/crm/retomarContato'
 
 /** Days until the next occurrence of a MM-DD / YYYY-MM-DD birthday, or null. */
 function daysToBirthday(bday: string | null): number | null {
@@ -39,13 +40,13 @@ function SuggestModal({ contact, onClose }: { contact: Contact; onClose: () => v
     })
     ;(async () => {
       const model = (await window.api.settings.get('claude_model')) ?? ''
-      const prompt = `Sou nômade e quero manter viva minha relação com ${contact.name}. Com base no contexto abaixo, escreva 2 ou 3 opções curtas de mensagem calorosa e natural para retomar o contato (em português, tom pessoal, sem parecer robô). Se houver um gancho no contexto (ex.: um exame, uma viagem, um projeto), puxe por ele.
-
-Nome: ${contact.name}
-Local: ${[contact.location, contact.state, contact.country].filter(Boolean).join(', ') || '—'}
-Interesses: ${contact.interests ?? '—'}
-Última conversa: ${contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleDateString(getLocale()) : '—'}
-Contexto: ${contact.context ?? '—'}`
+      const prompt = promptRetomarContato({
+        nome: contact.name,
+        local: [contact.location, contact.state, contact.country].filter(Boolean).join(', '),
+        interesses: contact.interests,
+        ultimaConversa: contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleDateString(getLocale()) : null,
+        contexto: contact.context
+      })
       runId.current = await window.api.ai.start({ prompt, model, save: false, source: 'crm' })
     })()
     return () => {

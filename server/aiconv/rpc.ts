@@ -12,6 +12,7 @@ import type { RunnerDeps } from './runner'
 import { findTranscript, listTerminalSessions, parseTranscript } from './transcripts'
 import { getUsageLimits } from './usageLimits'
 import { tt } from '../i18n'
+import { promptMensagemCommit } from '../../shared/prompts/promptRunner/mensagemCommit'
 
 /**
  * Canais `conv:*` do Prompt Runner (conversas com o Claude CLI). Eventos ao vivo saem
@@ -248,7 +249,7 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     const ctx = await gitc.commitContext(dir)
     if (!ctx.trim()) throw new Error(tt('aiconv.nadaParaDescrever'))
     const out = await runClaude(
-      `Escreva UMA mensagem de commit para as mudanças abaixo, no mesmo estilo e idioma dos commits recentes (ex.: convencional "tipo(escopo): resumo"). Responda só com a mensagem, sem aspas nem explicação; corpo opcional depois de uma linha em branco.\n\n${ctx}`,
+      promptMensagemCommit({ contexto: ctx }),
       c ? await deps.resolveCommand(c) : 'claude',
       { model: 'haiku', timeoutMs: 90_000, usage: { source: 'prompt-runner', projectId: c?.projectId ?? null } }
     )
