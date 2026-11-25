@@ -1,0 +1,158 @@
+/* Paleta "Windows XP" — azul Luna, janelas bege e botão verde; o escuro lembra o tema preto da época. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='xp'] {
+  --pal-bg: #1b1d22;
+  --pal-sidebar: #23262d;
+  --pal-surface: #2a2d34;
+  --pal-elevated: #33363e;
+  --pal-user-bubble: #2f3a52;
+  --pal-border: #4a5060;
+  --pal-border-strong: #6b7385; /* derivado */
+  --pal-text: #f2f2f2;
+  --pal-text-2: #c8cbd2;
+  --pal-text-3: #a9adb6;
+  --pal-accent: #7fb2ff;
+  --pal-accent-hover: #a6c8ff; /* derivado */
+  --pal-selection: #23406e;
+  --pal-primary: #2e7d32;
+  --pal-on-primary: #ffffff;
+  --pal-success: #8fd694;
+  --pal-success-bg: #1f3a24;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(242, 242, 242, 0.06);
+  --pal-ring: rgba(127, 178, 255, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='xp'][data-theme='light'] {
+  --pal-bg: #ece9d8;
+  --pal-sidebar: #d6dff7;
+  --pal-surface: #ffffff;
+  --pal-elevated: #f5f4ea;
+  --pal-user-bubble: #e3ebfb;
+  --pal-border: #7f9db9;
+  --pal-border-strong: #003c74; /* derivado */
+  --pal-text: #000000;
+  --pal-text-2: #333333;
+  --pal-text-3: #555555;
+  --pal-accent: #0a46c8;
+  --pal-accent-hover: #003399; /* derivado */
+  --pal-selection: #c1d2ee;
+  --pal-primary: #2a7d2a;
+  --pal-on-primary: #ffffff;
+  --pal-success: #276b2b;
+  --pal-success-bg: #e1f0dc;
+  --pal-shadow: #00000014;
+  --pal-hover: rgba(0, 0, 0, 0.05);
+  --pal-ring: rgba(10, 70, 200, 0.25);
+  --pal-scrim: rgba(0, 0, 0, 0.3);
+  color-scheme: light;
+}
+
+/* ── Estilo XP (só neste tema): barra de título, botões com relevo, Tahoma ──── */
+:root[data-skin='devlytics'][data-palette='xp'] {
+  --dl-font: Tahoma, Verdana, 'Segoe UI', sans-serif;
+  --radius: 3px;
+  --radius-sm: 3px;
+  --radius-lg: 6px;
+  /* escuro: barras grafite, seleção azul */
+  --xp-title: linear-gradient(180deg, #4a505e 0%, #2b2f38 12%, #1f2229 70%, #16181d 100%);
+  --xp-title-line: #0d0e11;
+  --xp-side: linear-gradient(180deg, #2a2e38 0%, #1f222a 100%);
+  --xp-btn: linear-gradient(180deg, #4a4e58 0%, #3a3d46 86%, #2e3038 100%);
+  --xp-btn-text: #f2f2f2;
+  --xp-btn-border: #12141a;
+  --xp-primary: linear-gradient(180deg, #3a9a3a 0%, #2e7d32 50%, #236326 100%);
+  --xp-primary-border: #154018;
+  --xp-active: #2a5aa8;
+  --xp-card-title: #9cc3ff;
+  --xp-danger: #ff9b9b;
+}
+:root[data-skin='devlytics'][data-palette='xp'][data-theme='light'] {
+  /* claro: Luna azul */
+  --xp-title: linear-gradient(180deg, #3d95ff 0%, #0a5fe6 9%, #0a5fe6 45%, #0453d9 85%, #0042c0 100%);
+  --xp-title-line: #003c74;
+  --xp-side: linear-gradient(180deg, #dce6fa 0%, #c4d3f5 100%);
+  --xp-btn: linear-gradient(180deg, #ffffff 0%, #f3f2ec 50%, #ecebe6 86%, #d6d0c5 100%);
+  --xp-btn-text: #000000;
+  --xp-btn-border: #003c74;
+  --xp-primary: linear-gradient(180deg, #349034 0%, #2a7d2a 50%, #236b23 100%);
+  --xp-primary-border: #1e5e1e;
+  --xp-active: #316ac5;
+  --xp-card-title: #215dc6;
+  --xp-danger: #b91c1c;
+}
+
+/* barra superior = barra de título de janela */
+:root[data-palette='xp'] .active-task-bar {
+  background: var(--xp-title);
+  border-bottom: 1px solid var(--xp-title-line);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  --text-primary: #ffffff;
+  --text-secondary: #dce8ff;
+  --text-muted: #c7d8ff;
+  color: #ffffff;
+}
+:root[data-palette='xp'] .active-task-bar :is(input, select, textarea) {
+  background: #ffffff;
+  color: #000000;
+  border-color: var(--xp-btn-border);
+}
+:root[data-palette='xp'] .active-task-timer {
+  background: none;
+  color: #ffffff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* sidebar = painel de tarefas do Explorer */
+:root[data-palette='xp'] .sidebar {
+  background: var(--xp-side);
+}
+:root[data-palette='xp'] .nav-btn.active {
+  background: var(--xp-active);
+  color: #ffffff;
+}
+:root[data-palette='xp'] .nav-btn.active::before {
+  display: none;
+}
+
+/* títulos de card em azul, como os grupos do Explorer */
+:root[data-palette='xp'] .chart-title {
+  color: var(--xp-card-title);
+  font-weight: 700;
+}
+
+/* botões com relevo */
+:root[data-palette='xp'] :is(.btn-secondary, .seg-btn.active),
+:root[data-palette='xp'] .btn-secondary:hover {
+  background: var(--xp-btn);
+  color: var(--xp-btn-text);
+  border: 1px solid var(--xp-btn-border);
+  box-shadow: none;
+}
+:root[data-palette='xp'] .btn-secondary:hover {
+  box-shadow: inset 0 0 0 1px #f8b636; /* realce laranja do hover do XP */
+}
+:root[data-palette='xp'] .btn-primary,
+:root[data-palette='xp'] .btn-primary:hover {
+  background: var(--xp-primary);
+  color: #ffffff;
+  border: 1px solid var(--xp-primary-border);
+  font-weight: 700;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: none;
+}
+:root[data-palette='xp'] :is(.btn-primary, .btn-secondary):active {
+  transform: none;
+  filter: brightness(0.9);
+}
+
+/* botão de perigo (Stop etc.): mesmo relevo, texto vermelho — legível também na barra azul */
+:root[data-palette='xp'] .btn-danger,
+:root[data-palette='xp'] .btn-danger:hover {
+  background: var(--xp-btn);
+  color: var(--xp-danger);
+  border: 1px solid var(--xp-btn-border);
+  font-weight: 700;
+}
