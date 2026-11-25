@@ -1,0 +1,50 @@
+/* Paleta "Ártico" — cinza-azulado frio com destaque azul-gelo. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='artico'] {
+  --pal-bg: #1f242d;
+  --pal-sidebar: #191d25;
+  --pal-surface: #262c36;
+  --pal-elevated: #2d3440;
+  --pal-user-bubble: #313947;
+  --pal-border: #3a4250;
+  --pal-border-strong: #4a5363; /* derivado */
+  --pal-text: #eceff4;
+  --pal-text-2: #b4bccb;
+  --pal-text-3: #a3acbc;
+  --pal-accent: #88c0d0;
+  --pal-accent-hover: #a6d2de; /* derivado */
+  --pal-selection: #2a3a48;
+  --pal-primary: #88c0d0;
+  --pal-on-primary: #142028;
+  --pal-success: #a3cf9a;
+  --pal-success-bg: #26352a;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(236, 239, 244, 0.06);
+  --pal-ring: rgba(136, 192, 208, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='artico'][data-theme='light'] {
+  --pal-bg: #f3f5f8;
+  --pal-sidebar: #e6eaf0;
+  --pal-surface: #ffffff;
+  --pal-elevated: #eceff4;
+  --pal-user-bubble: #e4e9f0;
+  --pal-border: #d3d9e2;
+  --pal-border-strong: #b8c1ce; /* derivado */
+  --pal-text: #1f2633;
+  --pal-text-2: #4c5668;
+  --pal-text-3: #556072;
+  --pal-accent: #2f6585;
+  --pal-accent-hover: #26536d; /* derivado */
+  --pal-selection: #deeaf2;
+  --pal-primary: #3b6e8f;
+  --pal-on-primary: #ffffff;
+  --pal-success: #3a6b3f;
+  --pal-success-bg: #e2efe3;
+  --pal-shadow: #1f263314;
+  --pal-hover: rgba(31, 38, 51, 0.05);
+  --pal-ring: rgba(47, 101, 133, 0.25);
+  --pal-scrim: rgba(31, 38, 51, 0.3);
+  color-scheme: light;
+}
