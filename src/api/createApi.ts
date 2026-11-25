@@ -5,7 +5,7 @@ import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import { MEMORY_METHODS, type MemoryWindowApi } from '../modules/memory/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -651,8 +651,10 @@ export function createApi() {
     },
     // Prompt Runner: conversas com o Claude CLI (server/aiconv)
     conv: {
-      list: (archived?: boolean) => invoke<AiConversation[]>('conv:list', archived),
-      get: (id: string) => invoke<{ conversation: AiConversation; turns: AiTurn[] } | null>('conv:get', id),
+      list: (query?: ConvListQuery) => invoke<ConvListPage>('conv:list', query ?? {}),
+      get: (id: string, opts?: { limit?: number; sinceId?: number | null }) =>
+        invoke<{ conversation: AiConversation; turns: AiTurn[]; hasMoreTurns: boolean } | null>('conv:get', id, opts ?? {}),
+      olderTurns: (id: string, beforeId: number, limit?: number) => invoke<ConvTurnsPage>('conv:olderTurns', id, beforeId, limit),
       create: (params: AiConversationPatch) => invoke<AiConversation>('conv:create', params),
       update: (id: string, patch: AiConversationPatch) => invoke<AiConversation | null>('conv:update', id, patch),
       delete: (id: string, removeWorktree?: boolean) => invoke<boolean>('conv:delete', id, !!removeWorktree),

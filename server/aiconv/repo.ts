@@ -1,6 +1,7 @@
 import type { Database } from 'sql.js'
 import { randomUUID } from 'crypto'
-import type { AiBlock, AiConversation, AiConversationPatch, AiTurn, AiTurnStatus, ConvEffort, ConvPermissionMode } from '../../shared/aiConversations'
+import type { AiBlock, AiConversation, AiConversationPatch, AiTurn, AiTurnStatus, ConvEffort, ConvListPage, ConvListQuery, ConvPermissionMode, ConvTurnsPage } from '../../shared/aiConversations'
+import { CONV_PAGE_SIZE } from '../../shared/aiConversations'
 import { getDb, saveDb } from '../database/db'
 
 /** Banco das conversas do Prompt Runner (`ai_conversations` + `ai_conv_turns`). */
@@ -136,9 +137,43 @@ function toTurn(r: TurnRow): AiTurn {
 
 const CONV_SELECT = `SELECT c.*, (SELECT COUNT(*) FROM ai_conv_turns t WHERE t.conversationId = c.id) AS turnCount FROM ai_conversations c`
 
-export async function listConversations(opts: { archived?: boolean } = {}): Promise<AiConversation[]> {
+/**
+ * Lista paginada por cursor (updatedAt, id), do mais recente ao mais antigo. As fixadas
+ * vêm todas na 1ª página (são poucas e ficam no topo); as páginas seguintes só têm não fixadas.
+ */
+export async function listConversations(query: ConvListQuery = {}): Promise<ConvListPage> {
   const db = await getDb()
-  return all<ConvRow>(db, `${CONV_SELECT} WHERE c.archived = ? ORDER BY c.pinned DESC, c.updatedAt DESC LIMIT 300`, [opts.archived ? 1 : 0]).map(toConv)
+  const limit = Math.max(1, Math.min(200, Math.floor(query.limit ?? CONV_PAGE_SIZE)))
+  const where: string[] = ['c.archived = ?']
+  const params: P = [query.archived ? 1 : 0]
+  const q = (query.q ?? '').trim().toLowerCase()
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (m) => '\\' + m)}%`
+    where.push(`(LOWER(c.title) LIKE ? ESCAPE '\\' OR c.projectId IN (SELECT id FROM projects WHERE LOWER(name) LIKE ? ESCAPE '\\'))`)
+    params.push(like, like)
+  }
+  if (query.projectId === 'none') where.push('c.projectId IS NULL')
+  else if (typeof query.projectId === 'number') {
+    where.push('c.projectId = ?')
+    params.push(query.projectId)
+  }
+  const base = where.join(' AND ')
+  const first = !query.after
+  const pinned = first ? all<ConvRow>(db, `${CONV_SELECT} WHERE ${base} AND c.pinned = 1 ORDER BY c.updatedAt DESC, c.id DESC`, params) : []
+  const restWhere = [base, 'c.pinned = 0']
+  const restParams: P = [...params]
+  if (query.after) {
+    restWhere.push('(c.updatedAt < ? OR (c.updatedAt = ? AND c.id < ?))')
+    restParams.push(query.after.updatedAt, query.after.updatedAt, query.after.id)
+  }
+  const rest = all<ConvRow>(db, `${CONV_SELECT} WHERE ${restWhere.join(' AND ')} ORDER BY c.updatedAt DESC, c.id DESC LIMIT ?`, [...restParams, limit + 1])
+  const hasMore = rest.length > limit
+  const page: ConvListPage = { items: [...pinned, ...rest.slice(0, limit)].map(toConv), hasMore }
+  if (first) {
+    page.projectIds = all<{ projectId: number }>(db, 'SELECT DISTINCT projectId FROM ai_conversations WHERE projectId IS NOT NULL').map((r) => Number(r.projectId))
+    page.hasNoProject = !!one<{ x: number }>(db, 'SELECT 1 AS x FROM ai_conversations WHERE projectId IS NULL LIMIT 1')
+  }
+  return page
 }
 
 export async function getConversation(id: string): Promise<AiConversation | null> {
@@ -325,6 +360,31 @@ export async function deleteConversation(id: string): Promise<void> {
 export async function listTurns(conversationId: string): Promise<AiTurn[]> {
   const db = await getDb()
   return all<TurnRow>(db, 'SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id', [conversationId]).map(toTurn)
+}
+
+/**
+ * Página de turnos, em ordem cronológica:
+ * - `sinceId`: todos a partir desse id (recarregar o que já está na tela sem perder nada);
+ * - `beforeId`: os `limit` anteriores a esse id ("carregar anteriores");
+ * - nenhum: os `limit` mais recentes.
+ */
+export async function listTurnsPage(conversationId: string, opts: { limit: number; beforeId?: number | null; sinceId?: number | null }): Promise<ConvTurnsPage> {
+  const db = await getDb()
+  const limit = Math.max(1, Math.min(500, Math.floor(opts.limit)))
+  let rows: TurnRow[]
+  if (opts.sinceId != null) {
+    rows = all<TurnRow>(db, 'SELECT * FROM ai_conv_turns WHERE conversationId = ? AND id >= ? ORDER BY id', [conversationId, opts.sinceId])
+  } else {
+    const before = opts.beforeId != null ? ' AND id < ?' : ''
+    const params: P = opts.beforeId != null ? [conversationId, opts.beforeId, limit] : [conversationId, limit]
+    rows = all<TurnRow>(db, `SELECT * FROM ai_conv_turns WHERE conversationId = ?${before} ORDER BY id DESC LIMIT ?`, params).reverse()
+  }
+  const oldest = rows[0]?.id
+  const hasMore =
+    oldest != null
+      ? !!one<{ x: number }>(db, 'SELECT 1 AS x FROM ai_conv_turns WHERE conversationId = ? AND id < ? LIMIT 1', [conversationId, oldest])
+      : false
+  return { turns: rows.map(toTurn), hasMore }
 }
 
 export async function createTurn(conversationId: string, prompt: string, attachments: string[] = []): Promise<AiTurn> {

@@ -3,7 +3,7 @@ import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
 export type { FinanceRule, InvestmentGroupDef } from '../../shared/finance'
-import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
 export interface Tag {
@@ -1224,8 +1224,9 @@ declare global {
         save: (id: string, content: string) => Promise<ClaudeSkillInfo>
       }
       conv: {
-        list: (archived?: boolean) => Promise<AiConversation[]>
-        get: (id: string) => Promise<{ conversation: AiConversation; turns: AiTurn[] } | null>
+        list: (query?: ConvListQuery) => Promise<ConvListPage>
+        get: (id: string, opts?: { limit?: number; sinceId?: number | null }) => Promise<{ conversation: AiConversation; turns: AiTurn[]; hasMoreTurns: boolean } | null>
+        olderTurns: (id: string, beforeId: number, limit?: number) => Promise<ConvTurnsPage>
         create: (params: AiConversationPatch) => Promise<AiConversation>
         update: (id: string, patch: AiConversationPatch) => Promise<AiConversation | null>
         delete: (id: string, removeWorktree?: boolean) => Promise<boolean>

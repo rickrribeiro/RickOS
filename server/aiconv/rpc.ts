@@ -1,7 +1,7 @@
 import os from 'os'
 import path from 'path'
-import type { AiConversationPatch, AiImageInput, AiPromptResponse, AiTurn, ConvEffort, ConvPermissionMode, TerminalSession } from '../../shared/aiConversations'
-import { IMAGE_MEDIA_TYPES, MAX_IMAGES_PER_MESSAGE } from '../../shared/aiConversations'
+import type { AiConversationPatch, AiImageInput, AiPromptResponse, AiTurn, ConvEffort, ConvListQuery, ConvPermissionMode, TerminalSession } from '../../shared/aiConversations'
+import { CONV_TURNS_PAGE_SIZE, IMAGE_MEDIA_TYPES, MAX_IMAGES_PER_MESSAGE } from '../../shared/aiConversations'
 import { runClaude } from '../services/claude'
 import * as gitc from './git'
 import { listClaudeSkills, readSkill, saveSkill, slashCommands } from './claudeSkills'
@@ -100,20 +100,30 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     if (c) broadcast('conv:update', { conversationId: id, conversation: runner.withLive(c) })
   }
 
-  handle('conv:list', async (_e, archived?: boolean) => (await repo.listConversations({ archived: !!archived })).map(runner.withLive))
+  handle('conv:list', async (_e, query?: ConvListQuery) => {
+    const page = await repo.listConversations(query ?? {})
+    return { ...page, items: page.items.map(runner.withLive) }
+  })
 
-  handle('conv:get', async (_e, id: string) => {
+  /** Conversa + os turnos mais recentes (ou todos a partir de `sinceId`, para recarregar a tela). */
+  handle('conv:get', async (_e, id: string, opts?: { limit?: number; sinceId?: number | null }) => {
     const c = await repo.getConversation(id)
     if (!c) return null
-    const turns: AiTurn[] = await repo.listTurns(id)
+    const page = await repo.listTurnsPage(id, { limit: opts?.limit ?? CONV_TURNS_PAGE_SIZE, sinceId: opts?.sinceId ?? null })
+    const turns: AiTurn[] = page.turns
     const lt = runner.liveTurn(id)
     if (lt) {
       const i = turns.findIndex((t) => t.id === lt.id)
       if (i >= 0) turns[i] = lt
-      else turns.push(lt)
+      else if (!turns.length || lt.id > turns[turns.length - 1].id) turns.push(lt)
     }
-    return { conversation: runner.withLive(c), turns }
+    return { conversation: runner.withLive(c), turns, hasMoreTurns: page.hasMore }
   })
+
+  /** Turnos anteriores a `beforeId` ("carregar mensagens anteriores"). */
+  handle('conv:olderTurns', async (_e, id: string, beforeId: number, limit?: number) =>
+    repo.listTurnsPage(id, { limit: limit ?? CONV_TURNS_PAGE_SIZE, beforeId })
+  )
 
   handle('conv:create', async (_e, params: CreateParams = {}) => {
     const p = sanitizePatch(params)

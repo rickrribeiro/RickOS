@@ -154,6 +154,34 @@ export interface AiConversation {
   turnCount?: number
 }
 
+/** Filtro da lista de conversas (busca no título/projeto e projeto: id, 'none' = sem projeto). */
+export interface ConvListQuery {
+  archived?: boolean
+  q?: string
+  projectId?: number | 'none' | null
+  /** Cursor: a última conversa (não fixada) da página anterior. */
+  after?: { updatedAt: string; id: string } | null
+  limit?: number
+}
+
+export interface ConvListPage {
+  /** Na 1ª página vêm todas as fixadas que casam com o filtro + a 1ª página das demais. */
+  items: AiConversation[]
+  hasMore: boolean
+  /** Projetos que têm conversa (para o filtro), só na 1ª página. */
+  projectIds?: number[]
+  hasNoProject?: boolean
+}
+
+export interface ConvTurnsPage {
+  turns: AiTurn[]
+  /** Há turnos mais antigos que o primeiro desta página. */
+  hasMore: boolean
+}
+
+export const CONV_PAGE_SIZE = 40
+export const CONV_TURNS_PAGE_SIZE = 20
+
 export type AiConversationPatch = Partial<
   Pick<AiConversation, 'title' | 'projectId' | 'agentId' | 'skillIds' | 'model' | 'effort' | 'permissionMode' | 'pinned' | 'archived' | 'claudeCommand' | 'useWorktree'>
 >

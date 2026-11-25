@@ -82,7 +82,7 @@ export function PromptRunnerPage(): React.ReactElement {
   const { agents, refresh: refreshAgents } = useAgentStore()
   const { projects, refresh: refreshProjects } = useProjectStore()
   const store = useConvStore()
-  const { conversations, archived, showArchived, selectedId, turns } = store
+  const { conversations, archived, showArchived, selectedId, turns, results } = store
 
   const [draft, setDraft] = useState<DraftSettings>(EMPTY_DRAFT)
   /** Padrão salvo em Configurações → IA (modelo/esforço de conversas novas). */
@@ -113,11 +113,18 @@ export function PromptRunnerPage(): React.ReactElement {
   const messagesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const stickBottom = useRef(true)
+  /** Altura/posição antes de inserir mensagens antigas no topo, para não pular a rolagem. */
+  const prependAnchor = useRef<{ height: number; top: number } | null>(null)
+  const listEndRef = useRef<HTMLDivElement>(null)
   const handoffText = useRef<string | null>(null) // prompt recebido por hand-off, até o composer da conversa nova assumir
 
   const conv: AiConversation | null = useMemo(
-    () => conversations.find((c) => c.id === selectedId) ?? archived.find((c) => c.id === selectedId) ?? null,
-    [conversations, archived, selectedId]
+    () =>
+      conversations.find((c) => c.id === selectedId) ??
+      archived.find((c) => c.id === selectedId) ??
+      results?.items.find((c) => c.id === selectedId) ??
+      null,
+    [conversations, archived, results, selectedId]
   )
   const convTurns = selectedId ? turns[selectedId] ?? [] : []
   // configurações efetivas (conversa aberta ou rascunho de uma nova)
@@ -248,8 +255,52 @@ export function PromptRunnerPage(): React.ReactElement {
   // rola para o fim enquanto o usuário estiver no fim
   useLayoutEffect(() => {
     const el = messagesRef.current
-    if (el && stickBottom.current) el.scrollTop = el.scrollHeight
+    if (!el) return
+    const anchor = prependAnchor.current
+    if (anchor) {
+      // mensagens antigas entraram no topo: mantém na tela o que você estava lendo
+      prependAnchor.current = null
+      el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
+      return
+    }
+    if (stickBottom.current) el.scrollTop = el.scrollHeight
   }, [convTurns])
+
+  const hasOlderTurns = !!selectedId && !!store.turnsHasMore[selectedId]
+  const loadingOlder = !!selectedId && store.loadingOlder === selectedId
+  const loadOlder = useCallback(() => {
+    const el = messagesRef.current
+    const st = useConvStore.getState()
+    if (!el || !selectedId || st.loadingOlder || !st.turnsHasMore[selectedId]) return
+    prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop }
+    st.loadOlderTurns(selectedId).catch(() => {
+      prependAnchor.current = null
+    })
+  }, [selectedId])
+
+  // busca e filtro de projeto vão ao servidor (a lista é paginada); a busca espera você parar de digitar
+  useEffect(() => {
+    const projectId = projectFilter === 'all' ? null : projectFilter === 'none' ? 'none' : Number(projectFilter)
+    const t = setTimeout(() => {
+      useConvStore
+        .getState()
+        .setFilter({ q: search, projectId })
+        .catch(() => undefined)
+    }, search.trim() ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [search, projectFilter])
+
+  // rolagem infinita da lista de conversas
+  const listCanLoadMore = results ? results.hasMore : showArchived ? store.hasMore.archived : store.hasMore.active
+  useEffect(() => {
+    const el = listEndRef.current
+    if (!el || !listCanLoadMore) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) useConvStore.getState().loadMore().catch(() => undefined)
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [listCanLoadMore, results, showArchived, conversations.length, archived.length])
 
   // altura automática do textarea
   useLayoutEffect(() => {
@@ -460,7 +511,7 @@ export function PromptRunnerPage(): React.ReactElement {
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const list = showArchived ? archived : conversations
+  const list = results ? results.items : showArchived ? archived : conversations
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return list.filter(
@@ -471,11 +522,11 @@ export function PromptRunnerPage(): React.ReactElement {
   }, [list, search, projectName, projectFilter])
   // projetos que aparecem no filtro: os que têm conversa (+ o filtrado, se sumiu)
   const filterProjects = useMemo(() => {
-    const ids = new Set([...conversations, ...archived].map((c) => c.projectId).filter((x): x is number => x != null))
+    const ids = new Set([...store.projectIds, ...[...conversations, ...archived].map((c) => c.projectId).filter((x): x is number => x != null)])
     if (/^\d+$/.test(projectFilter)) ids.add(Number(projectFilter))
     return projects.filter((p) => ids.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
-  }, [conversations, archived, projects, projectFilter])
-  const hasNoProject = conversations.some((c) => c.projectId == null)
+  }, [conversations, archived, store.projectIds, projects, projectFilter])
+  const hasNoProject = store.hasNoProject || projectFilter === 'none' || conversations.some((c) => c.projectId == null)
 
   // ── autocompletar de "/" ──
   const slashKey = `${selectedId ?? 'new'}|${settings.projectId ?? ''}`
@@ -554,7 +605,15 @@ export function PromptRunnerPage(): React.ReactElement {
           <div className="cv-list">
             {filtered.length === 0 && (
               <div className="empty-hint" style={{ fontSize: 12, padding: 16 }}>
-                {showArchived ? 'Nenhuma conversa arquivada.' : store.loaded ? 'Nenhuma conversa ainda. Comece uma nova ou continue uma do terminal.' : 'Carregando…'}
+                {results
+                  ? results.loading
+                    ? 'Buscando…'
+                    : 'Nenhuma conversa encontrada.'
+                  : showArchived
+                    ? 'Nenhuma conversa arquivada.'
+                    : store.loaded
+                      ? 'Nenhuma conversa ainda. Comece uma nova ou continue uma do terminal.'
+                      : 'Carregando…'}
               </div>
             )}
             {filtered.map((c) => {
@@ -621,6 +680,13 @@ export function PromptRunnerPage(): React.ReactElement {
                 </button>
               )
             })}
+            {listCanLoadMore && (
+              <div ref={listEndRef} className="cv-list-more">
+                <button className="cv-link" onClick={() => store.loadMore().catch(() => undefined)} disabled={store.loadingMore}>
+                  {store.loadingMore ? 'Carregando…' : 'Carregar mais'}
+                </button>
+              </div>
+            )}
           </div>
           <UsageLimits />
           <button className="cv-side-foot" onClick={() => store.setShowArchived(!showArchived)}>
@@ -806,6 +872,7 @@ export function PromptRunnerPage(): React.ReactElement {
             onScroll={(e) => {
               const el = e.currentTarget
               stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+              if (el.scrollTop < 120 && hasOlderTurns) loadOlder()
             }}
           >
             {convTurns.length === 0 && (
@@ -822,6 +889,15 @@ export function PromptRunnerPage(): React.ReactElement {
                   <li>Digite <code className="md-code">/</code> para usar suas skills e comandos do Claude Code (pessoais, da conta de trabalho e do projeto).</li>
                   <li>Cole, arraste ou anexe (📎) imagens: prints de tela, erros, layouts.</li>
                 </ul>
+              </div>
+            )}
+            {hasOlderTurns && (
+              <div className="cv-older">
+                <button className="btn btn-secondary btn-sm" onClick={loadOlder} disabled={loadingOlder}>
+                  {loadingOlder
+                    ? 'Carregando…'
+                    : `↑ Mensagens anteriores${conv?.turnCount && conv.turnCount > convTurns.length ? ` (${conv.turnCount - convTurns.length})` : ''}`}
+                </button>
               </div>
             )}
             {convTurns.map((t, i) => (
