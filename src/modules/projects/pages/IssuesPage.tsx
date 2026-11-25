@@ -2,23 +2,24 @@ import React, { useEffect, useState } from 'react'
 import { GithubIssue } from '../../../types'
 import { useGithubStore, columnFor, parseLabels, repoFromUrl, BoardColumn } from '../store/githubStore'
 import { reposOf, useProjectStore } from '../store/projectStore'
+import { t, getLocale } from '../../../i18n'
 
 const COLUMNS: { key: BoardColumn; label: string }[] = [
-  { key: 'backlog', label: 'Backlog' },
-  { key: 'in-progress', label: 'Em andamento' },
-  { key: 'blocked', label: 'Bloqueado' },
-  { key: 'done', label: 'Concluído' }
+  { key: 'backlog', label: t('projects.backlog') },
+  { key: 'in-progress', label: t('projects.emAndamento') },
+  { key: 'blocked', label: t('projects.bloqueado') },
+  { key: 'done', label: t('projects.concluido2') }
 ]
 
 type DoneFilter = 'today' | 'week' | 'month' | 'thisMonth' | 'lastMonth' | 'all'
 
 const DONE_FILTERS: { key: DoneFilter; label: string }[] = [
-  { key: 'today', label: 'Hoje' },
-  { key: 'week', label: '1 semana' },
-  { key: 'month', label: '1 mês' },
-  { key: 'thisMonth', label: 'Esse mês' },
-  { key: 'lastMonth', label: 'Mês passado' },
-  { key: 'all', label: 'Total' }
+  { key: 'today', label: t('projects.hoje3') },
+  { key: 'week', label: t('projects.1Semana') },
+  { key: 'month', label: t('projects.1Mes') },
+  { key: 'thisMonth', label: t('projects.esseMes') },
+  { key: 'lastMonth', label: t('projects.mesPassado') },
+  { key: 'all', label: t('projects.total') }
 ]
 
 /** Whether a done issue's updatedAt falls within the selected window (proxy for "when done"). */
@@ -60,12 +61,12 @@ function IssueCard({ issue, pushing, onPush, onDelete }: CardProps): React.React
     <div className="kanban-card">
       <div className="kanban-card-repo">
         {issue.repo}
-        <span className={`issue-origin ${onGithub ? 'gh' : 'local'}`}>{onGithub ? '● GitHub' : '○ Local'}</span>
+        <span className={`issue-origin ${onGithub ? 'gh' : 'local'}`}>{onGithub ? t('projects.github') : t('projects.local')}</span>
       </div>
       <button
         className="kanban-card-title"
         onClick={() => issue.url && window.api.app.openExternal(issue.url)}
-        title={onGithub ? 'Abrir no GitHub' : 'Issue local (ainda não está no GitHub)'}
+        title={onGithub ? t('projects.abrirNoGithub') : t('projects.issueLocalAindaNaoEsta')}
         style={{ cursor: onGithub ? 'pointer' : 'default' }}
       >
         {onGithub ? `#${issue.number} ` : ''}
@@ -84,7 +85,7 @@ function IssueCard({ issue, pushing, onPush, onDelete }: CardProps): React.React
       {!onGithub && (
         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={() => onPush(issue.id)} disabled={pushing}>
-            {pushing ? 'Criando…' : '🐙 Criar no GitHub'}
+            {pushing ? t('projects.criando') : t('projects.criarNoGithub')}
           </button>
           <button className="btn btn-danger btn-sm" onClick={() => onDelete(issue.id)} disabled={pushing}>
             ✕
@@ -98,7 +99,7 @@ function IssueCard({ issue, pushing, onPush, onDelete }: CardProps): React.React
 function fmtSyncTime(iso: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export function IssuesPage(): React.ReactElement {
@@ -188,30 +189,29 @@ export function IssuesPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>📌 Issues (Kanban)</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('projects.issuesKanban')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Issues do GitHub + issues locais ({localCount} local{localCount === 1 ? '' : 'is'}). Crie
-            local e depois envie ao GitHub via Claude Code.
+            {t('projects.issuesDoGithubIssuesLocais', { count: localCount })}{t('projects.crieLocalEDepoisEnvie')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select value={doneFilter} onChange={(e) => setDoneFilter(e.target.value as DoneFilter)} title="Período das concluídas">
+          <select value={doneFilter} onChange={(e) => setDoneFilter(e.target.value as DoneFilter)} title={t('projects.periodoDasConcluidas')}>
             {DONE_FILTERS.map((f) => (
-              <option key={f.key} value={f.key}>Concluídas: {f.label}</option>
+              <option key={f.key} value={f.key}>{t('projects.concluidas')} {f.label}</option>
             ))}
           </select>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Fechar' : '+ Nova issue'}
+            {showForm ? t('projects.fechar') : t('projects.novaIssue')}
           </button>
           <button className="btn btn-primary btn-sm" onClick={sync} disabled={syncing}>
-            {syncing ? 'Sincronizando…' : '🔄 Sincronizar'}
+            {syncing ? t('projects.sincronizando') : t('projects.sincronizar')}
           </button>
         </div>
       </div>
 
       {linkable.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 2 }}>Projetos:</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 2 }}>{t('projects.projetos2')}</span>
           <button
             className={`btn btn-sm ${selectedIds.size === 0 ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => {
@@ -219,7 +219,7 @@ export function IssuesPage(): React.ReactElement {
               setRepoFilter(null)
             }}
           >
-            Todos
+            {t('projects.todos')}
           </button>
           {linkable.map((x) => (
             <button
@@ -229,16 +229,16 @@ export function IssuesPage(): React.ReactElement {
               title={x.repos.join(', ')}
             >
               {x.p.name}
-              {x.repos.length > 1 && <span style={{ opacity: 0.7 }}> · {x.repos.length} repos</span>}
+              {x.repos.length > 1 && <span style={{ opacity: 0.7 }}> {t('projects.repos3', { count: x.repos.length })}</span>}
             </button>
           ))}
         </div>
       )}
       {repoChoices.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 2 }}>Repositório:</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 2 }}>{t('projects.repositorio')}</span>
           <button className={`btn btn-sm ${repoFilter == null ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRepoFilter(null)}>
-            Todos
+            {t('projects.todos')}
           </button>
           {repoChoices.map((r) => (
             <button key={r} className={`btn btn-sm ${repoFilter === r ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRepoFilter(r)} title={r}>
@@ -254,7 +254,7 @@ export function IssuesPage(): React.ReactElement {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <input
               list="repos-datalist"
-              placeholder="Repositório (owner/name) *"
+              placeholder={t('projects.repositorioOwnerName')}
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
             />
@@ -267,11 +267,11 @@ export function IssuesPage(): React.ReactElement {
                 ))
               )}
             </datalist>
-            <input placeholder="Título *" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <textarea placeholder="Descrição (opcional)" rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
+            <input placeholder={t('projects.titulo')} value={title} onChange={(e) => setTitle(e.target.value)} />
+            <textarea placeholder={t('projects.descricaoOpcional')} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowForm(false)}>Cancelar</button>
-              <button className="btn btn-primary btn-sm" onClick={handleAdd}>Adicionar local</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowForm(false)}>{t('projects.cancelar')}</button>
+              <button className="btn btn-primary btn-sm" onClick={handleAdd}>{t('projects.adicionarLocal')}</button>
             </div>
           </div>
         </div>
@@ -282,13 +282,12 @@ export function IssuesPage(): React.ReactElement {
 
       {issues.length === 0 && !error && (
         <div className="empty-hint">
-          Nenhuma issue. Sincronize com o GitHub (token em <strong>Configurações</strong>) ou crie uma
-          issue local com <strong>+ Nova issue</strong>.
+          {t('projects.nenhumaIssueSincronizeComO')} <strong>{t('projects.configuracoes')}</strong>{t('projects.ouCrieUmaIssueLocal')} <strong>{t('projects.novaIssue')}</strong>.
         </div>
       )}
 
       {issues.length > 0 && visible.length === 0 && (
-        <div className="empty-hint">Nenhuma issue para o projeto selecionado.</div>
+        <div className="empty-hint">{t('projects.nenhumaIssueParaOProjeto')}</div>
       )}
 
       {visible.length > 0 && (
@@ -316,8 +315,8 @@ export function IssuesPage(): React.ReactElement {
 
       {(lastCount !== null || lastSyncAt) && !error && (
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
-          Última sincronização{lastSyncAt ? `: ${fmtSyncTime(lastSyncAt)}` : ''}
-          {lastCount !== null ? ` · ${lastCount} issues` : ''}
+          {t('projects.ultimaSincronizacao')}{lastSyncAt ? `: ${fmtSyncTime(lastSyncAt)}` : ''}
+          {lastCount !== null ? t('projects.issues', { lastCount }) : ''}
         </p>
       )}
     </div>

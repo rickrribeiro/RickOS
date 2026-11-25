@@ -1,6 +1,7 @@
 import { GitBranch, GitBranchDetails, GitBranchStatus } from '../../types'
 import { useUIStore } from '../../store/uiStore'
 import { DRAFT_KEY } from '../ai/pages/PromptRunnerPage'
+import { t } from '../../i18n'
 
 export interface StatusDef {
   id: GitBranchStatus
@@ -12,12 +13,12 @@ export interface StatusDef {
 
 /** Order = priority in the list (what needs attention first). */
 export const STATUS_DEFS: StatusDef[] = [
-  { id: 'risk', emoji: '🔴', label: 'Em risco', color: '#f87171', hint: 'Mudanças não commitadas ou commits que só existem nesta máquina' },
-  { id: 'forgotten', emoji: '🟠', label: 'Esquecida', color: '#fb923c', hint: 'Commits à frente da base, sem PR aberta e parada há dias' },
-  { id: 'orphan', emoji: '👻', label: 'Órfã', color: '#a78bfa', hint: 'A pasta da worktree sumiu, mas o git ainda a registra' },
-  { id: 'active', emoji: '🟡', label: 'Em andamento', color: '#facc15', hint: 'PR aberta ou mexida recentemente' },
-  { id: 'merged', emoji: '🟢', label: 'Pode limpar', color: '#22c55e', hint: 'Já está na base (merge ou PR mergeada)' },
-  { id: 'base', emoji: '⚪', label: 'Base', color: '#a1a1aa', hint: 'Branch principal do repositório' }
+  { id: 'risk', emoji: '🔴', label: t('projects.emRisco'), color: '#f87171', hint: t('projects.mudancasNaoCommitadasOuCommits') },
+  { id: 'forgotten', emoji: '🟠', label: t('projects.esquecida'), color: '#fb923c', hint: t('projects.commitsAFrenteDaBase') },
+  { id: 'orphan', emoji: '👻', label: t('projects.orfa'), color: '#a78bfa', hint: t('projects.aPastaDaWorktreeSumiu') },
+  { id: 'active', emoji: '🟡', label: t('projects.emAndamento'), color: '#facc15', hint: t('projects.prAbertaOuMexidaRecentemente') },
+  { id: 'merged', emoji: '🟢', label: t('projects.podeLimpar'), color: '#22c55e', hint: t('projects.jaEstaNaBaseMerge') },
+  { id: 'base', emoji: '⚪', label: t('projects.base'), color: '#a1a1aa', hint: t('projects.branchPrincipalDoRepositorio') }
 ]
 export const STATUS_BY_ID = Object.fromEntries(STATUS_DEFS.map((d) => [d.id, d])) as Record<GitBranchStatus, StatusDef>
 export const STATUS_RANK = Object.fromEntries(STATUS_DEFS.map((d, i) => [d.id, i])) as Record<GitBranchStatus, number>
@@ -35,9 +36,9 @@ export function timeAgo(iso: string | null): string {
   const d = Math.floor(h / 24)
   if (d < 30) return `${d}d`
   const m = Math.floor(d / 30)
-  if (m < 12) return m === 1 ? '1 mês' : `${m} meses`
+  if (m < 12) return t('projects.age.months', { count: m })
   const y = Math.floor(m / 12)
-  return y === 1 ? '1 ano' : `${y} anos`
+  return t('projects.age.years', { count: y })
 }
 
 export function shortPath(p: string | null): string {
@@ -51,7 +52,7 @@ export async function copyText(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text)
     return true
   } catch {
-    window.prompt('Copie:', text)
+    window.prompt(t('projects.copie'), text)
     return false
   }
 }

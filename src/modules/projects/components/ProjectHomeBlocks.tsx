@@ -6,6 +6,7 @@ import { NextActionModal } from './NextActionModal'
 import { PULSE, TODAY_FOCUS_KEY, isClosed, isProjectDay, sizeDef } from '../lib/constants'
 import { timeAgo, localDateStr } from '../../../utils/dates'
 import '../projects-hub.css'
+import { t, weekdayNames } from '../../../i18n'
 
 interface TodayItem {
   projectId: number
@@ -57,7 +58,7 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
     ? open.filter((p) => p.nextAction && p.nextActionSize === 'rapida' && p.status !== 'incubadora').sort((a, b) => (a.status === 'foco' ? -1 : 0) - (b.status === 'foco' ? -1 : 0))
     : open.filter((p) => p.status === 'foco').sort((a, b) => b.priority - a.priority)
   const dayProjects = open.filter((p) => isProjectDay(p))
-  const dayNames = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+  const dayNames = weekdayNames('long')
   const resume = open
     .filter((p) => p.whereLeftOff && p.whereLeftOffAt)
     .sort((a, b) => (b.whereLeftOffAt ?? '').localeCompare(a.whereLeftOffAt ?? ''))[0]
@@ -72,17 +73,17 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
     <div className="ph-home">
       <div className="chart-section">
         <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>{quick ? '⚡ Cabe em 15 min' : '🎯 Em foco'}</span>
+          <span>{quick ? t('projects.cabeEm15Min') : t('projects.emFoco')}</span>
           <span style={{ display: 'flex', gap: 10 }}>
-            <button className={`ph-linkbtn ${quick ? 'on' : ''}`} onClick={() => setQuick((v) => !v)} title="Só próximas ações rápidas, de qualquer projeto">
-              {quick ? '← em foco' : '⚡ tenho 15 min'}
+            <button className={`ph-linkbtn ${quick ? 'on' : ''}`} onClick={() => setQuick((v) => !v)} title={t('projects.soProximasAcoesRapidasDe')}>
+              {quick ? t('projects.emFoco2') : t('projects.tenho15Min')}
             </button>
-            <button className="ph-linkbtn" onClick={() => setPage('projects')}>cockpit →</button>
+            <button className="ph-linkbtn" onClick={() => setPage('projects')}>{t('projects.cockpit')}</button>
           </span>
         </div>
         {dayProjects.length > 0 && !quick && (
           <div className="ph-dayline">
-            📅 {dayNames[new Date().getDay()]} é dia de{' '}
+            {t('projects.eDiaDe', { p0: dayNames[new Date().getDay()] })}{' '}
             {dayProjects.map((p, i) => (
               <React.Fragment key={p.id}>
                 {i > 0 && ', '}
@@ -95,7 +96,7 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
           </div>
         )}
         {focus.length === 0 && (
-          <div className="empty-hint">{quick ? 'Nenhuma próxima ação marcada como ⚡ 15 min.' : 'Nenhum projeto em foco. Escolha 1–3 no cockpit.'}</div>
+          <div className="empty-hint">{quick ? t('projects.nenhumaProximaAcaoMarcadaComo') : t('projects.nenhumProjetoEmFocoEscolha')}</div>
         )}
         {focus.map((p) => {
           const ov = overview[p.id]
@@ -109,13 +110,13 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
                     👉 {p.nextAction} {sizeDef(p.nextActionSize)?.icon ?? ''}
                   </div>
                 ) : (
-                  <button className="ph-linkbtn" onClick={() => setAction({ p, mode: 'set' })}>+ próxima ação</button>
+                  <button className="ph-linkbtn" onClick={() => setAction({ p, mode: 'set' })}>{t('projects.proximaAcao3')}</button>
                 )}
               </div>
               {p.nextAction && (
-                <button className="ph-tick" style={{ ['--pc' as string]: p.color }} title="Concluir próxima ação" onClick={() => setAction({ p, mode: 'complete' })}>○</button>
+                <button className="ph-tick" style={{ ['--pc' as string]: p.color }} title={t('projects.concluirProximaAcao')} onClick={() => setAction({ p, mode: 'complete' })}>○</button>
               )}
-              <button className="btn btn-primary btn-sm" onClick={() => startWorking(p)} title="Trabalhar nisso">▶</button>
+              <button className="btn btn-primary btn-sm" onClick={() => startWorking(p)} title={t('projects.trabalharNisso')}>▶</button>
             </div>
           )
         })}
@@ -123,12 +124,12 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
 
       <div className="chart-section">
         <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>☀️ Foco de hoje <span className="ph-muted">({today.items.filter((i) => i.done).length}/{today.items.length})</span></span>
+          <span>{t('projects.focoDeHoje')} <span className="ph-muted">({today.items.filter((i) => i.done).length}/{today.items.length})</span></span>
           {today.items.length < MAX_TODAY && (
-            <button className="ph-linkbtn" onClick={() => setPicking((v) => !v)}>{picking ? 'fechar' : '+ escolher'}</button>
+            <button className="ph-linkbtn" onClick={() => setPicking((v) => !v)}>{picking ? t('projects.fechar2') : t('projects.escolher')}</button>
           )}
         </div>
-        {today.items.length === 0 && !picking && <div className="empty-hint">Escolha até 3 ações para hoje.</div>}
+        {today.items.length === 0 && !picking && <div className="empty-hint">{t('projects.escolhaAte3AcoesPara')}</div>}
         {today.items.map((it, idx) => {
           const p = name(it.projectId)
           return (
@@ -143,13 +144,13 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
                 {p && <div className="ph-muted">{p.name}</div>}
               </div>
               {p && !it.done && <button className="btn btn-secondary btn-sm" onClick={() => startWorking(p, it.text)}>▶</button>}
-              <button className="ph-x" aria-label="Remover" onClick={() => saveToday({ ...today, items: today.items.filter((_, j) => j !== idx) })}>✕</button>
+              <button className="ph-x" aria-label={t('projects.remover')} onClick={() => saveToday({ ...today, items: today.items.filter((_, j) => j !== idx) })}>✕</button>
             </div>
           )
         })}
         {picking && (
           <div className="ph-chips">
-            {candidates.length === 0 && <span className="ph-muted">Defina próximas ações nos projetos em foco/fila.</span>}
+            {candidates.length === 0 && <span className="ph-muted">{t('projects.definaProximasAcoesNosProjetos')}</span>}
             {candidates.map((p) => (
               <button
                 key={p.id}
@@ -169,24 +170,24 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
 
       {resume && (
         <div className="chart-section">
-          <div className="chart-title">📍 Continuar de onde parei</div>
+          <div className="chart-title">{t('projects.continuarDeOndeParei')}</div>
           <div className="ph-home-item" style={{ alignItems: 'flex-start' }}>
             <div className="grow">
               <div className="ph-home-name" onClick={() => openProject(resume.id)}>{resume.name}</div>
               <div className="ph-clamp" style={{ fontSize: 13, marginTop: 4 }} title={resume.whereLeftOff ?? ''}>{resume.whereLeftOff}</div>
               <div className="ph-muted" style={{ marginTop: 4 }}>
-                há {timeAgo(resume.whereLeftOffAt!)}
-                {resume.nextAction ? ` · próximo: ${resume.nextAction}` : ''}
+                {t('projects.ha2', { p0: timeAgo(resume.whereLeftOffAt!) })}
+                {resume.nextAction ? t('projects.proximo', { nextAction: resume.nextAction }) : ''}
               </div>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => startWorking(resume)}>▶ Continuar</button>
+            <button className="btn btn-primary btn-sm" onClick={() => startWorking(resume)}>{t('projects.continuar2')}</button>
           </div>
         </div>
       )}
 
       {(decisions.length > 0 || forgotten.length > 0) && (
         <div className="chart-section">
-          <div className="chart-title">📡 Precisam de decisão</div>
+          <div className="chart-title">{t('projects.precisamDeDecisao')}</div>
           {decisions.slice(0, 5).map(({ p, a }, i) => (
             <div key={`${p.id}-${i}`} className="ph-home-item">
               <span className="ph-dot" style={{ background: a.severity === 'alta' ? 'var(--danger)' : 'var(--warning)' }} />
@@ -198,7 +199,7 @@ export function ProjectHomeBlocks(): React.ReactElement | null {
           ))}
           {forgotten.length > 0 && (
             <div className="ph-muted" style={{ marginTop: 6 }}>
-              🕸 Esquecidos (+30 dias): {forgotten.slice(0, 6).map((p, i) => (
+              {t('projects.esquecidos30Dias')} {forgotten.slice(0, 6).map((p, i) => (
                 <React.Fragment key={p.id}>
                   {i > 0 && ', '}
                   <button className="ph-linkbtn" onClick={() => openProject(p.id)}>{p.name}</button>

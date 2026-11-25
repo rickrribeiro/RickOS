@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { Project } from '../../../types'
 import { useProjectStore } from '../store/projectStore'
 import { fmtMinutes } from '../lib/constants'
+import { t, getLocale } from '../../../i18n'
 
 const RANGES = [
-  { key: 30, label: '30 dias' },
-  { key: 90, label: '90 dias' },
-  { key: 365, label: '1 ano' }
+  { key: 30, label: t('projects.30Dias') },
+  { key: 90, label: t('projects.90Dias') },
+  { key: 365, label: t('projects.1Ano') }
 ]
 
 /** Métricas: iniciados × concluídos, horas por projeto, tempo médio até concluir. */
@@ -27,7 +28,7 @@ export function ProjectMetrics({ projects }: { projects: Project[] }): React.Rea
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      out.push({ key, label: d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''), started: 0, done: 0, dropped: 0 })
+      out.push({ key, label: d.toLocaleDateString(getLocale(), { month: 'short' }).replace('.', ''), started: 0, done: 0, dropped: 0 })
     }
     for (const p of projects) {
       const s = out.find((m) => p.createdAt?.startsWith(m.key))
@@ -57,31 +58,31 @@ export function ProjectMetrics({ projects }: { projects: Project[] }): React.Rea
     <div className="ph-metrics">
       <div className="cards-grid">
         <div className="stat-card">
-          <div className="stat-card-label">Iniciados</div>
+          <div className="stat-card-label">{t('projects.iniciados')}</div>
           <div className="stat-card-value">{projects.length}</div>
-          <div className="stat-card-sub">{inFlight} em andamento</div>
+          <div className="stat-card-sub">{inFlight} {t('projects.emAndamento2')}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Concluídos</div>
+          <div className="stat-card-label">{t('projects.concluidos2')}</div>
           <div className="stat-card-value">{done.length}</div>
-          <div className="stat-card-sub">{dropped.length} encerrados{rate != null ? ` · ${rate}% de conclusão` : ''}</div>
+          <div className="stat-card-sub">{dropped.length} {t('projects.encerrados2')}{rate != null ? t('projects.deConclusao', { rate }) : ''}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Tempo médio até concluir</div>
-          <div className="stat-card-value">{avgDays != null ? `${avgDays}d` : '—'}</div>
+          <div className="stat-card-label">{t('projects.tempoMedioAteConcluir')}</div>
+          <div className="stat-card-value">{avgDays != null ? t('projects.d', { avgDays }) : '—'}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Horas em projetos ({range}d)</div>
+          <div className="stat-card-label">{t('projects.horasEmProjetosD', { range })}</div>
           <div className="stat-card-value">{fmtMinutes(totalRange)}</div>
           <div className="stat-card-sub">{byArea.map((a) => `${a.area}: ${fmtMinutes(a.minutes)}`).join(' · ')}</div>
         </div>
       </div>
 
       <div className="chart-section" style={{ marginTop: 12 }}>
-        <div className="chart-title">Iniciados × concluídos (12 meses)</div>
+        <div className="chart-title">{t('projects.iniciadosConcluidos12Meses')}</div>
         <div className="ph-months">
           {months.map((m) => (
-            <div key={m.key} className="ph-month" title={`${m.key}: ${m.started} iniciados, ${m.done} concluídos, ${m.dropped} encerrados`}>
+            <div key={m.key} className="ph-month" title={t('projects.iniciadosConcluidosEncerrados', { key: m.key, started: m.started, done: m.done, dropped: m.dropped })}>
               <div className="ph-month-bars">
                 <span className="started" style={{ height: `${(m.started / maxMonth) * 100}%` }} />
                 <span className="done" style={{ height: `${(m.done / maxMonth) * 100}%` }} />
@@ -92,15 +93,15 @@ export function ProjectMetrics({ projects }: { projects: Project[] }): React.Rea
           ))}
         </div>
         <div className="ph-legend">
-          <span><i className="started" /> iniciados</span>
-          <span><i className="done" /> concluídos</span>
-          <span><i className="dropped" /> encerrados</span>
+          <span><i className="started" /> {t('projects.iniciados2')}</span>
+          <span><i className="done" /> {t('projects.concluidos3')}</span>
+          <span><i className="dropped" /> {t('projects.encerrados2')}</span>
         </div>
       </div>
 
       <div className="chart-section" style={{ marginTop: 12 }}>
         <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span>Horas por projeto</span>
+          <span>{t('projects.horasPorProjeto')}</span>
           <div className="seg-toggle">
             {RANGES.map((r) => (
               <button key={r.key} className={`seg-btn ${range === r.key ? 'active' : ''}`} onClick={() => setRange(r.key)}>{r.label}</button>
@@ -108,7 +109,7 @@ export function ProjectMetrics({ projects }: { projects: Project[] }): React.Rea
           </div>
         </div>
         <div className="ph-hbars">
-          {hours.length === 0 && <div className="empty-hint">Sem horas vinculadas a projetos. Use “▶ Trabalhar” ou vincule tags na triagem.</div>}
+          {hours.length === 0 && <div className="empty-hint">{t('projects.semHorasVinculadasAProjetos')}</div>}
           {hours.map((h) => {
             const p = projects.find((x) => x.id === h.projectId)
             if (!p) return null
@@ -124,7 +125,7 @@ export function ProjectMetrics({ projects }: { projects: Project[] }): React.Rea
           })}
         </div>
         <p className="ph-muted" style={{ marginTop: 8 }}>
-          Total histórico: {fmtMinutes(Object.values(overview).reduce((s, o) => s + o.minutesTotal, 0))}
+          {t('projects.totalHistorico', { p0: fmtMinutes(Object.values(overview).reduce((s, o) => s + o.minutesTotal, 0)) })}
         </p>
       </div>
     </div>

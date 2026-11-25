@@ -17,6 +17,7 @@ import { chats } from './chats'
 import { crm } from './crm'
 import { estudos } from './estudos'
 import { finance } from './finance'
+import { projects } from './projects'
 
 export const en: Messages = {
   ...common,
@@ -36,5 +37,6 @@ export const en: Messages = {
   ...chats,
   ...crm,
   ...estudos,
-  ...finance
+  ...finance,
+  ...projects
 }

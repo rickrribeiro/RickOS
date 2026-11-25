@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { Project } from '../../../types'
 import { unnumberedRoadmapItems } from '../../../../shared/roadmap'
 import { MARK_ICON, MARK_LABEL, RoadmapMark, RoadmapNode, buildRoadmapDelegation, flattenRoadmap, isOpenItem, nextMark, openIds, parseRoadmap, roadmapStats } from '../lib/roadmap'
+import { t } from '../../../i18n'
 
 type Mode = 'arvore' | 'tabela'
 
@@ -63,7 +64,7 @@ export function RoadmapView({
         const r = await window.api.projects.roadmapSetMany(project.id, todo, '~')
         setData((cur) => (cur ? { ...cur, content: r.content } : cur))
       } catch (e) {
-        setError(`Delegado, mas não consegui marcar em andamento: ${e instanceof Error ? e.message : String(e)}`)
+        setError(t('projects.delegadoMasNaoConseguiMarcar', { p0: e instanceof Error ? e.message : String(e) }))
         void load()
       }
     })
@@ -78,7 +79,7 @@ export function RoadmapView({
         checked={ids.length > 0 && ids.every((id) => selected.has(id))}
         onChange={() => toggleIds(ids)}
         onClick={(e) => e.stopPropagation()}
-        title={ids.length ? `Selecionar ${ids.length} ${ids.length === 1 ? 'item aberto' : 'itens abertos'}` : 'Nada aberto aqui'}
+        title={ids.length ? t('projects.selecionar', { count: ids.length }) : t('projects.nadaAbertoAqui')}
       />
     ) : null
 
@@ -120,17 +121,17 @@ export function RoadmapView({
     (filter === 'todos' || (filter === 'abertos' ? n.mark === ' ' || n.mark === '~' : n.mark === filter)) && (!version || n.version === version)
 
   if (!project.localPath) {
-    return <div className="empty-hint">Defina o caminho local do projeto (Editar) para ler o <code>ROADMAP_RICKOS.md</code>.</div>
+    return <div className="empty-hint">{t('projects.definaOCaminhoLocalDo')} <code>ROADMAP_RICKOS.md</code>.</div>
   }
-  if (!data) return <div className="empty-hint">Carregando roadmap…</div>
+  if (!data) return <div className="empty-hint">{t('projects.carregandoRoadmap')}</div>
   if (!data.exists) {
     return (
       <div className="chart-section">
-        <div className="chart-title">🗺 Sem roadmap ainda</div>
+        <div className="chart-title">{t('projects.semRoadmapAinda')}</div>
         <p className="ph-muted" style={{ margin: '8px 0' }}>
-          Crie <code>ROADMAP_RICKOS.md</code> na raiz de <code>{project.localPath}</code> seguindo o padrão: <code>##</code> área, <code>###</code> funcionalidade, <code>- [ ]</code> tarefa, <code>@v1</code> versão, <code>!alta</code> prioridade.
+          {t('projects.crie')} <code>ROADMAP_RICKOS.md</code> {t('projects.naRaizDe')} <code>{project.localPath}</code> {t('projects.seguindoOPadrao')} <code>##</code> {t('projects.area2')} <code>###</code> {t('projects.funcionalidade')} <code>- [ ]</code> {t('projects.tarefa2')} <code>@v1</code> {t('projects.versao')} <code>!alta</code> {t('projects.prioridade')}
         </p>
-        <button className="btn btn-primary btn-sm" onClick={createTemplate}>Criar a partir do modelo</button>
+        <button className="btn btn-primary btn-sm" onClick={createTemplate}>{t('projects.criarAPartirDoModelo')}</button>
         {error && <div className="ph-error">{error}</div>}
       </div>
     )
@@ -178,7 +179,7 @@ export function RoadmapView({
         <div className={`ph-rm-item ${selected.has(n.id) && selecting ? 'picked ' : ''}mark-${n.mark === ' ' ? 'todo' : n.mark === 'x' ? 'done' : n.mark === '~' ? 'doing' : n.mark === '-' ? 'drop' : 'none'}`}>
           {pickBox(openIds(n))}
           {n.mark ? (
-            <button className="ph-rm-mark" onClick={() => cycle(n)} title={`${MARK_LABEL[n.mark]} — clique para avançar`}>
+            <button className="ph-rm-mark" onClick={() => cycle(n)} title={t('projects.cliqueParaAvancar', { p0: MARK_LABEL[n.mark] })}>
               {MARK_ICON[n.mark]}
             </button>
           ) : (
@@ -198,24 +199,24 @@ export function RoadmapView({
     <div className="ph-roadmap">
       <div className="ph-rm-toolbar">
         <div className="seg-toggle">
-          <button className={`seg-btn ${mode === 'arvore' ? 'active' : ''}`} onClick={() => setMode('arvore')}>🌳 Árvore</button>
-          <button className={`seg-btn ${mode === 'tabela' ? 'active' : ''}`} onClick={() => setMode('tabela')}>▦ Tabela</button>
+          <button className={`seg-btn ${mode === 'arvore' ? 'active' : ''}`} onClick={() => setMode('arvore')}>{t('projects.arvore')}</button>
+          <button className={`seg-btn ${mode === 'tabela' ? 'active' : ''}`} onClick={() => setMode('tabela')}>{t('projects.tabela')}</button>
         </div>
         <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
-          <option value="todos">Todos</option>
-          <option value="abertos">Abertos</option>
-          <option value="~">Em andamento</option>
-          <option value="x">Feitos</option>
-          <option value="-">Descartados</option>
+          <option value="todos">{t('projects.todos')}</option>
+          <option value="abertos">{t('projects.abertos')}</option>
+          <option value="~">{t('projects.emAndamento')}</option>
+          <option value="x">{t('projects.feitos')}</option>
+          <option value="-">{t('projects.descartados')}</option>
         </select>
         {versions.length > 0 && (
           <select value={version} onChange={(e) => setVersion(e.target.value)}>
-            <option value="">Todas as versões</option>
+            <option value="">{t('projects.todasAsVersoes')}</option>
             {versions.map((v) => <option key={v} value={v}>@{v}</option>)}
           </select>
         )}
         <span className="ph-muted">
-          {stats.done}/{stats.total} feitos · {stats.doing} em andamento · {pct}%
+          {t('projects.feitosEmAndamento', { done: stats.done, total: stats.total, doing: stats.doing, pct })}
         </span>
         {onDelegate && (
           <button
@@ -224,14 +225,14 @@ export function RoadmapView({
               setSelecting(!selecting)
               if (selecting) setSelected(new Set())
             }}
-            title="Selecionar itens ou blocos (área/funcionalidade) para delegar ao Claude de uma vez"
+            title={t('projects.selecionarItensOuBlocosArea')}
           >
-            {selecting ? '✕ Sair da seleção' : '☑ Selecionar p/ delegar'}
+            {selecting ? t('projects.sairDaSelecao') : t('projects.selecionarPDelegar')}
           </button>
         )}
         {unnumbered > 0 && (
-          <button className="btn btn-secondary btn-sm" onClick={numberItems} title="Grava #N (maior número + 1) nos itens sem número, sem mexer nos já numerados">
-            # Numerar {unnumbered}
+          <button className="btn btn-secondary btn-sm" onClick={numberItems} title={t('projects.gravaNMaiorNumero1')}>
+            {t('projects.numerar', { unnumbered })}
           </button>
         )}
         <button className="btn btn-secondary btn-sm" onClick={load} title={data.path ?? ''}>↻</button>
@@ -241,17 +242,17 @@ export function RoadmapView({
       {selecting && (
         <div className="ph-rm-selbar">
           <span>
-            {picked.length ? <><strong>{picked.length}</strong> {picked.length === 1 ? 'item' : 'itens'}: {picked.map((r) => (r.node.num != null ? `#${r.node.num}` : '•')).join(' ')}</> : 'Marque itens ou blocos abertos (a fazer / em andamento).'}
+            {picked.length ? <><strong>{picked.length}</strong> {picked.length === 1 ? t('projects.item') : t('projects.itens')}: {picked.map((r) => (r.node.num != null ? `#${r.node.num}` : '•')).join(' ')}</> : t('projects.marqueItensOuBlocosAbertos')}
           </span>
           <span style={{ flex: 1 }} />
-          {picked.length > 0 && <button className="btn btn-secondary btn-sm" onClick={() => setSelected(new Set())}>Limpar</button>}
+          {picked.length > 0 && <button className="btn btn-secondary btn-sm" onClick={() => setSelected(new Set())}>{t('projects.limpar')}</button>}
           <button
             className="btn btn-primary btn-sm"
             disabled={!picked.length}
             onClick={delegate}
-            title="O Claude monta um prompt (em paralelo, um commit por item) que abre no Prompt Runner para você revisar e enviar"
+            title={t('projects.oClaudeMontaUmPrompt')}
           >
-            🤖 Delegar {picked.length || ''}
+            {t('projects.delegar')} {picked.length || ''}
           </button>
         </div>
       )}
@@ -264,13 +265,13 @@ export function RoadmapView({
             <thead>
               <tr>
                 {selecting && <th />}
-                <th>Status</th>
+                <th>{t('projects.status')}</th>
                 <th>#</th>
-                <th>Item</th>
-                <th>Área</th>
-                <th>Funcionalidade</th>
-                <th>Versão</th>
-                <th>Prior.</th>
+                <th>{t('projects.item2')}</th>
+                <th>{t('projects.area')}</th>
+                <th>{t('projects.funcionalidade2')}</th>
+                <th>{t('projects.versao2')}</th>
+                <th>{t('projects.prior')}</th>
               </tr>
             </thead>
             <tbody>

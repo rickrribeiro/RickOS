@@ -14,6 +14,7 @@ import {
 } from '../git'
 import { openExternal } from '../../../api/createApi'
 import '../worktrees.css'
+import { t as tr, getLocale } from '../../../i18n'
 
 const ATTENTION: GitBranchStatus[] = ['risk', 'forgotten', 'orphan']
 
@@ -111,7 +112,7 @@ export function WorktreesPage(): React.ReactElement {
   async function act(label: string, fn: () => Promise<unknown>, rescan = true): Promise<void> {
     try {
       const r = await fn()
-      setToast(typeof r === 'string' ? r : `${label}: ok`)
+      setToast(typeof r === 'string' ? r : tr('projects.ok', { label }))
       if (rescan) await refresh({ refreshPrs: true })
     } catch (e) {
       setToast(`${label}: ${e instanceof Error ? e.message : String(e)}`)
@@ -125,19 +126,19 @@ export function WorktreesPage(): React.ReactElement {
     <div className="module-page wt-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🌿 Worktrees & Branches</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('projects.worktreesBranches')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             {scan
-              ? `${repoCount} repositório(s) · ${scan.branches.length} branches · atualizado há ${timeAgo(scan.scannedAt)}`
-              : 'Estado de todas as branches e worktrees locais dos seus projetos.'}
+              ? tr('projects.repositorioSBranchesAtualizadoHa', { repoCount, count: scan.branches.length, p2: timeAgo(scan.scannedAt) })
+              : tr('projects.estadoDeTodasAsBranches')}
           </p>
         </div>
         <div className="wt-header-actions">
           <button className="btn btn-secondary btn-sm" onClick={() => setShowConfig((v) => !v)}>
-            ⚙️ Pastas
+            {tr('projects.pastas')}
           </button>
           <button className="btn btn-primary btn-sm" disabled={loading} onClick={() => refresh({ refreshPrs: true })}>
-            {loading ? 'Escaneando…' : '↻ Atualizar'}
+            {loading ? tr('projects.escaneando') : tr('projects.atualizar')}
           </button>
         </div>
       </div>
@@ -160,16 +161,16 @@ export function WorktreesPage(): React.ReactElement {
           </button>
         ))}
         <button className="wt-chip wt-chip-plain" onClick={() => setStatuses(allSelected ? ATTENTION : STATUS_DEFS.map((d) => d.id))}>
-          {allSelected ? 'Só atenção' : 'Todas'}
+          {allSelected ? tr('projects.soAtencao') : tr('projects.todas')}
         </button>
       </div>
 
       <div className="todo-toolbar">
-        <input placeholder="🔍 Buscar branch, repo, commit…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+        <input placeholder={tr('projects.buscarBranchRepoCommit')} value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
         <select value={repoFilter} onChange={(e) => setRepoFilter(e.target.value)}>
-          <option value="all">Todos os repositórios</option>
+          <option value="all">{tr('projects.todosOsRepositorios')}</option>
           {projectsInScan.length > 0 && (
-            <optgroup label="Projetos">
+            <optgroup label={tr('projects.projetos')}>
               {projectsInScan.map(([id, name]) => (
                 <option key={id} value={`p:${id}`}>
                   {name}
@@ -177,7 +178,7 @@ export function WorktreesPage(): React.ReactElement {
               ))}
             </optgroup>
           )}
-          <optgroup label="Repositórios">
+          <optgroup label={tr('projects.repositorios2')}>
             {(scan?.repos ?? []).map((r) => (
               <option key={r.path} value={`r:${r.path}`}>
                 {r.name}
@@ -186,21 +187,21 @@ export function WorktreesPage(): React.ReactElement {
           </optgroup>
         </select>
         <label className="wt-toggle">
-          <input type="checkbox" checked={agentOnly} onChange={(e) => setAgentOnly(e.target.checked)} /> 🤖 só de agentes
+          <input type="checkbox" checked={agentOnly} onChange={(e) => setAgentOnly(e.target.checked)} /> {tr('projects.soDeAgentes')}
         </label>
       </div>
 
       {scan && repoCount === 0 && (
         <div className="empty-hint" style={{ padding: 24 }}>
-          Nenhum repositório encontrado. Preencha o <b>caminho local</b> dos seus projetos ou adicione pastas em <b>⚙️ Pastas</b> (ex.: <code>~/Projects</code>).
+          {tr('projects.nenhumRepositorioEncontradoPreenchaO')} <b>{tr('projects.caminhoLocal')}</b> {tr('projects.dosSeusProjetosOuAdicione')} <b>{tr('projects.pastas')}</b> {tr('projects.ex')} <code>~/Projects</code>).
         </div>
       )}
       {scan && repoCount > 0 && groups.length === 0 && (
         <div className="empty-hint" style={{ padding: 24 }}>
-          ✨ Nada nesses filtros. {statuses.length === ATTENTION.length && 'Nenhum trabalho perdido!'}
+          {tr('projects.nadaNessesFiltros')} {statuses.length === ATTENTION.length && tr('projects.nenhumTrabalhoPerdido')}
         </div>
       )}
-      {!scan && loading && <div className="empty-hint" style={{ padding: 24 }}>Escaneando repositórios…</div>}
+      {!scan && loading && <div className="empty-hint" style={{ padding: 24 }}>{tr('projects.escaneandoRepositorios')}</div>}
 
       {groups.map(({ repo, branches }) => (
         <RepoGroup
@@ -233,20 +234,20 @@ function RepoGroup(props: {
           <span className="wt-repo-name">{repo.name}</span>
           {repo.projectName && <span className="project-chip">{repo.projectName}</span>}
           <span className="wt-muted wt-mono">{shortPath(repo.path)}</span>
-          <span className="wt-muted">base: {repo.base}</span>
+          <span className="wt-muted">{tr('projects.base2')} {repo.base}</span>
         </div>
         <div className="wt-repo-actions">
           {repo.hasRemote && (
-            <button className="btn btn-secondary btn-sm" onClick={() => act('git fetch', () => window.api.git.fetch(repo.path))} title="git fetch --all --prune (atualiza à frente/atrás)">
-              ⇣ Fetch
+            <button className="btn btn-secondary btn-sm" onClick={() => act(tr('projects.gitFetch'), () => window.api.git.fetch(repo.path))} title={tr('projects.gitFetchAllPruneAtualiza')}>
+              {tr('projects.fetch')}
             </button>
           )}
           {orphanCount > 0 && (
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => window.confirm(`Remover os ${orphanCount} registro(s) de worktrees cujas pastas não existem mais (git worktree prune)?`) && act('Prune', () => window.api.git.prune(repo.path))}
+              onClick={() => window.confirm(tr('projects.removerOsRegistroSDe', { orphanCount })) && act(tr('projects.prune2'), () => window.api.git.prune(repo.path))}
             >
-              👻 Prune ({orphanCount})
+              {tr('projects.prune', { orphanCount })}
             </button>
           )}
           <OpenButtons target={repo.path} act={act} />
@@ -266,21 +267,21 @@ function OpenButtons({ target, act }: { target: string; act: (label: string, fn:
   if (window.desktop) {
     return (
       <>
-        <button className="btn btn-secondary btn-sm" onClick={() => act('VS Code', () => window.api.git.openPath(target, 'vscode'), false)} title="Abrir no VS Code">
-          VS Code
+        <button className="btn btn-secondary btn-sm" onClick={() => act(tr('projects.vsCode'), () => window.api.git.openPath(target, 'vscode'), false)} title={tr('projects.abrirNoVsCode')}>
+          {tr('projects.vsCode')}
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={() => act('Finder', () => window.api.git.openPath(target, 'finder'), false)} title="Abrir no Finder">
-          Finder
+        <button className="btn btn-secondary btn-sm" onClick={() => act(tr('projects.finder'), () => window.api.git.openPath(target, 'finder'), false)} title={tr('projects.abrirNoFinder')}>
+          {tr('projects.finder')}
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={() => act('Terminal', () => window.api.git.openPath(target, 'terminal'), false)} title="Abrir no Terminal">
-          Terminal
+        <button className="btn btn-secondary btn-sm" onClick={() => act(tr('projects.terminal'), () => window.api.git.openPath(target, 'terminal'), false)} title={tr('projects.abrirNoTerminal')}>
+          {tr('projects.terminal')}
         </button>
       </>
     )
   }
   return (
-    <button className="btn btn-secondary btn-sm" onClick={() => copyText(`cd "${target}" && code .`)} title="Copia o comando para abrir no terminal/VS Code">
-      ⧉ Comando
+    <button className="btn btn-secondary btn-sm" onClick={() => copyText(`cd "${target}" && code .`)} title={tr('projects.copiaOComandoParaAbrir')}>
+      {tr('projects.comando')}
     </button>
   )
 }
@@ -321,11 +322,11 @@ function BranchRow(props: {
   }
 
   const meta: React.ReactNode[] = []
-  if (!b.isBase && (b.ahead || b.behind)) meta.push(<span key="ab" title={`${b.ahead} à frente / ${b.behind} atrás de ${repo.base}`}>↑{b.ahead} ↓{b.behind}</span>)
-  if ((b.localOnly ?? 0) > 0) meta.push(<span key="lo" className="wt-warn" title="Commits que não existem em nenhum remoto">⬆ {b.localOnly} não enviado(s)</span>)
-  if ((b.dirty ?? 0) > 0) meta.push(<span key="d" className="wt-warn">✎ {b.dirty} modificado(s)</span>)
-  if ((b.untracked ?? 0) > 0) meta.push(<span key="u" className="wt-warn">+ {b.untracked} novo(s)</span>)
-  if (b.upstreamGone) meta.push(<span key="g" title="O branch remoto foi apagado">remoto apagado</span>)
+  if (!b.isBase && (b.ahead || b.behind)) meta.push(<span key="ab" title={tr('projects.aFrenteAtrasDe', { ahead: b.ahead, behind: b.behind, base: repo.base })}>↑{b.ahead} ↓{b.behind}</span>)
+  if ((b.localOnly ?? 0) > 0) meta.push(<span key="lo" className="wt-warn" title={tr('projects.commitsQueNaoExistemEm')}>⬆ {b.localOnly} {tr('projects.naoEnviadoS')}</span>)
+  if ((b.dirty ?? 0) > 0) meta.push(<span key="d" className="wt-warn">✎ {b.dirty} {tr('projects.modificadoS')}</span>)
+  if ((b.untracked ?? 0) > 0) meta.push(<span key="u" className="wt-warn">+ {b.untracked} {tr('projects.novoS')}</span>)
+  if (b.upstreamGone) meta.push(<span key="g" title={tr('projects.oBranchRemotoFoiApagado')}>{tr('projects.remotoApagado')}</span>)
 
   return (
     <div className={`list-row wt-row ${open ? 'open' : ''}`} style={{ '--status': def.color } as React.CSSProperties}>
@@ -333,21 +334,21 @@ function BranchRow(props: {
         <span className="wt-status" title={def.hint}>
           {def.emoji} <span className="wt-status-label">{def.label}</span>
         </span>
-        <span className="wt-branch wt-mono">{b.branch ?? '(HEAD destacado)'}</span>
-        {b.agent && <span className="wt-badge" title="Criada por agente (pasta/prefixo de agente)">🤖</span>}
+        <span className="wt-branch wt-mono">{b.branch ?? tr('projects.headDestacado')}</span>
+        {b.agent && <span className="wt-badge" title={tr('projects.criadaPorAgentePastaPrefixo')}>🤖</span>}
         {b.worktreePath && !b.isBase && (
           <span className={`wt-badge ${b.worktreeMissing ? 'wt-badge-bad' : ''}`} title={b.worktreePath}>
-            {b.worktreeMissing ? 'worktree sumiu' : 'worktree'}
+            {b.worktreeMissing ? tr('projects.worktreeSumiu') : tr('projects.worktree')}
           </span>
         )}
         {b.pr && (
           <span className={`wt-pr wt-pr-${b.pr.state.toLowerCase()}`} title={b.pr.title}>
-            PR #{b.pr.number} {b.pr.state === 'OPEN' ? 'aberta' : b.pr.state === 'MERGED' ? 'mergeada' : 'fechada'}
+            {tr('projects.pr2', { number: b.pr.number })} {b.pr.state === 'OPEN' ? tr('projects.aberta') : b.pr.state === 'MERGED' ? tr('projects.mergeada') : tr('projects.fechada')}
           </span>
         )}
         <span className="wt-meta">{meta}</span>
-        <span className="wt-when" title={b.lastCommitAt ? new Date(b.lastCommitAt).toLocaleString('pt-BR') : ''}>
-          {b.lastCommitAt ? `há ${timeAgo(b.lastCommitAt)}` : ''}
+        <span className="wt-when" title={b.lastCommitAt ? new Date(b.lastCommitAt).toLocaleString(getLocale()) : ''}>
+          {b.lastCommitAt ? tr('projects.ha2', { p0: timeAgo(b.lastCommitAt) }) : ''}
         </span>
         <span className="wt-subject">{b.lastCommitSubject}</span>
       </button>
@@ -357,18 +358,18 @@ function BranchRow(props: {
           <div className="wt-actions">
             {b.branch && (
               <button className="btn btn-secondary btn-sm" onClick={() => copyText(b.branch!)}>
-                ⧉ Branch
+                {tr('projects.branch')}
               </button>
             )}
             {b.worktreePath && (
               <button className="btn btn-secondary btn-sm" onClick={() => copyText(b.worktreePath!)}>
-                ⧉ Caminho
+                {tr('projects.caminho')}
               </button>
             )}
             {b.worktreePath && !b.worktreeMissing && <OpenButtons target={b.worktreePath} act={act} />}
             {b.pr && (
               <button className="btn btn-secondary btn-sm" onClick={() => openExternal(b.pr!.url)}>
-                ↗ PR #{b.pr.number}
+                {tr('projects.pr3', { number: b.pr.number })}
               </button>
             )}
             {!b.pr && !b.isBase && b.branch && b.ahead > 0 && repo.ghAvailable && b.status !== 'merged' && (
@@ -376,43 +377,43 @@ function BranchRow(props: {
                 className="btn btn-secondary btn-sm"
                 onClick={() =>
                   window.confirm(
-                    `Criar PR de "${b.branch}" para ${repo.base}?${!b.upstream || (b.localOnly ?? 0) > 0 ? '\n\nA branch será enviada (git push -u origin) antes.' : ''}`
+                    tr('projects.criarPrDePara', { branch: b.branch, base: repo.base, p2: !b.upstream || (b.localOnly ?? 0) > 0 ? '\n\nA branch será enviada (git push -u origin) antes.' : '' })
                   ) &&
-                  act('PR', async () => {
+                  act(tr('projects.pr4'), async () => {
                     const r = await window.api.git.createPr(b.repoPath, b.branch!)
                     if (r.url) openExternal(r.url)
-                    return `PR criada: ${r.url}`
+                    return tr('projects.prCriada', { url: r.url })
                   })
                 }
               >
-                ⇡ Criar PR
+                {tr('projects.criarPr2')}
               </button>
             )}
             {b.status !== 'merged' && b.status !== 'orphan' && !b.isBase && (
               <button className="btn btn-primary btn-sm" onClick={continueInRunner}>
-                ▶ Continuar no Prompt Runner
+                {tr('projects.continuarNoPromptRunner')}
               </button>
             )}
             {b.status === 'merged' && b.branch && (
               <button
                 className="btn btn-danger btn-sm"
                 onClick={() =>
-                  window.confirm(`Apagar a branch "${b.branch}"${b.worktreePath ? ' e a worktree dela' : ''}? Ela já está na base.`) &&
-                  act('Apagar', () => window.api.git.deleteBranch(b.repoPath, b.branch!))
+                  window.confirm(tr('projects.apagarABranchElaJa', { branch: b.branch, p1: b.worktreePath ? ' e a worktree dela' : '' })) &&
+                  act(tr('projects.apagar'), () => window.api.git.deleteBranch(b.repoPath, b.branch!))
                 }
               >
-                🗑 Apagar branch
+                {tr('projects.apagarBranch')}
               </button>
             )}
           </div>
 
           {b.worktreePath && <div className="wt-muted wt-mono wt-path">{b.worktreePath}</div>}
-          {loadingDetails && <div className="wt-muted">Carregando…</div>}
+          {loadingDetails && <div className="wt-muted">{tr('projects.carregando')}</div>}
           {details && (
             <div className="wt-detail-grid">
               <div>
-                <div className="chart-title">Commits à frente de {repo.base} ({details.commits.length})</div>
-                {details.commits.length === 0 && <div className="wt-muted">Nenhum.</div>}
+                <div className="chart-title">{tr('projects.commitsAFrenteDe', { base: repo.base, count: details.commits.length })}</div>
+                {details.commits.length === 0 && <div className="wt-muted">{tr('projects.nenhum')}</div>}
                 <ul className="wt-list">
                   {details.commits.map((c) => (
                     <li key={c.hash}>
@@ -422,8 +423,8 @@ function BranchRow(props: {
                 </ul>
               </div>
               <div>
-                <div className="chart-title">Não commitado ({details.files.length})</div>
-                {details.files.length === 0 && <div className="wt-muted">{b.worktreePath ? 'Worktree limpa.' : 'Sem worktree.'}</div>}
+                <div className="chart-title">{tr('projects.naoCommitado', { count: details.files.length })}</div>
+                {details.files.length === 0 && <div className="wt-muted">{b.worktreePath ? tr('projects.worktreeLimpa') : tr('projects.semWorktree')}</div>}
                 <ul className="wt-list">
                   {details.files.map((f) => (
                     <li key={f.path} className="wt-mono">
@@ -434,7 +435,7 @@ function BranchRow(props: {
               </div>
               {details.diffStat && (
                 <div className="wt-full">
-                  <div className="chart-title">Diff contra a base</div>
+                  <div className="chart-title">{tr('projects.diffContraABase')}</div>
                   <pre className="wt-diffstat">{details.diffStat}</pre>
                 </div>
               )}
@@ -460,19 +461,18 @@ function ScanConfig({ onSaved }: { onSaved: () => void }): React.ReactElement {
   }
   return (
     <div className="chart-section wt-config">
-      <div className="chart-title">Onde procurar repositórios</div>
+      <div className="chart-title">{tr('projects.ondeProcurarRepositorios')}</div>
       <p className="wt-muted" style={{ fontSize: 12, margin: '4px 0 8px' }}>
-        Projetos com <b>caminho local</b> já entram automaticamente. Adicione pastas (uma por linha) para achar também repositórios não cadastrados — o
-        scan olha a pasta e até 2 níveis abaixo.
+        {tr('projects.projetosCom')} <b>{tr('projects.caminhoLocal')}</b> {tr('projects.jaEntramAutomaticamenteAdicionePastas')}
       </p>
-      <textarea rows={3} value={roots} onChange={(e) => setRoots(e.target.value)} placeholder="~/Projects" style={{ width: '100%' }} />
+      <textarea rows={3} value={roots} onChange={(e) => setRoots(e.target.value)} placeholder={tr('projects.projects')} style={{ width: '100%' }} />
       <div className="wt-config-row">
         <label>
-          Considerar "esquecida" após{' '}
-          <input type="number" min={1} value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 64 }} /> dias parada
+          {tr('projects.considerarEsquecidaApos')}{' '}
+          <input type="number" min={1} value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 64 }} /> {tr('projects.diasParada')}
         </label>
         <button className="btn btn-primary btn-sm" onClick={save}>
-          Salvar e escanear
+          {tr('projects.salvarEEscanear')}
         </button>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { fmtDate, fmtMinutes } from '../lib/constants'
 import { renderMarkdown } from '../../estudos/markdown'
 import { ChangelogModal } from './ChangelogModal'
 import type { ProjectCycle } from '../../../types'
+import { t } from '../../../i18n'
 
 /** Estante: projetos concluídos/encerrados e ciclos fechados — o histórico do que terminou. */
 export function ProjectShelf({ projects, onStatus }: { projects: Project[]; onStatus: (p: Project, to: ProjectStatus) => void }): React.ReactElement {
@@ -28,17 +29,17 @@ export function ProjectShelf({ projects, onStatus }: { projects: Project[]; onSt
           <span className="ph-muted">{fmtDate(p.closedAt)}</span>
         </div>
         <div className="ph-muted">
-          {ov ? fmtMinutes(ov.minutesTotal) : '0h'}
-          {days ? ` · ${days} dias` : ''}
+          {ov ? fmtMinutes(ov.minutesTotal) : t('projects.0h')}
+          {days ? t('projects.dias', { days }) : ''}
           {p.closeReason ? ` · ${p.closeReason}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
           {p.retrospective && (
             <button className="btn btn-secondary btn-sm" onClick={() => setOpenRetro(openRetro === p.id ? null : p.id)}>
-              {openRetro === p.id ? 'Ocultar' : '🔍 Retrospectiva'}
+              {openRetro === p.id ? t('projects.ocultar') : t('projects.retrospectiva2')}
             </button>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => onStatus(p, 'fila')}>↺ Reabrir</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => onStatus(p, 'fila')}>{t('projects.reabrir')}</button>
         </div>
         {openRetro === p.id && p.retrospective && <div className="md-preview-pane ph-retro-view">{renderMarkdown(p.retrospective)}</div>}
       </div>
@@ -48,13 +49,13 @@ export function ProjectShelf({ projects, onStatus }: { projects: Project[]; onSt
   return (
     <div className="ph-shelf">
       <section>
-        <h3 className="ph-section-title">🏆 Concluídos <span className="kanban-count">{done.length}</span></h3>
-        <div className="ph-shelf-grid">{done.length ? done.map(row) : <div className="empty-hint">Nenhum ainda — o primeiro vai ser especial.</div>}</div>
+        <h3 className="ph-section-title">{t('projects.concluidos')} <span className="kanban-count">{done.length}</span></h3>
+        <div className="ph-shelf-grid">{done.length ? done.map(row) : <div className="empty-hint">{t('projects.nenhumAindaOPrimeiroVai')}</div>}</div>
       </section>
       <section>
-        <h3 className="ph-section-title">🔁 Ciclos entregues <span className="kanban-count">{closedCycles.length}</span></h3>
+        <h3 className="ph-section-title">{t('projects.ciclosEntregues')} <span className="kanban-count">{closedCycles.length}</span></h3>
         <div className="list-stack">
-          {closedCycles.length === 0 && <div className="empty-hint">Nenhum ciclo fechado.</div>}
+          {closedCycles.length === 0 && <div className="empty-hint">{t('projects.nenhumCicloFechado')}</div>}
           {closedCycles.map((c) => (
             <div key={c.id} className="list-row">
               <span className="list-row-title">
@@ -63,17 +64,17 @@ export function ProjectShelf({ projects, onStatus }: { projects: Project[]; onSt
               </span>
               <span className="ph-muted">
                 {fmtDate(c.closedAt)}
-                {c.extensions ? ` · ${c.extensions} extensão(ões)` : ''}
+                {c.extensions ? t('projects.extensaoOes', { extensions: c.extensions }) : ''}
               </span>
-              <button className="btn btn-secondary btn-sm" onClick={() => setChangelog(c)}>📜 Changelog</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setChangelog(c)}>{t('projects.changelog')}</button>
             </div>
           ))}
         </div>
       </section>
       {changelog && <ChangelogModal cycle={changelog} onClose={() => setChangelog(null)} />}
       <section>
-        <h3 className="ph-section-title">🪦 Encerrados <span className="kanban-count">{dropped.length}</span></h3>
-        <div className="ph-shelf-grid">{dropped.length ? dropped.map(row) : <div className="empty-hint">Nada encerrado.</div>}</div>
+        <h3 className="ph-section-title">{t('projects.encerrados')} <span className="kanban-count">{dropped.length}</span></h3>
+        <div className="ph-shelf-grid">{dropped.length ? dropped.map(row) : <div className="empty-hint">{t('projects.nadaEncerrado')}</div>}</div>
       </section>
     </div>
   )

@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Project } from '../../../types'
 import { renderMarkdown } from '../../estudos/markdown'
 import { repoFromUrl } from '../store/githubStore'
+import { t } from '../../../i18n'
 
 type Period = 'week' | 'month' | 'lastMonth'
 const PERIODS: { key: Period; label: string }[] = [
-  { key: 'week', label: 'Esta semana' },
-  { key: 'month', label: 'Este mês' },
-  { key: 'lastMonth', label: 'Mês passado' }
+  { key: 'week', label: t('projects.estaSemana') },
+  { key: 'month', label: t('projects.esteMes') },
+  { key: 'lastMonth', label: t('projects.mesPassado') }
 ]
 
 /** Uses the local Claude + gh to summarize commit/issue progress over a period. */
@@ -26,7 +27,7 @@ export function ProgressModal({ projects, onClose }: { projects: Project[]; onCl
       if (rid !== runId.current) return
       runId.current = null
       setRunning(false)
-      if (!ok) return setError(err || 'Falha ao gerar o resumo.')
+      if (!ok) return setError(err || t('projects.falhaAoGerarOResumo'))
       setOutput(out)
     })
     return () => {
@@ -41,7 +42,7 @@ export function ProgressModal({ projects, onClose }: { projects: Project[]; onCl
     setError('')
     setOutput('')
     if (repos.length === 0) {
-      setError('Nenhum projeto com repositório GitHub configurado.')
+      setError(t('projects.nenhumProjetoComRepositorioGithub'))
       return
     }
     setRunning(true)
@@ -69,7 +70,7 @@ Seja factual — use apenas o que o gh retornar. Se um repositório não existir
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 520, maxWidth: 720 }}>
-        <h2>📊 Resumo de progresso (GitHub)</h2>
+        <h2>{t('projects.resumoDeProgressoGithub')}</h2>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
           {PERIODS.map((p) => (
             <button key={p.key} className={`btn btn-sm ${period === p.key ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPeriod(p.key)} disabled={running}>
@@ -77,20 +78,20 @@ Seja factual — use apenas o que o gh retornar. Se um repositório não existir
             </button>
           ))}
           <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={run} disabled={running}>
-            {running ? 'Analisando…' : '✨ Gerar'}
+            {running ? t('projects.analisando') : t('projects.gerar')}
           </button>
         </div>
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-          Repos: {repos.join(', ') || '—'}. Usa o gh CLI da sua máquina via Claude local.
+          {t('projects.repos2')} {repos.join(', ') || '—'}{t('projects.usaOGhCliDa')}
         </p>
         {error && <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8 }}>{error}</div>}
         {(running || output) && (
           <div className="md-preview-pane" style={{ minHeight: 0, maxHeight: 420 }}>
-            {output ? renderMarkdown(output) : <div className="empty-hint">Coletando dados do GitHub…</div>}
+            {output ? renderMarkdown(output) : <div className="empty-hint">{t('projects.coletandoDadosDoGithub')}</div>}
           </div>
         )}
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Fechar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('projects.fechar')}</button>
         </div>
       </div>
     </div>

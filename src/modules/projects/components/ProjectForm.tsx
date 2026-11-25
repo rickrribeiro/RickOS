@@ -3,6 +3,7 @@ import type { Project, ProjectArea, ProjectRepoInput } from '../../../types'
 import { reposOf, useProjectStore, workTagsFor } from '../store/projectStore'
 import { useTagStore } from '../../timetracker/store/tagStore'
 import { AREAS, PRESET_COLORS, STAGES } from '../lib/constants'
+import { t as tr } from '../../../i18n'
 
 interface FormState {
   name: string
@@ -67,14 +68,14 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
     setDetectMsg('')
     setDetected(null)
     if (!form.localPath.trim()) {
-      setDetectMsg('Preencha o caminho local (a pasta raiz) primeiro.')
+      setDetectMsg(tr('projects.preenchaOCaminhoLocalA'))
       return
     }
     try {
       const r = await window.api.projects.detectRepos(form.localPath.trim())
       const fresh = r.repos.filter((d) => !repos.some((x) => x.path.trim() === d.path))
-      if (!r.repos.length) setDetectMsg(r.rootIsRepo ? 'Esta pasta já é um repositório: o projeto é de 1 repo, não precisa listar.' : 'Nenhum repositório encontrado nesta pasta.')
-      else if (!fresh.length) setDetectMsg('Todos os repositórios desta pasta já estão na lista.')
+      if (!r.repos.length) setDetectMsg(r.rootIsRepo ? tr('projects.estaPastaJaEUm') : tr('projects.nenhumRepositorioEncontradoNestaPasta'))
+      else if (!fresh.length) setDetectMsg(tr('projects.todosOsRepositoriosDestaPasta'))
       else setDetected(fresh)
     } catch (e) {
       setDetectMsg(e instanceof Error ? e.message : String(e))
@@ -115,10 +116,10 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal ph-modal ph-modal-wide" onClick={(e) => e.stopPropagation()}>
-        <h2>{project ? `Editar ${project.name}` : '🥚 Novo projeto (entra na incubadora)'}</h2>
+        <h2>{project ? tr('projects.editar', { name: project.name }) : tr('projects.novoProjetoEntraNaIncubadora')}</h2>
         <div className="ph-form">
-          <input placeholder="Nome" value={form.name} onChange={(e) => set('name', e.target.value)} autoFocus onKeyDown={(e) => e.key === 'Enter' && !advanced && submit()} />
-          <input placeholder="Descrição curta (opcional)" value={form.description} onChange={(e) => set('description', e.target.value)} />
+          <input placeholder={tr('projects.nome')} value={form.name} onChange={(e) => set('name', e.target.value)} autoFocus onKeyDown={(e) => e.key === 'Enter' && !advanced && submit()} />
+          <input placeholder={tr('projects.descricaoCurtaOpcional')} value={form.description} onChange={(e) => set('description', e.target.value)} />
           <div className="ph-row">
             <div className="ph-seg">
               {AREAS.map((a) => (
@@ -127,16 +128,16 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
                 </button>
               ))}
             </div>
-            <select value={form.stage} onChange={(e) => set('stage', e.target.value)} title="Estágio (maturidade)">
+            <select value={form.stage} onChange={(e) => set('stage', e.target.value)} title={tr('projects.estagioMaturidade')}>
               {STAGES.map((s) => (
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}
             </select>
           </div>
           <div className="ph-worktags">
-            <span className="ph-worktags-label" title="Tags que o timer recebe quando você clica em ▶ Trabalhar nisso">⏱ Tags ao trabalhar</span>
+            <span className="ph-worktags-label" title={tr('projects.tagsQueOTimerRecebe')}>{tr('projects.tagsAoTrabalhar')}</span>
             <select value={form.workTagId ?? ''} onChange={(e) => set('workTagId', e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Automático{autoTag ? ` (${autoTag.name})` : ' (sem tag)'}</option>
+              <option value="">{tr('projects.automatico')}{autoTag ? ` (${autoTag.name})` : tr('projects.semTag')}</option>
               {tags.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -146,9 +147,9 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
             <select
               value={form.workTagId2 ?? ''}
               onChange={(e) => set('workTagId2', e.target.value ? Number(e.target.value) : null)}
-              title="Tag secundária (opcional)"
+              title={tr('projects.tagSecundariaOpcional')}
             >
-              <option value="">Sem tag secundária</option>
+              <option value="">{tr('projects.semTagSecundaria')}</option>
               {tags
                 .filter((t) => t.id !== (form.workTagId ?? autoTag?.id))
                 .map((t) => (
@@ -159,39 +160,39 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
             </select>
           </div>
           <button className="ph-linkbtn" onClick={() => setAdvanced((v) => !v)}>
-            {advanced ? '▾' : '▸'} Repositório, pasta local, negócio, cor
+            {advanced ? '▾' : '▸'} {tr('projects.repositorioPastaLocalNegocioCor')}
           </button>
           {advanced && (
             <>
               {repos.length === 0 && (
-                <input placeholder="GitHub repo URL" value={form.githubRepoUrl} onChange={(e) => set('githubRepoUrl', e.target.value)} />
+                <input placeholder={tr('projects.githubRepoUrl')} value={form.githubRepoUrl} onChange={(e) => set('githubRepoUrl', e.target.value)} />
               )}
               <input
                 placeholder={
                   repos.length
-                    ? 'Pasta raiz do workspace (ex: ~/work) — CLAUDE.md, skills e ROADMAP_RICKOS.md'
-                    : 'Caminho local (ex: ~/Projects/app) — commits, branches e ROADMAP_RICKOS.md'
+                    ? tr('projects.pastaRaizDoWorkspaceEx')
+                    : tr('projects.caminhoLocalExProjectsApp')
                 }
                 value={form.localPath}
                 onChange={(e) => set('localPath', e.target.value)}
               />
               <div className="ph-repos">
                 <div className="ph-repos-head">
-                  <span className="ph-worktags-label" title="Pasta raiz com vários repositórios (front, back, infra…): o Claude roda na raiz e commits, branches, issues e mudanças juntam todos">
-                    📦 Repositórios {repos.length ? `(${repos.length})` : '— só se a pasta for um workspace com vários repos'}
+                  <span className="ph-worktags-label" title={tr('projects.pastaRaizComVariosRepositorios')}>
+                    {tr('projects.repositorios')} {repos.length ? `(${repos.length})` : tr('projects.soSeAPastaFor')}
                   </span>
-                  <button className="ph-linkbtn" onClick={detect}>🔎 Detectar na pasta</button>
-                  <button className="ph-linkbtn" onClick={() => setReposState([...repos, { name: '', path: '', githubRepoUrl: '' }])}>＋ Adicionar</button>
+                  <button className="ph-linkbtn" onClick={detect}>{tr('projects.detectarNaPasta')}</button>
+                  <button className="ph-linkbtn" onClick={() => setReposState([...repos, { name: '', path: '', githubRepoUrl: '' }])}>{tr('projects.adicionar')}</button>
                 </div>
                 {detectMsg && <div className="ph-repos-hint">{detectMsg}</div>}
                 {detected && (
                   <div className="ph-repos-suggest">
-                    <span>Encontrei {detected.length} repositório(s):</span>
+                    <span>{tr('projects.encontreiRepositorioS', { count: detected.length })}</span>
                     {detected.map((d) => (
                       <button
                         key={d.path}
                         className="ph-chip-btn"
-                        title={d.githubRepoUrl ?? 'sem remote do GitHub'}
+                        title={d.githubRepoUrl ?? tr('projects.semRemoteDoGithub')}
                         onClick={() => {
                           setReposState([...repos, d])
                           setDetected(detected.filter((x) => x.path !== d.path).length ? detected.filter((x) => x.path !== d.path) : null)
@@ -207,32 +208,32 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
                         setDetected(null)
                       }}
                     >
-                      Adicionar todos
+                      {tr('projects.adicionarTodos')}
                     </button>
                   </div>
                 )}
                 {repos.map((r, i) => (
                   <div key={i} className="ph-repo-row">
-                    <input placeholder="Nome (front)" value={r.name} onChange={(e) => setRepo(i, 'name', e.target.value)} />
-                    <input placeholder="Subpasta (front)" value={r.path} onChange={(e) => setRepo(i, 'path', e.target.value)} />
-                    <input placeholder="GitHub repo URL" value={r.githubRepoUrl ?? ''} onChange={(e) => setRepo(i, 'githubRepoUrl', e.target.value)} />
-                    <button className="ph-linkbtn" aria-label={`Remover ${r.name || r.path}`} title="Remover da lista" onClick={() => setReposState(repos.filter((_, j) => j !== i))}>
+                    <input placeholder={tr('projects.nomeFront')} value={r.name} onChange={(e) => setRepo(i, 'name', e.target.value)} />
+                    <input placeholder={tr('projects.subpastaFront')} value={r.path} onChange={(e) => setRepo(i, 'path', e.target.value)} />
+                    <input placeholder={tr('projects.githubRepoUrl')} value={r.githubRepoUrl ?? ''} onChange={(e) => setRepo(i, 'githubRepoUrl', e.target.value)} />
+                    <button className="ph-linkbtn" aria-label={tr('projects.remover2', { p0: r.name || r.path })} title={tr('projects.removerDaLista')} onClick={() => setReposState(repos.filter((_, j) => j !== i))}>
                       ✕
                     </button>
                   </div>
                 ))}
               </div>
-              <input placeholder="Comando do Claude (opcional — padrão global)" value={form.claudeCommand} onChange={(e) => set('claudeCommand', e.target.value)} />
+              <input placeholder={tr('projects.comandoDoClaudeOpcionalPadrao')} value={form.claudeCommand} onChange={(e) => set('claudeCommand', e.target.value)} />
               <div className="ph-row">
-                <input placeholder="Modelo de receita" value={form.businessModel} onChange={(e) => set('businessModel', e.target.value)} />
-                <input placeholder="Preço" value={form.pricing} onChange={(e) => set('pricing', e.target.value)} />
-                <input placeholder="Público-alvo" value={form.audience} onChange={(e) => set('audience', e.target.value)} />
+                <input placeholder={tr('projects.modeloDeReceita')} value={form.businessModel} onChange={(e) => set('businessModel', e.target.value)} />
+                <input placeholder={tr('projects.preco')} value={form.pricing} onChange={(e) => set('pricing', e.target.value)} />
+                <input placeholder={tr('projects.publicoAlvo')} value={form.audience} onChange={(e) => set('audience', e.target.value)} />
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {PRESET_COLORS.map((c) => (
                   <button
                     key={c}
-                    aria-label={`Cor ${c}`}
+                    aria-label={tr('projects.cor', { c })}
                     onClick={() => set('color', c)}
                     className="ph-swatch"
                     style={{ background: c, outline: form.color === c ? '2px solid var(--text-primary)' : 'none' }}
@@ -243,8 +244,8 @@ export function ProjectForm({ project, onClose, onCreated }: { project: Project 
           )}
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={submit}>{project ? 'Salvar' : 'Criar'}</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('projects.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={submit}>{project ? tr('projects.salvar') : tr('projects.criar2')}</button>
         </div>
       </div>
     </div>

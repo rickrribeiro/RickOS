@@ -3,6 +3,7 @@ import type { Project, ProjectArea, ProjectStatus, Todo } from '../../../types'
 import { useProjectStore } from '../store/projectStore'
 import { AREAS, STAGES, STATUSES, fmtMinutes, isClosed } from '../lib/constants'
 import { suggestProjectByName, suggestProjectForText } from '../lib/match'
+import { t as tr } from '../../../i18n'
 
 type UnlinkedTag = { tagId: number; tagName: string; tagColor: string; minutes: number }
 
@@ -43,8 +44,8 @@ export function TriageModal({ onClose }: { onClose: () => void }): React.ReactEl
 
   async function saveCurrent(): Promise<void> {
     if (!current) return
-    if (status === 'foco' && !nextAction.trim()) return setError('Em foco precisa de uma próxima ação.')
-    if ((status === 'pausado' || status === 'encerrado') && !reason.trim()) return setError('Registre o motivo.')
+    if (status === 'foco' && !nextAction.trim()) return setError(tr('projects.emFocoPrecisaDeUma'))
+    if ((status === 'pausado' || status === 'encerrado') && !reason.trim()) return setError(tr('projects.registreOMotivo'))
     await patch(current.id, { area, stage, nextAction: nextAction.trim() || null, triagedAt: new Date().toISOString() })
     if (status !== current.status) {
       await setStatus(current.id, status, { reason: reason.trim() || null, resumeAt: resumeAt || null, nextAction: nextAction.trim() || null, note: 'Triagem' })
@@ -58,16 +59,16 @@ export function TriageModal({ onClose }: { onClose: () => void }): React.ReactEl
         {phase === 'projects' && current ? (
           <>
             <h2>
-              🧭 Triagem {idx + 1}/{queue.length}: <span style={{ color: current.color }}>{current.name}</span>
+              {tr('projects.triagem', { p0: idx + 1, count: queue.length })} <span style={{ color: current.color }}>{current.name}</span>
             </h2>
             {current.description && <p className="ph-muted">{current.description}</p>}
             {overview[current.id] && (
               <p className="ph-muted">
-                {fmtMinutes(overview[current.id].minutesTotal)} registradas · {overview[current.id].openTodos} tarefas abertas · última atividade{' '}
-                {overview[current.id].idleDays == null ? 'nunca' : `há ${overview[current.id].idleDays}d`}
+                {tr('projects.registradasTarefasAbertasUltimaAtividade', { p0: fmtMinutes(overview[current.id].minutesTotal), openTodos: overview[current.id].openTodos })}{' '}
+                {overview[current.id].idleDays == null ? tr('projects.nunca') : tr('projects.haD', { idleDays: overview[current.id].idleDays })}
               </p>
             )}
-            <label className="ph-label">Situação</label>
+            <label className="ph-label">{tr('projects.situacao')}</label>
             <div className="ph-seg">
               {STATUSES.filter((s) => s.key !== 'concluido').map((s) => (
                 <button key={s.key} className={status === s.key ? 'active' : ''} onClick={() => setSt(s.key)} title={s.hint}>
@@ -77,7 +78,7 @@ export function TriageModal({ onClose }: { onClose: () => void }): React.ReactEl
             </div>
             <div className="ph-row">
               <div>
-                <label className="ph-label">Área</label>
+                <label className="ph-label">{tr('projects.area')}</label>
                 <div className="ph-seg">
                   {AREAS.map((a) => (
                     <button key={a.key} className={area === a.key ? 'active' : ''} onClick={() => setArea(a.key)}>
@@ -87,7 +88,7 @@ export function TriageModal({ onClose }: { onClose: () => void }): React.ReactEl
                 </div>
               </div>
               <div>
-                <label className="ph-label">Estágio</label>
+                <label className="ph-label">{tr('projects.estagio')}</label>
                 <select value={stage} onChange={(e) => setStage(e.target.value)}>
                   {STAGES.map((s) => (
                     <option key={s.key} value={s.key}>{s.label}</option>
@@ -97,19 +98,19 @@ export function TriageModal({ onClose }: { onClose: () => void }): React.ReactEl
             </div>
             {(status === 'foco' || status === 'fila' || status === 'baixa') && (
               <>
-                <label className="ph-label">Próxima ação {status !== 'foco' && '(opcional)'}</label>
-                <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Uma ação concreta" />
+                <label className="ph-label">{tr('projects.proximaAcao')} {status !== 'foco' && tr('projects.opcional')}</label>
+                <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder={tr('projects.umaAcaoConcreta')} />
               </>
             )}
             {(status === 'pausado' || status === 'encerrado') && (
               <div className="ph-row">
                 <div style={{ flex: 1 }}>
-                  <label className="ph-label">Motivo</label>
+                  <label className="ph-label">{tr('projects.motivo')}</label>
                   <input value={reason} onChange={(e) => setReason(e.target.value)} />
                 </div>
                 {status === 'pausado' && (
                   <div>
-                    <label className="ph-label">Retomar em</label>
+                    <label className="ph-label">{tr('projects.retomarEm')}</label>
                     <input type="date" value={resumeAt} onChange={(e) => setResumeAt(e.target.value)} />
                   </div>
                 )}
@@ -117,9 +118,9 @@ export function TriageModal({ onClose }: { onClose: () => void }): React.ReactEl
             )}
             {error && <div className="ph-error">{error}</div>}
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={onClose}>Parar aqui</button>
-              <button className="btn btn-secondary btn-sm" onClick={advance}>Pular</button>
-              <button className="btn btn-primary btn-sm" onClick={saveCurrent}>Salvar e próximo →</button>
+              <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('projects.pararAqui')}</button>
+              <button className="btn btn-secondary btn-sm" onClick={advance}>{tr('projects.pular')}</button>
+              <button className="btn btn-primary btn-sm" onClick={saveCurrent}>{tr('projects.salvarEProximo')}</button>
             </div>
           </>
         ) : (
@@ -169,7 +170,7 @@ function LinksStep({ projects, onDone }: { projects: Project[]; onDone: () => vo
 
   const select = (key: string): React.ReactElement => (
     <select value={choice[key] ?? ''} onChange={(e) => setChoice({ ...choice, [key]: e.target.value ? Number(e.target.value) : '' })}>
-      <option value="">— projeto —</option>
+      <option value="">{tr('projects.projeto')}</option>
       {projects.map((p) => (
         <option key={p.id} value={p.id}>{p.name}</option>
       ))}
@@ -180,40 +181,40 @@ function LinksStep({ projects, onDone }: { projects: Project[]; onDone: () => vo
 
   return (
     <>
-      <h2>🔗 Vínculos sem dono</h2>
-      <p className="ph-muted">Tags do timer contam horas para o projeto vinculado. TODOs vinculados aparecem na página do projeto.</p>
-      <div className="ph-label">Tags com horas (90 dias) sem projeto</div>
+      <h2>{tr('projects.vinculosSemDono')}</h2>
+      <p className="ph-muted">{tr('projects.tagsDoTimerContamHoras')}</p>
+      <div className="ph-label">{tr('projects.tagsComHoras90Dias')}</div>
       <div className="list-stack">
-        {tags.length === 0 && <div className="empty-hint">Tudo vinculado ✨</div>}
+        {tags.length === 0 && <div className="empty-hint">{tr('projects.tudoVinculado')}</div>}
         {tags.map((t) => {
           const k = `t${t.tagId}`
           return (
             <div key={k} className="list-row ph-link-row">
               <span className="ph-dot" style={{ background: t.tagColor }} />
               <span className="list-row-title">{t.tagName} <span className="ph-muted">· {fmtMinutes(t.minutes)}</span></span>
-              {done.has(k) ? <span className="ph-ok">✓ vinculado</span> : (<>{select(k)}<button className="btn btn-secondary btn-sm" onClick={() => link(k)} disabled={!choice[k]}>Vincular</button></>)}
+              {done.has(k) ? <span className="ph-ok">{tr('projects.vinculado')}</span> : (<>{select(k)}<button className="btn btn-secondary btn-sm" onClick={() => link(k)} disabled={!choice[k]}>{tr('projects.vincular')}</button></>)}
             </div>
           )
         })}
       </div>
       <div className="ph-label" style={{ marginTop: 12 }}>
-        TODOs soltos com projeto provável ({suggestedTodos.length} de {todos.length})
+        {tr('projects.todosSoltosComProjetoProvavel', { count: suggestedTodos.length, count2: todos.length })}
       </div>
       <div className="list-stack ph-scroll">
-        {suggestedTodos.length === 0 && <div className="empty-hint">Nenhuma sugestão.</div>}
+        {suggestedTodos.length === 0 && <div className="empty-hint">{tr('projects.nenhumaSugestao')}</div>}
         {suggestedTodos.map((t) => {
           const k = `d${t.id}`
           return (
             <div key={k} className="list-row ph-link-row">
               <span className="list-row-title">{t.title}</span>
-              {done.has(k) ? <span className="ph-ok">✓</span> : (<>{select(k)}<button className="btn btn-secondary btn-sm" onClick={() => link(k)} disabled={!choice[k]}>Vincular</button></>)}
+              {done.has(k) ? <span className="ph-ok">✓</span> : (<>{select(k)}<button className="btn btn-secondary btn-sm" onClick={() => link(k)} disabled={!choice[k]}>{tr('projects.vincular')}</button></>)}
             </div>
           )
         })}
       </div>
       <div className="modal-actions">
-        <button className="btn btn-secondary btn-sm" onClick={linkAllSuggested}>Vincular todas as sugestões</button>
-        <button className="btn btn-primary btn-sm" onClick={onDone}>Concluir</button>
+        <button className="btn btn-secondary btn-sm" onClick={linkAllSuggested}>{tr('projects.vincularTodasAsSugestoes')}</button>
+        <button className="btn btn-primary btn-sm" onClick={onDone}>{tr('projects.concluir')}</button>
       </div>
     </>
   )

@@ -3,6 +3,7 @@ import type { NextActionSize, Project, Todo } from '../../../types'
 import { useProjectStore } from '../store/projectStore'
 import { projectContext, runJson } from '../lib/ai'
 import { SIZES } from '../lib/constants'
+import { t as tr } from '../../../i18n'
 
 /**
  * Concluir a próxima ação fecha a tarefa dela e já pede a seguinte: uma tarefa aberta do projeto
@@ -75,9 +76,9 @@ export function NextActionModal({ project, mode, onClose }: { project: Project; 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal ph-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{mode === 'complete' ? '✅ Ação concluída! E agora?' : '👉 Próxima ação'}</h2>
+        <h2>{mode === 'complete' ? tr('projects.acaoConcluidaEAgora') : tr('projects.proximaAcao2')}</h2>
         {mode === 'complete' && project.nextAction && <p className="ph-muted ph-strike">{project.nextAction}</p>}
-        <label className="ph-label">Próxima ação de {project.name}</label>
+        <label className="ph-label">{tr('projects.proximaAcaoDe')} {project.name}</label>
         <select
           value={String(choice)}
           onChange={(e) => {
@@ -87,14 +88,14 @@ export function NextActionModal({ project, mode, onClose }: { project: Project; 
           style={{ width: '100%' }}
         >
           {todos.length > 0 && (
-            <optgroup label="Tarefas do projeto">
+            <optgroup label={tr('projects.tarefasDoProjeto')}>
               {todos.map((t) => (
                 <option key={t.id} value={t.id}>{t.title}</option>
               ))}
             </optgroup>
           )}
-          <option value="new">+ Nova tarefa…</option>
-          <option value="none">— Nenhuma próxima ação</option>
+          <option value="new">{tr('projects.novaTarefa')}</option>
+          <option value="none">{tr('projects.nenhumaProximaAcao')}</option>
         </select>
         {choice === 'new' && (
           <input
@@ -103,10 +104,10 @@ export function NextActionModal({ project, mode, onClose }: { project: Project; 
             value={next}
             onChange={(e) => setNext(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && save()}
-            placeholder="Nova tarefa: uma ação concreta"
+            placeholder={tr('projects.novaTarefaUmaAcaoConcreta')}
           />
         )}
-        <div className="ph-seg" style={{ marginTop: 8 }} role="group" aria-label="Tamanho">
+        <div className="ph-seg" style={{ marginTop: 8 }} role="group" aria-label={tr('projects.tamanho')}>
           {SIZES.map((sz) => (
             <button key={sz.key} className={size === sz.key ? 'active' : ''} onClick={() => setSize(size === sz.key ? null : sz.key)}>
               {sz.icon} {sz.label}
@@ -124,18 +125,18 @@ export function NextActionModal({ project, mode, onClose }: { project: Project; 
         )}
         <div style={{ marginTop: 8 }}>
           <button className="btn btn-secondary btn-sm" onClick={suggest} disabled={aiRunning}>
-            {aiRunning ? 'Pensando…' : '✨ Sugerir com IA'}
+            {aiRunning ? tr('projects.pensando') : tr('projects.sugerirComIa')}
           </button>
         </div>
         {error && <div className="ph-error">{error}</div>}
         {choice === 'new' && next.trim() && (
-          <p className="ph-muted" style={{ marginTop: 8, fontSize: 12 }}>Vira uma tarefa nova em Tarefas do projeto.</p>
+          <p className="ph-muted" style={{ marginTop: 8, fontSize: 12 }}>{tr('projects.viraUmaTarefaNovaEm')}</p>
         )}
-        {project.status === 'foco' && !text && <div className="ph-warn">Projetos em foco devem ter uma próxima ação — ele vai aparecer no radar.</div>}
+        {project.status === 'foco' && !text && <div className="ph-warn">{tr('projects.projetosEmFocoDevemTer')}</div>}
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('projects.cancelar')}</button>
           <button className="btn btn-primary btn-sm" onClick={save}>
-            Salvar
+            {tr('projects.salvar')}
           </button>
         </div>
       </div>

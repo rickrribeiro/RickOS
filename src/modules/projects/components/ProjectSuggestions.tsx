@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { ProjectSuggestion, ProjectSuggestionsResult } from '../../../types'
 import '../suggestions.css'
+import { t as tr } from '../../../i18n'
 
 const COLORS = ['#6366f1', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4']
 
@@ -14,13 +15,13 @@ function colorFor(name: string): string {
 function timeAgo(iso: string | null): string {
   if (!iso) return ''
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-  if (days <= 0) return 'hoje'
-  if (days === 1) return 'ontem'
-  if (days < 30) return `há ${days} dias`
+  if (days <= 0) return tr('projects.ago.today')
+  if (days === 1) return tr('projects.ago.yesterday')
+  if (days < 30) return tr('projects.ago.days', { count: days })
   const months = Math.floor(days / 30)
-  if (months < 12) return `há ${months} ${months === 1 ? 'mês' : 'meses'}`
+  if (months < 12) return tr('projects.ago.months', { count: months })
   const years = Math.floor(days / 365)
-  return `há ${years} ${years === 1 ? 'ano' : 'anos'}`
+  return tr('projects.ago.years', { count: years })
 }
 
 interface Props {
@@ -50,7 +51,7 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
   }
 
   const changeRoot = async (): Promise<void> => {
-    const next = window.prompt('Pasta onde ficam seus projetos (no computador que roda o rickOS):', data?.root ?? '~/Projects')
+    const next = window.prompt(tr('projects.pastaOndeFicamSeusProjetos'), data?.root ?? '~/Projects')
     if (next == null) return
     await window.api.settings.set('projects_root', next.trim())
     await onReload()
@@ -62,29 +63,29 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
     <div className="chart-section psug">
       <div className="psug-head">
         <div style={{ minWidth: 0 }}>
-          <div className="chart-title">💡 Projetos sugeridos</div>
+          <div className="chart-title">{tr('projects.projetosSugeridos')}</div>
           <div className="psug-sub">
-            Pastas em <code>{data?.root ?? '~/Projects'}</code> que ainda não são projetos ·{' '}
-            <button className="psug-link" onClick={() => void changeRoot()}>alterar pasta</button>
+            {tr('projects.pastasEm')} <code>{data?.root ?? '~/Projects'}</code> {tr('projects.queAindaNaoSaoProjetos')}{' '}
+            <button className="psug-link" onClick={() => void changeRoot()}>{tr('projects.alterarPasta')}</button>
           </div>
         </div>
         <div className="psug-head-actions">
-          <button className="btn btn-secondary btn-sm" onClick={() => void onReload()} disabled={loading} title="Ler a pasta de novo">
+          <button className="btn btn-secondary btn-sm" onClick={() => void onReload()} disabled={loading} title={tr('projects.lerAPastaDeNovo')}>
             {loading ? '…' : '↻'}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} title="Fechar">✕</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} title={tr('projects.fechar')}>✕</button>
         </div>
       </div>
 
       {error && <div className="psug-error">{error}</div>}
 
       {data && !data.rootExists && (
-        <div className="empty-hint">A pasta {data.root} não existe neste computador. Use “alterar pasta”.</div>
+        <div className="empty-hint">{tr('projects.aPastaNaoExisteNeste', { root: data.root })}</div>
       )}
       {data?.rootExists && !items.length && !loading && (
-        <div className="empty-hint">🎉 Todas as pastas já estão cadastradas como projetos.</div>
+        <div className="empty-hint">{tr('projects.todasAsPastasJaEstao')}</div>
       )}
-      {!data && loading && <div className="empty-hint">Lendo a pasta…</div>}
+      {!data && loading && <div className="empty-hint">{tr('projects.lendoAPasta')}</div>}
 
       <div className="psug-list">
         {items.map((s) => (
@@ -101,7 +102,7 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
               {s.description && <div className="psug-desc">{s.description}</div>}
               <div className="psug-meta">
                 <code>{s.displayPath}</code>
-                {s.lastActivity && <span> · mexido {timeAgo(s.lastActivity)}</span>}
+                {s.lastActivity && <span> {tr('projects.mexido')} {timeAgo(s.lastActivity)}</span>}
                 {s.githubRepoUrl && <span> · {s.githubRepoUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>}
               </div>
             </div>
@@ -110,9 +111,9 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
                 className="btn btn-primary btn-sm"
                 disabled={!!busy[s.path]}
                 onClick={() => void run(s.path, () => onCreate(s))}
-                title="Criar o projeto com nome, descrição, repo e caminho local preenchidos"
+                title={tr('projects.criarOProjetoComNome')}
               >
-                {busy[s.path] ? '…' : '+ Criar'}
+                {busy[s.path] ? '…' : tr('projects.criar')}
               </button>
               <button
                 className="btn btn-secondary btn-sm"
@@ -123,9 +124,9 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
                     await onReload()
                   })
                 }
-                title="Não sugerir mais esta pasta"
+                title={tr('projects.naoSugerirMaisEstaPasta')}
               >
-                Ignorar
+                {tr('projects.ignorar')}
               </button>
             </div>
           </div>
@@ -134,7 +135,7 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
 
       {!!data?.ignoredCount && (
         <div className="psug-foot">
-          {data.ignoredCount} pasta(s) ignorada(s) ·{' '}
+          {tr('projects.pastaSIgnoradaS', { ignoredCount: data.ignoredCount })}{' '}
           <button
             className="psug-link"
             onClick={() =>
@@ -144,7 +145,7 @@ export function ProjectSuggestions({ data, loading, onReload, onCreate, onClose 
               })
             }
           >
-            mostrar de novo
+            {tr('projects.mostrarDeNovo')}
           </button>
         </div>
       )}

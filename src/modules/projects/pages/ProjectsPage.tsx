@@ -14,13 +14,14 @@ import { ProjectMetrics } from '../components/ProjectMetrics'
 import { ProjectsSettingsModal } from '../components/ProjectsSettingsModal'
 import { AREAS, STAGES, FOCUS_LIMIT_KEY, isClosed, statusDef } from '../lib/constants'
 import '../projects-hub.css'
+import { t } from '../../../i18n'
 
 type View = 'cockpit' | 'estagios' | 'estante' | 'metricas'
 const VIEWS: { key: View; label: string }[] = [
-  { key: 'cockpit', label: '🎛 Cockpit' },
-  { key: 'estagios', label: '🧬 Estágios' },
-  { key: 'estante', label: '🏆 Estante' },
-  { key: 'metricas', label: '📈 Métricas' }
+  { key: 'cockpit', label: t('projects.cockpit2') },
+  { key: 'estagios', label: t('projects.estagios') },
+  { key: 'estante', label: t('projects.estante') },
+  { key: 'metricas', label: t('projects.metricas') }
 ]
 const COCKPIT_ORDER: ProjectStatus[] = ['foco', 'fila', 'baixa', 'incubadora', 'pausado']
 
@@ -124,20 +125,20 @@ export function ProjectsPage(): React.ReactElement {
     <div className="module-page ph-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🗂 Projetos</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('projects.projetos3')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Poucos em foco, cada um com uma próxima ação. Nada morre em silêncio.
+            {t('projects.poucosEmFocoCadaUm')}
           </p>
         </div>
         <div className="ph-header-actions">
           {untriaged > 0 && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowTriage(true)} title="Decidir situação, área e próxima ação dos projetos ainda não triados">
-              🧭 Triagem <span className="psug-count">{untriaged}</span>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowTriage(true)} title={t('projects.decidirSituacaoAreaEProxima')}>
+              {t('projects.triagem2')} <span className="psug-count">{untriaged}</span>
             </button>
           )}
           {untriaged === 0 && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowTriage(true)} title="Vincular tags do timer e TODOs soltos aos projetos">
-              🔗 Vínculos
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowTriage(true)} title={t('projects.vincularTagsDoTimerE')}>
+              {t('projects.vinculos')}
             </button>
           )}
           <button
@@ -146,14 +147,14 @@ export function ProjectsPage(): React.ReactElement {
               setShowSuggestions((v) => !v)
               if (!showSuggestions) void loadSuggestions()
             }}
-            title="Projetos sugeridos a partir da sua pasta de projetos"
+            title={t('projects.projetosSugeridosAPartirDa')}
           >
-            💡 Sugestões
+            {t('projects.sugestoes')}
             {!!suggestions?.items.length && <span className="psug-count">{suggestions.items.length}</span>}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowProgress(true)}>📊 GitHub</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowSettings(true)} title="Automações (onde parei via Claude Code)" aria-label="Automações dos projetos">⚙️</button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>+ Novo</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowProgress(true)}>{t('projects.github2')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowSettings(true)} title={t('projects.automacoesOndePareiViaClaude')} aria-label={t('projects.automacoesDosProjetos2')}>⚙️</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>{t('projects.novo')}</button>
         </div>
       </div>
 
@@ -164,15 +165,15 @@ export function ProjectsPage(): React.ReactElement {
           ))}
         </div>
         <div className="seg-toggle">
-          <button className={`seg-btn ${area === 'todas' ? 'active' : ''}`} onClick={() => changeArea('todas')}>Todos</button>
+          <button className={`seg-btn ${area === 'todas' ? 'active' : ''}`} onClick={() => changeArea('todas')}>{t('projects.todos')}</button>
           {AREAS.map((a) => (
             <button key={a.key} className={`seg-btn ${area === a.key ? 'active' : ''}`} onClick={() => changeArea(a.key)}>{a.label}</button>
           ))}
         </div>
-        <button className={`btn btn-sm ${quickOnly ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickOnly((v) => !v)} title="Só projetos cuja próxima ação cabe em 15 minutos">
-          ⚡ Tenho 15 min
+        <button className={`btn btn-sm ${quickOnly ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickOnly((v) => !v)} title={t('projects.soProjetosCujaProximaAcao')}>
+          {t('projects.tenho15Min2')}
         </button>
-        {loadingOverview && <span className="ph-muted">atualizando…</span>}
+        {loadingOverview && <span className="ph-muted">{t('projects.atualizando')}</span>}
       </div>
 
       {showSuggestions && (
@@ -189,7 +190,7 @@ export function ProjectsPage(): React.ReactElement {
         <>
           {radar.length > 0 && (
             <div className="ph-radar">
-              <div className="ph-radar-title">📡 Radar — precisam de decisão</div>
+              <div className="ph-radar-title">{t('projects.radarPrecisamDeDecisao')}</div>
               <div className="ph-radar-list">
                 {radar.slice(0, 8).map(({ p, a }, i) => (
                   <button key={`${p.id}-${i}`} className={`ph-radar-item sev-${a.severity}`} onClick={() => openProject(p.id)}>
@@ -198,7 +199,7 @@ export function ProjectsPage(): React.ReactElement {
                     <span>{a.text}</span>
                   </button>
                 ))}
-                {radar.length > 8 && <span className="ph-muted">+{radar.length - 8} alertas</span>}
+                {radar.length > 8 && <span className="ph-muted">{t('projects.alertas', { p0: radar.length - 8 })}</span>}
               </div>
             </div>
           )}
@@ -224,17 +225,17 @@ export function ProjectsPage(): React.ReactElement {
                   </h3>
                   {isFocus && (
                     <label className="ph-muted ph-limit">
-                      limite
+                      {t('projects.limite')}
                       <select value={focusLimit} onChange={(e) => changeFocusLimit(Number(e.target.value))}>
                         {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </label>
                   )}
-                  {isFocus && list.length > focusLimit && <span className="ph-warn-inline">acima do limite</span>}
+                  {isFocus && list.length > focusLimit && <span className="ph-warn-inline">{t('projects.acimaDoLimite')}</span>}
                 </div>
                 <p className="ph-muted ph-lane-hint">{def.hint}</p>
                 <div className={`ph-grid ${isFocus ? 'focus' : ''}`}>
-                  {list.length === 0 && <div className="empty-hint">{isFocus ? 'Nada em foco. Escolha 1–3 projetos da fila.' : 'Vazio — arraste um card para cá.'}</div>}
+                  {list.length === 0 && <div className="empty-hint">{isFocus ? t('projects.nadaEmFocoEscolha1') : t('projects.vazioArrasteUmCardPara')}</div>}
                   {list.map((p) => (
                     <ProjectCard key={p.id} project={p} ov={overview[p.id]} compact={st === 'incubadora' || st === 'pausado' || st === 'baixa'} {...cardProps} />
                   ))}
@@ -269,7 +270,7 @@ export function ProjectsPage(): React.ReactElement {
                       draggable
                       onDragStart={(e) => e.dataTransfer.setData('text/plain', String(p.id))}
                       onClick={() => openProject(p.id)}
-                      title="Arraste para mudar de estágio · clique para abrir"
+                      title={t('projects.arrasteParaMudarDeEstagio')}
                     >
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{statusDef(p.status).icon} {statusDef(p.status).label}</div>

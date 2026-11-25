@@ -6,14 +6,15 @@ import { timeAgo } from '../../../utils/dates'
 import { copyText, shortPath } from '../git'
 import { useUIStore } from '../../../store/uiStore'
 import { DRAFT_KEY } from '../../ai/pages/PromptRunnerPage'
+import { t as tr } from '../../../i18n'
 
 export const DELEGATION_STATUS: Record<ProjectDelegation['status'], { label: string; cls: string }> = {
-  rodando: { label: '⏳ rodando', cls: 'run' },
-  pronta: { label: '👀 pronta p/ revisão', cls: 'ready' },
-  erro: { label: '⚠️ erro', cls: 'err' },
-  cancelada: { label: '✕ cancelada', cls: 'off' },
-  aceita: { label: '✅ aceita', cls: 'ok' },
-  descartada: { label: '🗑 descartada', cls: 'off' }
+  rodando: { label: tr('projects.rodando'), cls: 'run' },
+  pronta: { label: tr('projects.prontaPRevisao'), cls: 'ready' },
+  erro: { label: tr('projects.erro'), cls: 'err' },
+  cancelada: { label: tr('projects.cancelada'), cls: 'off' },
+  aceita: { label: tr('projects.aceita'), cls: 'ok' },
+  descartada: { label: tr('projects.descartada'), cls: 'off' }
 }
 
 /**
@@ -94,7 +95,7 @@ export function DelegateModal({
   }
 
   async function go(): Promise<void> {
-    if (!window.confirm('Executar direto, sem revisar o prompt? O Claude trabalha sozinho num worktree isolado.')) return
+    if (!window.confirm(tr('projects.executarDiretoSemRevisarO'))) return
     setBusy('run')
     setError('')
     try {
@@ -112,36 +113,34 @@ export function DelegateModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal ph-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>🤖 Delegar ao Claude — {project.name}</h2>
+        <h2>{tr('projects.delegarAoClaude')} {project.name}</h2>
         <p className="ph-muted">
-          O Claude analisa a tarefa{project.localPath ? <> e o repositório ({shortPath(project.localPath)}), só lendo,</> : ''} e monta um prompt detalhado. Ele abre
-          no <strong>Prompt Runner</strong>{project.localPath ? <>, já com <strong>worktree isolado</strong>,</> : ''} para você revisar, editar e enviar. Nada é
-          executado antes disso.
+          {tr('projects.oClaudeAnalisaATarefa')}{project.localPath ? <> {tr('projects.eORepositorioSoLendo', { p0: shortPath(project.localPath) })}</> : ''} {tr('projects.eMontaUmPromptDetalhado')} <strong>{tr('projects.promptRunner')}</strong>{project.localPath ? <>{tr('projects.jaCom')} <strong>{tr('projects.worktreeIsolado')}</strong>,</> : ''} {tr('projects.paraVoceRevisarEditarE')}
         </p>
-        <label className="ph-label">Tarefa</label>
+        <label className="ph-label">{tr('projects.tarefa')}</label>
         <textarea rows={multi ? 8 : 2} value={action} onChange={(e) => setAction(e.target.value)} />
-        <label className="ph-label">Instruções extras (opcional)</label>
-        <textarea rows={initialInstructions ? 6 : 3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex: use o componente X, não mude a API pública, escreva testes…" />
+        <label className="ph-label">{tr('projects.instrucoesExtrasOpcional')}</label>
+        <textarea rows={initialInstructions ? 6 : 3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder={tr('projects.exUseOComponenteX')} />
         {error && <div className="ph-error">{error}</div>}
         {busy === 'draft' && (
           <div className="ph-muted" style={{ marginTop: 8 }}>
-            🔎 Claude analisando a tarefa{project.localPath ? ' e o repositório' : ''}… {elapsed}s
+            {tr('projects.claudeAnalisandoATarefa')}{project.localPath ? tr('projects.eORepositorio') : ''}{tr('projects.s', { elapsed })}
           </div>
         )}
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('projects.cancelar')}</button>
           {project.localPath && (
             <button
               className="btn btn-secondary btn-sm"
               onClick={go}
               disabled={!!busy || !action.trim()}
-              title="Fluxo antigo: o Claude executa sozinho num worktree isolado e você revisa no fim"
+              title={tr('projects.fluxoAntigoOClaudeExecuta')}
             >
-              {busy === 'run' ? 'Criando worktree…' : '🤖 Executar direto'}
+              {busy === 'run' ? tr('projects.criandoWorktree') : tr('projects.executarDireto')}
             </button>
           )}
           <button className="btn btn-primary btn-sm" onClick={draft} disabled={!!busy || !action.trim()}>
-            {busy === 'draft' ? 'Montando prompt…' : '📝 Montar prompt'}
+            {busy === 'draft' ? tr('projects.montandoPrompt') : tr('projects.montarPrompt')}
           </button>
         </div>
       </div>
@@ -167,7 +166,7 @@ export function DelegationsPanel({ project, onAccepted }: { project: Project; on
   if (!list.length) return null
 
   async function act(d: ProjectDelegation, kind: 'cancel' | 'discard' | 'accept' | 'pr'): Promise<void> {
-    if (kind === 'discard' && !window.confirm('Remover o worktree e apagar a branch desta delegação?')) return
+    if (kind === 'discard' && !window.confirm(tr('projects.removerOWorktreeEApagar'))) return
     setBusy(`${kind}${d.id}`)
     setError('')
     try {
@@ -191,7 +190,7 @@ export function DelegationsPanel({ project, onAccepted }: { project: Project; on
 
   return (
     <div className="ph-panel">
-      <div className="ph-panel-title">🤖 Delegações</div>
+      <div className="ph-panel-title">{tr('projects.delegacoes')}</div>
       {error && <div className="ph-error">{error}</div>}
       {list.map((d) => {
         const st = DELEGATION_STATUS[d.status]
@@ -210,7 +209,7 @@ export function DelegationsPanel({ project, onAccepted }: { project: Project; on
                   {d.prUrl && (
                     <>
                       {' · '}
-                      <button className="ph-linkbtn" onClick={() => window.api.app.openExternal(d.prUrl!)}>PR ↗</button>
+                      <button className="ph-linkbtn" onClick={() => window.api.app.openExternal(d.prUrl!)}>{tr('projects.pr')}</button>
                     </>
                   )}
                 </div>
@@ -225,28 +224,28 @@ export function DelegationsPanel({ project, onAccepted }: { project: Project; on
                       </div>
                     )}
                     {review.diffStat && <pre className="ph-diffstat">{review.diffStat}</pre>}
-                    {review.uncommitted.length > 0 && <div className="ph-warn">{review.uncommitted.length} arquivo(s) sem commit no worktree.</div>}
-                    {!review.commits.length && !review.uncommitted.length && d.status !== 'rodando' && <div className="ph-muted">Nenhuma mudança no código.</div>}
+                    {review.uncommitted.length > 0 && <div className="ph-warn">{review.uncommitted.length} {tr('projects.arquivoSSemCommitNo')}</div>}
+                    {!review.commits.length && !review.uncommitted.length && d.status !== 'rodando' && <div className="ph-muted">{tr('projects.nenhumaMudancaNoCodigo')}</div>}
                   </>
                 )}
-                {d.status === 'rodando' && <div className="ph-muted">O Claude está trabalhando… você será notificado ao terminar.</div>}
+                {d.status === 'rodando' && <div className="ph-muted">{tr('projects.oClaudeEstaTrabalhandoVoce')}</div>}
                 {d.output && <div className="md-preview-pane ph-deleg-out">{renderMarkdown(d.output)}</div>}
                 <div className="ph-btnrow">
                   {d.status === 'rodando' ? (
-                    <button className="btn btn-secondary btn-sm" onClick={() => act(d, 'cancel')} disabled={!!busy}>■ Cancelar</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => act(d, 'cancel')} disabled={!!busy}>{tr('projects.cancelar2')}</button>
                   ) : (
                     <>
                       {review?.worktreeExists && (
                         <>
-                          <button className="btn btn-secondary btn-sm" onClick={() => window.api.git.openPath(d.worktreePath, 'vscode')}>VS Code</button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => copyText(`cd ${JSON.stringify(d.worktreePath)} && claude`)} title="Copia o comando para continuar a conversa no worktree">⧉ Continuar</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => window.api.git.openPath(d.worktreePath, 'vscode')}>{tr('projects.vsCode')}</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => copyText(`cd ${JSON.stringify(d.worktreePath)} && claude`)} title={tr('projects.copiaOComandoParaContinuar')}>{tr('projects.continuar')}</button>
                         </>
                       )}
                       {!d.prUrl && !!review?.commits.length && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => act(d, 'pr')} disabled={!!busy}>{busy === `pr${d.id}` ? 'Abrindo…' : '🔀 Criar PR'}</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => act(d, 'pr')} disabled={!!busy}>{busy === `pr${d.id}` ? tr('projects.abrindo') : tr('projects.criarPr')}</button>
                       )}
-                      {d.status !== 'aceita' && <button className="btn btn-primary btn-sm" onClick={() => act(d, 'accept')} disabled={!!busy}>✓ Aceitar</button>}
-                      <button className="btn btn-danger btn-sm" onClick={() => act(d, 'discard')} disabled={!!busy}>Descartar</button>
+                      {d.status !== 'aceita' && <button className="btn btn-primary btn-sm" onClick={() => act(d, 'accept')} disabled={!!busy}>{tr('projects.aceitar')}</button>}
+                      <button className="btn btn-danger btn-sm" onClick={() => act(d, 'discard')} disabled={!!busy}>{tr('projects.descartar')}</button>
                     </>
                   )}
                 </div>

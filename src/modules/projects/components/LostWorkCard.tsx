@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { useGitStore } from '../store/gitStore'
 import { useUIStore } from '../../../store/uiStore'
 import { STATUS_BY_ID, timeAgo } from '../git'
+import { t } from '../../../i18n'
 
 /**
  * Home card: branches/worktrees with work that isn't delivered (risk + forgotten).
@@ -28,25 +29,25 @@ export function LostWorkCard(): React.ReactElement | null {
   return (
     <div className="chart-section" style={{ marginTop: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <div className="chart-title">🌿 Trabalho esquecido em branches</div>
+        <div className="chart-title">{t('projects.trabalhoEsquecidoEmBranches')}</div>
         <button className="btn btn-secondary btn-sm" onClick={() => setPage('worktrees')}>
-          Ver tudo →
+          {t('projects.verTudo')}
         </button>
       </div>
       <div className="git-card-counts">
         {risk > 0 && (
           <span>
-            {STATUS_BY_ID.risk.emoji} <b>{risk}</b> em risco
+            {STATUS_BY_ID.risk.emoji} <b>{risk}</b> {t('projects.emRisco2')}
           </span>
         )}
         {forgotten > 0 && (
           <span>
-            {STATUS_BY_ID.forgotten.emoji} <b>{forgotten}</b> esquecida(s)
+            {STATUS_BY_ID.forgotten.emoji} <b>{forgotten}</b> {t('projects.esquecidaS')}
           </span>
         )}
         {orphans > 0 && (
           <span>
-            {STATUS_BY_ID.orphan.emoji} <b>{orphans}</b> órfã(s)
+            {STATUS_BY_ID.orphan.emoji} <b>{orphans}</b> {t('projects.orfaS')}
           </span>
         )}
       </div>
@@ -55,8 +56,8 @@ export function LostWorkCard(): React.ReactElement | null {
           <div key={b.id} style={{ display: 'flex', gap: 8, minWidth: 0 }}>
             <span>{STATUS_BY_ID[b.status].emoji}</span>
             <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{b.repoName}</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{b.branch ?? '(HEAD destacado)'}</span>
-            <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{b.lastCommitAt ? `há ${timeAgo(b.lastCommitAt)}` : ''}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{b.branch ?? t('projects.headDestacado')}</span>
+            <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{b.lastCommitAt ? t('projects.ha2', { p0: timeAgo(b.lastCommitAt) }) : ''}</span>
           </div>
         ))}
       </div>

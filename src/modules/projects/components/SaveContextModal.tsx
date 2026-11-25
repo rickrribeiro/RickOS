@@ -4,6 +4,7 @@ import { useContextPromptStore } from '../store/contextPromptStore'
 import { useProjectStore } from '../store/projectStore'
 import { fmtMinutes } from '../lib/constants'
 import { projectContext, runText } from '../lib/ai'
+import { t } from '../../../i18n'
 
 /** Aparece ao encerrar uma sessão do timer vinculada a um projeto: "onde parei" + próximo passo. */
 export function SaveContextModal(): React.ReactElement | null {
@@ -53,20 +54,20 @@ export function SaveContextModal(): React.ReactElement | null {
   return (
     <div className="modal-overlay" onClick={dismiss}>
       <div className="modal ph-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>📍 Salvar contexto — {project.name}</h2>
+        <h2>{t('projects.salvarContexto')} {project.name}</h2>
         <p className="ph-muted">
-          Sessão de {fmtMinutes(prompt.minutes)} em “{prompt.taskTitle}”. Deixe um bilhete para o você do futuro.
+          {t('projects.sessaoDeEmDeixeUm', { p0: fmtMinutes(prompt.minutes), taskTitle: prompt.taskTitle })}
         </p>
-        <label className="ph-label">Onde parei</label>
-        <textarea autoFocus rows={3} value={where} onChange={(e) => setWhere(e.target.value)} placeholder={project.whereLeftOff ?? 'Ex: login funcionando, falta tratar refresh token em api/auth.ts'} />
+        <label className="ph-label">{t('projects.ondeParei')}</label>
+        <textarea autoFocus rows={3} value={where} onChange={(e) => setWhere(e.target.value)} placeholder={project.whereLeftOff ?? t('projects.exLoginFuncionandoFaltaTratar')} />
         <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={draft} disabled={aiRunning}>
-          {aiRunning ? 'Escrevendo…' : '✨ Rascunho pela IA'}
+          {aiRunning ? t('projects.escrevendo') : t('projects.rascunhoPelaIa')}
         </button>
-        <label className="ph-label">Próximo passo</label>
+        <label className="ph-label">{t('projects.proximoPasso')}</label>
         <input value={next} onChange={(e) => setNext(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={dismiss}>Agora não</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={dismiss}>{t('projects.agoraNao')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{t('projects.salvar')}</button>
         </div>
       </div>
     </div>

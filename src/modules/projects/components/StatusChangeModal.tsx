@@ -3,6 +3,7 @@ import type { Project, ProjectStatus } from '../../../types'
 import { useProjectStore } from '../store/projectStore'
 import { statusDef, FOCUS_LIMIT_KEY } from '../lib/constants'
 import { ClosingRitualModal } from './ClosingRitualModal'
+import { t } from '../../../i18n'
 
 /**
  * Toda mudança de situação passa por aqui e vira uma decisão registrada:
@@ -31,10 +32,10 @@ export function StatusChangeModal({ project, to, onClose }: { project: Project; 
 
   async function save(): Promise<void> {
     setError('')
-    if (to === 'pausado' && !reason.trim()) return setError('Diga por que está pausando.')
-    if (to === 'pausado' && !resumeAt && !resumeCondition.trim()) return setError('Defina uma data ou condição de retomada.')
-    if (to === 'encerrado' && !reason.trim()) return setError('Registre o motivo do encerramento.')
-    if (to === 'foco' && !nextAction.trim()) return setError('Projeto em foco precisa de exatamente uma próxima ação.')
+    if (to === 'pausado' && !reason.trim()) return setError(t('projects.digaPorQueEstaPausando'))
+    if (to === 'pausado' && !resumeAt && !resumeCondition.trim()) return setError(t('projects.definaUmaDataOuCondicao'))
+    if (to === 'encerrado' && !reason.trim()) return setError(t('projects.registreOMotivoDoEncerramento'))
+    if (to === 'foco' && !nextAction.trim()) return setError(t('projects.projetoEmFocoPrecisaDe'))
     setSaving(true)
     try {
       await setStatus(project.id, to, {
@@ -64,26 +65,26 @@ export function StatusChangeModal({ project, to, onClose }: { project: Project; 
           <>
             {inFocus >= limit && (
               <div className="ph-warn">
-                ⚠️ Você já tem {inFocus} projeto(s) em foco (limite {limit}). Considere pausar ou mandar outro para a fila.
+                {t('projects.voceJaTemProjetoS', { inFocus, limit })}
               </div>
             )}
-            <label className="ph-label">Próxima ação (uma só, concreta)</label>
-            <input autoFocus value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Ex: escrever o endpoint de login" />
+            <label className="ph-label">{t('projects.proximaAcaoUmaSoConcreta')}</label>
+            <input autoFocus value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder={t('projects.exEscreverOEndpointDe')} />
           </>
         )}
 
         {to === 'pausado' && (
           <>
-            <label className="ph-label">Por que pausar?</label>
-            <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex: prioridade do trabalho, esperando cliente…" />
+            <label className="ph-label">{t('projects.porQuePausar')}</label>
+            <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('projects.exPrioridadeDoTrabalhoEsperando')} />
             <div className="ph-row">
               <div style={{ flex: '0 0 auto' }}>
-                <label className="ph-label">Retomar em</label>
+                <label className="ph-label">{t('projects.retomarEm')}</label>
                 <input type="date" value={resumeAt} onChange={(e) => setResumeAt(e.target.value)} />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
-                <label className="ph-label">…ou quando</label>
-                <input value={resumeCondition} onChange={(e) => setResumeCondition(e.target.value)} placeholder="Ex: depois do lançamento do X" />
+                <label className="ph-label">{t('projects.ouQuando')}</label>
+                <input value={resumeCondition} onChange={(e) => setResumeCondition(e.target.value)} placeholder={t('projects.exDepoisDoLancamentoDo')} />
               </div>
             </div>
           </>
@@ -91,31 +92,31 @@ export function StatusChangeModal({ project, to, onClose }: { project: Project; 
 
         {to === 'encerrado' && (
           <>
-            <label className="ph-label">Por que encerrar?</label>
-            <textarea autoFocus rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex: perdi interesse, mercado não existe, outro projeto resolve isso…" />
-            <p className="ph-muted">Encerrar não é fracasso: é liberar espaço. O projeto vai para a estante com o motivo registrado.</p>
+            <label className="ph-label">{t('projects.porQueEncerrar')}</label>
+            <textarea autoFocus rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('projects.exPerdiInteresseMercadoNao')} />
+            <p className="ph-muted">{t('projects.encerrarNaoEFracassoE')}</p>
           </>
         )}
 
         {to === 'baixa' && (
           <>
-            <label className="ph-label">Próxima ação (opcional — para quando sobrar um tempo)</label>
-            <input autoFocus value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Ex: adicionar gráfico semanal" />
+            <label className="ph-label">{t('projects.proximaAcaoOpcionalParaQuando')}</label>
+            <input autoFocus value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder={t('projects.exAdicionarGraficoSemanal')} />
           </>
         )}
 
         {(to === 'fila' || to === 'incubadora') && (
           <>
-            <label className="ph-label">Nota da decisão (opcional)</label>
-            <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex: entra em foco depois do RickOS v2" />
+            <label className="ph-label">{t('projects.notaDaDecisaoOpcional')}</label>
+            <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('projects.exEntraEmFocoDepois')} />
           </>
         )}
 
         {error && <div className="ph-error">{error}</div>}
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('projects.cancelar')}</button>
           <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
-            {saving ? 'Salvando…' : `Mover para ${def.label}`}
+            {saving ? t('projects.salvando') : t('projects.moverPara', { label: def.label })}
           </button>
         </div>
       </div>

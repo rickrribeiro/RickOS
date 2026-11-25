@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import type { ClaudeHookStatus } from '../../../types'
 import { timeAgo } from '../../../utils/dates'
 import { shortPath } from '../git'
+import { t } from '../../../i18n'
 
 /** Automações da Central de Projetos: hook do Claude Code que preenche o "onde parei". */
 export function ProjectsSettingsModal({ onClose }: { onClose: () => void }): React.ReactElement {
@@ -32,57 +33,55 @@ export function ProjectsSettingsModal({ onClose }: { onClose: () => void }): Rea
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal ph-modal ph-modal-wide" onClick={(e) => e.stopPropagation()}>
-        <h2>⚙️ Automações dos projetos</h2>
+        <h2>{t('projects.automacoesDosProjetos')}</h2>
 
         <div className="ph-panel">
-          <div className="ph-panel-title">📍 “Onde parei” automático (Claude Code)</div>
+          <div className="ph-panel-title">{t('projects.ondePareiAutomaticoClaudeCode')}</div>
           <p className="ph-muted">
-            Um hook <code>SessionEnd</code> global avisa o rickOS quando uma sessão do Claude Code termina. Se a pasta pertence a um projeto (ou a um
-            worktree dele), o rickOS lê a conversa e os commits e escreve o “onde parei” — e a próxima ação, se estiver vazia.
+            {t('projects.umHook')} <code>SessionEnd</code> {t('projects.globalAvisaORickosQuando')}
           </p>
           {st && (
             <div className="ph-hook-status">
-              <span className={`ph-deleg-status ${st.installed ? 'ok' : 'off'}`}>{st.installed ? '● instalado' : '○ não instalado'}</span>
-              {st.installed && <span className="ph-muted">em {shortPath(st.settingsPath)}</span>}
+              <span className={`ph-deleg-status ${st.installed ? 'ok' : 'off'}`}>{st.installed ? t('projects.instalado') : t('projects.naoInstalado')}</span>
+              {st.installed && <span className="ph-muted">{t('projects.em')} {shortPath(st.settingsPath)}</span>}
             </div>
           )}
           {st?.last && (
             <div className="ph-muted">
-              Última sessão: {st.last.project ?? '—'} · {st.last.status} · há {timeAgo(st.last.at)}
+              {t('projects.ultimaSessao')} {st.last.project ?? '—'} {t('projects.ha', { status: st.last.status, p1: timeAgo(st.last.at) })}
             </div>
           )}
           {st?.installed && (
             <>
               <label className="ph-check">
                 <input type="checkbox" checked={st.enabled} onChange={() => run(() => window.api.projects.hookConfig(!st.enabled, null))} />
-                <span>Ativo (desligue para pausar sem desinstalar)</span>
+                <span>{t('projects.ativoDesligueParaPausarSem')}</span>
               </label>
               <div className="ph-row">
                 <label className="ph-muted" style={{ flex: 1 }}>
-                  Modelo do resumo
-                  <input value={model} onChange={(e) => setModel(e.target.value)} onBlur={() => model !== st.model && run(() => window.api.projects.hookConfig(st.enabled, model))} placeholder="haiku" />
+                  {t('projects.modeloDoResumo')}
+                  <input value={model} onChange={(e) => setModel(e.target.value)} onBlur={() => model !== st.model && run(() => window.api.projects.hookConfig(st.enabled, model))} placeholder={t('projects.haiku')} />
                 </label>
               </div>
             </>
           )}
           <div className="ph-btnrow">
             {!st?.installed ? (
-              <button className="btn btn-primary btn-sm" onClick={() => run(() => window.api.projects.hookInstall())} disabled={busy}>Instalar hook</button>
+              <button className="btn btn-primary btn-sm" onClick={() => run(() => window.api.projects.hookInstall())} disabled={busy}>{t('projects.instalarHook')}</button>
             ) : (
               <>
-                <button className="btn btn-secondary btn-sm" onClick={() => run(() => window.api.projects.hookInstall())} disabled={busy} title="Regrava o script (ex.: mudou a porta/token)">↻ Reinstalar</button>
-                <button className="btn btn-danger btn-sm" onClick={() => run(() => window.api.projects.hookUninstall())} disabled={busy}>Desinstalar</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => run(() => window.api.projects.hookInstall())} disabled={busy} title={t('projects.regravaOScriptExMudou')}>{t('projects.reinstalar')}</button>
+                <button className="btn btn-danger btn-sm" onClick={() => run(() => window.api.projects.hookUninstall())} disabled={busy}>{t('projects.desinstalar')}</button>
               </>
             )}
           </div>
           <p className="ph-muted">
-            Instalar edita <code>~/.claude/settings.json</code> (backup em <code>settings.json.rickos-backup</code>) no computador que roda o rickOS. Vale para
-            sessões novas do Claude Code. Cada resumo é uma chamada curta ao modelo escolhido.
+            {t('projects.instalarEdita')} <code>~/.claude/settings.json</code> {t('projects.backupEm')} <code>settings.json.rickos-backup</code>{t('projects.noComputadorQueRodaO')}
           </p>
         </div>
         {error && <div className="ph-error">{error}</div>}
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Fechar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('projects.fechar')}</button>
         </div>
       </div>
     </div>

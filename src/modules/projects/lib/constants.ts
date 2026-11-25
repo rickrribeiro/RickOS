@@ -1,14 +1,15 @@
 import type { NextActionSize, Project, ProjectArea, ProjectOverview, ProjectStatus } from '../../../types'
+import { t, getLocale, weekdayNames } from '../../../i18n'
 
 /** Situação = onde o projeto está na minha atenção. Independe do estágio (maturidade). */
 export const STATUSES: { key: ProjectStatus; label: string; icon: string; hint: string }[] = [
-  { key: 'foco', label: 'Em foco', icon: '🎯', hint: 'Poucos, com próxima ação definida. É aqui que o tempo vai.' },
-  { key: 'fila', label: 'Fila', icon: '⏭', hint: 'Decidido: entra em foco quando abrir vaga.' },
-  { key: 'baixa', label: 'Baixa prioridade', icon: '🐢', hint: 'Em andamento, mas sem o seu foco: avança de vez em quando, sem cobrança.' },
-  { key: 'incubadora', label: 'Incubadora', icon: '🥚', hint: 'Ideias e projetos ainda não decididos. Todo projeto novo começa aqui.' },
-  { key: 'pausado', label: 'Pausado', icon: '⏸', hint: 'Parado de propósito, com motivo e data/condição de retomada.' },
-  { key: 'concluido', label: 'Concluído', icon: '🏁', hint: 'Cruzou a linha de chegada.' },
-  { key: 'encerrado', label: 'Encerrado', icon: '🪦', hint: 'Abandonado conscientemente, com motivo registrado.' }
+  { key: 'foco', label: t('projects.emFoco3'), icon: '🎯', hint: t('projects.poucosComProximaAcaoDefinida') },
+  { key: 'fila', label: t('projects.fila'), icon: '⏭', hint: t('projects.decididoEntraEmFocoQuando') },
+  { key: 'baixa', label: t('projects.baixaPrioridade'), icon: '🐢', hint: t('projects.emAndamentoMasSemO') },
+  { key: 'incubadora', label: t('projects.incubadora'), icon: '🥚', hint: t('projects.ideiasEProjetosAindaNao') },
+  { key: 'pausado', label: t('projects.pausado'), icon: '⏸', hint: t('projects.paradoDePropositoComMotivo') },
+  { key: 'concluido', label: t('projects.concluido2'), icon: '🏁', hint: t('projects.cruzouALinhaDeChegada') },
+  { key: 'encerrado', label: t('projects.encerrado'), icon: '🪦', hint: t('projects.abandonadoConscientementeComMotivoRegistrado') }
 ]
 export const statusDef = (k: string): (typeof STATUSES)[number] => STATUSES.find((s) => s.key === k) ?? STATUSES[2]
 export const statusLabel = (k: string): string => {
@@ -19,19 +20,19 @@ export const isClosed = (p: Pick<Project, 'status'>): boolean => p.status === 'c
 
 /** Estágio = maturidade do produto. */
 export const STAGES: { key: string; label: string }[] = [
-  { key: '', label: '— sem estágio' },
-  { key: 'ideia', label: '💡 Ideia' },
-  { key: 'validacao', label: '🔎 Validação' },
-  { key: 'mvp', label: '🛠 MVP' },
-  { key: 'lancado', label: '🚀 Lançado' },
-  { key: 'monetizando', label: '💰 Monetizando' },
-  { key: 'manutencao', label: '🔧 Manutenção' }
+  { key: '', label: t('projects.semEstagio') },
+  { key: 'ideia', label: t('projects.ideia') },
+  { key: 'validacao', label: t('projects.validacao') },
+  { key: 'mvp', label: t('projects.mvp') },
+  { key: 'lancado', label: t('projects.lancado') },
+  { key: 'monetizando', label: t('projects.monetizando') },
+  { key: 'manutencao', label: t('projects.manutencao') }
 ]
 export const stageLabel = (k: string | null | undefined): string => STAGES.find((s) => s.key === (k ?? ''))?.label ?? k ?? ''
 
 export const AREAS: { key: ProjectArea; label: string }[] = [
-  { key: 'pessoal', label: '🏠 Pessoal' },
-  { key: 'profissional', label: '💼 Profissional' }
+  { key: 'pessoal', label: t('projects.pessoal') },
+  { key: 'profissional', label: t('projects.profissional') }
 ]
 export const areaLabel = (k: string): string => AREAS.find((a) => a.key === k)?.label ?? k
 
@@ -45,18 +46,18 @@ export const PULSE: Record<ProjectOverview['pulse'], { label: string; color: str
 export const PRESET_COLORS = ['#6366f1', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4']
 
 export const EVENT_LABEL: Record<string, string> = {
-  status: '🔀 Situação',
-  decisao: '⚖️ Decisão',
-  proxima_acao: '👉 Próxima ação',
-  acao_concluida: '✅ Ação concluída',
-  onde_parei: '📍 Onde parei',
-  bloqueio: '🧱 Bloqueio',
-  ciclo: '🔁 Ciclo',
-  marco: '🎯 Marco',
-  revisao: '🗓️ Revisão',
-  nota: '📝 Nota',
-  sessao_claude: '🤖 Sessão Claude',
-  delegacao: '🤖 Delegação'
+  status: t('projects.situacao2'),
+  decisao: t('projects.decisao'),
+  proxima_acao: t('projects.proximaAcao2'),
+  acao_concluida: t('projects.acaoConcluida'),
+  onde_parei: t('projects.ondeParei2'),
+  bloqueio: t('projects.bloqueio'),
+  ciclo: t('projects.ciclo'),
+  marco: t('projects.marco'),
+  revisao: t('projects.revisao'),
+  nota: t('projects.nota'),
+  sessao_claude: t('projects.sessaoClaude'),
+  delegacao: t('projects.delegacao')
 }
 
 export function fmtMinutes(min: number): string {
@@ -70,7 +71,7 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso)
   if (isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' })
+  return d.toLocaleDateString(getLocale(), { day: '2-digit', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' })
 }
 
 export function daysBetween(fromIso: string, to: Date = new Date()): number {
@@ -83,20 +84,16 @@ export const LAST_REVIEW_KEY = 'projects_last_review'
 
 /** Tamanho da próxima ação: cabe numa brecha de 15 min ou pede um bloco de foco. */
 export const SIZES: { key: NextActionSize; icon: string; label: string }[] = [
-  { key: 'rapida', icon: '⚡', label: '15 min' },
-  { key: 'longa', icon: '🧠', label: '2 h' }
+  { key: 'rapida', icon: '⚡', label: t('projects.15Min') },
+  { key: 'longa', icon: '🧠', label: t('projects.2H') }
 ]
 export const sizeDef = (k: string | null | undefined): (typeof SIZES)[number] | null => SIZES.find((s) => s.key === k) ?? null
 
-export const WEEKDAYS = [
-  { short: 'D', label: 'dom', long: 'domingo' },
-  { short: 'S', label: 'seg', long: 'segunda' },
-  { short: 'T', label: 'ter', long: 'terça' },
-  { short: 'Q', label: 'qua', long: 'quarta' },
-  { short: 'Q', label: 'qui', long: 'quinta' },
-  { short: 'S', label: 'sex', long: 'sexta' },
-  { short: 'S', label: 'sáb', long: 'sábado' }
-]
+// dom..sáb no idioma atual: inicial, abreviado e por extenso
+const WD_NARROW = weekdayNames('narrow')
+const WD_SHORT = weekdayNames('short').map((s) => s.toLowerCase())
+const WD_LONG = weekdayNames('long')
+export const WEEKDAYS = WD_SHORT.map((label, i) => ({ short: WD_NARROW[i].toUpperCase(), label, long: WD_LONG[i] }))
 
 export function parseWorkDays(raw: string | null | undefined): number[] {
   try {

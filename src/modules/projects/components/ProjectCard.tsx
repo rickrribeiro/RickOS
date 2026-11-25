@@ -4,6 +4,7 @@ import { useUIStore } from '../../../store/uiStore'
 import { reposOf, useProjectStore } from '../store/projectStore'
 import { PULSE, STATUSES, areaLabel, fmtDate, fmtMinutes, stageLabel, sizeDef, workDaysLabel, isProjectDay } from '../lib/constants'
 import { timeAgo } from '../../../utils/dates'
+import { t } from '../../../i18n'
 
 interface Props {
   project: Project
@@ -38,7 +39,7 @@ export function ProjectCard({ project: p, ov, compact, onStatus, onCompleteActio
       onKeyDown={(e) => e.key === 'Enter' && openProject(p.id)}
     >
       <div className="ph-card-head">
-        <span className="ph-pulse" style={{ background: pulse.color }} title={`Sinal de vida: ${pulse.label}${ov?.lastActivityAt ? ` · última atividade (${ov.lastActivitySource}) há ${timeAgo(ov.lastActivityAt)}` : ''}`} />
+        <span className="ph-pulse" style={{ background: pulse.color }} title={t('projects.sinalDeVida', { label: pulse.label, p1: ov?.lastActivityAt ? ` · última atividade (${ov.lastActivitySource}) há ${timeAgo(ov.lastActivityAt)}` : '' })} />
         <span className="ph-card-name">{p.name}</span>
         {ov && ov.alerts.length > 0 && (
           <span className={`ph-alert-badge sev-${worst?.severity ?? 'baixa'}`} title={ov.alerts.map((a) => a.text).join('\n')}>
@@ -52,12 +53,12 @@ export function ProjectCard({ project: p, ov, compact, onStatus, onCompleteActio
           <span>{areaLabel(p.area)}</span>
           {p.stage && <span>{stageLabel(p.stage)}</span>}
           {ov?.activeCycle && <span>🔁 {ov.activeCycle.name}{ov.activeCycle.dueDate ? ` · ${fmtDate(ov.activeCycle.dueDate)}` : ''}</span>}
-          {p.workDays && workDaysLabel(p.workDays) && <span className={today ? 'ph-today' : ''}>📅 {today ? 'hoje · ' : ''}{workDaysLabel(p.workDays)}</span>}
+          {p.workDays && workDaysLabel(p.workDays) && <span className={today ? 'ph-today' : ''}>📅 {today ? t('projects.hoje') : ''}{workDaysLabel(p.workDays)}</span>}
         </div>
       )}
       {deleg && (
         <div className={`ph-deleg-status ${deleg.status === 'rodando' ? 'run' : 'ready'}`} title={deleg.action}>
-          🤖 {deleg.status === 'rodando' ? 'Claude trabalhando…' : 'delegação pronta p/ revisão'}
+          🤖 {deleg.status === 'rodando' ? t('projects.claudeTrabalhando') : t('projects.delegacaoProntaPRevisao')}
         </div>
       )}
 
@@ -73,12 +74,12 @@ export function ProjectCard({ project: p, ov, compact, onStatus, onCompleteActio
         <div className={`ph-card-next ${p.nextAction ? '' : 'missing'}`} onClick={stop}>
           {p.nextAction ? (
             <>
-              <button className="ph-tick" title="Concluir próxima ação" onClick={() => onCompleteAction(p)}>○</button>
+              <button className="ph-tick" title={t('projects.concluirProximaAcao')} onClick={() => onCompleteAction(p)}>○</button>
               <span onClick={() => onSetAction(p)}>{p.nextAction}</span>
               {size && <span className="ph-size" title={size.label}>{size.icon}</span>}
             </>
           ) : (
-            <button className="ph-linkbtn" onClick={() => onSetAction(p)}>+ definir próxima ação</button>
+            <button className="ph-linkbtn" onClick={() => onSetAction(p)}>{t('projects.definirProximaAcao')}</button>
           )}
         </div>
       )}
@@ -87,33 +88,33 @@ export function ProjectCard({ project: p, ov, compact, onStatus, onCompleteActio
 
       {p.status === 'pausado' && (
         <div className="ph-card-where">
-          ⏸ {p.pauseReason ?? 'sem motivo'}
-          {(p.resumeAt || p.resumeCondition) && <> · retomar {p.resumeAt ? `em ${fmtDate(p.resumeAt)}` : `quando ${p.resumeCondition}`}</>}
+          ⏸ {p.pauseReason ?? t('projects.semMotivo')}
+          {(p.resumeAt || p.resumeCondition) && <> {t('projects.retomar')} {p.resumeAt ? t('projects.em2', { p0: fmtDate(p.resumeAt) }) : t('projects.quando', { resumeCondition: p.resumeCondition })}</>}
         </div>
       )}
 
       <div className="ph-card-foot" onClick={stop}>
-        <span className="ph-muted" title="Horas nos últimos 7 dias / total">
+        <span className="ph-muted" title={t('projects.horasNosUltimos7Dias')}>
           ⏱ {fmtMinutes(ov?.minutes7d ?? 0)} <span className="ph-dim">/ {fmtMinutes(ov?.minutesTotal ?? 0)}</span>
         </span>
-        {ov && ov.commits7d > 0 && <span className="ph-muted" title="Commits nos últimos 7 dias">⎇ {ov.commits7d}</span>}
+        {ov && ov.commits7d > 0 && <span className="ph-muted" title={t('projects.commitsNosUltimos7Dias')}>⎇ {ov.commits7d}</span>}
         {repoCount > 0 && (
-          <span className="ph-muted" title="Projeto workspace: commits, branches e issues somam todos os repositórios">
-            📦 {repoCount} repos
+          <span className="ph-muted" title={t('projects.projetoWorkspaceCommitsBranchesE')}>
+            {t('projects.repos', { repoCount })}
           </span>
         )}
         <span style={{ flex: 1 }} />
         {(p.status === 'foco' || p.status === 'fila' || p.status === 'baixa') && (
-          <button className="btn btn-primary btn-sm" onClick={() => startWorking(p)} title="Inicia o timer vinculado a este projeto">
-            ▶ Trabalhar
+          <button className="btn btn-primary btn-sm" onClick={() => startWorking(p)} title={t('projects.iniciaOTimerVinculadoA')}>
+            {t('projects.trabalhar')}
           </button>
         )}
         <select
           className="ph-status-select"
           value=""
           onChange={(e) => e.target.value && onStatus(p, e.target.value as ProjectStatus)}
-          title="Mudar situação"
-          aria-label="Mudar situação"
+          title={t('projects.mudarSituacao')}
+          aria-label={t('projects.mudarSituacao')}
         >
           <option value="">⋯</option>
           {STATUSES.filter((s) => s.key !== p.status).map((s) => (

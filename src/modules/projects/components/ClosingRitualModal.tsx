@@ -3,14 +3,15 @@ import type { Project } from '../../../types'
 import { useProjectStore } from '../store/projectStore'
 import { projectContext, runText } from '../lib/ai'
 import { fmtMinutes } from '../lib/constants'
+import { t } from '../../../i18n'
 
 const CHECKLIST = [
-  'A linha de chegada foi atingida',
-  'Marcos da entrega concluídos (ou movidos para "futuro")',
-  'Publicado / em uso (deploy, release, entregue a quem precisa)',
-  'README / documentação mínima atualizada',
-  'Branches e worktrees limpos',
-  'Ideias soltas anotadas em "melhorias futuras"'
+  t('projects.closing.finishLine'),
+  t('projects.closing.milestones'),
+  t('projects.closing.published'),
+  t('projects.closing.readme'),
+  t('projects.closing.branches'),
+  t('projects.closing.ideas')
 ]
 
 /** Ritual de conclusão: checklist → retrospectiva (com IA) → celebração. */
@@ -62,14 +63,14 @@ export function ClosingRitualModal({ project, onClose }: { project: Project; onC
       <div className="modal ph-modal ph-modal-wide" onClick={(e) => e.stopPropagation()}>
         {step === 0 && (
           <>
-            <h2>🏁 Concluir {project.name}</h2>
+            <h2>{t('projects.concluir2')} {project.name}</h2>
             {project.finishLine && (
               <div className="ph-finish">
-                <span className="ph-label">Pronto quando…</span>
+                <span className="ph-label">{t('projects.prontoQuando')}</span>
                 <div>{project.finishLine}</div>
               </div>
             )}
-            {openMs.length > 0 && <div className="ph-warn">Ainda há {openMs.length} marco(s) aberto(s): {openMs.map((m) => m.title).join(', ')}</div>}
+            {openMs.length > 0 && <div className="ph-warn">{t('projects.aindaHaMarcoSAberto', { count: openMs.length })} {openMs.map((m) => m.title).join(', ')}</div>}
             <div className="ph-checklist">
               {CHECKLIST.map((c, i) => (
                 <label key={c} className="ph-check">
@@ -79,9 +80,9 @@ export function ClosingRitualModal({ project, onClose }: { project: Project; onC
               ))}
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={onClose}>Ainda não</button>
+              <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('projects.aindaNao')}</button>
               <button className="btn btn-primary btn-sm" onClick={() => setStep(1)}>
-                Retrospectiva → {checks.every(Boolean) ? '' : `(${checks.filter(Boolean).length}/${CHECKLIST.length})`}
+                {t('projects.retrospectiva')} {checks.every(Boolean) ? '' : `(${checks.filter(Boolean).length}/${CHECKLIST.length})`}
               </button>
             </div>
           </>
@@ -89,23 +90,23 @@ export function ClosingRitualModal({ project, onClose }: { project: Project; onC
 
         {step === 1 && (
           <>
-            <h2>🔍 Retrospectiva</h2>
-            <label className="ph-label">O que foi bem?</label>
+            <h2>{t('projects.retrospectiva2')}</h2>
+            <label className="ph-label">{t('projects.oQueFoiBem')}</label>
             <textarea rows={2} value={wentWell} onChange={(e) => setWentWell(e.target.value)} />
-            <label className="ph-label">O que aprendi?</label>
+            <label className="ph-label">{t('projects.oQueAprendi')}</label>
             <textarea rows={2} value={learned} onChange={(e) => setLearned(e.target.value)} />
-            <label className="ph-label">O que faria diferente?</label>
+            <label className="ph-label">{t('projects.oQueFariaDiferente')}</label>
             <textarea rows={2} value={differently} onChange={(e) => setDifferently(e.target.value)} />
             <div style={{ marginTop: 8 }}>
               <button className="btn btn-secondary btn-sm" onClick={generate} disabled={aiRunning}>
-                {aiRunning ? 'Escrevendo…' : aiRetro ? '↻ Gerar de novo' : '✨ Gerar retrospectiva com IA'}
+                {aiRunning ? t('projects.escrevendo') : aiRetro ? t('projects.gerarDeNovo') : t('projects.gerarRetrospectivaComIa')}
               </button>
             </div>
             {aiRetro && <textarea className="ph-retro" rows={8} value={aiRetro} onChange={(e) => setAiRetro(e.target.value)} />}
             {error && <div className="ph-error">{error}</div>}
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => setStep(0)}>← Voltar</button>
-              <button className="btn btn-primary btn-sm" onClick={finish}>🏁 Concluir projeto</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setStep(0)}>{t('projects.voltar')}</button>
+              <button className="btn btn-primary btn-sm" onClick={finish}>{t('projects.concluirProjeto')}</button>
             </div>
           </>
         )}
@@ -118,15 +119,15 @@ export function ClosingRitualModal({ project, onClose }: { project: Project; onC
               ))}
             </div>
             <div className="ph-celebrate-emoji">🎉</div>
-            <h2>{project.name} concluído!</h2>
+            <h2>{project.name} {t('projects.concluido')}</h2>
             <p className="ph-muted">
-              {ov ? `${fmtMinutes(ov.minutesTotal)} registradas` : ''}
-              {days ? ` · ${days} dias do início ao fim` : ''}
-              {ov?.milestonesTotal ? ` · ${ov.milestonesDone}/${ov.milestonesTotal} marcos` : ''}
+              {ov ? t('projects.registradas', { p0: fmtMinutes(ov.minutesTotal) }) : ''}
+              {days ? t('projects.diasDoInicioAoFim', { days }) : ''}
+              {ov?.milestonesTotal ? t('projects.marcos', { milestonesDone: ov.milestonesDone, milestonesTotal: ov.milestonesTotal }) : ''}
             </p>
-            <p>Projetos terminados são raros. Este foi para a estante. 🏆</p>
+            <p>{t('projects.projetosTerminadosSaoRarosEste')}</p>
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+              <button className="btn btn-primary btn-sm" onClick={onClose}>{t('projects.fechar')}</button>
             </div>
           </div>
         )}

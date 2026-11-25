@@ -6,6 +6,7 @@
  */
 
 import { ROADMAP_NUM } from '../../../../shared/roadmap'
+import { t } from '../../../i18n'
 
 export type RoadmapMark = ' ' | 'x' | '~' | '-'
 
@@ -136,7 +137,7 @@ export function flattenRoadmap(nodes: RoadmapNode[]): RoadmapRow[] {
   return rows
 }
 
-export const MARK_LABEL: Record<RoadmapMark, string> = { ' ': 'A fazer', '~': 'Em andamento', x: 'Feito', '-': 'Descartado' }
+export const MARK_LABEL: Record<RoadmapMark, string> = { ' ': t('projects.aFazer'), '~': t('projects.emAndamento'), x: t('projects.feito'), '-': t('projects.descartado') }
 export const MARK_ICON: Record<RoadmapMark, string> = { ' ': '○', '~': '◐', x: '●', '-': '⊘' }
 export const nextMark = (m: RoadmapMark): RoadmapMark => (m === ' ' ? '~' : m === '~' ? 'x' : ' ')
 

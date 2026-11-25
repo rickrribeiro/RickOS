@@ -1,5 +1,6 @@
 import type { Project, ProjectMilestone, ProjectOverview, Todo } from '../../../types'
 import { statusLabel, stageLabel, fmtMinutes } from './constants'
+import { t } from '../../../i18n'
 
 /** Roda o Claude local e devolve o primeiro objeto/array JSON da resposta. */
 export async function runJson<T>(prompt: string, source = 'projetos'): Promise<T> {
@@ -11,11 +12,11 @@ export async function runJson<T>(prompt: string, source = 'projetos'): Promise<T
   )
   const text = String(out ?? '')
   const start = text.search(/[[{]/)
-  if (start < 0) throw new Error('A IA não devolveu JSON.')
+  if (start < 0) throw new Error(t('projects.iaNaoDevolveuJson'))
   const open = text[start]
   const close = open === '{' ? '}' : ']'
   const end = text.lastIndexOf(close)
-  if (end <= start) throw new Error('JSON incompleto na resposta da IA.')
+  if (end <= start) throw new Error(t('projects.jsonIncompleto'))
   return JSON.parse(text.slice(start, end + 1)) as T
 }
 
