@@ -20,6 +20,7 @@ import {
   convDefaultModel
 } from '../../../../shared/aiConversations'
 import { AiUsageModal } from '../components/AiUsageModal'
+import { AiCallsModal } from '../components/AiCallsModal'
 import { firstBusinessDay } from '../../../../shared/finance'
 import { finishPluggySync } from '../../finance/pluggySync'
 import { t as tr, getLocale } from '../../../i18n'
@@ -85,6 +86,7 @@ export function SettingsPage(): React.ReactElement {
   }
 
   const [showAiUsage, setShowAiUsage] = useState(false)
+  const [showAiCalls, setShowAiCalls] = useState(false)
 
   // IA (Claude CLI)
   const [claudeCmd, setClaudeCmd] = useState('claude')
@@ -645,14 +647,18 @@ export function SettingsPage(): React.ReactElement {
       <SnapshotsSection />
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">{tr('settings.usoDeTokensDaIa')}</div>
+        <div className="chart-title">{tr('settings.inteligenciaArtificial')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          {tr('settings.quantoCadaModuloEProjeto')}
+          {tr('settings.iaCardDesc')}
         </p>
-        <button className="btn btn-secondary btn-sm" onClick={() => setShowAiUsage(true)}>{tr('settings.verConsumoDeTokens')}</button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowAiUsage(true)}>{tr('settings.verConsumoDeTokens')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowAiCalls(true)}>{tr('settings.verOndeAIaEUsada')}</button>
+        </div>
       </div>
 
       {showAiUsage && <AiUsageModal onClose={() => setShowAiUsage(false)} />}
+      {showAiCalls && <AiCallsModal onClose={() => setShowAiCalls(false)} />}
     </div>
   )
 }

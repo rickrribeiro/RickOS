@@ -10,6 +10,10 @@ Todo texto enviado a uma IA (Claude CLI ou Gemini) mora aqui, **um arquivo por p
 
 Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs agendados ficam no banco e são editados na UI; as sementes estão em `server/database/aiSeeds.ts`) e o schema de resposta do Gemini (`TOPICS_SCHEMA` em `server/services/news.ts`).
 
+## Catálogo (Configurações → IA → "Ver onde a IA é usada")
+
+`catalogo.ts` lista **toda** chamada de IA do app: motor (Claude Code / Codex / Gemini), modelo e effort (com a chave de configuração e o padrão) e o prompt montado com dados de exemplo. Chamada nova ou alterada = atualizar a entrada lá e o nome em `src/i18n/locales/<idioma>/settings.ts` (`settings.iaChamada.<id>`).
+
 ## Índice
 
 | Arquivo | O que faz | Usado em |
@@ -69,7 +73,8 @@ Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs a
 | `delegarRoadmap.ts` | Tarefa + regras para delegar itens do roadmap | `src/modules/projects/lib/roadmap.ts` |
 | `continuarBranch.ts` | Entregar uma branch a um agente para terminar | `src/modules/projects/git.ts` |
 | **promptRunner/** | | |
-| `composicao.ts` | Montagem agente → skills → prompt do usuário | `src/modules/ai/compose.ts` |
+| `sistemaConversa.ts` | System prompt das conversas (contexto do projeto + agente + skills) | `server/rpc.ts` |
+| `composicao.ts` | Montagem agente → skills → prompt do usuário (modo antigo, sem uso hoje) | `src/modules/ai/compose.ts` |
 | `mensagemCommit.ts` | Sugerir mensagem de commit | `server/aiconv/rpc.ts` |
 | **viagens/** | | |
 | `analiseHospedagem.ts` | As 3 melhores hospedagens da busca* | `src/modules/travel-stays/pages/StayFinderPage.tsx` |

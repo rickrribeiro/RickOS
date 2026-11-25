@@ -22,7 +22,7 @@ import {
   type NewsTopic
 } from '../../shared/news'
 import { tt } from '../i18n'
-import { promptResumoNoticias } from '../../shared/prompts/noticias/resumoCategoria'
+import { MODELO_NOTICIAS, promptResumoNoticias } from '../../shared/prompts/noticias/resumoCategoria'
 
 export const GEMINI_KEY_SETTING = 'gemini_api_key'
 const CATEGORIES_SETTING = 'news_categories'
@@ -30,7 +30,7 @@ const DIGEST_SETTING = 'news_digest'
 /** Notícias abertas em "Ler mais" (últimas MAX_READS), evidência para sugerir memórias. */
 const READS_SETTING = 'news_reads'
 const MAX_READS = 60
-const MODEL = 'gemini-2.5-flash'
+const MODEL = MODELO_NOTICIAS
 /** Notícias do dia-alvo mandadas ao Gemini por categoria (o feed já vem por relevância). */
 const MAX_ITEMS_PER_CATEGORY = 20
 const MAX_TOPICS_PER_CATEGORY = 6

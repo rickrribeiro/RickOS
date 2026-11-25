@@ -257,6 +257,7 @@ import { getConfig } from './config'
 import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, convDefaultModel } from '../shared/aiConversations'
 import { promptOcrImagem } from '../shared/prompts/inbox/ocrImagem'
 import { promptContextoProjeto } from '../shared/prompts/projetos/contextoProjeto'
+import { promptSistemaConversa } from '../shared/prompts/promptRunner/sistemaConversa'
 
 /**
  * RPC registry: every `<ns>:<action>` channel the clients can call. The handlers
@@ -1524,21 +1525,13 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
   projectWorkspaceRepos: (projectId) => workspaceRepoDirs(projectId),
   allowedToolsArgs: () => resolveAllowedToolsArgs(),
   systemPrompt: async (c) => {
-    const parts: string[] = []
-    const ctx = (await buildProjectContext(c.projectId)).trim()
-    if (ctx) parts.push(ctx)
-    if (c.agentId) {
-      const ag = (await getAgents()).find((a) => a.id === c.agentId)
-      if (ag?.systemPrompt.trim()) parts.push(`### AGENTE: ${ag.name}\n${ag.systemPrompt.trim()}`)
-    }
-    if (c.skillIds.length) {
-      const all = await getSkills()
-      for (const id of c.skillIds) {
-        const sk = all.find((x) => x.id === id)
-        if (sk?.content.trim()) parts.push(`### SKILL: ${sk.name}\n${sk.content.trim()}`)
-      }
-    }
-    return parts.join('\n\n')
+    const agente = c.agentId ? (await getAgents()).find((a) => a.id === c.agentId) ?? null : null
+    const all = c.skillIds.length ? await getSkills() : []
+    return promptSistemaConversa({
+      contextoProjeto: await buildProjectContext(c.projectId),
+      agente,
+      skills: c.skillIds.map((id) => all.find((x) => x.id === id)).filter((x): x is NonNullable<typeof x> => !!x)
+    })
   },
   projectPaths: async () => {
     const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()])

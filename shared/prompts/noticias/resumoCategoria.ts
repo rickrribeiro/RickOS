@@ -3,6 +3,8 @@
  * em server/services/news.ts). Recebe Memória Pessoal (integração #8 aprovada) só para desempate.
  * Usado em: server/services/news.ts (`summarize`).
  */
+export const MODELO_NOTICIAS = 'gemini-2.5-flash'
+
 export function promptResumoNoticias(p: {
   data: string
   categoria: string
