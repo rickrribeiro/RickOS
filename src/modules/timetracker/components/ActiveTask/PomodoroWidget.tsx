@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useTaskStore } from '../../store/taskStore'
 import { useTagStore } from '../../store/tagStore'
+import { t as tr } from '../../../../i18n'
 
 const STATE_KEY = 'rickos:pomodoro'
 const IDLE_TAG_ID = 1 // seeded default/Idle tag
@@ -83,12 +84,12 @@ export function PomodoroWidget(): React.ReactElement {
     try {
       if (cur.phase === 'work') {
         await stopActiveTask()
-        notify('🍅 Foco concluído!', 'Hora da pausa.')
+        notify(tr('timetracker.focoConcluido'), tr('timetracker.horaDaPausa'))
         await startTask('Pausa ☕', IDLE_TAG_ID, null)
         setSt((s) => ({ ...s, phase: 'break', endsAt: Date.now() + breakMinRef.current * 60000, cycles: s.cycles + 1 }))
       } else {
         await stopActiveTask()
-        notify('☕ Pausa acabou', 'Pronto para o próximo foco?')
+        notify(tr('timetracker.pausaAcabou'), tr('timetracker.prontoParaOProximoFoco'))
         setSt((s) => ({ ...s, phase: 'idle', endsAt: 0 }))
       }
     } finally {
@@ -140,9 +141,9 @@ export function PomodoroWidget(): React.ReactElement {
       <button
         className={`btn btn-sm ${running ? 'btn-primary' : 'btn-secondary'}`}
         onClick={() => setOpen((o) => !o)}
-        title="Pomodoro"
+        title={tr('timetracker.pomodoro')}
       >
-        🍅 {running ? `${st.phase === 'work' ? 'Foco' : 'Pausa'} ${fmt(remaining)}` : 'Pomodoro'}
+        🍅 {running ? `${st.phase === 'work' ? 'Foco' : 'Pausa'} ${fmt(remaining)}` : tr('timetracker.pomodoro')}
       </button>
 
       {open && (
@@ -150,38 +151,38 @@ export function PomodoroWidget(): React.ReactElement {
           {!running ? (
             <>
               <div className="editor-field">
-                <label>Foco em</label>
-                <input value={st.title} placeholder="O que vai focar?" onChange={(e) => setSt((s) => ({ ...s, title: e.target.value }))} />
+                <label>{tr('timetracker.focoEm')}</label>
+                <input value={st.title} placeholder={tr('timetracker.oQueVaiFocar')} onChange={(e) => setSt((s) => ({ ...s, title: e.target.value }))} />
               </div>
               <div className="editor-field">
-                <label>Tag</label>
+                <label>{tr('timetracker.tag')}</label>
                 <select value={st.tagId ?? ''} onChange={(e) => setSt((s) => ({ ...s, tagId: e.target.value ? Number(e.target.value) : null }))}>
-                  <option value="">Nenhuma</option>
+                  <option value="">{tr('timetracker.nenhuma')}</option>
                   {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
               <div className="editor-row">
                 <div className="editor-field">
-                  <label>Foco (min)</label>
+                  <label>{tr('timetracker.focoMin')}</label>
                   <input type="number" min={1} value={workMin} onChange={(e) => setWorkMin(Number(e.target.value) || 25)} />
                 </div>
                 <div className="editor-field">
-                  <label>Pausa (min)</label>
+                  <label>{tr('timetracker.pausaMin')}</label>
                   <input type="number" min={1} value={breakMin} onChange={(e) => setBreakMin(Number(e.target.value) || 5)} />
                 </div>
               </div>
-              <button className="btn btn-primary btn-sm" style={{ marginTop: 10, width: '100%' }} onClick={startWork}>▶ Iniciar foco</button>
-              {st.cycles > 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>🍅 {st.cycles} ciclos hoje</div>}
+              <button className="btn btn-primary btn-sm" style={{ marginTop: 10, width: '100%' }} onClick={startWork}>{tr('timetracker.iniciarFoco')}</button>
+              {st.cycles > 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>{tr('timetracker.ciclosHoje', { cycles: st.cycles })}</div>}
             </>
           ) : (
             <>
               <div className="pomodoro-count">{fmt(remaining)}</div>
               <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                {st.phase === 'work' ? `🍅 Foco: ${st.title}` : '☕ Pausa'}
+                {st.phase === 'work' ? tr('timetracker.foco', { title: st.title }) : tr('timetracker.pausa')}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={skip}>Pular</button>
-                <button className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={stopAll}>Parar</button>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={skip}>{tr('timetracker.pular')}</button>
+                <button className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={stopAll}>{tr('timetracker.parar')}</button>
               </div>
             </>
           )}

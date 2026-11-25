@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { TaskWithTag } from '@/types'
+import { t } from '../../../../i18n'
 
 interface Props {
   task: TaskWithTag
@@ -112,7 +113,7 @@ export function TimelineBlock({
       <div className="timeline-block-content">
         {height > 20 && (
           <div className="timeline-block-title">
-            {task.studyNodeId != null && <span title={task.studyTopicName ? `Estudo: ${task.studyTopicName}` : 'Estudo'}>📖 </span>}
+            {task.studyNodeId != null && <span title={task.studyTopicName ? t('timetracker.estudo2', { studyTopicName: task.studyTopicName }) : t('timetracker.estudo3')}>📖 </span>}
             {task.title}
           </div>
         )}
@@ -133,7 +134,7 @@ export function TimelineBlock({
         {height > 50 && (
           <div className="timeline-block-time">
             {formatTime(task.startTime)}
-            {task.endTime ? ` – ${formatTime(task.endTime)}` : ' (active)'}
+            {task.endTime ? ` – ${formatTime(task.endTime)}` : t('timetracker.active2')}
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import { TimelineEventBlock } from './TimelineEventBlock'
 import { useTaskStore } from '../../store/taskStore'
 import { useTagStore } from '../../store/tagStore'
 import { localDateStr } from '@/utils/dates'
+import { t as tr, getLocale } from '../../../../i18n'
 
 const PIXELS_PER_MINUTE = 1.5
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -93,7 +94,7 @@ export function Timeline({ tasks, events, habitMarks = [], selectedDate, onRefre
       onRefresh()
     } catch (err) {
       console.error('Failed to save task:', err)
-      alert('Error saving task: ' + String(err))
+      alert(tr('timetracker.errorSavingTask', { error: String(err) }))
     }
   }
 
@@ -116,47 +117,47 @@ export function Timeline({ tasks, events, habitMarks = [], selectedDate, onRefre
       {form && (
         <div className="task-edit-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h3 style={{ margin: 0 }}>{isCreating ? 'New Task' : 'Edit Task'}</h3>
+            <h3 style={{ margin: 0 }}>{isCreating ? tr('timetracker.newTask') : tr('timetracker.editTask')}</h3>
             <button className="btn btn-secondary btn-sm" onClick={closeForm}>✕</button>
           </div>
 
           <div className="form-row">
-            <label>Title</label>
+            <label>{tr('timetracker.title')}</label>
             <input
               type="text"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
               autoFocus
-              placeholder="Task name"
+              placeholder={tr('timetracker.taskName')}
             />
           </div>
           <div className="form-row">
-            <label>Tag 1</label>
+            <label>{tr('timetracker.tag1')}</label>
             <select
               value={form.tagId ?? ''}
               onChange={(e) => setForm({ ...form, tagId: e.target.value ? Number(e.target.value) : null })}
             >
-              <option value="">None</option>
+              <option value="">{tr('timetracker.none')}</option>
               {tags.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
           </div>
           <div className="form-row">
-            <label>Tag 2</label>
+            <label>{tr('timetracker.tag2')}</label>
             <select
               value={form.secondaryTagId ?? ''}
               onChange={(e) => setForm({ ...form, secondaryTagId: e.target.value ? Number(e.target.value) : null })}
             >
-              <option value="">None</option>
+              <option value="">{tr('timetracker.none')}</option>
               {tags.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
           </div>
           <div className="form-row">
-            <label>Start</label>
+            <label>{tr('timetracker.start')}</label>
             <input
               type="datetime-local"
               value={form.startTime}
@@ -164,23 +165,23 @@ export function Timeline({ tasks, events, habitMarks = [], selectedDate, onRefre
             />
           </div>
           <div className="form-row">
-            <label>End</label>
+            <label>{tr('timetracker.end')}</label>
             <input
               type="datetime-local"
               value={form.endTime}
               onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-              placeholder="Leave empty if still active"
+              placeholder={tr('timetracker.leaveEmptyIfStillActive')}
             />
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={handleSave}>
-              {isCreating ? 'Create' : 'Save'}
+              {isCreating ? tr('timetracker.create') : tr('timetracker.save')}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={closeForm}>Cancel</button>
+            <button className="btn btn-secondary btn-sm" onClick={closeForm}>{tr('timetracker.cancel')}</button>
             {!isCreating && (
               <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={handleDelete}>
-                Delete
+                {tr('timetracker.delete2')}
               </button>
             )}
           </div>
@@ -189,7 +190,7 @@ export function Timeline({ tasks, events, habitMarks = [], selectedDate, onRefre
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
         <button className="btn btn-primary btn-sm" onClick={openCreate}>
-          + Add Task
+          {tr('timetracker.addTask')}
         </button>
       </div>
 
@@ -220,7 +221,7 @@ export function Timeline({ tasks, events, habitMarks = [], selectedDate, onRefre
                   key={`${h.habitId}-${h.completedAt}`}
                   className="timeline-habit-mark"
                   style={{ top: min * PIXELS_PER_MINUTE }}
-                  title={`🔥 ${h.name} — ${new Date(h.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                  title={`🔥 ${h.name} — ${new Date(h.completedAt).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })}`}
                 >
                   🔥
                 </div>

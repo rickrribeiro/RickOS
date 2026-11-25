@@ -4,6 +4,7 @@ import { renderMarkdown } from '../../estudos/markdown'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
 import { LAST_REVIEW_KEY } from '../../projects/lib/constants'
+import { t as tr, getLocale } from '../../../i18n'
 
 /** Último relatório gerado (no servidor: desktop e celular veem o mesmo). */
 const REPORT_KEY = 'weekly_review_report'
@@ -20,7 +21,7 @@ const DAY = 86400000
 function fmtGenerated(iso: string): string {
   const d = new Date(iso)
   const days = Math.floor((Date.now() - d.getTime()) / DAY)
-  const when = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  const when = d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' })
   return days <= 0 ? `hoje (${when})` : days === 1 ? `ontem (${when})` : `há ${days} dias (${when})`
 }
 
@@ -128,7 +129,7 @@ export function WeeklyReview(): React.ReactElement {
       setRunning(false)
       setStream('')
       if (!ok) {
-        setError(err || 'Falha ao gerar a revisão.')
+        setError(err || tr('home.falhaAoGerarARevisao'))
         void window.api.settings.set(PENDING_KEY, '')
         return
       }
@@ -198,27 +199,27 @@ export function WeeklyReview(): React.ReactElement {
     <div className="chart-section" style={{ marginBottom: 12 }}>
       <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span>
-          🗓️ Revisão semanal
+          {tr('home.revisaoSemanal')}
           {saved && !running && (
             <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
-              gerada {fmtGenerated(saved.generatedAt)}
+              {tr('home.gerada', { p0: fmtGenerated(saved.generatedAt) })}
             </span>
           )}
         </span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {saved && !running && (
             <button className="btn btn-secondary btn-sm" onClick={() => setOpen((o) => !o)}>
-              {open ? 'Ocultar' : 'Ver'}
+              {open ? tr('home.ocultar') : tr('home.ver')}
             </button>
           )}
           <button className="btn btn-primary btn-sm" onClick={generate} disabled={running}>
-            {running ? 'Gerando…' : saved ? '↻ Gerar de novo' : '🗓️ Gerar revisão'}
+            {running ? tr('home.gerando') : saved ? tr('home.gerarDeNovo') : tr('home.gerarRevisao')}
           </button>
         </div>
       </div>
       {error && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{error}</div>}
       <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setLearnOpen((o) => !o)}>
-        📝 {learnOpen ? 'Fechar' : 'O que aprendi nesta semana'}
+        📝 {learnOpen ? tr('home.fechar') : tr('home.oQueAprendiNestaSemana')}
       </button>
       {learnOpen && (
         <div style={{ marginTop: 8 }}>
@@ -226,7 +227,7 @@ export function WeeklyReview(): React.ReactElement {
             rows={3}
             value={learned}
             onChange={(e) => setLearned(e.target.value)}
-            placeholder="Aprendizados, o que funcionou, o que quer mudar… A IA sugere memórias para você revisar no Inbox da Memória Pessoal."
+            placeholder={tr('home.aprendizadosOQueFuncionouO')}
             style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
           />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -237,13 +238,13 @@ export function WeeklyReview(): React.ReactElement {
                 window.api.memory.produceWeeklyReview(learned).then(
                   () => {
                     setLearned('')
-                    setLearnMsg('Enviado — as sugestões aparecem no Inbox da Memória Pessoal em instantes.')
+                    setLearnMsg(tr('home.enviadoSugestoesInbox'))
                   },
                   (e) => setLearnMsg(e instanceof Error ? e.message : String(e))
                 )
               }
             >
-              🧬 Sugerir memórias
+              {tr('home.sugerirMemorias')}
             </button>
             {learnMsg && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{learnMsg}</span>}
           </div>
@@ -251,7 +252,7 @@ export function WeeklyReview(): React.ReactElement {
       )}
       {open && (running || content) && (
         <div className="md-preview-pane" style={{ marginTop: 10, minHeight: 0 }}>
-          {content ? renderMarkdown(content) : <div className="empty-hint">Revisando sua semana…</div>}
+          {content ? renderMarkdown(content) : <div className="empty-hint">{tr('home.revisandoSuaSemana')}</div>}
         </div>
       )}
     </div>

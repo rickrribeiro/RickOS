@@ -20,6 +20,7 @@ import { priorityDef } from '../../todo/constants'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import type { MonitorSummary } from '../../../../shared/flights'
 import { formatMoney as formatFlightMoney } from '../../../../shared/flights'
+import { t as tr } from '../../../i18n'
 
 function fmtHours(minutes: number): string {
   const h = Math.floor(minutes / 60)
@@ -91,7 +92,7 @@ export function HomePage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700 }}>🏠 Hoje</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700 }}>{tr('home.hoje')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{localDateStr(new Date())}</p>
         </div>
       </div>
@@ -99,8 +100,8 @@ export function HomePage(): React.ReactElement {
       <button className="braindump-cta" onClick={() => setPage('braindump')}>
         <span className="braindump-cta-icon">🧠</span>
         <span className="braindump-cta-text">
-          <strong>Despejar minha cabeça</strong>
-          <span>Escreva tudo que está pensando · a IA vira tarefas, projetos e agenda</span>
+          <strong>{tr('home.despejarMinhaCabeca')}</strong>
+          <span>{tr('home.escrevaTudoQueEstaPensando')}</span>
         </span>
         <span className="braindump-cta-arrow">→</span>
       </button>
@@ -114,7 +115,7 @@ export function HomePage(): React.ReactElement {
       {/* ── Hoje ── */}
       <div className="dash-section">
         <div className="chart-section">
-          <div className="chart-title">⏱ Agora</div>
+          <div className="chart-title">{tr('home.agora')}</div>
           {activeTask ? (
             <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="active-task-dot" />
@@ -126,17 +127,17 @@ export function HomePage(): React.ReactElement {
               )}
             </div>
           ) : (
-            <div className="empty-hint" style={{ padding: 12 }}>Nenhuma tarefa ativa.</div>
+            <div className="empty-hint" style={{ padding: 12 }}>{tr('home.nenhumaTarefaAtiva')}</div>
           )}
           {upcoming[0] && (
             <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
-              Próxima reunião: <strong>{upcoming[0].title}</strong> — {fmtEventTime(upcoming[0].startTime)}
+              {tr('home.proximaReuniao')} <strong>{upcoming[0].title}</strong> — {fmtEventTime(upcoming[0].startTime)}
             </div>
           )}
         </div>
 
         <div className="chart-section">
-          <div className="chart-title">📋 Top tarefas</div>
+          <div className="chart-title">{tr('home.topTarefas')}</div>
           <div className="list-stack" style={{ marginTop: 8 }}>
             {openTodos.slice(0, 3).map((t) => (
               <div key={t.id} className="list-row">
@@ -144,12 +145,12 @@ export function HomePage(): React.ReactElement {
                 <span className="list-row-title">{t.title}</span>
               </div>
             ))}
-            {openTodos.length === 0 && <div className="empty-hint">Nada pendente 🎉</div>}
+            {openTodos.length === 0 && <div className="empty-hint">{tr('home.nadaPendente')}</div>}
           </div>
         </div>
 
         <div className="chart-section">
-          <div className="chart-title">🔥 Hábitos pendentes</div>
+          <div className="chart-title">{tr('home.habitosPendentes')}</div>
           <div className="list-stack" style={{ marginTop: 8 }}>
             {pendingHabits.map((h) => (
               <div key={h.id} className="list-row">
@@ -157,9 +158,9 @@ export function HomePage(): React.ReactElement {
               </div>
             ))}
             {habits.length > 0 && pendingHabits.length === 0 && (
-              <div className="empty-hint">Todos concluídos ✅</div>
+              <div className="empty-hint">{tr('home.todosConcluidos')}</div>
             )}
-            {habits.length === 0 && <div className="empty-hint">Nenhum hábito cadastrado.</div>}
+            {habits.length === 0 && <div className="empty-hint">{tr('home.nenhumHabitoCadastrado')}</div>}
           </div>
         </div>
       </div>
@@ -176,37 +177,37 @@ export function HomePage(): React.ReactElement {
       <LostWorkCard />
 
       {/* ── Esta semana ── */}
-      <h3 className="dash-heading">Esta semana</h3>
+      <h3 className="dash-heading">{tr('home.estaSemana')}</h3>
       <div className="cards-grid">
         <div className="stat-card">
-          <div className="stat-card-label">Horas trabalhadas</div>
+          <div className="stat-card-label">{tr('home.horasTrabalhadas')}</div>
           <div className="stat-card-value">{fmtHours(weekMinutes)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Tarefas abertas</div>
+          <div className="stat-card-label">{tr('home.tarefasAbertas')}</div>
           <div className="stat-card-value">{openTodos.length}</div>
-          <div className="stat-card-sub">{inboxCount} na inbox p/ processar</div>
+          <div className="stat-card-sub">{inboxCount} {tr('home.naInboxPProcessar')}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Hábitos hoje</div>
+          <div className="stat-card-label">{tr('home.habitosHoje')}</div>
           <div className="stat-card-value">
             {habitsDone}/{habits.length}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Issues GitHub abertas</div>
+          <div className="stat-card-label">{tr('home.issuesGithubAbertas')}</div>
           <div className="stat-card-value">{openIssues}</div>
-          {issues.length === 0 && <div className="stat-card-sub">sincronize em Projetos</div>}
+          {issues.length === 0 && <div className="stat-card-sub">{tr('home.sincronizeEmProjetos')}</div>}
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Gastos do mês</div>
+          <div className="stat-card-label">{tr('home.gastosDoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--danger)' }}>{expensesLabel}</div>
-          {transactions.length === 0 && <div className="stat-card-sub">sem transações no mês</div>}
+          {transactions.length === 0 && <div className="stat-card-sub">{tr('home.semTransacoesNoMes')}</div>}
         </div>
       </div>
 
       {/* ── Próxima viagem ── */}
-      <h3 className="dash-heading">Próxima viagem</h3>
+      <h3 className="dash-heading">{tr('home.proximaViagem')}</h3>
       <div className="cards-grid">
         {nextTrip ? (
           <div className="stat-card">
@@ -214,18 +215,18 @@ export function HomePage(): React.ReactElement {
               {nextTrip.origin ? `${nextTrip.origin} → ` : ''}{nextTrip.destination}
             </div>
             <div className="stat-card-value" style={{ fontSize: 16 }}>
-              {tripDays != null && tripDays >= 0 ? `faltam ${tripDays}d` : nextTrip.status}
+              {tripDays != null && tripDays >= 0 ? tr('home.faltamD', { tripDays }) : nextTrip.status}
             </div>
             <div className="stat-card-sub">
               {nextTripWatch
-                ? `menor preço encontrado: ${formatFlightMoney(nextTripWatch.minPrice)}`
+                ? tr('home.menorPrecoEncontrado', { p0: formatFlightMoney(nextTripWatch.minPrice) })
                 : nextTrip.budget != null
-                  ? `orçamento: ${formatMoney(nextTrip.budget, nextTrip.currency)}`
-                  : 'sem preço monitorado'}
+                  ? tr('home.orcamento', { p0: formatMoney(nextTrip.budget, nextTrip.currency) })
+                  : tr('home.semPrecoMonitorado')}
             </div>
           </div>
         ) : (
-          <div className="empty-hint">Nenhuma viagem planejada. Crie em Viagens.</div>
+          <div className="empty-hint">{tr('home.nenhumaViagemPlanejadaCrieEm')}</div>
         )}
       </div>
 

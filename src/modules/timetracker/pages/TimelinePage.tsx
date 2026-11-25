@@ -5,6 +5,7 @@ import { useTagStore } from '../store/tagStore'
 import { Timeline } from '../components/Timeline/Timeline'
 import { CalendarEvent, HabitCompletion } from '@/types'
 import { localDateStr, localDayStartISO, localDayEndISO } from '@/utils/dates'
+import { t as tr, getLocale } from '../../../i18n'
 
 function formatDateDisplay(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00')
@@ -15,7 +16,7 @@ function formatDateDisplay(dateStr: string): string {
 
   if (dateStr === todayStr) return 'Today'
   if (dateStr === yesterdayStr) return 'Yesterday'
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 function offsetDate(dateStr: string, days: number): string {
@@ -85,7 +86,7 @@ export function TimelinePage(): React.ReactElement {
                     key={title}
                     className="quick-start-btn"
                     onClick={() => startTask(title, task?.tagId ?? null)}
-                    title={`Quick start: ${title}`}
+                    title={tr('timetracker.quickStart', { title })}
                   >
                     {task?.tagColor && (
                       <span className="quick-start-dot" style={{ background: task.tagColor }} />

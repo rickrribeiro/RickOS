@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { renderMarkdown } from '../../estudos/markdown'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
+import { t as tr } from '../../../i18n'
 
 const STATE_KEY = 'rickos:dailyStandup'
 
@@ -40,7 +41,7 @@ export function DailyStandup(): React.ReactElement {
       if (rid !== runId.current) return
       runId.current = null
       setRunning(false)
-      if (!ok) return setError(err || 'Falha ao gerar o briefing.')
+      if (!ok) return setError(err || tr('home.falhaAoGerarOBriefing'))
       setOutput(out)
       localStorage.setItem(STATE_KEY, JSON.stringify({ date: today, output: out }))
     })
@@ -114,18 +115,18 @@ ${ctx}`
   return (
     <div className="chart-section" style={{ marginBottom: 12 }}>
       <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>☀️ Briefing do dia</span>
+        <span>{tr('home.briefingDoDia')}</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {output && !running && <button className="btn btn-secondary btn-sm" onClick={() => setOpen((o) => !o)}>{open ? 'Ocultar' : 'Ver'}</button>}
+          {output && !running && <button className="btn btn-secondary btn-sm" onClick={() => setOpen((o) => !o)}>{open ? tr('home.ocultar') : tr('home.ver')}</button>}
           <button className="btn btn-primary btn-sm" onClick={run} disabled={running}>
-            {running ? 'Gerando…' : output ? '↻ Atualizar' : '☀️ Gerar briefing'}
+            {running ? tr('home.gerando') : output ? tr('home.atualizar') : tr('home.gerarBriefing')}
           </button>
         </div>
       </div>
       {error && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{error}</div>}
       {open && (running || output) && (
         <div className="md-preview-pane" style={{ marginTop: 10, minHeight: 0 }}>
-          {output ? renderMarkdown(output) : <div className="empty-hint">Montando seu dia…</div>}
+          {output ? renderMarkdown(output) : <div className="empty-hint">{tr('home.montandoSeuDia')}</div>}
         </div>
       )}
     </div>

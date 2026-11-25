@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { DailyStats, TagStats } from '@/types'
 import { localDateStr, localDayStartISO, localDayEndISO } from '@/utils/dates'
+import { t as tr, getLocale } from '../../../../i18n'
 
 type Period = 'day' | 'week' | 'month'
 
@@ -9,7 +10,7 @@ function getRange(period: Period, baseDate: Date): { start: string; end: string;
 
   if (period === 'day') {
     const dayStr = localDateStr(d)
-    const label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
+    const label = d.toLocaleDateString(getLocale(), { day: 'numeric', month: 'long', year: 'numeric' })
     return { start: localDayStartISO(dayStr), end: localDayEndISO(dayStr), label }
   }
 
@@ -21,14 +22,14 @@ function getRange(period: Period, baseDate: Date): { start: string; end: string;
     const sunday = new Date(monday)
     sunday.setDate(monday.getDate() + 6)
     sunday.setHours(23, 59, 59, 999)
-    const label = `Week of ${monday.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} - ${sunday.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`
+    const label = tr('timetracker.weekOf', { start: monday.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' }), end: sunday.toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) })
     return { start: monday.toISOString(), end: sunday.toISOString(), label }
   }
 
   // month
   const first = new Date(d.getFullYear(), d.getMonth(), 1)
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
-  const label = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  const label = d.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' })
   return { start: first.toISOString(), end: last.toISOString(), label }
 }
 
@@ -111,9 +112,9 @@ export function Dashboard(): React.ReactElement {
       <div className="dashboard-header">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <h2 className="dashboard-title">
-            Statistics{' '}
+            {tr('timetracker.statistics')}{' '}
             <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-muted)' }}>
-              (active days: {activeDays} {activeDays === 1 ? 'day' : 'days'})
+              {tr('timetracker.activeDays', { activeDays })} {activeDays === 1 ? tr('timetracker.day') : tr('timetracker.days')})
             </span>
           </h2>
           <div className="period-navigation">
@@ -129,7 +130,7 @@ export function Dashboard(): React.ReactElement {
               className={`period-btn ${period === p ? 'active' : ''}`}
               onClick={() => { setPeriod(p); setBaseDate(new Date()) }}
             >
-              {p.charAt(0).toUpperCase() + p.slice(1)}
+              {tr(`timetracker.period.${p}`)}
             </button>
           ))}
         </div>
@@ -137,40 +138,40 @@ export function Dashboard(): React.ReactElement {
 
       {loading ? (
         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>
-          Loading...
+          {tr('timetracker.loading')}
         </div>
       ) : (
         <>
           <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
             
             <div className="stat-card">
-              <div className="stat-card-label">Work + Personal Projects + Study</div>
-              <div className="stat-card-value">{formatHoursShort(totalMinutes)}<span style={{ fontSize: 18, color: 'var(--text-muted)' }}>h</span></div>
+              <div className="stat-card-label">{tr('timetracker.workPersonalProjectsStudy')}</div>
+              <div className="stat-card-value">{formatHoursShort(totalMinutes)}<span style={{ fontSize: 18, color: 'var(--text-muted)' }}>{tr('timetracker.h2')}</span></div>
               <div className="stat-card-sub">{formatHours(totalMinutes)}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-card-label">Work</div>
-              <div className="stat-card-value">{formatHoursShort(productiveMinutes)}<span style={{ fontSize: 18, color: 'var(--text-muted)' }}>h</span></div>
-              <div className="stat-card-sub">{productivePercent}% of tracked time</div>
+              <div className="stat-card-label">{tr('timetracker.work')}</div>
+              <div className="stat-card-value">{formatHoursShort(productiveMinutes)}<span style={{ fontSize: 18, color: 'var(--text-muted)' }}>{tr('timetracker.h2')}</span></div>
+              <div className="stat-card-sub">{productivePercent}{tr('timetracker.ofTrackedTime')}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-card-label">Prod + Semi</div>
-              <div className="stat-card-value">{formatHoursShort(prodPlusSemiMinutes)}<span style={{ fontSize: 18, color: 'var(--text-muted)' }}>h</span></div>
-              <div className="stat-card-sub">{prodPlusSemiPercent}% of tracked time</div>
+              <div className="stat-card-label">{tr('timetracker.prodSemi')}</div>
+              <div className="stat-card-value">{formatHoursShort(prodPlusSemiMinutes)}<span style={{ fontSize: 18, color: 'var(--text-muted)' }}>{tr('timetracker.h2')}</span></div>
+              <div className="stat-card-sub">{prodPlusSemiPercent}{tr('timetracker.ofTrackedTime')}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-card-label">Active Days</div>
+              <div className="stat-card-label">{tr('timetracker.activeDays2')}</div>
               <div className="stat-card-value">{activeDays}</div>
-              <div className="stat-card-sub">{dailyStats.length} days in period</div>
+              <div className="stat-card-sub">{dailyStats.length} {tr('timetracker.daysInPeriod')}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-card-label">Banco de Horas</div>
+              <div className="stat-card-label">{tr('timetracker.bancoDeHoras')}</div>
               <div className="stat-card-value" style={{ color: bankMinutes < 0 ? 'var(--danger)' : 'var(--success)' }}>
                 {bankMinutes < 0 ? '−' : '+'}{formatHoursShort(Math.abs(bankMinutes))}
-                <span style={{ fontSize: 18, color: 'var(--text-muted)' }}>h</span>
+                <span style={{ fontSize: 18, color: 'var(--text-muted)' }}>{tr('timetracker.h2')}</span>
               </div>
-              <div className="stat-card-sub">{workDays} {workDays === 1 ? 'dia útil' : 'dias úteis'} × 8h</div>
-              <div className="stat-card-sub">Semi: {semiBankMinutes < 0 ? '−' : '+'}{formatHoursShort(Math.abs(semiBankMinutes))}</div>
+              <div className="stat-card-sub">{workDays} {workDays === 1 ? tr('timetracker.diaUtil') : tr('timetracker.diasUteis')} {tr('timetracker.8h')}</div>
+              <div className="stat-card-sub">{tr('timetracker.semi')} {semiBankMinutes < 0 ? '−' : '+'}{formatHoursShort(Math.abs(semiBankMinutes))}</div>
 
               
             </div>
@@ -178,7 +179,7 @@ export function Dashboard(): React.ReactElement {
 
           {dailyStats.length > 0 && (
             <div className="chart-section">
-              <div className="chart-title">Daily Breakdown</div>
+              <div className="chart-title">{tr('timetracker.dailyBreakdown')}</div>
               <div style={{ position: 'relative' }}>
                 <div className="bar-chart">
                   {dailyStats.map((d) => {
@@ -192,7 +193,7 @@ export function Dashboard(): React.ReactElement {
                         key={d.date}
                         className="bar-chart-bar"
                         style={{ height: `${Math.max(2, heightPct)}%`, background: 'var(--accent)', position: 'relative' }}
-                        title={`${d.date}: ${formatHours(d.totalMinutes)} (${Math.round(prodPct)}% prod, ${Math.round(erosPct)}% eros, ${Math.round(semiPct)}% semi)`}
+                        title={tr('timetracker.prodErosSemi', { date: d.date, p1: formatHours(d.totalMinutes), p2: Math.round(prodPct), p3: Math.round(erosPct), p4: Math.round(semiPct) })}
                       >
                         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${prodPct}%`, background: '#22c55e', borderRadius: 'inherit', zIndex: 3 }} />
                         <div style={{ position: 'absolute', bottom: `${prodPct}%`, left: 0, right: 0, height: `${erosPct}%`, background: '#fb7185', zIndex: 2 }} />
@@ -204,13 +205,13 @@ export function Dashboard(): React.ReactElement {
                 </div>
                 <div style={{ marginTop: 28, display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent)', display: 'inline-block' }} /> Total
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent)', display: 'inline-block' }} /> {tr('timetracker.total')}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e', display: 'inline-block' }} /> Productive
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e', display: 'inline-block' }} /> {tr('timetracker.productive2')}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: '#a855f7', display: 'inline-block' }} /> Semi-productive
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: '#a855f7', display: 'inline-block' }} /> {tr('timetracker.semiProductive2')}
                   </span>
                 </div>
               </div>
@@ -219,19 +220,19 @@ export function Dashboard(): React.ReactElement {
 
           {tagStats.length > 0 && (
             <div className="chart-section">
-              <div className="chart-title">By Tag</div>
+              <div className="chart-title">{tr('timetracker.byTag')}</div>
               <div className="tag-stats-list">
                 {tagStats.map((ts) => (
                   <div key={ts.tagId ?? 'null'} className="tag-stat-row">
                     <div className="tag-stat-color" style={{ background: ts.tagColor || '#6b7280' }} />
-                    <span className="tag-stat-name">{ts.tagName || 'No tag'}</span>
+                    <span className="tag-stat-name">{ts.tagName || tr('timetracker.noTag')}</span>
                     <div className="tag-stat-bar-wrap">
                       <div
                         className="tag-stat-bar"
                         style={{ width: `${(ts.totalMinutes / maxTagMinutes) * 100}%`, background: ts.tagColor || '#6b7280' }}
                       />
                     </div>
-                    <span className="tag-stat-hours">{formatHoursShort(ts.totalMinutes)}h</span>
+                    <span className="tag-stat-hours">{formatHoursShort(ts.totalMinutes)}{tr('timetracker.h2')}</span>
                   </div>
                 ))}
               </div>
@@ -240,7 +241,7 @@ export function Dashboard(): React.ReactElement {
 
           {tagStats.length === 0 && dailyStats.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 60 }}>
-              No data for this period. Start tracking tasks!
+              {tr('timetracker.noDataForThisPeriod')}
             </div>
           )}
         </>

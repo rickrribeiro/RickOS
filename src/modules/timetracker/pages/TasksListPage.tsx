@@ -3,6 +3,7 @@ import { TaskWithTag } from '@/types'
 import { useTagStore } from '../store/tagStore'
 import { useUIStore } from '@/store/uiStore'
 import { localDateStr } from '@/utils/dates'
+import { t as tr, getLocale } from '../../../i18n'
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
@@ -25,7 +26,7 @@ function formatDateHeader(dateStr: string): string {
   if (dateStr === today) return 'Today'
   if (dateStr === yesterday) return 'Yesterday'
   const d = new Date(dateStr + 'T12:00:00')
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString(getLocale(), { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 interface EditState {
@@ -104,7 +105,7 @@ export function TasksListPage(): React.ReactElement {
 
   async function handleDelete() {
     if (!editState) return
-    if (!confirm(`Delete "${editState.task.title}"?`)) return
+    if (!confirm(tr('timetracker.delete', { title: editState.task.title }))) return
     await window.api.tasks.delete(editState.task.id)
     setEditState(null)
     load()
@@ -122,13 +123,13 @@ export function TasksListPage(): React.ReactElement {
     <div className="tasks-list-page">
       <div className="tasks-list-header">
         <div>
-          <h2 className="tasks-list-title">All Tasks</h2>
-          <span className="tasks-list-meta">{totalTasks} tasks across {totalDays} days</span>
+          <h2 className="tasks-list-title">{tr('timetracker.allTasks')}</h2>
+          <span className="tasks-list-meta">{totalTasks} {tr('timetracker.tasksAcrossDays', { totalDays })}</span>
         </div>
         <input
           className="tasks-list-search"
           type="text"
-          placeholder="Search by title or tag..."
+          placeholder={tr('timetracker.searchByTitleOrTag')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
@@ -138,11 +139,11 @@ export function TasksListPage(): React.ReactElement {
       {editState && (
         <div className="task-edit-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h3 style={{ margin: 0 }}>Edit Task</h3>
+            <h3 style={{ margin: 0 }}>{tr('timetracker.editTask')}</h3>
             <button className="btn btn-secondary btn-sm" onClick={() => setEditState(null)}>✕</button>
           </div>
           <div className="form-row">
-            <label>Title</label>
+            <label>{tr('timetracker.title')}</label>
             <input
               type="text"
               value={editState.title}
@@ -152,48 +153,48 @@ export function TasksListPage(): React.ReactElement {
             />
           </div>
           <div className="form-row">
-            <label>Tag 1</label>
+            <label>{tr('timetracker.tag1')}</label>
             <select
               value={editState.tagId ?? ''}
               onChange={(e) => setEditState({ ...editState, tagId: e.target.value ? Number(e.target.value) : null })}
             >
-              <option value="">None</option>
+              <option value="">{tr('timetracker.none')}</option>
               {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div className="form-row">
-            <label>Tag 2</label>
+            <label>{tr('timetracker.tag2')}</label>
             <select
               value={editState.secondaryTagId ?? ''}
               onChange={(e) => setEditState({ ...editState, secondaryTagId: e.target.value ? Number(e.target.value) : null })}
             >
-              <option value="">None</option>
+              <option value="">{tr('timetracker.none')}</option>
               {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div className="form-row">
-            <label>Start</label>
+            <label>{tr('timetracker.start')}</label>
             <input type="datetime-local" value={editState.startTime}
               onChange={(e) => setEditState({ ...editState, startTime: e.target.value })} />
           </div>
           <div className="form-row">
-            <label>End</label>
+            <label>{tr('timetracker.end')}</label>
             <input type="datetime-local" value={editState.endTime}
               onChange={(e) => setEditState({ ...editState, endTime: e.target.value })} />
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn btn-primary btn-sm" onClick={handleSave}>Save</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditState(null)}>Cancel</button>
-            <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={handleDelete}>Delete</button>
+            <button className="btn btn-primary btn-sm" onClick={handleSave}>{tr('timetracker.save')}</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditState(null)}>{tr('timetracker.cancel')}</button>
+            <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={handleDelete}>{tr('timetracker.delete2')}</button>
           </div>
         </div>
       )}
 
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>Loading...</div>
+        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>{tr('timetracker.loading')}</div>
       ) : filtered.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>
-          {search ? 'No tasks match your search.' : 'No tasks yet.'}
+          {search ? tr('timetracker.noTasksMatchYourSearch') : tr('timetracker.noTasksYet')}
         </div>
       ) : (
         <div className="tasks-list-groups">
@@ -204,9 +205,9 @@ export function TasksListPage(): React.ReactElement {
                 <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => goToDate(date)}
-                  title="Open this day in Timeline"
+                  title={tr('timetracker.openThisDayInTimeline')}
                 >
-                  Open timeline →
+                  {tr('timetracker.openTimeline')}
                 </button>
               </div>
               <div className="tasks-day-list">
@@ -238,7 +239,7 @@ export function TasksListPage(): React.ReactElement {
                     <div className="task-row-times">
                       <span>{formatTime(task.startTime)}</span>
                       <span style={{ color: 'var(--text-muted)' }}>→</span>
-                      <span>{task.endTime ? formatTime(task.endTime) : <span style={{ color: 'var(--success)' }}>active</span>}</span>
+                      <span>{task.endTime ? formatTime(task.endTime) : <span style={{ color: 'var(--success)' }}>{tr('timetracker.active')}</span>}</span>
                     </div>
                     <div className="task-row-duration">
                       {formatDuration(task.startTime, task.endTime)}

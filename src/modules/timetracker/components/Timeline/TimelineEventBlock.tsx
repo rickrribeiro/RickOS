@@ -1,12 +1,13 @@
 import React from 'react'
 import { CalendarEvent } from '@/types'
+import { getLocale } from '../../../../i18n'
 
 function toMinutes(date: Date, base: Date): number {
   return (date.getTime() - base.getTime()) / 60000
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 interface Props {

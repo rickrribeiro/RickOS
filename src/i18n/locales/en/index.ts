@@ -4,11 +4,15 @@ import { nav } from './nav'
 import { settings } from './settings'
 import { shell } from './shell'
 import { skin } from './skin'
+import { timetracker } from './timetracker'
+import { home } from './home'
 
 export const en: Messages = {
   ...common,
   ...nav,
   ...settings,
   ...shell,
-  ...skin
+  ...skin,
+  ...timetracker,
+  ...home
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useTagStore } from '../../store/tagStore'
 import { Tag } from '@/types'
 import { useProjectStore } from '../../../projects/store/projectStore'
+import { t } from '../../../../i18n'
 
 const PRESET_COLORS = [
   '#6366f1', '#3b82f6', '#22c55e', '#f59e0b',
@@ -57,27 +58,27 @@ export function TagsManager(): React.ReactElement {
 
   async function handleDelete(tag: Tag) {
     if (tag.id <= 3) {
-      alert('Cannot delete built-in tags.')
+      alert(t('timetracker.cannotDeleteBuiltInTags'))
       return
     }
-    if (!confirm(`Delete tag "${tag.name}"? Tasks will be moved to Idle.`)) return
+    if (!confirm(t('timetracker.deleteTagTasksWillBe', { name: tag.name }))) return
     await deleteTag(tag.id)
   }
 
   return (
     <div className="tags-page">
       <div className="tags-header">
-        <h2 style={{ fontSize: 18, fontWeight: 700 }}>Tags</h2>
-        <button className="btn btn-primary" onClick={startCreate}>+ New Tag</button>
+        <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('timetracker.tags')}</h2>
+        <button className="btn btn-primary" onClick={startCreate}>{t('timetracker.newTag')}</button>
       </div>
 
       {showForm && (
         <div className="tag-form">
-          <h3>{editing ? 'Edit Tag' : 'New Tag'}</h3>
+          <h3>{editing ? t('timetracker.editTag') : t('timetracker.newTag2')}</h3>
           <div className="tag-form-fields">
             <input
               type="text"
-              placeholder="Tag name"
+              placeholder={t('timetracker.tagName')}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
@@ -107,7 +108,7 @@ export function TagsManager(): React.ReactElement {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <label htmlFor="productive-select" style={{ fontSize: 13 }}>
-              Type:
+              {t('timetracker.type')}
             </label>
             <select
               id="productive-select"
@@ -115,18 +116,18 @@ export function TagsManager(): React.ReactElement {
               onChange={(e) => setForm({ ...form, isProductive: Number(e.target.value) })}
               style={{ fontSize: 13, padding: '4px 8px' }}
             >
-              <option value={0}>Non-productive</option>
-              <option value={1}>Productive</option>
-              <option value={2}>Semi-productive</option>
-              <option value={3}>ProductiveEros</option>
+              <option value={0}>{t('timetracker.nonProductive')}</option>
+              <option value={1}>{t('timetracker.productive2')}</option>
+              <option value={2}>{t('timetracker.semiProductive2')}</option>
+              <option value={3}>{t('timetracker.productiveeros2')}</option>
             </select>
           </div>
           <div className="tag-form-actions">
             <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setEditing(null) }}>
-              Cancel
+              {t('timetracker.cancel')}
             </button>
             <button className="btn btn-primary btn-sm" onClick={handleSubmit}>
-              {editing ? 'Save' : 'Create'}
+              {editing ? t('timetracker.save') : t('timetracker.create')}
             </button>
           </div>
         </div>
@@ -138,17 +139,17 @@ export function TagsManager(): React.ReactElement {
             <div className="tag-color-dot" style={{ background: tag.color }} />
             <span className="tag-name">{tag.name}</span>
             <span className={`tag-badge ${tag.isProductive === 1 ? 'productive' : tag.isProductive === 2 ? 'semi-productive' : tag.isProductive === 3 ? 'productive-eros' : 'idle'}`}>
-              {tag.isProductive === 1 ? 'Productive' : tag.isProductive === 2 ? 'Semi-productive' : tag.isProductive === 3 ? 'ProductiveEros' : 'Non-productive'}
+              {tag.isProductive === 1 ? t('timetracker.productive2') : tag.isProductive === 2 ? t('timetracker.semiProductive2') : tag.isProductive === 3 ? t('timetracker.productiveeros2') : t('timetracker.nonProductive')}
             </span>
             {tag.id !== 1 && tag.id !== 3 && projects.length > 0 && (
               <select
                 value={tag.projectId ?? ''}
                 onChange={(e) => linkProject(tag, e.target.value ? Number(e.target.value) : null)}
-                title="Horas com este tag contam para o projeto"
-                aria-label="Projeto vinculado"
+                title={t('timetracker.horasComEsteTagContam')}
+                aria-label={t('timetracker.projetoVinculado')}
                 style={{ width: 'auto', maxWidth: 160, fontSize: 12 }}
               >
-                <option value="">🗂 sem projeto</option>
+                <option value="">{t('timetracker.semProjeto')}</option>
                 {projects.filter((p) => p.status !== 'encerrado' || p.id === tag.projectId).map((p) => (
                   <option key={p.id} value={p.id}>🗂 {p.name}</option>
                 ))}
@@ -159,14 +160,14 @@ export function TagsManager(): React.ReactElement {
                 className="btn btn-secondary btn-sm"
                 onClick={() => startEdit(tag)}
               >
-                Edit
+                {t('timetracker.edit')}
               </button>
               {tag.id > 3 && (
                 <button
                   className="btn btn-danger btn-sm"
                   onClick={() => handleDelete(tag)}
                 >
-                  Delete
+                  {t('timetracker.delete2')}
                 </button>
               )}
             </div>

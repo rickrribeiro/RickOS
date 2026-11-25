@@ -3,6 +3,7 @@ import { DailyStats } from '@/types'
 import { localDateStr, localDayStartISO } from '@/utils/dates'
 import { useHabitStore } from '../../../habits/store/habitStore'
 import { useContactStore } from '../../../crm/store/contactStore'
+import { t } from '../../../../i18n'
 
 interface Props {
   year: number
@@ -168,7 +169,7 @@ export function CalendarView({
         {WEEKDAYS.map((d) => (
           <div key={d} className="calendar-day-header">{d}</div>
         ))}
-        <div className="calendar-day-header">Banco de Horas</div>
+        <div className="calendar-day-header">{t('timetracker.bancoDeHoras')}</div>
 
         {weeks.map((week, weekIdx) => {
           let weekProd = 0
@@ -210,7 +211,7 @@ export function CalendarView({
                           <button
                             type="button"
                             className="cal-bday-btn"
-                            aria-label={`Aniversários: ${bdays.join(', ')}`}
+                            aria-label={t('timetracker.aniversarios', { p0: bdays.join(', ') })}
                             onClick={(e) => {
                               e.stopPropagation()
                               setBdayOpen(open ? null : cell.date)
@@ -223,7 +224,7 @@ export function CalendarView({
                               className={`cal-bday-pop ${i >= 4 ? 'align-right' : ''}`}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <strong>Aniversário</strong>
+                              <strong>{t('timetracker.aniversario')}</strong>
                               {bdays.map((n) => (
                                 <span key={n}>{n}</span>
                               ))}
@@ -234,7 +235,7 @@ export function CalendarView({
                     })()}
                   </span>
                   {!cell.otherMonth && eventDays[cell.date] > 0 && (
-                    <span className="cal-event-badge" title={`${eventDays[cell.date]} evento(s)`}>
+                    <span className="cal-event-badge" title={t('timetracker.eventoS', { p0: eventDays[cell.date] })}>
                       📅 {eventDays[cell.date]}
                     </span>
                   )}
@@ -243,8 +244,8 @@ export function CalendarView({
                       className={`cal-habit-badge ${habitsAllDone ? 'done' : ''}`}
                       title={
                         habitsAllDone
-                          ? 'Todos os hábitos de hoje concluídos ✅'
-                          : `Hábitos pendentes: ${habitsPending.join(', ')}`
+                          ? t('timetracker.todosOsHabitosDeHoje')
+                          : t('timetracker.habitosPendentes', { p0: habitsPending.join(', ') })
                       }
                     >
                       {habitsAllDone ? '✅' : '🔥'} {habitsDone}/{habitsTotal}
@@ -260,17 +261,17 @@ export function CalendarView({
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
-                      title="Work Day"
+                      title={t('timetracker.workDay')}
                       style={{ width: 18, height: 18, cursor: 'pointer', zIndex: 10 }}
                     />
                   )}
                 </div>
                 {mins > 0 && stats && (
                   <div className="calendar-day-hours">
-                    <div>T: {formatHours(mins)}</div>
-                    <div>Productive: {formatHours(stats.productiveMinutes)}</div>
-                    {stats.productiveErosMinutes > 0 && <div>ProductiveEros: {formatHours(stats.productiveErosMinutes)}</div>}
-                    <div>Semi + productive: {formatHours(stats.productiveMinutes + (stats.semiProductiveMinutes || 0) + (stats.productiveErosMinutes || 0))}</div>
+                    <div>{t('timetracker.t')} {formatHours(mins)}</div>
+                    <div>{t('timetracker.productive')} {formatHours(stats.productiveMinutes)}</div>
+                    {stats.productiveErosMinutes > 0 && <div>{t('timetracker.productiveeros')} {formatHours(stats.productiveErosMinutes)}</div>}
+                    <div>{t('timetracker.semiProductive')} {formatHours(stats.productiveMinutes + (stats.semiProductiveMinutes || 0) + (stats.productiveErosMinutes || 0))}</div>
                   </div>
                 )}
               </div>
@@ -287,13 +288,13 @@ export function CalendarView({
               {dayCells}
               <div className="calendar-week-stats">
                 <div className="week-stat-group">
-                  <div className="week-stat-label">Productive</div>
+                  <div className="week-stat-label">{t('timetracker.productive2')}</div>
                   <div className="week-stat-value">
-                    {formatHours(weekProd) || '0m'}/{weekWorkDays * 8}h
+                    {formatHours(weekProd) || t('timetracker.0m')}{t('timetracker.h', { p0: weekWorkDays * 8 })}
                   </div>
                 </div>
                 <div className="week-stat-group" style={{ marginTop: 8 }}>
-                  <div className="week-stat-label">Saldo</div>
+                  <div className="week-stat-label">{t('timetracker.saldo')}</div>
                   <div className="week-stat-value" style={{ color: balanceMins < 0 ? '#ef4444' : '#10b981' }}>
                     {balancePrefix}{balanceStr}
                   </div>

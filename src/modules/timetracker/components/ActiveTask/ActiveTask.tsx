@@ -4,6 +4,7 @@ import { useTagStore } from '../../store/tagStore'
 import { PomodoroWidget } from './PomodoroWidget'
 import { useProjectStore } from '../../../projects/store/projectStore'
 import { useUIStore } from '../../../../store/uiStore'
+import { t as tr } from '../../../../i18n'
 
 function formatDuration(startTime: string): string {
   const diff = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000)
@@ -98,7 +99,7 @@ export function ActiveTask(): React.ReactElement {
                 <button
                   className="active-task-tag"
                   style={{ background: activeTask.projectColor || '#6366f1', border: 'none', cursor: 'pointer' }}
-                  title="Abrir projeto"
+                  title={tr('timetracker.abrirProjeto')}
                   onClick={() => activeTask.projectId && openProject(activeTask.projectId)}
                 >
                   🗂 {activeTask.projectName}
@@ -128,13 +129,13 @@ export function ActiveTask(): React.ReactElement {
             onClick={() => setSwitchOpen((v) => !v)}
             aria-expanded={switchOpen}
           >
-            {switchOpen ? '✕' : '⇄ Trocar'}
+            {switchOpen ? '✕' : tr('timetracker.trocar')}
           </button>
           <div className="active-task-controls">
             <div className="task-input-row">
               <input
                 type="text"
-                placeholder="Switch to..."
+                placeholder={tr('timetracker.switchTo')}
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -143,7 +144,7 @@ export function ActiveTask(): React.ReactElement {
                 value={newTagId ?? ''}
                 onChange={(e) => setNewTagId(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">Tag 1</option>
+                <option value="">{tr('timetracker.tag1')}</option>
                 {tags.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
@@ -152,42 +153,42 @@ export function ActiveTask(): React.ReactElement {
                 value={newSecondaryTagId ?? ''}
                 onChange={(e) => setNewSecondaryTagId(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">Tag 2</option>
+                <option value="">{tr('timetracker.tag2')}</option>
                 {tags.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
               {studyOptions.length > 0 && (
-                <select value={newStudyNodeId ?? ''} onChange={(e) => setNewStudyNodeId(e.target.value ? Number(e.target.value) : null)} title="Vincular a um estudo">
-                  <option value="">📖 Estudo</option>
+                <select value={newStudyNodeId ?? ''} onChange={(e) => setNewStudyNodeId(e.target.value ? Number(e.target.value) : null)} title={tr('timetracker.vincularAUmEstudo')}>
+                  <option value="">{tr('timetracker.estudo')}</option>
                   {studyOptions.map((o) => (
                     <option key={o.id} value={o.id}>{o.label}</option>
                   ))}
                 </select>
               )}
               {openProjects.length > 0 && (
-                <select value={newProjectId ?? ''} onChange={(e) => setNewProjectId(e.target.value ? Number(e.target.value) : null)} title="Vincular a um projeto (conta horas)" style={{ minWidth: 0, width: 120 }}>
-                  <option value="">🗂 Projeto</option>
+                <select value={newProjectId ?? ''} onChange={(e) => setNewProjectId(e.target.value ? Number(e.target.value) : null)} title={tr('timetracker.vincularAUmProjetoConta')} style={{ minWidth: 0, width: 120 }}>
+                  <option value="">{tr('timetracker.projeto')}</option>
                   {openProjects.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               )}
               <button className="btn btn-primary" onClick={handleSwitch}>
-                Switch
+                {tr('timetracker.switch')}
               </button>
             </div>
             <button className="btn btn-danger" onClick={stopActiveTask}>
-              ■ Stop
+              {tr('timetracker.stop')}
             </button>
           </div>
         </>
       ) : (
         <div className="task-input-row" style={{ flex: 1 }}>
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>No active task</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{tr('timetracker.noActiveTask')}</span>
           <input
             type="text"
-            placeholder="What are you working on?"
+            placeholder={tr('timetracker.whatAreYouWorkingOn')}
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -198,7 +199,7 @@ export function ActiveTask(): React.ReactElement {
             value={newTagId ?? ''}
             onChange={(e) => setNewTagId(e.target.value ? Number(e.target.value) : null)}
           >
-            <option value="">Tag 1</option>
+            <option value="">{tr('timetracker.tag1')}</option>
             {tags.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -207,29 +208,29 @@ export function ActiveTask(): React.ReactElement {
             value={newSecondaryTagId ?? ''}
             onChange={(e) => setNewSecondaryTagId(e.target.value ? Number(e.target.value) : null)}
           >
-            <option value="">Tag 2</option>
+            <option value="">{tr('timetracker.tag2')}</option>
             {tags.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
           {studyOptions.length > 0 && (
-            <select value={newStudyNodeId ?? ''} onChange={(e) => setNewStudyNodeId(e.target.value ? Number(e.target.value) : null)} title="Vincular a um estudo">
-              <option value="">📖 Estudo</option>
+            <select value={newStudyNodeId ?? ''} onChange={(e) => setNewStudyNodeId(e.target.value ? Number(e.target.value) : null)} title={tr('timetracker.vincularAUmEstudo')}>
+              <option value="">{tr('timetracker.estudo')}</option>
               {studyOptions.map((o) => (
                 <option key={o.id} value={o.id}>{o.label}</option>
               ))}
             </select>
           )}
           {openProjects.length > 0 && (
-                <select value={newProjectId ?? ''} onChange={(e) => setNewProjectId(e.target.value ? Number(e.target.value) : null)} title="Vincular a um projeto (conta horas)" style={{ minWidth: 0, width: 120 }}>
-                  <option value="">🗂 Projeto</option>
+                <select value={newProjectId ?? ''} onChange={(e) => setNewProjectId(e.target.value ? Number(e.target.value) : null)} title={tr('timetracker.vincularAUmProjetoConta')} style={{ minWidth: 0, width: 120 }}>
+                  <option value="">{tr('timetracker.projeto')}</option>
                   {openProjects.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               )}
           <button className="btn btn-primary" onClick={handleStart}>
-            ▶ Start
+            {tr('timetracker.start2')}
           </button>
         </div>
       )}

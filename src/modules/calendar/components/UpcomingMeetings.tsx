@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useCalendarStore } from '../store/calendarStore'
+import { t, getLocale } from '../../../i18n'
 
 export function fmtEventTime(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleString([], { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString(getLocale(), { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 export function UpcomingMeetings(): React.ReactElement {
@@ -29,30 +30,30 @@ export function UpcomingMeetings(): React.ReactElement {
   return (
     <div className="chart-section">
       <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>📅 Próximas reuniões</span>
+        <span>{t('timetracker.proximasReunioes')}</span>
         <button className="btn btn-secondary btn-sm" onClick={() => setAdding((a) => !a)}>
-          {adding ? 'Fechar' : '+ Evento'}
+          {adding ? t('timetracker.fechar') : t('timetracker.evento')}
         </button>
       </div>
 
       {adding && (
         <div style={{ display: 'flex', gap: 6, margin: '10px 0', flexWrap: 'wrap' }}>
           <input
-            placeholder="Título"
+            placeholder={t('timetracker.titulo')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             style={{ flex: 1, minWidth: 120 }}
           />
           <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
           <button className="btn btn-primary btn-sm" onClick={handleAdd}>
-            Adicionar
+            {t('timetracker.adicionar')}
           </button>
         </div>
       )}
 
       <div className="list-stack" style={{ marginTop: 8 }}>
         {upcoming.length === 0 && (
-          <div className="empty-hint">Sem eventos. Adicione manualmente ou conecte o Google (sync automático 1×/dia).</div>
+          <div className="empty-hint">{t('timetracker.semEventosAdicioneManualmenteOu')}</div>
         )}
         {upcoming.map((e) => (
           <div key={e.id} className="list-row">

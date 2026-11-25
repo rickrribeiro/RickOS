@@ -3,6 +3,8 @@ import { nav } from './nav'
 import { settings } from './settings'
 import { shell } from './shell'
 import { skin } from './skin'
+import { timetracker } from './timetracker'
+import { home } from './home'
 
 /** Dicionário de referência. Cada módulo tem seu arquivo, com chaves prefixadas (`todo.*`, `finance.*`…). */
 export const ptBR = {
@@ -10,7 +12,9 @@ export const ptBR = {
   ...nav,
   ...settings,
   ...shell,
-  ...skin
+  ...skin,
+  ...timetracker,
+  ...home
 }
 
 export type MessageKey = keyof typeof ptBR
