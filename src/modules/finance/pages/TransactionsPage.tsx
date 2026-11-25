@@ -6,7 +6,7 @@ import { TransactionEditor } from '../components/TransactionEditor'
 import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
-import { detectInvestmentMove, detectOwnTransfer, countsInTotals } from '../../../../shared/finance'
+import { detectInvestmentMove, detectOwnTransfer, countsInTotals, normalizeText } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -41,14 +41,38 @@ export function TransactionsPage(): React.ReactElement {
   // filtros da lista
   const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment' | 'transfer'>('')
   const [fCategory, setFCategory] = useState<'' | 'none' | number>('')
+  const [fText, setFText] = useState('')
+  const [allMonths, setAllMonths] = useState(false)
+  const [everything, setEverything] = useState<Transaction[] | null>(null) // todas as transações (busca em todos os meses)
 
-  const filtered = monthListing.filter(
+  useEffect(() => {
+    if (!allMonths) return
+    let alive = true
+    window.api.transactions.getAll().then((all) => alive && setEverything(all))
+    return () => {
+      alive = false
+    }
+  }, [allMonths, monthListing]) // recarrega quando a lista do mês muda (edição/exclusão)
+  const source = allMonths ? (everything ?? []) : monthListing
+
+  /** Busca: todas as palavras precisam aparecer (descrição, categoria, data ou valor), sem diferenciar maiúsculas/acentos. */
+  const terms = normalizeText(fText).split(' ').filter(Boolean)
+  const matchesText = (t: Transaction): boolean => {
+    if (!terms.length) return true
+    const hay = normalizeText(
+      [t.description ?? '', categoryName(t.categoryId), t.date, t.date.split('-').reverse().join('/'), t.amount.toFixed(2), t.amount.toFixed(2).replace('.', ',')].join(' ')
+    )
+    return terms.every((w) => hay.includes(w))
+  }
+
+  const filtered = source.filter(
     (t) =>
       (fType === '' ||
         (fType === 'investment' ? !!t.investment : fType === 'transfer' ? !!t.transfer : t.type === fType)) &&
-      (fCategory === '' || (fCategory === 'none' ? t.categoryId == null : t.categoryId === fCategory))
+      (fCategory === '' || (fCategory === 'none' ? t.categoryId == null : t.categoryId === fCategory)) &&
+      matchesText(t)
   )
-  const filtering = fType !== '' || fCategory !== ''
+  const filtering = fType !== '' || fCategory !== '' || terms.length > 0
   const fmtTotals = (items: Transaction[]): string =>
     Object.entries(sumByCurrency(items))
       .map(([c, v]) => formatMoney(v, c))
@@ -200,6 +224,17 @@ export function TransactionsPage(): React.ReactElement {
       </div>
 
       <div className="tx-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+        <input
+          type="search"
+          placeholder="🔍 Buscar (descrição, categoria, valor…)"
+          value={fText}
+          onChange={(e) => setFText(e.target.value)}
+          style={{ flex: '1 1 200px', minWidth: 160 }}
+        />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+          <input type="checkbox" checked={allMonths} onChange={(e) => setAllMonths(e.target.checked)} />
+          todos os meses
+        </label>
         <select
           value={fType}
           onChange={(e) => {
@@ -233,23 +268,23 @@ export function TransactionsPage(): React.ReactElement {
             ))}
         </select>
         {filtering && (
-          <button className="btn btn-secondary btn-sm" onClick={() => { setFType(''); setFCategory('') }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setFType(''); setFCategory(''); setFText('') }}>
             Limpar filtros
           </button>
         )}
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-          {filtering && `${filtered.length} de ${monthListing.length} · `}
+          {filtering && `${filtered.length} de ${source.length}${allMonths ? ' (todos os meses)' : ''} · `}
           <span style={{ color: 'var(--success)' }}>+{inTotal}</span> ·{' '}
           <span style={{ color: 'var(--danger)' }}>−{outTotal}</span>
         </span>
       </div>
 
       <div className="list-stack">
-        {monthListing.length === 0 && <div className="empty-hint">Nenhuma transação neste mês.</div>}
-        {monthListing.length > 0 && filtered.length === 0 && <div className="empty-hint">Nenhuma transação com esses filtros.</div>}
+        {source.length === 0 && <div className="empty-hint">{allMonths ? 'Nenhuma transação.' : 'Nenhuma transação neste mês.'}</div>}
+        {source.length > 0 && filtered.length === 0 && <div className="empty-hint">Nenhuma transação com esses filtros.</div>}
         {filtered.map((t: Transaction) => t.ignoredReason ? (
           <div key={t.id} className="list-row" style={{ opacity: 0.55 }} title="Não entra em nenhum cálculo nem gráfico">
-            <span className="due-badge due-future">{t.date.slice(5)}</span>
+            <span className="due-badge due-future">{allMonths ? t.date.split('-').reverse().join('/') : t.date.slice(5)}</span>
             <span className="list-row-title" style={{ color: 'var(--text-muted)' }}>{t.description || categoryName(t.categoryId)}</span>
             <span className="project-chip" style={{ color: 'var(--text-muted)' }}>ignorada · {t.ignoredReason}</span>
             <span style={{ fontWeight: 600, color: 'var(--text-muted)', minWidth: 90, textAlign: 'right', textDecoration: 'line-through' }}>
@@ -260,7 +295,7 @@ export function TransactionsPage(): React.ReactElement {
           </div>
         ) : (
           <div key={t.id} className="list-row">
-            <span className="due-badge due-future">{t.date.slice(5)}</span>
+            <span className="due-badge due-future">{allMonths ? t.date.split('-').reverse().join('/') : t.date.slice(5)}</span>
             <span className="list-row-title">{t.description || categoryName(t.categoryId)}</span>
             <span className="project-chip">{categoryName(t.categoryId)}</span>
             {t.investment ? (
