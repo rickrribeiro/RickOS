@@ -116,6 +116,12 @@ import {
   deleteInvestment,
   closeInvestment,
   renameInvestment,
+  setInvestmentGroup,
+  getInvestmentGroups,
+  createInvestmentGroup,
+  updateInvestmentGroup,
+  deleteInvestmentGroup,
+  moveInvestmentGroup,
   getTrips,
   createTrip,
   updateTrip,
@@ -1047,7 +1053,15 @@ ipcMain.handle('budgets:set', (_, categoryId: number, month: string, amount: num
 
 ipcMain.handle('investments:getAll', () => getInvestments())
 ipcMain.handle('investments:history', () => getInvestmentHistory())
-ipcMain.handle('investments:create', (_, name: string, type: string | null, amount: number, currency: string, month?: string) => createInvestment(name, type, amount, currency, month))
+ipcMain.handle('investments:create', (_, name: string, type: string | null, amount: number, currency: string, month?: string, groupKey?: string | null) =>
+  createInvestment(name, type, amount, currency, month, groupKey)
+)
+ipcMain.handle('investments:setGroup', (_, id: number, groupKey: string | null) => setInvestmentGroup(id, groupKey))
+ipcMain.handle('investmentGroups:getAll', () => getInvestmentGroups())
+ipcMain.handle('investmentGroups:create', (_, label: string, icon: string) => createInvestmentGroup(label, icon))
+ipcMain.handle('investmentGroups:update', (_, key: string, label: string, icon: string) => updateInvestmentGroup(key, label, icon))
+ipcMain.handle('investmentGroups:delete', (_, key: string) => deleteInvestmentGroup(key))
+ipcMain.handle('investmentGroups:move', (_, key: string, dir: -1 | 1) => moveInvestmentGroup(key, dir))
 ipcMain.handle('investments:setValue', (_, investmentId: number, month: string, amount: number) => setInvestmentValue(investmentId, month, amount))
 ipcMain.handle('investments:delete', (_, id: number) => deleteInvestment(id))
 ipcMain.handle('investments:close', (_, id: number, month: string) => closeInvestment(id, month))

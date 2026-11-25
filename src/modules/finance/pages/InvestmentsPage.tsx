@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { Investment, InvestmentHistory } from '../../../types'
+import { Investment, InvestmentHistory, InvestmentGroupDef } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { InvestmentSummary } from '../components/InvestmentSummary'
 import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth, comparableInvestmentDelta } from '../util'
-import { investmentGroup, INVESTMENT_GROUPS, type InvestmentDetails, type InvestmentGroup } from '../../../../shared/finance'
+import { investmentGroup, resolveInvestmentGroup, type InvestmentDetails } from '../../../../shared/finance'
 
 function parseDetails(raw: string | null | undefined): InvestmentDetails | null {
   if (!raw) return null
@@ -58,10 +58,16 @@ function InvestmentRow({
   isExplicit,
   onSave,
   onRemove,
-  onRename
+  onRename,
+  groups,
+  groupKey,
+  onGroupChange
 }: {
   investment: Investment
   onRename: (name: string) => void
+  groups: InvestmentGroupDef[]
+  groupKey: string // grupo efetivo
+  onGroupChange: (key: string) => void
   value: number | null // carried-forward value for the month (null if none yet)
   prevValue: number | null // carried-forward value for the previous month
   isExplicit: boolean // true if there's a snapshot for this exact month
@@ -103,6 +109,18 @@ function InvestmentRow({
         {detailsLine(investment) && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{detailsLine(investment)}</span>}
       </div>
       {investment.type && <span className="project-chip">{investment.type}</span>}
+      <select
+        value={groupKey}
+        onChange={(e) => onGroupChange(e.target.value)}
+        title="Mover para outro grupo"
+        style={{ fontSize: 11, padding: '1px 4px', maxWidth: 150 }}
+      >
+        {groups.map((g) => (
+          <option key={g.key} value={g.key}>
+            {g.icon} {g.label}
+          </option>
+        ))}
+      </select>
       {investment.externalId && (
         <span
           className="project-chip"
@@ -186,11 +204,120 @@ function ClosedRow({
   )
 }
 
+/** Gerenciar grupos: renomear/trocar ícone/reordenar todos; criar e excluir os seus (os padrão ficam). */
+function GroupsModal({ groups, counts, onChanged, onClose }: {
+  groups: InvestmentGroupDef[]
+  counts: Record<string, number>
+  onChanged: () => Promise<void>
+  onClose: () => void
+}): React.ReactElement {
+  const [newLabel, setNewLabel] = useState('')
+  const [newIcon, setNewIcon] = useState('')
+
+  async function create(): Promise<void> {
+    if (!newLabel.trim()) return
+    await window.api.investmentGroups.create(newLabel.trim(), newIcon.trim() || '📦')
+    setNewLabel('')
+    setNewIcon('')
+    await onChanged()
+  }
+  async function save(g: InvestmentGroupDef, label: string, icon: string): Promise<void> {
+    const l = label.trim()
+    const ic = icon.trim() || '📦'
+    if (!l || (l === g.label && ic === g.icon)) return
+    await window.api.investmentGroups.update(g.key, l, ic)
+    await onChanged()
+  }
+  async function move(g: InvestmentGroupDef, dir: -1 | 1): Promise<void> {
+    await window.api.investmentGroups.move(g.key, dir)
+    await onChanged()
+  }
+  async function remove(g: InvestmentGroupDef): Promise<void> {
+    const n = counts[g.key] ?? 0
+    const extra = n ? ` Os ${n} investimento(s) dele voltam ao grupo do tipo (ou "Outros").` : ''
+    if (!confirm(`Excluir o grupo "${g.label}"?${extra}`)) return
+    await window.api.investmentGroups.delete(g.key)
+    await onChanged()
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 320, maxWidth: 520 }}>
+        <h2>Grupos de investimento</h2>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+          Os padrão recebem os investimentos automaticamente pelo tipo; os que você cria recebem os que você mover para eles
+          (pelo seletor de grupo de cada investimento, ou ao adicionar um manual).
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
+          {groups.map((g, i) => (
+            <div key={`${g.key}|${g.label}|${g.icon}`} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', fontSize: 10, lineHeight: 1 }}>
+                <button className="btn btn-secondary btn-sm" style={{ padding: '1px 5px', minHeight: 0, lineHeight: 1 }} disabled={i === 0} onClick={() => move(g, -1)} title="Subir">▲</button>
+                <button className="btn btn-secondary btn-sm" style={{ padding: '1px 5px', minHeight: 0, lineHeight: 1 }} disabled={i === groups.length - 1} onClick={() => move(g, 1)} title="Descer">▼</button>
+              </div>
+              <input
+                defaultValue={g.icon}
+                onBlur={(e) => save(g, g.label, e.target.value)}
+                style={{ width: 40, flexShrink: 0, textAlign: 'center', padding: '4px 2px' }}
+                title="Ícone (emoji)"
+              />
+              <input
+                defaultValue={g.label}
+                onBlur={(e) => save(g, e.target.value, g.icon)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <span
+                style={{ fontSize: 11, color: 'var(--text-muted)', width: 40, flexShrink: 0, textAlign: 'right', lineHeight: 1.2 }}
+                title={g.builtin ? 'Grupo padrão (não pode ser excluído)' : undefined}
+              >
+                {counts[g.key] ?? 0} {(counts[g.key] ?? 0) === 1 ? 'item' : 'itens'}
+                {!!g.builtin && <><br />padrão</>}
+              </span>
+              {!g.builtin && (
+                <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => remove(g)} title="Excluir grupo">✕</button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+          <input placeholder="🪙" value={newIcon} onChange={(e) => setNewIcon(e.target.value)} style={{ width: 44, textAlign: 'center' }} title="Ícone (emoji)" />
+          <input
+            placeholder="Novo grupo (ex.: Previdência)"
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && create()}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button className="btn btn-primary btn-sm" onClick={create} disabled={!newLabel.trim()}>+ Criar</button>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function InvestmentsPage(): React.ReactElement {
-  const { investments, investmentHistory, month, refresh, addInvestment, setInvestmentValue, removeInvestment, closeInvestment, renameInvestment } =
-    useFinanceStore()
-  const [openGroups, setOpenGroups] = useState<Set<InvestmentGroup>>(new Set())
-  const toggleGroup = (g: InvestmentGroup): void =>
+  const {
+    investments,
+    investmentHistory,
+    investmentGroups,
+    month,
+    refresh,
+    addInvestment,
+    setInvestmentValue,
+    removeInvestment,
+    closeInvestment,
+    renameInvestment,
+    setInvestmentGroup
+  } = useFinanceStore()
+  const groupKeys = new Set(investmentGroups.map((g) => g.key))
+  const groupOf = (i: Investment): string => resolveInvestmentGroup(i, groupKeys)
+  const [groupsOpen, setGroupsOpen] = useState(false)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (g: string): void =>
     setOpenGroups((cur) => {
       const next = new Set(cur)
       if (next.has(g)) next.delete(g)
@@ -231,7 +358,7 @@ export function InvestmentsPage(): React.ReactElement {
     }
   }
   const [name, setName] = useState('')
-  const [group, setGroup] = useState<InvestmentGroup | ''>('')
+  const [group, setGroup] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('BRL')
 
@@ -242,9 +369,7 @@ export function InvestmentsPage(): React.ReactElement {
   async function handleAdd(): Promise<void> {
     const v = parseFloat(amount)
     if (!name.trim() || isNaN(v) || !group) return
-    // o rótulo do grupo vira o `type` — investmentGroup() reconhece cada rótulo
-    const label = INVESTMENT_GROUPS.find((g) => g.id === group)?.label ?? null
-    await addInvestment(name.trim(), label, v, currency)
+    await addInvestment(name.trim(), null, v, currency, group)
     setName('')
     setGroup('')
     setAmount('')
@@ -297,10 +422,10 @@ export function InvestmentsPage(): React.ReactElement {
       <div className="chart-section" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
-          <select value={group} onChange={(e) => setGroup(e.target.value as InvestmentGroup | '')} title="Grupo do investimento">
+          <select value={group} onChange={(e) => setGroup(e.target.value)} title="Grupo do investimento">
             <option value="">Grupo…</option>
-            {INVESTMENT_GROUPS.map((g) => (
-              <option key={g.id} value={g.id}>
+            {investmentGroups.map((g) => (
+              <option key={g.key} value={g.key}>
                 {g.icon} {g.label}
               </option>
             ))}
@@ -315,6 +440,9 @@ export function InvestmentsPage(): React.ReactElement {
           </select>
           <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={!name.trim() || !group || isNaN(parseFloat(amount))}>
             + Adicionar
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setGroupsOpen(true)} title="Criar, renomear e reordenar grupos">
+            ⚙️ Grupos
           </button>
         </div>
         {pluggyReady && (
@@ -334,26 +462,26 @@ export function InvestmentsPage(): React.ReactElement {
 
       <div className="list-stack">
         {active.length === 0 && <div className="empty-hint">Nenhum investimento neste mês.</div>}
-        {INVESTMENT_GROUPS.map((g) => {
-          const items = active.filter((i) => investmentGroup(i.type, i.name) === g.id)
-          if (!items.length && g.id === 'outros') return null
+        {investmentGroups.map((g) => {
+          const items = active.filter((i) => groupOf(i) === g.key)
+          if (!items.length && g.key === 'outros') return null
           const prevMonthKey = shiftMonth(month, -1)
           const val = (i: Investment, m: string): number => investmentValueAtMonth(investmentHistory, i.id, m) ?? 0
           const total = items.reduce((s2, i) => s2 + val(i, month), 0)
           // variação do grupo só entre itens com valor nos dois meses
           const cmpG = comparableInvestmentDelta(
-            [...items, ...closed.map((c) => c.investment).filter((ci) => investmentGroup(ci.type, ci.name) === g.id)].map((i) => i.id),
+            [...items, ...closed.map((c) => c.investment).filter((ci) => groupOf(ci) === g.key)].map((i) => i.id),
             investmentHistory,
             month
           )
           const share = grandTotal > 0 ? (total / grandTotal) * 100 : 0
-          const open = openGroups.has(g.id)
+          const open = openGroups.has(g.key)
           return (
-            <div key={g.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
                 className="list-row"
                 style={{ cursor: items.length ? 'pointer' : 'default', textAlign: 'left', width: '100%', opacity: items.length ? 1 : 0.55, font: 'inherit', color: 'inherit' }}
-                onClick={() => items.length && toggleGroup(g.id)}
+                onClick={() => items.length && toggleGroup(g.key)}
                 disabled={!items.length}
                 title={items.length ? (open ? 'Fechar detalhes' : 'Ver cada investimento') : 'Nenhum investimento neste grupo'}
               >
@@ -388,6 +516,10 @@ export function InvestmentsPage(): React.ReactElement {
                           onSave={(v) => setInvestmentValue(i.id, month, v)}
                           onRemove={() => handleClose(i)}
                           onRename={(n) => renameInvestment(i.id, n)}
+                          groups={investmentGroups}
+                          groupKey={groupOf(i)}
+                          // voltar ao grupo do tipo limpa a escolha (segue a inferência)
+                          onGroupChange={(k) => setInvestmentGroup(i.id, k === investmentGroup(i.type, i.name) ? null : k)}
                         />
                       )
                     })}
@@ -397,11 +529,24 @@ export function InvestmentsPage(): React.ReactElement {
           )
         })}
         {active.length > 0 && (
-          <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setOpenGroups(openGroups.size ? new Set() : new Set(INVESTMENT_GROUPS.map((g) => g.id)))}>
+          <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setOpenGroups(openGroups.size ? new Set() : new Set(investmentGroups.map((g) => g.key)))}>
             {openGroups.size ? 'Fechar todos' : 'Ver detalhes de todos'}
           </button>
         )}
       </div>
+
+      {groupsOpen && (
+        <GroupsModal
+          groups={investmentGroups}
+          counts={investments.reduce<Record<string, number>>((acc, i) => {
+            const k = groupOf(i)
+            acc[k] = (acc[k] ?? 0) + 1
+            return acc
+          }, {})}
+          onChanged={refresh}
+          onClose={() => setGroupsOpen(false)}
+        />
+      )}
 
       {closed.length > 0 && (
         <div style={{ marginTop: 16 }}>

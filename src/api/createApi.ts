@@ -427,12 +427,21 @@ export function createApi() {
     investments: {
       getAll: () => invoke('investments:getAll'),
       history: () => invoke('investments:history'),
-      create: (name: string, type: string | null, amount: number, currency: string, month?: string) => invoke('investments:create', name, type, amount, currency, month),
+      create: (name: string, type: string | null, amount: number, currency: string, month?: string, groupKey?: string | null) =>
+        invoke('investments:create', name, type, amount, currency, month, groupKey),
+      setGroup: (id: number, groupKey: string | null) => invoke('investments:setGroup', id, groupKey),
       setValue: (investmentId: number, month: string, amount: number) => invoke('investments:setValue', investmentId, month, amount),
       delete: (id: number) => invoke('investments:delete', id),
       close: (id: number, month: string) => invoke('investments:close', id, month),
       rename: (id: number, name: string) => invoke('investments:rename', id, name),
       movements: () => invoke('investments:movements')
+    },
+    investmentGroups: {
+      getAll: () => invoke('investmentGroups:getAll'),
+      create: (label: string, icon: string) => invoke('investmentGroups:create', label, icon),
+      update: (key: string, label: string, icon: string) => invoke('investmentGroups:update', key, label, icon),
+      delete: (key: string) => invoke('investmentGroups:delete', key),
+      move: (key: string, dir: -1 | 1) => invoke('investmentGroups:move', key, dir)
     },
     pluggy: {
       sync: (month?: string) => invoke('pluggy:sync', month),

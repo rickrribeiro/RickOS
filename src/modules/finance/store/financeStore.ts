@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { Account, Category, Transaction, Budget, Investment, InvestmentHistory, RecurringSuggestion, InvestmentMovement } from '../../../types'
+import { Account, Category, Transaction, Budget, Investment, InvestmentHistory, RecurringSuggestion, InvestmentMovement, InvestmentGroupDef } from '../../../types'
 import { currentMonth, setMoneyHidden } from '../util'
-import { countsInTotals, type TransactionKind } from '../../../../shared/finance'
+import { countsInTotals, INVESTMENT_GROUPS, type TransactionKind } from '../../../../shared/finance'
 
 const HIDDEN_KEY = 'rickos:financeHidden'
 const initialHidden = ((): boolean => {
@@ -25,6 +25,7 @@ interface FinanceState {
   investments: Investment[]
   investmentHistory: InvestmentHistory[] // all-time monthly snapshots
   investmentMovements: InvestmentMovement[] // aportes/resgates/proventos/impostos (Open Finance)
+  investmentGroups: InvestmentGroupDef[] // padrão + criados, na ordem de exibição
   base: string
   rates: Record<string, number>
   hidden: boolean // privacy mode: mask money values
@@ -54,7 +55,8 @@ interface FinanceState {
   setRecurring: (key: string, recurring: boolean | null) => Promise<void>
   importTransactions: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
   setBudget: (categoryId: number, amount: number) => Promise<void>
-  addInvestment: (name: string, type: string | null, amount: number, currency: string) => Promise<void>
+  addInvestment: (name: string, type: string | null, amount: number, currency: string, groupKey?: string | null) => Promise<void>
+  setInvestmentGroup: (id: number, groupKey: string | null) => Promise<void>
   setInvestmentValue: (investmentId: number, month: string, amount: number) => Promise<void>
   removeInvestment: (id: number) => Promise<void>
   closeInvestment: (id: number, month: string) => Promise<void>
@@ -76,6 +78,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   investments: [],
   investmentHistory: [],
   investmentMovements: [],
+  investmentGroups: INVESTMENT_GROUPS.map((g, i) => ({ key: g.id, label: g.label, icon: g.icon, sortOrder: (i + 1) * 10, builtin: 1 })),
   base: 'BRL',
   rates: {},
   hidden: initialHidden,
@@ -101,7 +104,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   refresh: async () => {
     const month = get().month
-    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw, recurringSuggestions, accountBalances, investmentMovements] =
+    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw, recurringSuggestions, accountBalances, investmentMovements, investmentGroups] =
       await Promise.all([
         window.api.accounts.getAll(),
         window.api.categories.getAll(),
@@ -116,7 +119,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         window.api.settings.get('finance_default_account'),
         window.api.transactions.recurringSuggestions ? window.api.transactions.recurringSuggestions().catch(() => []) : Promise.resolve([]),
         window.api.accountsHistory ? window.api.accountsHistory.balances().catch(() => []) : Promise.resolve([]),
-        window.api.investments.movements ? window.api.investments.movements().catch(() => []) : Promise.resolve([])
+        window.api.investments.movements ? window.api.investments.movements().catch(() => []) : Promise.resolve([]),
+        window.api.investmentGroups ? window.api.investmentGroups.getAll().catch(() => null) : Promise.resolve(null)
       ])
     let rates: Record<string, number> = {}
     try {
@@ -140,6 +144,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurringSuggestions,
       accountBalances,
       investmentMovements,
+      ...(investmentGroups?.length ? { investmentGroups } : {}),
       defaultAccountId: defaultAccountRaw && accounts.some((a) => a.id === Number(defaultAccountRaw)) ? Number(defaultAccountRaw) : null
     })
   },
@@ -215,8 +220,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await window.api.budgets.set(categoryId, get().month, amount)
     await get().refresh()
   },
-  addInvestment: async (name, type, amount, currency) => {
-    await window.api.investments.create(name, type, amount, currency, get().month)
+  addInvestment: async (name, type, amount, currency, groupKey) => {
+    await window.api.investments.create(name, type, amount, currency, get().month, groupKey)
+    await get().refresh()
+  },
+  setInvestmentGroup: async (id, groupKey) => {
+    await window.api.investments.setGroup(id, groupKey)
     await get().refresh()
   },
   setInvestmentValue: async (investmentId, month, amount) => {

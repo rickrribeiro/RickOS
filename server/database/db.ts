@@ -4,7 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { SCHEMA } from './schema'
 import { seedAiLibrary } from './aiSeeds'
-import { detectPaymentMethod } from '../../shared/finance'
+import { detectPaymentMethod, INVESTMENT_GROUPS } from '../../shared/finance'
 
 let db: Database | null = null
 let dbPath: string
@@ -527,6 +527,29 @@ const MIGRATIONS: Migration[] = [
           netAmount REAL,
           quantity REAL
         );`)
+      } catch { /* exists */ }
+    }
+  },
+  {
+    version: 41,
+    label: 'Investimentos: grupos dinâmicos (padrão + criados pelo usuário) e grupo escolhido por investimento',
+    run: (db) => {
+      try {
+        db.run(`CREATE TABLE IF NOT EXISTS investment_groups (
+          key TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          icon TEXT NOT NULL DEFAULT '📦',
+          sortOrder INTEGER NOT NULL DEFAULT 0,
+          builtin INTEGER NOT NULL DEFAULT 0
+        );`)
+      } catch { /* exists */ }
+      INVESTMENT_GROUPS.forEach((g, i) => {
+        const stmt = db.prepare('INSERT OR IGNORE INTO investment_groups (key, label, icon, sortOrder, builtin) VALUES (?, ?, ?, ?, 1)')
+        stmt.run([g.id, g.label, g.icon, g.id === 'outros' ? 1000 : (i + 1) * 10])
+        stmt.free()
+      })
+      try {
+        db.run('ALTER TABLE investments ADD COLUMN groupKey TEXT')
       } catch { /* exists */ }
     }
   }

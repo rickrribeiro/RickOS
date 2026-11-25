@@ -1,8 +1,8 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { FinanceRule, TransactionKind } from '../../shared/finance'
-export type { FinanceRule } from '../../shared/finance'
+import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
+export type { FinanceRule, InvestmentGroupDef } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
@@ -496,6 +496,7 @@ export interface Investment {
   externalId?: string | null // id no Pluggy (sincronizado do Open Finance)
   externalName?: string | null // nome como o banco mandou
   details?: string | null // JSON InvestmentDetails
+  groupKey?: string | null // grupo escolhido (null = inferido pelo tipo)
 }
 
 export interface InvestmentMovement {
@@ -1139,12 +1140,20 @@ declare global {
       investments: {
         getAll: () => Promise<Investment[]>
         history: () => Promise<InvestmentHistory[]>
-        create: (name: string, type: string | null, amount: number, currency: string, month?: string) => Promise<Investment>
+        create: (name: string, type: string | null, amount: number, currency: string, month?: string, groupKey?: string | null) => Promise<Investment>
+        setGroup: (id: number, groupKey: string | null) => Promise<void>
         setValue: (investmentId: number, month: string, amount: number) => Promise<void>
         delete: (id: number) => Promise<void>
         close: (id: number, month: string) => Promise<void>
         rename: (id: number, name: string) => Promise<void>
         movements: () => Promise<InvestmentMovement[]>
+      }
+      investmentGroups: {
+        getAll: () => Promise<InvestmentGroupDef[]>
+        create: (label: string, icon: string) => Promise<InvestmentGroupDef>
+        update: (key: string, label: string, icon: string) => Promise<void>
+        delete: (key: string) => Promise<void>
+        move: (key: string, dir: -1 | 1) => Promise<void>
       }
       pluggy: {
         syncInvestments: () => Promise<PluggyInvestmentSyncResult>

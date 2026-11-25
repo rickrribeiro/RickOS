@@ -1,5 +1,5 @@
 import { Database } from 'sql.js'
-import type { FinanceRule, TransactionKind } from '../../shared/finance'
+import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
 import { randomUUID } from 'crypto'
 import { getDb, saveDb } from './db'
 
@@ -1220,6 +1220,7 @@ export interface DbInvestment {
   externalId?: string | null
   externalName?: string | null
   details?: string | null // JSON InvestmentDetails
+  groupKey?: string | null // grupo escolhido pelo usuário (null = inferido pelo tipo)
 }
 export interface DbInvestmentHistory {
   id: number
@@ -1595,10 +1596,11 @@ export async function createInvestment(
   type: string | null,
   amount: number,
   currency: string,
-  month?: string
+  month?: string,
+  groupKey?: string | null
 ): Promise<DbInvestment> {
   const db = await getDb()
-  run(db, 'INSERT INTO investments (name, type, amount, currency) VALUES (?, ?, ?, ?)', [name, type, amount, currency])
+  run(db, 'INSERT INTO investments (name, type, amount, currency, groupKey) VALUES (?, ?, ?, ?, ?)', [name, type, amount, currency, groupKey ?? null])
   const id = lastInsertId(db)
   run(db, 'INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)', [id, month || currentMonthKey(), amount])
   return getOne<DbInvestment>(db, 'SELECT * FROM investments WHERE id = ?', [id])!
@@ -1638,6 +1640,56 @@ export async function renameInvestment(id: number, name: string): Promise<void> 
   const db = await getDb()
   run(db, 'UPDATE investments SET name = ? WHERE id = ?', [name, id])
 }
+/** Muda o grupo do investimento (null = volta a inferir pelo tipo). A sincronização não mexe nisso. */
+export async function setInvestmentGroup(id: number, groupKey: string | null): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE investments SET groupKey = ? WHERE id = ?', [groupKey, id])
+}
+
+// ── Grupos de investimento ──
+export async function getInvestmentGroups(): Promise<InvestmentGroupDef[]> {
+  const db = await getDb()
+  return getAll<InvestmentGroupDef>(db, 'SELECT * FROM investment_groups ORDER BY sortOrder, label')
+}
+/** Cria um grupo no fim da lista (antes de "Outros", se ele for o último). */
+export async function createInvestmentGroup(label: string, icon: string): Promise<InvestmentGroupDef> {
+  const db = await getDb()
+  const last = getOne<InvestmentGroupDef>(db, 'SELECT * FROM investment_groups ORDER BY sortOrder DESC, label DESC LIMIT 1')
+  let order = (last?.sortOrder ?? 0) + 10
+  if (last?.key === 'outros') {
+    // "Outros" fica sempre por último se ainda estiver lá
+    order = last.sortOrder
+    run(db, 'UPDATE investment_groups SET sortOrder = ? WHERE key = ?', [last.sortOrder + 10, 'outros'])
+  }
+  const key = `g${Date.now().toString(36)}`
+  run(db, 'INSERT INTO investment_groups (key, label, icon, sortOrder, builtin) VALUES (?, ?, ?, ?, 0)', [key, label, icon || '📦', order])
+  return getOne<InvestmentGroupDef>(db, 'SELECT * FROM investment_groups WHERE key = ?', [key])!
+}
+export async function updateInvestmentGroup(key: string, label: string, icon: string): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE investment_groups SET label = ?, icon = ? WHERE key = ?', [label, icon || '📦', key])
+}
+/** Exclui um grupo criado (os padrão não); os itens dele voltam ao grupo inferido pelo tipo. */
+export async function deleteInvestmentGroup(key: string): Promise<void> {
+  const db = await getDb()
+  const g = getOne<InvestmentGroupDef>(db, 'SELECT * FROM investment_groups WHERE key = ?', [key])
+  if (!g || g.builtin) return
+  run(db, 'UPDATE investments SET groupKey = NULL WHERE groupKey = ?', [key])
+  run(db, 'DELETE FROM investment_groups WHERE key = ?', [key])
+}
+/** Troca a posição do grupo com o vizinho (dir −1 = sobe, 1 = desce). */
+export async function moveInvestmentGroup(key: string, dir: -1 | 1): Promise<void> {
+  const db = await getDb()
+  const all = getAll<InvestmentGroupDef>(db, 'SELECT * FROM investment_groups ORDER BY sortOrder, label')
+  const i = all.findIndex((g) => g.key === key)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= all.length) return
+  // renumera para não depender de sortOrder distintos
+  const order = all.map((g) => g.key)
+  ;[order[i], order[j]] = [order[j], order[i]]
+  order.forEach((k, idx) => run(db, 'UPDATE investment_groups SET sortOrder = ? WHERE key = ?', [(idx + 1) * 10, k]))
+}
+
 /** Vincula/atualiza o investimento com o Open Finance. `name` só muda se o usuário não renomeou. */
 export async function setInvestmentExternal(
   id: number,

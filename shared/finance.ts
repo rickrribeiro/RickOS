@@ -419,6 +419,27 @@ export const INVESTMENT_GROUPS: { id: InvestmentGroup; label: string; icon: stri
   { id: 'outros', label: 'Outros', icon: '📦' }
 ]
 
+/** Grupo de investimento salvo no banco (os de `INVESTMENT_GROUPS` são os padrão; dá para criar mais). */
+export interface InvestmentGroupDef {
+  key: string // padrão: o id de INVESTMENT_GROUPS; criados: "g<timestamp>"
+  label: string
+  icon: string
+  sortOrder: number
+  builtin: number // 1 = padrão (não pode excluir; recebe os itens pela inferência do tipo)
+}
+
+/**
+ * Grupo efetivo de um investimento: o escolhido pelo usuário (`groupKey`, se o grupo ainda existe)
+ * ou o inferido pelo tipo/nome.
+ */
+export function resolveInvestmentGroup(
+  inv: { type: string | null; name: string; groupKey?: string | null },
+  existingKeys: ReadonlySet<string>
+): string {
+  if (inv.groupKey && existingKeys.has(inv.groupKey)) return inv.groupKey
+  return investmentGroup(inv.type, inv.name)
+}
+
 /**
  * Grupo pelo tipo amigável do investimento (o que a sincronização grava em `type`, ex.: "CDB",
  * "Ação", "FII", "Fundo de renda fixa", "Tesouro") ou pelo texto livre de um investimento manual.
