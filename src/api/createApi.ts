@@ -6,6 +6,7 @@ import { MEMORY_METHODS, type MemoryWindowApi } from '../modules/memory/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
+import { t } from '../i18n'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -64,7 +65,7 @@ async function exportDbToDevice(): Promise<ExportResult> {
     try {
       handle = await picker({
         suggestedName: name,
-        types: [{ description: 'Banco SQLite', accept: { 'application/x-sqlite3': ['.sqlite'] } }]
+        types: [{ description: t('api.bancoSqlite'), accept: { 'application/x-sqlite3': ['.sqlite'] } }]
       })
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return { ok: false } // cancelado
@@ -76,7 +77,7 @@ async function exportDbToDevice(): Promise<ExportResult> {
       const w = await handle.createWritable()
       await w.write(await res.blob())
       await w.close()
-      return { ok: true, target: 'local', message: `Backup salvo em ${handle.name}.` }
+      return { ok: true, target: 'local', message: t('api.backupSalvoEm', { name: handle.name }) }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
@@ -87,7 +88,7 @@ async function exportDbToDevice(): Promise<ExportResult> {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  return { ok: true, target: 'local', message: 'Download do backup iniciado.' }
+  return { ok: true, target: 'local', message: t('api.downloadIniciado') }
 }
 
 interface SaveHandle {
@@ -586,7 +587,7 @@ export function createApi() {
         const f = await invoke<ExportFile | null>('study:exportMarkdown', topicId)
         if (!f) return { ok: false }
         downloadText(f)
-        return { ok: true, message: `Caderno baixado: ${f.name}` }
+        return { ok: true, message: t('api.cadernoBaixado', { name: f.name }) }
       },
       exportJson: (topicId: number) => exportFile('study:exportJson', topicId),
       importJson: async () => {
@@ -608,7 +609,7 @@ export function createApi() {
         const files = await pickFolderFiles()
         if (!files.length) return { ok: false }
         const roadmap = files.find((f) => f.name === 'roadmap.json')
-        if (!roadmap) return { ok: false, error: 'roadmap.json não encontrado na pasta.' }
+        if (!roadmap) return { ok: false, error: t('api.roadmapNaoEncontrado') }
         try {
           return invoke('study:importBundle', JSON.parse(await roadmap.text()))
         } catch (e) {
@@ -706,7 +707,7 @@ export function createApi() {
         if (!f) return false
         const r = await invoke<{ ok: boolean; error?: string }>('app:importDbData', await fileToBase64(f))
         if (!r.ok) {
-          alert('Falha ao importar: ' + (r.error || 'erro desconhecido'))
+          alert(t('api.falhaAoImportar', { error: r.error || t('api.erroDesconhecido') }))
           return false
         }
         window.location.reload()

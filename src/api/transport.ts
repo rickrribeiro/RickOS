@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 /**
  * HTTP transport to the rickOS server — the same on desktop (Electron) and web.
  *  - desktop: the preload exposes `window.desktop.serverUrl` (the embedded server)
@@ -50,10 +51,10 @@ export async function invoke<T = unknown>(channel: string, ...args: unknown[]): 
   })
   if (res.status === 401) {
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
-    throw new Error('Não autorizado: informe o token do rickOS.')
+    throw new Error(t('api.naoAutorizado'))
   }
   const json = (await res.json()) as { ok: boolean; result?: T; error?: string }
-  if (!json.ok) throw new Error(json.error || `Falha em ${channel}`)
+  if (!json.ok) throw new Error(json.error || t('api.falhaEm', { channel }))
   return json.result as T
 }
 

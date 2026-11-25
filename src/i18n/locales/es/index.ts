@@ -22,6 +22,7 @@ import { flights } from './flights'
 import { travel } from './travel'
 import { ai } from './ai'
 import { misc } from './misc'
+import { api } from './api'
 
 export const es: Messages = {
   ...common,
@@ -46,5 +47,6 @@ export const es: Messages = {
   ...flights,
   ...travel,
   ...ai,
-  ...misc
+  ...misc,
+  ...api
 }

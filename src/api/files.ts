@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 /** Browser-side file helpers that replace Electron's native open/save dialogs. */
 
 export interface ExportFile {
@@ -109,8 +110,8 @@ export async function saveFolder(folder: string, files: ExportFile[]): Promise<s
       await w.write(f.content)
       await w.close()
     }
-    return `Exportado para ${root.name}/${folder}`
+    return t('api.exportadoPara', { path: `${root.name}/${folder}` })
   }
   for (const f of files) downloadText({ ...f, name: `${folder}__${f.name}` })
-  return `${files.length} arquivos baixados (prefixo ${folder}__)`
+  return t('api.arquivosBaixados', { n: files.length, prefix: `${folder}__` })
 }
