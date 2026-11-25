@@ -27,12 +27,15 @@ export function AppearanceSection(): React.ReactElement {
           <button className={`seg-btn ${skin === 'devlytics' ? 'active' : ''}`} onClick={() => pickSkin('devlytics')}>
             Novo
           </button>
+          <button className={`seg-btn ${skin === 'grafite' ? 'active' : ''}`} onClick={() => pickSkin('grafite')}>
+            Grafite & Coral
+          </button>
           <button className={`seg-btn ${skin === 'classic' ? 'active' : ''}`} onClick={() => pickSkin('classic')}>
             Clássico
           </button>
         </div>
       </div>
-      {skin === 'devlytics' && (
+      {skin !== 'classic' && (
         <div className="editor-field">
           <label>Tema</label>
           <div className="seg-toggle">

@@ -10,6 +10,8 @@ import '@fontsource-variable/geist-mono'
 import './index.css'
 import './styles/responsive.css'
 import './styles/skin-devlytics.css'
+import './styles/palettes.css'
+import './styles/palette-grafite.css'
 
 // Same API on desktop and web: everything goes to the rickOS server over HTTP.
 window.api = createApi() as unknown as Window['api']

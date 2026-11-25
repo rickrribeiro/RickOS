@@ -1,0 +1,50 @@
+/* Paleta "Grafite & Coral" — só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='grafite'] {
+  --pal-bg: #18191b;
+  --pal-sidebar: #111214;
+  --pal-surface: #202124;
+  --pal-elevated: #27282c;
+  --pal-user-bubble: #2d2b2c;
+  --pal-border: #343539;
+  --pal-border-strong: #45464b; /* derivado: hover de borda */
+  --pal-text: #f4f1ec;
+  --pal-text-2: #b2afae;
+  --pal-text-3: #a5a2a0;
+  --pal-accent: #ffab89;
+  --pal-accent-hover: #ffc2a9; /* derivado: um passo mais claro */
+  --pal-selection: #342824;
+  --pal-primary: #ffac8b;
+  --pal-on-primary: #301c13;
+  --pal-success: #a4cdb7;
+  --pal-success-bg: #22352c;
+  --pal-shadow: #00000033;
+  --pal-hover: rgba(244, 241, 236, 0.06);
+  --pal-ring: rgba(255, 171, 137, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.55);
+}
+
+:root[data-skin='devlytics'][data-palette='grafite'][data-theme='light'] {
+  --pal-bg: #faf9f7;
+  --pal-sidebar: #efeeeb;
+  --pal-surface: #ffffff;
+  --pal-elevated: #f1efec;
+  --pal-user-bubble: #efebe7;
+  --pal-border: #dad6d1;
+  --pal-border-strong: #c6c0b9; /* derivado */
+  --pal-text: #252320;
+  --pal-text-2: #66605c;
+  --pal-text-3: #706964;
+  --pal-accent: #92462b;
+  --pal-accent-hover: #7a3a23; /* derivado: um passo mais escuro */
+  --pal-selection: #f5e6dd;
+  --pal-primary: #995034;
+  --pal-on-primary: #ffffff;
+  --pal-success: #316247;
+  --pal-success-bg: #e3efe6;
+  --pal-shadow: #30221610;
+  --pal-hover: rgba(37, 35, 32, 0.05);
+  --pal-ring: rgba(146, 70, 43, 0.25);
+  --pal-scrim: rgba(37, 35, 32, 0.3);
+  color-scheme: light;
+}
