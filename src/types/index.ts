@@ -448,6 +448,7 @@ export interface Transaction {
   recurring?: number // 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
   installmentNumber?: number | null // parcela n (Open Finance)
   installmentTotal?: number | null // de N
+  refundOf?: number | null // estorno: id da compra estornada; -1 = não parear
 }
 
 export interface RulePreviewItem {

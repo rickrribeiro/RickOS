@@ -212,6 +212,7 @@ import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAcco
 import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken, reclassifyInvestmentFlags } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
 import { recomputeRecurring, recurringSuggestions } from './services/recurring'
+import { reconcileRefunds } from './services/refunds'
 import { countsInTotals, firstBusinessDay, type TransactionKind } from '../shared/finance'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
@@ -374,6 +375,8 @@ export function startScheduler(): void {
   // Finanças: investimentos do Open Finance no 1º dia útil do mês (checa de hora em hora).
   setTimeout(() => void maybeMonthlyInvestmentSync(), 90_000)
   setInterval(() => void maybeMonthlyInvestmentSync(), 60 * 60 * 1000)
+  // Finanças: pareia estornos pendentes no boot (cobre dados já importados).
+  setTimeout(() => void reconcileRefunds().catch((e) => console.error('[estornos]', e)), 4000)
   // Finanças: recorrência é derivada das transações — recalcula no boot (cobre a migração e regras novas).
   setTimeout(() => void recomputeRecurring().catch((e) => console.error('[recorrência]', e)), 5000)
   setInterval(() => void checkProjectRadar().catch(() => undefined), 60 * 60 * 1000)
@@ -996,6 +999,7 @@ ipcMain.handle('categories:delete', (_, id: number) => deleteCategory(id))
 ipcMain.handle('transactions:getAll', (_, month?: string) => getTransactions(month))
 /** Depois de mexer em transações, recalcula a recorrência (sem travar a resposta em caso de erro). */
 async function afterTxChange<T>(r: T): Promise<T> {
+  await reconcileRefunds().catch((e) => console.error('[estornos]', e))
   await recomputeRecurring().catch((e) => console.error('[recorrência]', e))
   return r
 }

@@ -1203,6 +1203,7 @@ export interface DbTransaction {
   recurring?: number // 1 = recorrente
   installmentNumber?: number | null // parcela n (Pluggy)
   installmentTotal?: number | null // de N
+  refundOf?: number | null // estorno: id da compra estornada; -1 = não parear
 }
 export interface DbBudget {
   id: number
@@ -1460,9 +1461,33 @@ export async function setTransactionKind(id: number, kind: TransactionKind): Pro
   run(db, 'UPDATE transactions SET investment = ?, transfer = ? WHERE id = ?', [kind === 'investment' ? 1 : 0, kind === 'transfer' ? 1 : 0, id])
 }
 /** Marca (motivo) ou desmarca (null) a transação como ignorada nos cálculos. */
+/**
+ * Marca (motivo) ou desmarca (null) a transação como ignorada. Se ela faz parte de um par
+ * estorno↔compra, desmarcar desfaz o par inteiro e o estorno não é pareado de novo sozinho.
+ */
 export async function setTransactionIgnored(id: number, reason: string | null): Promise<void> {
   const db = await getDb()
+  if (reason == null) {
+    const t = getOne<{ id: number; refundOf: number | null }>(db, 'SELECT id, refundOf FROM transactions WHERE id = ?', [id])
+    const refund = t?.refundOf && t.refundOf > 0 ? t : getOne<{ id: number; refundOf: number | null }>(db, 'SELECT id, refundOf FROM transactions WHERE refundOf = ?', [id])
+    if (refund && refund.refundOf && refund.refundOf > 0) {
+      run(db, 'UPDATE transactions SET ignoredReason = NULL WHERE id IN (?, ?)', [refund.id, refund.refundOf])
+      run(db, 'UPDATE transactions SET refundOf = -1 WHERE id = ?', [refund.id])
+      return
+    }
+  } else if (reason) {
+    // ignorar um estorno à mão também é uma decisão: não parear depois
+    run(db, 'UPDATE transactions SET refundOf = COALESCE(refundOf, -1) WHERE id = ? AND type = ?', [id, 'income'])
+  }
   run(db, 'UPDATE transactions SET ignoredReason = ? WHERE id = ?', [reason, id])
+}
+/** Grava pares estorno→compra: as duas ficam ignoradas (fora dos cálculos). */
+export async function applyRefundPairs(pairs: [number, number][], refundReason: string, refundedReason: string): Promise<void> {
+  const db = await getDb()
+  for (const [refundId, purchaseId] of pairs) {
+    run(db, 'UPDATE transactions SET refundOf = ?, ignoredReason = ? WHERE id = ?', [purchaseId, refundReason, refundId])
+    run(db, 'UPDATE transactions SET ignoredReason = ? WHERE id = ?', [refundedReason, purchaseId])
+  }
 }
 export async function deleteTransaction(id: number): Promise<void> {
   const db = await getDb()

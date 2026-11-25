@@ -6,7 +6,7 @@ import { TransactionEditor } from '../components/TransactionEditor'
 import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency, installmentOf } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
-import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel, recurringKey } from '../../../../shared/finance'
+import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel, recurringKey, isRefund } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -21,6 +21,7 @@ export function TransactionsPage(): React.ReactElement {
     addTransaction,
     removeTransaction,
     markTransactionValid,
+    ignoreTransaction,
     setTransactionKind,
     setRecurring,
     recurringSuggestions,
@@ -407,6 +408,22 @@ export function TransactionsPage(): React.ReactElement {
               >
                 🔁 transferência
               </button>
+            ) : null}
+            {isRefund(t) ? (
+              <span className="project-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--warning)' }} title="Estorno sem a compra original encontrada (valor diferente ou compra fora do período). Hoje conta como receita.">
+                ↩ estorno sem compra
+                <button
+                  className="btn btn-sm"
+                  style={{ padding: '0 4px', lineHeight: 1.2, background: 'transparent', border: 'none', color: 'var(--text-secondary)' }}
+                  title="Ignorar este estorno (tirar dos cálculos)"
+                  onClick={() => {
+                    if (confirm('Ignorar este estorno? Ele sai das receitas e de todos os cálculos.\n\nUse se a compra estornada também não deveria contar (ex.: você já a ignorou) ou se ela está fora do período importado.'))
+                      ignoreTransaction(t.id, 'Estorno (decidido à mão)')
+                  }}
+                >
+                  ignorar
+                </button>
+              </span>
             ) : null}
             {t.installmentTotal && t.installmentNumber && !installmentOf(t.description) ? (
               <span className="project-chip" title="Parcela (informada pelo banco)">

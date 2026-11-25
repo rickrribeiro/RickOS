@@ -485,6 +485,13 @@ const MIGRATIONS: Migration[] = [
       try { db.run('ALTER TABLE accounts ADD COLUMN externalId TEXT;') } catch { /* exists */ }
       try { db.run('ALTER TABLE accounts ADD COLUMN syncedAt TEXT;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 38,
+    label: 'Transações: estorno pareado com a compra (refundOf; -1 = não parear)',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN refundOf INTEGER;') } catch { /* exists */ }
+    }
   }
 ]
 

@@ -45,6 +45,7 @@ interface FinanceState {
   updateTransaction: (t: Transaction) => Promise<void>
   removeTransaction: (id: number) => Promise<void>
   markTransactionValid: (id: number) => Promise<void>
+  ignoreTransaction: (id: number, reason: string) => Promise<void>
   setTransactionKind: (id: number, kind: TransactionKind) => Promise<void>
   setTransactionPaymentMethod: (id: number, method: string | null) => Promise<void>
   /** Recorrência por estabelecimento (chave recurringKey): true/false fixa, null volta para o automático. */
@@ -187,6 +188,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   setTransactionKind: async (id, kind) => {
     await window.api.transactions.setKind(id, kind)
+    await get().refresh()
+  },
+  ignoreTransaction: async (id, reason) => {
+    await window.api.transactions.setIgnored(id, reason)
     await get().refresh()
   },
   markTransactionValid: async (id) => {

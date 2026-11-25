@@ -189,7 +189,8 @@ export const SCHEMA = `
     paymentMethod TEXT,                     -- credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
     recurring INTEGER NOT NULL DEFAULT 0,   -- 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
     installmentNumber INTEGER,              -- parcela n (creditCardMetadata do Pluggy); null = à vista/desconhecido
-    installmentTotal INTEGER                -- de N parcelas
+    installmentTotal INTEGER,               -- de N parcelas
+    refundOf INTEGER                        -- estorno: id da compra estornada (-1 = usuário pediu para não parear)
   );
 
   -- Exceções de recorrência por estabelecimento (chave = recurringKey): o usuário corrige a detecção.

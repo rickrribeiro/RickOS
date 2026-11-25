@@ -335,3 +335,73 @@ export function firstBusinessDay(year: number, month: number): string {
   }
   return ymd(new Date(year, month - 1, 1))
 }
+
+// ── Estornos ───────────────────────────────────────────────────────────────────
+
+export const REFUND_REASON = 'Estorno de compra'
+export const REFUNDED_REASON = 'Compra estornada'
+
+/** Estorno/crédito de compra (não é pagamento de fatura nem resgate). */
+export function isRefund(t: { type: string; description: string | null; paymentMethod?: string | null; investment?: number | null }): boolean {
+  if (t.type !== 'income' || t.investment) return false
+  const d = normalizeText(t.description ?? '')
+  if (/^pagamento recebido\b|\bfatura\b/.test(d)) return false
+  return /^(estorno|credito de ")|\bestorno\b/.test(d)
+}
+
+/** Loja citada no estorno: 'Crédito de "WEIXIN*Ctrip. Com"' → 'weixin*ctrip. com'; "Estorno de compra" → null. */
+export function refundMerchant(description: string | null): string | null {
+  const m = /cr[eé]dito de "([^"]+)"/i.exec(description ?? '')
+  return m ? normalizeText(m[1]) : null
+}
+
+interface RefundTx {
+  id: number
+  date: string
+  amount: number
+  type: string
+  description: string | null
+  paymentMethod?: string | null
+  investment?: number | null
+  ignoredReason?: string | null
+  refundOf?: number | null
+}
+
+/**
+ * Pareia estornos com a compra original: compra até 90 dias antes (ou no mesmo dia); valor igual
+ * (±1 centavo) ou, quando o estorno cita a loja ou é de IOF, até 5% de diferença (câmbio); se cita a
+ * loja, a descrição da compra tem de começar por ela. Fica com a compra de valor mais próximo. Estornos já decididos (refundOf != null) e compras já ignoradas ficam de fora.
+ * Retorna pares [estornoId, compraId].
+ */
+export function pairRefunds(txs: RefundTx[]): [number, number][] {
+  const purchases = txs
+    .filter((t) => t.type === 'expense' && !t.ignoredReason)
+    .sort((a, b) => b.date.localeCompare(a.date))
+  const taken = new Set<number>()
+  const out: [number, number][] = []
+  const refunds = txs.filter((t) => t.refundOf == null && !t.ignoredReason && isRefund(t)).sort((a, b) => a.date.localeCompare(b.date))
+  for (const r of refunds) {
+    const merchant = refundMerchant(r.description)
+    const isIofRefund = /\biof\b/i.test(r.description ?? '')
+    const rd = Date.parse(r.date)
+    // compra internacional estornada volta com outro câmbio: com loja identificada (ou estorno de IOF)
+    // aceita até 5% de diferença e fica com a mais próxima em valor; sem loja, só valor exato.
+    const tolerant = !!merchant || isIofRefund
+    const candidates = purchases.filter((p) => {
+      if (taken.has(p.id)) return false
+      const diff = Math.abs(p.amount - r.amount)
+      if (tolerant ? diff > Math.max(0.011, 0.05 * p.amount) : diff > 0.011) return false
+      const days = (rd - Date.parse(p.date)) / 86_400_000
+      if (days < 0 || days > 90) return false
+      const pd = normalizeText(p.description ?? '')
+      if (isIofRefund !== /\biof\b/.test(pd)) return false
+      return !merchant || pd.startsWith(merchant.slice(0, 12))
+    })
+    const match = candidates.sort((a, b) => Math.abs(a.amount - r.amount) - Math.abs(b.amount - r.amount) || b.date.localeCompare(a.date))[0]
+    if (match) {
+      taken.add(match.id)
+      out.push([r.id, match.id])
+    }
+  }
+  return out
+}
