@@ -405,3 +405,31 @@ export function pairRefunds(txs: RefundTx[]): [number, number][] {
   }
   return out
 }
+
+// ── Grupos de investimento ─────────────────────────────────────────────────────
+
+export type InvestmentGroup = 'renda-fixa' | 'bolsa' | 'fundos' | 'crypto' | 'tesouro' | 'outros'
+
+export const INVESTMENT_GROUPS: { id: InvestmentGroup; label: string; icon: string }[] = [
+  { id: 'renda-fixa', label: 'Renda fixa', icon: '🏦' },
+  { id: 'bolsa', label: 'Bolsa de valores', icon: '📊' },
+  { id: 'fundos', label: 'Fundos de investimento', icon: '🧺' },
+  { id: 'crypto', label: 'Crypto', icon: '🪙' },
+  { id: 'tesouro', label: 'Tesouro direto', icon: '🇧🇷' },
+  { id: 'outros', label: 'Outros', icon: '📦' }
+]
+
+/**
+ * Grupo pelo tipo amigável do investimento (o que a sincronização grava em `type`, ex.: "CDB",
+ * "Ação", "FII", "Fundo de renda fixa", "Tesouro") ou pelo texto livre de um investimento manual.
+ */
+export function investmentGroup(type: string | null | undefined, name?: string | null): InvestmentGroup {
+  const t = normalizeText(`${type ?? ''} ${type ? '' : (name ?? '')}`)
+  if (/\b(cripto|crypto|bitcoin|btc|eth|ethereum|usdt|solana)\b/.test(t)) return 'crypto'
+  if (/\btesouro\b/.test(t)) return 'tesouro'
+  if (/\bfii\b|fundo imobiliario/.test(t)) return 'bolsa' // FII é negociado em bolsa
+  if (/\b(fundo|fundos|fip|previdencia|pgbl|vgbl)\b/.test(t)) return 'fundos'
+  if (/\b(acao|acoes|bdr|etf|opcao|derivativo|stock|bolsa)\b/.test(t)) return 'bolsa'
+  if (/\b(cdb|rdb|lci|lca|lc|cri|cra|lig|lf|debenture|renda fixa|poupanca|caixinha)\b/.test(t)) return 'renda-fixa'
+  return 'outros'
+}

@@ -4,7 +4,7 @@ import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { InvestmentSummary } from '../components/InvestmentSummary'
 import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth } from '../util'
-import type { InvestmentDetails } from '../../../../shared/finance'
+import { investmentGroup, INVESTMENT_GROUPS, type InvestmentDetails, type InvestmentGroup } from '../../../../shared/finance'
 
 function parseDetails(raw: string | null | undefined): InvestmentDetails | null {
   if (!raw) return null
@@ -189,6 +189,14 @@ function ClosedRow({
 export function InvestmentsPage(): React.ReactElement {
   const { investments, investmentHistory, month, refresh, addInvestment, setInvestmentValue, removeInvestment, closeInvestment, renameInvestment } =
     useFinanceStore()
+  const [openGroups, setOpenGroups] = useState<Set<InvestmentGroup>>(new Set())
+  const toggleGroup = (g: InvestmentGroup): void =>
+    setOpenGroups((cur) => {
+      const next = new Set(cur)
+      if (next.has(g)) next.delete(g)
+      else next.add(g)
+      return next
+    })
   const [pluggyReady, setPluggyReady] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [syncMsg, setSyncMsg] = useState<{ text: string; ok: boolean } | null>(null)
@@ -246,6 +254,7 @@ export function InvestmentsPage(): React.ReactElement {
     amount: investmentValueAtMonth(investmentHistory, i.id, month) ?? 0
   }))
   const totals = sumByCurrency(monthItems)
+  const grandTotal = monthItems.reduce((s2, i) => s2 + i.amount, 0)
 
   // por mês: ativos (têm valor), encerrados (último registro é um encerramento) e futuros (ainda não existiam → ocultos)
   const active: Investment[] = []
@@ -316,23 +325,69 @@ export function InvestmentsPage(): React.ReactElement {
 
       <div className="list-stack">
         {active.length === 0 && <div className="empty-hint">Nenhum investimento neste mês.</div>}
-        {active.map((i) => {
-          const explicit = investmentHistory.some((h) => h.investmentId === i.id && h.month === month)
-          const value = investmentValueAtMonth(investmentHistory, i.id, month)
-          const prevValue = investmentValueAtMonth(investmentHistory, i.id, shiftMonth(month, -1))
+        {INVESTMENT_GROUPS.map((g) => {
+          const items = active.filter((i) => investmentGroup(i.type, i.name) === g.id)
+          if (!items.length && g.id === 'outros') return null
+          const prevMonthKey = shiftMonth(month, -1)
+          const val = (i: Investment, m: string): number => investmentValueAtMonth(investmentHistory, i.id, m) ?? 0
+          const total = items.reduce((s2, i) => s2 + val(i, month), 0)
+          const hasPrev = investmentHistory.some((h) => h.month <= prevMonthKey)
+          const prevTotal = items.reduce((s2, i) => s2 + val(i, prevMonthKey), 0)
+          const share = grandTotal > 0 ? (total / grandTotal) * 100 : 0
+          const open = openGroups.has(g.id)
           return (
-            <InvestmentRow
-              key={`${i.id}|${month}`}
-              investment={i}
-              value={value}
-              prevValue={prevValue}
-              isExplicit={explicit}
-              onSave={(v) => setInvestmentValue(i.id, month, v)}
-              onRemove={() => handleClose(i)}
-              onRename={(n) => renameInvestment(i.id, n)}
-            />
+            <div key={g.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                className="list-row"
+                style={{ cursor: items.length ? 'pointer' : 'default', textAlign: 'left', width: '100%', opacity: items.length ? 1 : 0.55, font: 'inherit', color: 'inherit' }}
+                onClick={() => items.length && toggleGroup(g.id)}
+                disabled={!items.length}
+                title={items.length ? (open ? 'Fechar detalhes' : 'Ver cada investimento') : 'Nenhum investimento neste grupo'}
+              >
+                <span style={{ fontSize: 18 }}>{g.icon}</span>
+                <span className="list-row-title" style={{ fontWeight: 600 }}>
+                  {g.label}
+                  <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>
+                    {items.length} {items.length === 1 ? 'item' : 'itens'}
+                  </span>
+                </span>
+                {items.length > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{share.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</span>}
+                {hasPrev && items.length > 0 && <DeltaTag prev={prevTotal} curr={total} currency="BRL" />}
+                <span style={{ marginLeft: 'auto', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(total)}</span>
+                <span style={{ width: 16, textAlign: 'center', color: 'var(--text-muted)' }}>{items.length ? (open ? '▲' : '▼') : ''}</span>
+              </button>
+              {open && (
+                <div className="list-stack" style={{ marginLeft: 14, paddingLeft: 10, borderLeft: '2px solid var(--border)' }}>
+                  {items
+                    .slice()
+                    .sort((a, b) => val(b, month) - val(a, month))
+                    .map((i) => {
+                      const explicit = investmentHistory.some((h) => h.investmentId === i.id && h.month === month)
+                      const value = investmentValueAtMonth(investmentHistory, i.id, month)
+                      const prevValue = investmentValueAtMonth(investmentHistory, i.id, prevMonthKey)
+                      return (
+                        <InvestmentRow
+                          key={`${i.id}|${month}`}
+                          investment={i}
+                          value={value}
+                          prevValue={prevValue}
+                          isExplicit={explicit}
+                          onSave={(v) => setInvestmentValue(i.id, month, v)}
+                          onRemove={() => handleClose(i)}
+                          onRename={(n) => renameInvestment(i.id, n)}
+                        />
+                      )
+                    })}
+                </div>
+              )}
+            </div>
           )
         })}
+        {active.length > 0 && (
+          <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setOpenGroups(openGroups.size ? new Set() : new Set(INVESTMENT_GROUPS.map((g) => g.id)))}>
+            {openGroups.size ? 'Fechar todos' : 'Ver detalhes de todos'}
+          </button>
+        )}
       </div>
 
       {closed.length > 0 && (
