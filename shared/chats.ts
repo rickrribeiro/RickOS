@@ -1,3 +1,4 @@
+import { labeled, labels, st } from './i18n'
 /**
  * Central de Mensagens: tipos normalizados, independentes do provedor (Beeper, conector
  * próprio de WhatsApp, Matrix, Unipile…). UI e serviços só conhecem estes contratos.
@@ -27,7 +28,7 @@ export const NETWORK_LABELS: Record<string, { label: string; icon: string; color
 }
 
 export function networkInfo(n: string): { label: string; icon: string; color: string } {
-  return NETWORK_LABELS[n] ?? { label: n ? n[0].toUpperCase() + n.slice(1) : 'Outra', icon: '💭', color: '#888888' }
+  return NETWORK_LABELS[n] ?? { label: n ? n[0].toUpperCase() + n.slice(1) : st('shared.chats.otherNetwork', 'Outra'), icon: '💭', color: '#888888' }
 }
 
 /** Uma rede de uma pessoa do CRM (conversa vinculada). */
@@ -152,13 +153,13 @@ export type ReplyState = 'needs_reply' | 'waiting' | 'none' | 'resolved' | 'snoo
 export type ManualReplyState = Exclude<ReplyState, 'snoozed'> | null
 export type ChatPriority = 'alta' | 'normal' | 'baixa'
 
-export const REPLY_STATE_LABELS: Record<ReplyState, string> = {
+export const REPLY_STATE_LABELS: Record<ReplyState, string> = labels('shared.chats.replyState', {
   needs_reply: 'Preciso responder',
   waiting: 'Aguardando resposta',
   none: 'Não requer resposta',
   resolved: 'Resolvido',
   snoozed: 'Adiado'
-}
+})
 
 export interface ChatLabel {
   id: number
@@ -356,13 +357,13 @@ export interface ContactChatLink {
 
 export type AiStyle = 'natural' | 'curto' | 'descontraido' | 'profissional' | 'elaborado'
 
-export const AI_STYLE_LABELS: Record<AiStyle, string> = {
+export const AI_STYLE_LABELS: Record<AiStyle, string> = labels('shared.chats.aiStyle', {
   natural: 'Natural',
   curto: 'Curto',
   descontraido: 'Descontraído',
   profissional: 'Profissional',
   elaborado: 'Mais elaborado'
-}
+})
 
 export interface AiSuggestRequest {
   chatId: number
@@ -456,10 +457,10 @@ export const DEFAULT_PRIORITY_WEIGHTS: PriorityWeights = {
   mutedPenalty: 25
 }
 
-export const PROVIDERS_INFO: { id: string; label: string; demo?: boolean }[] = [
+export const PROVIDERS_INFO: { id: string; label: string; demo?: boolean }[] = labeled('shared.chats.provider', 'id', [
   { id: 'beeper', label: 'Beeper Desktop API' },
   { id: 'mock', label: 'Demonstração (dados fictícios)', demo: true }
-]
+])
 
 export const NO_CAPABILITIES: ChatProviderCapabilities = {
   readMessages: false,

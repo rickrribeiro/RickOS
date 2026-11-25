@@ -1,3 +1,4 @@
+import { labeled, labels } from './i18n'
 /**
  * Conversas do Prompt Runner: cada conversa é uma sessão do Claude Code CLI
  * (continuada com `--resume <sessionId>`), com turnos persistidos no banco.
@@ -7,12 +8,12 @@
 /** Como o CLI lida com ferramentas nesta conversa. */
 export type ConvPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
 
-export const PERMISSION_MODE_LABELS: Record<ConvPermissionMode, string> = {
+export const PERMISSION_MODE_LABELS: Record<ConvPermissionMode, string> = labels('shared.ai.permission', {
   default: 'Perguntar',
   acceptEdits: 'Aceitar edições',
   plan: 'Planejar',
   bypassPermissions: 'Executar tudo'
-}
+})
 
 export type ConvEffort = '' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -23,13 +24,13 @@ export const CONV_MODELS: { v: string; label: string }[] = [
   { v: 'haiku', label: 'Haiku' }
 ]
 
-export const CONV_EFFORTS: { v: Exclude<ConvEffort, ''>; label: string }[] = [
+export const CONV_EFFORTS: { v: Exclude<ConvEffort, ''>; label: string }[] = labeled('shared.ai.effort', 'v', [
   { v: 'low', label: 'Baixo' },
   { v: 'medium', label: 'Médio' },
   { v: 'high', label: 'Alto' },
   { v: 'xhigh', label: 'Muito alto' },
   { v: 'max', label: 'Máximo' }
-]
+])
 
 /** Chaves de configuração do padrão do Prompt Runner (Configurações → IA). */
 export const CONV_DEFAULT_MODEL_KEY = 'prompt_runner_model'

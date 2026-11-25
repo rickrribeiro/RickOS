@@ -1,3 +1,4 @@
+import { labels } from './i18n'
 /**
  * Memória Pessoal — tipos e helpers puros compartilhados entre servidor e front.
  * Arquitetura: docs/memoria/arquitetura.md.
@@ -36,7 +37,7 @@ export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number]
 export const FEEDBACK_VERDICTS = ['approved', 'approved_edited', 'rejected', 'snoozed', 'irrelevant', 'incorrect', 'duplicate', 'too_personal', 'other'] as const
 export type FeedbackVerdict = (typeof FEEDBACK_VERDICTS)[number]
 
-export const TYPE_LABEL: Record<MemoryType, string> = {
+export const TYPE_LABEL: Record<MemoryType, string> = labels('shared.memory.type', {
   FACT: 'Fato',
   PREFERENCE: 'Preferência',
   GOAL: 'Objetivo',
@@ -46,29 +47,29 @@ export const TYPE_LABEL: Record<MemoryType, string> = {
   EXPERIENCE: 'Experiência',
   LEARNING: 'Aprendizado',
   INFERENCE: 'Inferência'
-}
+})
 
-export const LAYER_LABEL: Record<MemoryLayer, string> = {
+export const LAYER_LABEL: Record<MemoryLayer, string> = labels('shared.memory.layer', {
   semantic: 'Semântica',
   episodic: 'Episódica',
   procedural: 'Procedural',
   temporal: 'Temporal',
   reflective: 'Reflexiva'
-}
+})
 
-export const STATUS_LABEL: Record<MemoryStatus, string> = {
+export const STATUS_LABEL: Record<MemoryStatus, string> = labels('shared.memory.status', {
   active: 'Ativa',
   unconfirmed: 'Não confirmada',
   outdated: 'Desatualizada',
   archived: 'Arquivada',
   superseded: 'Substituída',
   expired: 'Expirada'
-}
+})
 
-export const SENSITIVITY_LABEL: Record<Sensitivity, string> = { NORMAL: 'Normal', PRIVATE: 'Privada', RESTRICTED: 'Restrita' }
-export const RELIABILITY_LABEL: Record<Reliability, string> = { stated: 'Declarada por mim', observed: 'Observada', inferred: 'Inferida pela IA' }
-export const STABILITY_LABEL: Record<Stability, string> = { permanent: 'Permanente', stable: 'Estável', evolving: 'Muda com o tempo', transient: 'Temporária' }
-export const ORIGIN_LABEL: Record<MemoryOrigin, string> = {
+export const SENSITIVITY_LABEL: Record<Sensitivity, string> = labels('shared.memory.sensitivity', { NORMAL: 'Normal', PRIVATE: 'Privada', RESTRICTED: 'Restrita' })
+export const RELIABILITY_LABEL: Record<Reliability, string> = labels('shared.memory.reliability', { stated: 'Declarada por mim', observed: 'Observada', inferred: 'Inferida pela IA' })
+export const STABILITY_LABEL: Record<Stability, string> = labels('shared.memory.stability', { permanent: 'Permanente', stable: 'Estável', evolving: 'Muda com o tempo', transient: 'Temporária' })
+export const ORIGIN_LABEL: Record<MemoryOrigin, string> = labels('shared.memory.origin', {
   manual: 'Manual',
   import: 'Importação',
   migration: 'Migração da Base',
@@ -76,24 +77,24 @@ export const ORIGIN_LABEL: Record<MemoryOrigin, string> = {
   interview: 'Me conheça melhor',
   consolidation: 'Consolidação',
   text: 'Texto livre'
-}
-export const RELATION_LABEL: Record<RelationKind, string> = {
+})
+export const RELATION_LABEL: Record<RelationKind, string> = labels('shared.memory.relation', {
   RELATED_TO: 'Relacionada a',
   SUPPORTS: 'Sustenta',
   CONTRADICTS: 'Contradiz',
   DERIVED_FROM: 'Derivada de',
   SUPERSEDES: 'Substitui',
   PART_OF: 'Parte de'
-}
-export const OP_LABEL: Record<SuggestionOp, string> = {
+})
+export const OP_LABEL: Record<SuggestionOp, string> = labels('shared.memory.op', {
   CREATE: 'Nova memória',
   UPDATE: 'Atualizar',
   MERGE: 'Consolidar',
   ARCHIVE: 'Arquivar',
   RESOLVE: 'Resolver conflito',
   ASK: 'Pergunta'
-}
-export const VERDICT_LABEL: Record<FeedbackVerdict, string> = {
+})
+export const VERDICT_LABEL: Record<FeedbackVerdict, string> = labels('shared.memory.verdict', {
   approved: 'Aprovada',
   approved_edited: 'Aprovada com edição',
   rejected: 'Rejeitada',
@@ -103,7 +104,7 @@ export const VERDICT_LABEL: Record<FeedbackVerdict, string> = {
   duplicate: 'Duplicada',
   too_personal: 'Pessoal demais',
   other: 'Outro motivo'
-}
+})
 
 /** Camada padrão de cada tipo (o usuário pode trocar). */
 export function defaultLayer(type: MemoryType): MemoryLayer {

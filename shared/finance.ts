@@ -1,3 +1,4 @@
+import { labeled, labels, sharedLocale, st } from './i18n'
 /**
  * Movimentação de investimento: aplicação (saída) ou resgate (entrada). Não é gasto nem
  * receita real — o dinheiro só troca de lugar —, então fica fora dos totais e aparece à parte.
@@ -118,7 +119,7 @@ export function detectOwnTransfer(description: string | null | undefined, catego
 
 export type PaymentMethod = 'credito' | 'debito' | 'pix' | 'ted' | 'boleto' | 'transferencia' | 'saque' | 'deposito'
 
-export const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string }[] = [
+export const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string }[] = labeled('shared.finance.payment', 'id', [
   { id: 'credito', label: 'Cartão de crédito', icon: '💳' },
   { id: 'debito', label: 'Cartão de débito', icon: '💳' },
   { id: 'pix', label: 'Pix', icon: '⚡' },
@@ -127,10 +128,10 @@ export const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string }
   { id: 'transferencia', label: 'Transferência', icon: '🔄' },
   { id: 'saque', label: 'Saque', icon: '💵' },
   { id: 'deposito', label: 'Depósito', icon: '📥' }
-]
+])
 
 export function paymentMethodLabel(id: string | null | undefined): string {
-  return PAYMENT_METHODS.find((p) => p.id === id)?.label ?? 'Não identificada'
+  return PAYMENT_METHODS.find((p) => p.id === id)?.label ?? st('shared.finance.paymentUnknown', 'Não identificada')
 }
 
 /** operationType do Open Finance (conta corrente) → forma de pagamento. */
@@ -198,21 +199,21 @@ export interface InvestmentDetails {
   syncedAt: string // ISO
 }
 
-const PLUGGY_KIND: Record<string, string> = {
+const PLUGGY_KIND: Record<string, string> = labels('shared.finance.pluggyKind', {
   CDB: 'CDB', LCI: 'LCI', LCA: 'LCA', LC: 'LC', CRI: 'CRI', CRA: 'CRA', LIG: 'LIG', LF: 'LF', DEBENTURES: 'Debênture', TREASURY: 'Tesouro',
   RETIREMENT: 'Previdência', PGBL: 'PGBL', VGBL: 'VGBL',
   INVESTMENT_FUND: 'Fundo', STOCK_FUND: 'Fundo de ações', MULTIMARKET_FUND: 'Fundo multimercado', EXCHANGE_FUND: 'Fundo cambial',
   FIXED_INCOME_FUND: 'Fundo de renda fixa', FIP_FUND: 'FIP', OFFSHORE_FUND: 'Fundo offshore', ETF_FUND: 'Fundo de ETF',
   STOCK: 'Ação', BDR: 'BDR', REAL_ESTATE_FUND: 'FII', DERIVATIVES: 'Derivativo', OPTION: 'Opção', ETF: 'ETF', STRUCTURED_NOTE: 'COE'
-}
+})
 
 export function pluggyInvestmentKind(type: string | null | undefined, subtype: string | null | undefined): string {
-  return PLUGGY_KIND[subtype ?? ''] ?? PLUGGY_KIND[type ?? ''] ?? (type === 'FIXED_INCOME' ? 'Renda fixa' : 'Investimento')
+  return PLUGGY_KIND[subtype ?? ''] ?? PLUGGY_KIND[type ?? ''] ?? (type === 'FIXED_INCOME' ? st('shared.finance.fixedIncome', 'Renda fixa') : st('shared.finance.investment', 'Investimento'))
 }
 
 /** "100% CDI", "IPCA + 6% a.a.", "12,5% a.a." — a partir de rate/rateType/fixedAnnualRate. */
 export function pluggyRateText(rate: number | null | undefined, rateType: string | null | undefined, fixedAnnualRate: number | null | undefined): string | null {
-  const fmt = (n: number): string => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  const fmt = (n: number): string => n.toLocaleString(sharedLocale(), { maximumFractionDigits: 2 })
   if (rateType && rate != null) {
     if (rateType === 'IPCA' || rateType === 'IGPM') return `${rateType}${fixedAnnualRate ? ` + ${fmt(fixedAnnualRate)}% a.a.` : ''}`
     return `${fmt(rate)}% ${rateType}`
@@ -410,14 +411,14 @@ export function pairRefunds(txs: RefundTx[]): [number, number][] {
 
 export type InvestmentGroup = 'renda-fixa' | 'bolsa' | 'fundos' | 'crypto' | 'tesouro' | 'outros'
 
-export const INVESTMENT_GROUPS: { id: InvestmentGroup; label: string; icon: string }[] = [
+export const INVESTMENT_GROUPS: { id: InvestmentGroup; label: string; icon: string }[] = labeled('shared.finance.investGroup', 'id', [
   { id: 'renda-fixa', label: 'Renda fixa', icon: '🏦' },
   { id: 'bolsa', label: 'Bolsa de valores', icon: '📊' },
   { id: 'fundos', label: 'Fundos de investimento', icon: '🧺' },
   { id: 'crypto', label: 'Crypto', icon: '🪙' },
   { id: 'tesouro', label: 'Tesouro direto', icon: '🇧🇷' },
   { id: 'outros', label: 'Outros', icon: '📦' }
-]
+])
 
 /** Grupo de investimento salvo no banco (os de `INVESTMENT_GROUPS` são os padrão; dá para criar mais). */
 export interface InvestmentGroupDef {

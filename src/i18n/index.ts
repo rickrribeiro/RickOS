@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { ptBR, type Messages, type MessageKey } from './locales/pt-BR'
 import { en } from './locales/en'
 import { es } from './locales/es'
+import { SHARED_LABELS } from './sharedLabels'
+import { setSharedTranslator } from '../../shared/i18n'
 
 /**
  * i18n do rickOS, feito à mão (sem lib):
@@ -80,6 +82,12 @@ export const useLocaleStore = create<LocaleState>((_set, get) => ({
 }))
 
 document.documentElement.lang = useLocaleStore.getState().locale
+
+// Rótulos de `shared/` (memória, chats, passagens…) e formatação de lá seguem o idioma do front.
+{
+  const l = useLocaleStore.getState().locale
+  setSharedTranslator(l, l === 'pt-BR' ? null : (key) => SHARED_LABELS[l][key])
+}
 
 export function getLocale(): Locale {
   return useLocaleStore.getState().locale

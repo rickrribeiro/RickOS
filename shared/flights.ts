@@ -1,3 +1,4 @@
+import { labeled, labels, sharedLocale } from './i18n'
 /**
  * Tipos do monitoramento de passagens, compartilhados entre servidor (`server/flights/`)
  * e front (`src/modules/flights/`). Só tipos e constantes puras — nada de Node nem DOM.
@@ -661,7 +662,7 @@ export interface ImportPreview {
 
 // ── Regiões geográficas (curadas; países ISO2) ───────────────────────────────
 
-export const REGIONS: { id: string; label: string; countries: string[] }[] = [
+export const REGIONS: { id: string; label: string; countries: string[] }[] = labeled('shared.flights.region', 'id', [
   { id: 'southeast_asia', label: 'Sudeste Asiático', countries: ['VN', 'TH', 'MY', 'SG', 'LA', 'KH', 'ID', 'PH', 'MM', 'BN', 'TL'] },
   { id: 'east_asia', label: 'Leste Asiático', countries: ['JP', 'KR', 'CN', 'TW', 'HK', 'MO', 'MN'] },
   { id: 'south_asia', label: 'Sul da Ásia', countries: ['IN', 'LK', 'NP', 'BD', 'PK', 'MV', 'BT'] },
@@ -675,35 +676,35 @@ export const REGIONS: { id: string; label: string; countries: string[] }[] = [
   { id: 'north_africa', label: 'Norte da África', countries: ['MA', 'DZ', 'TN', 'EG'] },
   { id: 'sub_saharan_africa', label: 'África Subsaariana', countries: ['ZA', 'KE', 'ET', 'NG', 'GH', 'SN', 'TZ', 'MZ', 'AO', 'CV', 'MU'] },
   { id: 'br_northeast', label: 'Nordeste do Brasil', countries: [] }
-]
+])
 
 /** Estados que compõem regiões sub-nacionais (ex.: Nordeste). */
 export const REGION_STATES: Record<string, string[]> = {
   br_northeast: ['BR-BA', 'BR-SE', 'BR-AL', 'BR-PE', 'BR-PB', 'BR-RN', 'BR-CE', 'BR-PI', 'BR-MA']
 }
 
-export const CABIN_LABEL: Record<Cabin, string> = {
+export const CABIN_LABEL: Record<Cabin, string> = labels('shared.flights.cabin', {
   economy: 'Econômica',
   premium_economy: 'Premium economy',
   business: 'Executiva',
   first: 'Primeira'
-}
+})
 
-export const STRATEGY_LABEL: Record<SortStrategy, string> = {
+export const STRATEGY_LABEL: Record<SortStrategy, string> = labels('shared.flights.strategy', {
   value: 'Melhor custo-benefício',
   price: 'Menor tarifa aérea',
   total_cost: 'Menor custo total',
   duration: 'Menor duração de voo',
   door_to_door: 'Menor tempo porta a porta',
   stops: 'Menos conexões'
-}
+})
 
-export const VERIFICATION_LABEL: Record<Verification, string> = {
+export const VERIFICATION_LABEL: Record<Verification, string> = labels('shared.flights.verification', {
   live: 'Preço ao vivo',
   cached: 'Cache do provedor',
   imported: 'Importado',
   assisted: 'Busca assistida'
-}
+})
 
 export const DEFAULT_WEIGHTS: ScoreWeights = { price: 5, duration: 3, stops: 2, connections: 2, schedule: 1, carriers: 1 }
 
@@ -755,7 +756,7 @@ export function formatMoney(m: Money | null | undefined): string {
   if (!m) return '—'
   const digits = minorDigits(m.currency)
   try {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: m.currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(
+    return new Intl.NumberFormat(sharedLocale(), { style: 'currency', currency: m.currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(
       m.amountMinor / 10 ** digits
     )
   } catch {
