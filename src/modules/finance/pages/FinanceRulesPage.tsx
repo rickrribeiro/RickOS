@@ -185,7 +185,7 @@ export function FinanceRulesPage(): React.ReactElement {
           Se a descrição contiver qualquer uma das palavras (sem diferenciar maiúsculas/acentos), a transação vai para a categoria.
           A regra só vale para transações do mesmo tipo da categoria (despesa/receita). Em conflito, vale a de cima.
           Aplicadas automaticamente em toda importação (Open Finance e CSV), só em transações que chegam sem categoria ou em
-          &quot;Outros&quot;.
+          &quot;Outros&quot;. Uma transação categorizada por regra deixa de ser tratada como transferência entre contas.
         </p>
       </div>
 

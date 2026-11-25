@@ -7,7 +7,11 @@ export const FALLBACK_CATEGORY_ID = 6
 const uncategorized = (t: { categoryId: number | null }): boolean =>
   t.categoryId == null || t.categoryId === FALLBACK_CATEGORY_ID
 
-/** Aplica as regras ativas às transações novas (importação) que chegaram sem categoria ou em "Outros". */
+/**
+ * Aplica as regras ativas às transações novas (importação) que chegaram sem categoria ou em "Outros".
+ * Regra do usuário vence a detecção automática de "transferência entre contas": se uma regra
+ * categoriza, a transação volta a contar em receitas/gastos.
+ */
 export async function categorizeNew<T extends Omit<DbTransaction, 'id'>>(rows: T[]): Promise<T[]> {
   const rules = await getFinanceRules()
   if (!rules.some((r) => r.active)) return rows
@@ -15,7 +19,7 @@ export async function categorizeNew<T extends Omit<DbTransaction, 'id'>>(rows: T
   return rows.map((r) => {
     if (!uncategorized(r)) return r
     const rule = matchFinanceRule(rules, categories, r.description, r.type)
-    return rule ? { ...r, categoryId: rule.categoryId } : r
+    return rule ? { ...r, categoryId: rule.categoryId, transfer: 0 } : r
   })
 }
 

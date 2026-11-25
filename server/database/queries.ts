@@ -1307,9 +1307,10 @@ export async function moveFinanceRule(id: number, dir: -1 | 1): Promise<void> {
   ;[rules[i], rules[j]] = [rules[j], rules[i]]
   rules.forEach((r, pos) => run(db, 'UPDATE finance_rules SET position = ? WHERE id = ?', [pos, r.id]))
 }
+/** Aplica categorias vindas das Regras; como em `categorizeNew`, a regra desfaz a marcação automática de transferência. */
 export async function setTransactionsCategory(changes: { id: number; categoryId: number }[]): Promise<void> {
   const db = await getDb()
-  for (const c of changes) run(db, 'UPDATE transactions SET categoryId = ? WHERE id = ?', [c.categoryId, c.id])
+  for (const c of changes) run(db, 'UPDATE transactions SET categoryId = ?, transfer = 0 WHERE id = ?', [c.categoryId, c.id])
 }
 
 /**
