@@ -21,6 +21,7 @@ import {
   type NewsState,
   type NewsTopic
 } from '../../shared/news'
+import { tt } from '../i18n'
 
 export const GEMINI_KEY_SETTING = 'gemini_api_key'
 const CATEGORIES_SETTING = 'news_categories'
@@ -130,7 +131,7 @@ export async function newsReadingEvidence(): Promise<string> {
   const custom = (await getNewsCategories()).filter((c) => !NEWS_DEFAULT_CATEGORIES.includes(c))
   const reads = await getReads()
   if (!reads.length && !custom.length) {
-    throw new Error('Abra algumas notícias em "Ler mais" (ou cadastre categorias próprias) antes de sugerir memórias.')
+    throw new Error(tt('services.abraAlgumasNoticiasEmLer'))
   }
   const lines = [
     'Evidência de interesses vinda do meu Resumo Diário de Notícias (comportamento, não afirmações explícitas).',
@@ -198,7 +199,7 @@ async function collect(category: string, targetDate: string, tzOffsetMin: number
     headers: { 'User-Agent': 'Mozilla/5.0 (rickOS news digest)' },
     signal: AbortSignal.timeout(20_000)
   })
-  if (!res.ok) throw new Error(`Google News respondeu ${res.status}`)
+  if (!res.ok) throw new Error(tt('services.googleNewsRespondeu', { status: res.status }))
   const items = parseRss(await res.text())
   const seen = new Set<string>()
   return items

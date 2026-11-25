@@ -3,6 +3,7 @@ import { DEFAULT_PRIORITY_WEIGHTS } from '../../shared/chats'
 import { getAllSettings, setSetting } from '../database/queries'
 import { decodeSecret, encodeSecret } from '../services/secrets'
 import { validateBeeperUrl } from './transport'
+import { tt } from '../i18n'
 
 /** Chaves `chats_*` na tabela settings (o framework de configurações já existente). */
 export const K = {
@@ -113,7 +114,7 @@ export async function saveConfig(p: ConfigPatch): Promise<void> {
   if (p.beeperToken !== undefined) await set(K.beeperToken, encodeSecret(K.beeperToken, p.beeperToken.trim()))
   if (p.enabled !== undefined) await set(K.enabled, b(p.enabled))
   if (p.providerId !== undefined) {
-    if (!['beeper', 'mock'].includes(p.providerId)) throw new Error('Provedor desconhecido.')
+    if (!['beeper', 'mock'].includes(p.providerId)) throw new Error(tt('chats.provedorDesconhecido'))
     await set(K.provider, p.providerId)
   }
   if (p.beeperMode !== undefined) await set(K.beeperMode, p.beeperMode === 'agent' ? 'agent' : 'direct')
@@ -127,7 +128,7 @@ export async function saveConfig(p: ConfigPatch): Promise<void> {
   if (p.markReadOnReply !== undefined) await set(K.markReadOnReply, b(p.markReadOnReply))
   if (p.aiModel !== undefined) {
     const m = p.aiModel.trim()
-    if (m && !/^[A-Za-z0-9._:-]+$/.test(m)) throw new Error('Modelo inválido.')
+    if (m && !/^[A-Za-z0-9._:-]+$/.test(m)) throw new Error(tt('chats.modeloInvalido'))
     await set(K.aiModel, m)
   }
   if (p.aiStyleInstructions !== undefined) await set(K.aiStyle, p.aiStyleInstructions.slice(0, 2000))

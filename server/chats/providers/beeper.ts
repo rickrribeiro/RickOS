@@ -3,6 +3,7 @@ import type { BeeperTransport, TransportRequest, TransportResponse } from '../tr
 import type { ChatProvider, Page, ProviderEvent, RealtimeState, RemoteAccount, RemoteAttachment, RemoteChat, RemoteMessage, RemoteParticipant } from './types'
 import { ProviderUnavailableError } from './types'
 import { readBeeperImage, sniffImage } from './localAsset'
+import { tt } from '../../i18n'
 
 /**
  * Provedor Beeper Desktop API (v1, validado contra o SDK oficial @beeper/desktop-api 6.0.0).
@@ -96,8 +97,8 @@ interface BList<T> {
 function ensureOk(r: TransportResponse, what: string): unknown {
   if (r.status >= 200 && r.status < 300) return r.json
   const msg = (r.json as { message?: string; error?: string } | undefined)?.message ?? (r.json as { error?: string } | undefined)?.error
-  if (r.status === 404) throw new Error(`${what}: não encontrado.`)
-  throw new Error(`${what}: Beeper respondeu ${r.status}${msg ? ` — ${String(msg).slice(0, 200)}` : ''}`)
+  if (r.status === 404) throw new Error(`${what}: não encontrado.`) // texto checado em getChat: não traduzir
+  throw new Error(tt('chats.beeperRespondeu', { what, status: r.status, p2: msg ? ` — ${String(msg).slice(0, 200)}` : '' }))
 }
 
 const userName = (u: BUser): string => u.fullName || u.username || u.phoneNumber || u.email || u.id
@@ -233,7 +234,7 @@ export function createBeeperProvider(
         ensureOk(r, 'Contas')
         version = r.headers?.['x-beeper-desktop-version'] ?? version
         const n = Array.isArray(r.json) ? r.json.length : 0
-        return { ok: true, message: `Conectado ao Beeper${version ? ` ${version}` : ''} (${transport.mode === 'agent' ? 'via agente local' : 'direto'}). ${n} conta(s).`, version }
+        return { ok: true, message: tt('chats.conectadoAoBeeperContaS', { p0: version ? ` ${version}` : '', p1: transport.mode === 'agent' ? tt('chats.viaAgenteLocal') : tt('chats.direto'), n }), version }
       } catch (e) {
         return { ok: false, message: e instanceof Error ? e.message : String(e) }
       }
@@ -292,7 +293,7 @@ export function createBeeperProvider(
           { method: 'POST', path: '/v1/assets/upload/base64', body: { content: image.data.toString('base64'), fileName: image.fileName, mimeType: image.mimeType } },
           'Enviar imagem'
         )) as { uploadID?: string; error?: string }
-        if (!up?.uploadID) throw new Error(`Enviar imagem: ${up?.error || 'o Beeper não aceitou o arquivo.'}`)
+        if (!up?.uploadID) throw new Error(tt('chats.enviarImagem', { p0: up?.error || 'o Beeper não aceitou o arquivo.' }))
         attachment = { uploadID: up.uploadID, mimeType: image.mimeType, fileName: image.fileName, type: image.mimeType === 'image/gif' ? 'gif' : 'image' }
       }
       const body = (await call(
@@ -331,9 +332,9 @@ export function createBeeperProvider(
     },
 
     async fetchAttachment(ref) {
-      if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error('Anexo inválido.')
+      if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error(tt('chats.anexoInvalido'))
       const failedAt = failedAssets.get(ref)
-      if (failedAt && Date.now() - failedAt < FAIL_TTL_MS) throw new Error('Anexo indisponível.')
+      if (failedAt && Date.now() - failedAt < FAIL_TTL_MS) throw new Error(tt('chats.anexoIndisponivel'))
       let r: TransportResponse | null = null
       try {
         r = await transport.request({ method: 'GET', path: '/v1/assets/serve', query: { url: ref }, binary: true })
@@ -349,7 +350,7 @@ export function createBeeperProvider(
       if (local) return local
       failedAssets.set(ref, Date.now())
       if (failedAssets.size > 5000) failedAssets.delete(failedAssets.keys().next().value as string)
-      throw new Error('Anexo indisponível.')
+      throw new Error(tt('chats.anexoIndisponivel'))
     },
 
     subscribe(onEvent, onState) {

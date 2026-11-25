@@ -4,6 +4,7 @@ import type { ClaudeUsageAccount, ClaudeUsageLimit, ClaudeUsageSnapshot } from '
 import { buildPath } from '../services/claude'
 import { configLabel } from './claudeSkills'
 import { configDirs } from './transcripts'
+import { tt } from '../i18n'
 
 /**
  * Limites de uso do Claude Code (os mesmos do `/usage` do terminal): roda
@@ -96,18 +97,18 @@ function runUsage(configDir: string): Promise<string> {
     let err = ''
     const timer = setTimeout(() => {
       child.kill('SIGTERM')
-      reject(new Error('O Claude CLI demorou demais para responder.'))
+      reject(new Error(tt('aiconv.oClaudeCliDemorouDemais')))
     }, TIMEOUT_MS)
     child.stdout.on('data', (b: Buffer) => (out += b.toString()))
     child.stderr.on('data', (b: Buffer) => (err += b.toString()))
     child.on('error', (e: NodeJS.ErrnoException) => {
       clearTimeout(timer)
-      reject(new Error(e.code === 'ENOENT' ? 'Claude CLI não encontrado no PATH.' : e.message))
+      reject(new Error(e.code === 'ENOENT' ? tt('aiconv.claudeCliNaoEncontradoNo') : e.message))
     })
     child.on('close', (code) => {
       clearTimeout(timer)
       if (code === 0 || out.trim()) resolve(out)
-      else reject(new Error(err.trim().split('\n').pop() || `claude saiu com código ${code}`))
+      else reject(new Error(err.trim().split('\n').pop() || tt('aiconv.claudeSaiuComCodigo', { code })))
     })
   })
 }
@@ -209,7 +210,7 @@ function readCodexRateLimits(): Promise<CodexRateLimitsResult | null> {
         child.kill('SIGTERM')
         fn()
       }
-      const timer = setTimeout(() => finish(() => reject(new Error('O Codex demorou demais para responder.'))), TIMEOUT_MS)
+      const timer = setTimeout(() => finish(() => reject(new Error(tt('aiconv.oCodexDemorouDemaisPara')))), TIMEOUT_MS)
       const send = (msg: unknown): void => {
         child.stdin.write(JSON.stringify(msg) + '\n')
       }
@@ -218,7 +219,7 @@ function readCodexRateLimits(): Promise<CodexRateLimitsResult | null> {
       child.stderr.on('data', (b: Buffer) => (err += b.toString()))
       child.on('close', (code) => {
         // shell sem o comando: 127 = "command not found"
-        finish(() => (code === 127 ? resolve(null) : reject(new Error(err.trim().split('\n').pop() || `codex saiu com código ${code}`))))
+        finish(() => (code === 127 ? resolve(null) : reject(new Error(err.trim().split('\n').pop() || tt('aiconv.codexSaiuComCodigo', { code })))))
       })
       child.stdout.on('data', (b: Buffer) => {
         buf += b.toString()
@@ -237,7 +238,7 @@ function readCodexRateLimits(): Promise<CodexRateLimitsResult | null> {
             send({ method: 'initialized' })
             send({ method: 'account/rateLimits/read', id: 2 })
           } else if (msg.id === 2) {
-            finish(() => (msg.error ? reject(new Error(msg.error.message || 'Erro do Codex.')) : resolve(msg.result as CodexRateLimitsResult)))
+            finish(() => (msg.error ? reject(new Error(msg.error.message || tt('aiconv.erroDoCodex'))) : resolve(msg.result as CodexRateLimitsResult)))
           }
         }
       })

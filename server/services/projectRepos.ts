@@ -3,6 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { getProjects, getProjectRepos, setProjectRepos, projectRefCounts, absorbProject, DbProject, DbProjectRepo } from '../database/queries'
+import { tt } from '../i18n'
 
 /**
  * Repositórios de um projeto. Um projeto pode ser:
@@ -94,7 +95,7 @@ export interface DetectedRepo {
  */
 export async function detectChildRepos(localPath: string): Promise<{ rootIsRepo: boolean; repos: DetectedRepo[] }> {
   const root = expandHome(localPath.trim())
-  if (!root || !fs.existsSync(root)) throw new Error('Pasta não encontrada')
+  if (!root || !fs.existsSync(root)) throw new Error(tt('services.pastaNaoEncontrada'))
   const found: string[] = []
   const skip = (n: string): boolean => n.startsWith('.') || n === 'node_modules'
   for (const e of fs.readdirSync(root, { withFileTypes: true })) {
@@ -167,7 +168,7 @@ export async function workspaceDuplicates(targetId: number): Promise<WorkspaceDu
 /** Incorpora um projeto duplicado no workspace (confere que é mesmo um dos repos dele). */
 export async function absorbIntoWorkspace(targetId: number, sourceId: number): Promise<void> {
   const dup = (await workspaceDuplicates(targetId)).find((d) => d.projectId === sourceId)
-  if (!dup) throw new Error('Este projeto não corresponde a nenhum repositório do workspace.')
+  if (!dup) throw new Error(tt('services.esteProjetoNaoCorrespondeA'))
   // o GitHub do antigo fica no repo do workspace, se ainda não estiver lá
   const [projects, rows] = await Promise.all([getProjects(), getProjectRepos(targetId)])
   const source = projects.find((p) => p.id === sourceId)

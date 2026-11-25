@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import { recordAiUsage } from '../database/queries'
+import { tt } from '../i18n'
 
 const TIMEOUT_MS = 120_000
 
@@ -288,7 +289,7 @@ function attempt(bin: string, prompt: string, viaShell: boolean, opts: RunOption
             if (settled) return
             settled = true
             child.kill('SIGKILL')
-            reject(new Error(`Tempo esgotado (${Math.round(timeoutMs / 1000)}s) executando o Claude CLI.`))
+            reject(new Error(tt('services.tempoEsgotadoSExecutandoO', { p0: Math.round(timeoutMs / 1000) })))
           }, timeoutMs)
         : null
     const clear = (): void => {
@@ -296,7 +297,7 @@ function attempt(bin: string, prompt: string, viaShell: boolean, opts: RunOption
     }
 
     if (!child.stdout || !child.stderr) {
-      reject(new Error('Falha ao abrir os fluxos de saída do Claude CLI.'))
+      reject(new Error(tt('services.falhaAoAbrirOsFluxos')))
       return
     }
     child.stdout.on('data', (d) => {
@@ -344,7 +345,7 @@ function attempt(bin: string, prompt: string, viaShell: boolean, opts: RunOption
       if (code === 0) {
         resolve(parsedMode ? finalText ?? (assistantText.trim() || stdout.trim()) : stdout.trim())
       } else {
-        reject(new Error(stderr.trim() || (parsedMode ? finalText ?? '' : '') || `Claude CLI saiu com código ${code}.`))
+        reject(new Error(stderr.trim() || (parsedMode ? finalText ?? '' : '') || tt('services.claudeCliSaiuComCodigo', { code })))
       }
     })
   })

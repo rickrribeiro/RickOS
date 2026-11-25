@@ -2,6 +2,7 @@ import { Database } from 'sql.js'
 import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
 import { randomUUID } from 'crypto'
 import { getDb, saveDb } from './db'
+import { tt } from '../i18n'
 
 export interface DbTag {
   id: number
@@ -822,10 +823,10 @@ const ABSORB_TEXT_FIELDS: [keyof DbProject, string][] = [
  */
 export async function absorbProject(targetId: number, sourceId: number): Promise<void> {
   const db = await getDb()
-  if (targetId === sourceId) throw new Error('Não dá para incorporar um projeto nele mesmo.')
+  if (targetId === sourceId) throw new Error(tt('db.naoDaParaIncorporarUm'))
   const target = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [targetId])
   const source = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [sourceId])
-  if (!target || !source) throw new Error('Projeto não encontrado.')
+  if (!target || !source) throw new Error(tt('db.projetoNaoEncontrado'))
   const exec = (sql: string, params: (string | number | null)[]): void => {
     const st = db.prepare(sql)
     st.run(params)
@@ -1378,7 +1379,7 @@ export async function getAccountReservedHistory(): Promise<{ accountId: number; 
   return getAll(db, 'SELECT accountId, month, amount, updatedAt FROM account_reserved_history ORDER BY month')
 }
 export async function setAccountReserved(accountId: number, month: string, amount: number): Promise<void> {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`)
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(tt('db.mesInvalido', { month }))
   const db = await getDb()
   run(
     db,
@@ -3056,7 +3057,7 @@ export async function patchProject(
 ): Promise<DbProject> {
   const db = await getDb()
   const prev = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])
-  if (!prev) throw new Error('Projeto não encontrado')
+  if (!prev) throw new Error(tt('db.projetoNaoEncontrado2'))
   const cols: string[] = []
   const params: (string | number | null)[] = []
   const now = new Date().toISOString()
@@ -3101,10 +3102,10 @@ export interface ProjectStatusPayload {
 
 /** Muda a situação registrando a decisão no histórico (motivo de pausa/encerramento, retomada, etc.). */
 export async function setProjectStatus(id: number, status: string, payload: ProjectStatusPayload = {}): Promise<DbProject> {
-  if (!(PROJECT_STATUSES as readonly string[]).includes(status)) throw new Error(`Situação inválida: ${status}`)
+  if (!(PROJECT_STATUSES as readonly string[]).includes(status)) throw new Error(tt('db.situacaoInvalida', { status }))
   const db = await getDb()
   const prev = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])
-  if (!prev) throw new Error('Projeto não encontrado')
+  if (!prev) throw new Error(tt('db.projetoNaoEncontrado2'))
   const now = new Date().toISOString()
   const closed = status === 'concluido' || status === 'encerrado'
   const sets: string[] = ['status = ?', 'statusChangedAt = ?', 'archived = ?', 'triagedAt = COALESCE(triagedAt, ?)']
@@ -3180,7 +3181,7 @@ export async function completeNextAction(
 ): Promise<DbProject> {
   const db = await getDb()
   const prev = getOne<DbProject>(db, 'SELECT * FROM projects WHERE id = ?', [id])
-  if (!prev) throw new Error('Projeto não encontrado')
+  if (!prev) throw new Error(tt('db.projetoNaoEncontrado2'))
   const now = new Date().toISOString()
   if (prev.nextAction) {
     run(db, 'INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)', [id, 'acao_concluida', prev.nextAction, now])

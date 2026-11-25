@@ -1,5 +1,6 @@
 import type { NormalizedOffer, Segment, Slice } from '../../../shared/flights'
 import { decimalToMinor, fetchJson, FlightProvider, isoDurationMin, ProviderError, SearchQuery } from './types'
+import { tt } from '../../i18n'
 
 /**
  * Duffel (API de NDC/GDS). Preços AO VIVO com trechos, companhia operadora, bagagem
@@ -121,7 +122,9 @@ async function token(getSetting: (k: string) => Promise<string | null>): Promise
 
 export const duffel: FlightProvider = {
   id: 'duffel',
-  label: 'Duffel (preço ao vivo)',
+  get label() {
+    return tt('flights.provider.duffel')
+  },
   kind: 'api',
   capabilities: {
     oneWay: true,

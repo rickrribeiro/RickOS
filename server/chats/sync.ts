@@ -9,6 +9,7 @@ import * as repo from './repo'
 import { activeProvider, changed, getSummary, invalidateMessages, scanChat } from './service'
 import type { ChatProvider, ProviderEvent, RemoteChat } from './providers/types'
 import { ProviderAuthError, ProviderUnavailableError } from './providers/types'
+import { tt } from '../i18n'
 
 /**
  * Sincronização: eventos em tempo real quando disponíveis, polling como fallback.
@@ -341,10 +342,10 @@ async function notifyImportant(ids: number[]): Promise<void> {
     const vip = s.contactVip || s.contactPriority === 'alta' || s.priority === 'alta'
     if (cfg.notifyVipWaiting && vip && s.replyState === 'needs_reply' && !s.lastMessageFromMe) {
       notified.set(id, stamp)
-      await notify({ title: `💬 ${s.contactName ?? s.title} mandou mensagem`, body: 'Pessoa importante esperando resposta.', source: 'mensagens', page: 'chats' })
+      await notify({ title: tt('chats.mandouMensagem', { p0: s.contactName ?? s.title }), body: tt('chats.pessoaImportanteEsperandoResposta'), source: 'mensagens', page: 'chats' })
     } else if (cfg.notifyMentions && s.type === 'group' && (s.unreadMentions ?? 0) > 0 && !s.mentionsReviewed) {
       notified.set(id, stamp)
-      await notify({ title: `@ Mencionaram você em ${s.title}`, body: `${s.unreadMentions} menção(ões)${s.mentionsEstimated ? ' (estimativa)' : ''}.`, source: 'mensagens', page: 'chats' })
+      await notify({ title: tt('chats.mencionaramVoceEm', { title: s.title }), body: tt('chats.mencaoOes', { unreadMentions: s.unreadMentions, p1: s.mentionsEstimated ? tt('chats.estimativaParen') : '' }), source: 'mensagens', page: 'chats' })
     }
   }
 }
@@ -357,7 +358,7 @@ async function checkReminders(): Promise<void> {
   if (!due.length) return
   for (const r of due) {
     if (cfg.notifyReminders) {
-      await notify({ title: `⏰ Responder: ${r.title}`, body: r.reminderNote || 'Lembrete da Central de Mensagens.', source: 'mensagens', page: 'chats' })
+      await notify({ title: tt('chats.responder', { title: r.title }), body: r.reminderNote || tt('chats.lembreteDaCentralDeMensagens'), source: 'mensagens', page: 'chats' })
     }
   }
   await repo.patchOrg(

@@ -13,6 +13,7 @@ import path from 'path'
 import { decodeSecret } from './secrets'
 import { runClaude } from './claude'
 import { projectForGithubRepo } from './projectRepos'
+import { tt } from '../i18n'
 
 const GITHUB_API = 'https://api.github.com'
 
@@ -37,7 +38,7 @@ function runGh(args: string[]): Promise<string> {
       child.stderr.on('data', (d) => (err += d.toString()))
       child.on('error', (e: NodeJS.ErrnoException) => reject(e))
       child.on('close', (code) =>
-        code === 0 ? resolve(out) : reject(new Error(err.trim() || `gh saiu com código ${code}.`))
+        code === 0 ? resolve(out) : reject(new Error(err.trim() || tt('services.ghSaiuComCodigo', { code })))
       )
     })
   return attempt(false).catch((e: NodeJS.ErrnoException) => {
@@ -114,7 +115,7 @@ function mapIssue(i: GithubApiIssue): DbGithubIssue {
 async function fetchIssuesViaToken(query: string): Promise<GithubApiIssue[]> {
   const token = decodeSecret(await getSetting('github_token'))
   if (!token) {
-    throw new Error('GitHub token não configurado. Vá em Configurações e adicione um token.')
+    throw new Error(tt('services.githubTokenNaoConfiguradoVa'))
   }
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -129,8 +130,8 @@ async function fetchIssuesViaToken(query: string): Promise<GithubApiIssue[]> {
     const res = await fetch(url, { headers })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      if (res.status === 401) throw new Error('Token inválido ou expirado (401).')
-      throw new Error(`GitHub API falhou (${res.status}). ${body.slice(0, 140)}`)
+      if (res.status === 401) throw new Error(tt('services.tokenInvalidoOuExpirado401'))
+      throw new Error(tt('services.githubApiFalhou', { status: res.status, p1: body.slice(0, 140) }))
     }
     data.push(...((await res.json()) as GithubApiIssue[]))
     url = parseNextLink(res.headers.get('link'))
@@ -147,9 +148,9 @@ async function fetchIssuesViaGh(query: string): Promise<GithubApiIssue[]> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      throw new Error('`gh` (GitHub CLI) não encontrado. Instale e rode `gh auth login`, ou use o modo Token.')
+      throw new Error(tt('services.ghGithubCliNaoEncontrado'))
     }
-    throw new Error(`Falha no gh: ${msg}`)
+    throw new Error(tt('services.falhaNoGh', { msg }))
   }
   // `gh api --paginate` on an array endpoint may concatenate multiple JSON arrays.
   try {

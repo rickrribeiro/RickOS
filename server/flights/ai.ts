@@ -10,6 +10,7 @@ import { parseImport } from './importer'
 import * as repo from './repo'
 import { configErrors, normalizeConfig } from './validate'
 import { fmtMinutes } from '../../shared/flights'
+import { tt } from '../i18n'
 
 /**
  * IA só onde agrega: interpretar linguagem natural, recomendar regiões/aeroportos,
@@ -43,7 +44,7 @@ function firstJson(text: string): unknown {
 async function spendAi(monitorId: number | null, limit: number): Promise<void> {
   const key = `ai:count:${monitorId ?? 'new'}:${todayLocal()}`
   const n = (await repo.cacheGet<number>(key)) ?? 0
-  if (n >= limit) throw new Error(`Limite de ${limit} chamada(s) de IA por dia atingido${monitorId ? ' para este monitor' : ''}. Ajuste em "Fontes e execução".`)
+  if (n >= limit) throw new Error(tt('flights.limiteDeChamadaSDe', { limit, p1: monitorId ? tt('flights.paraEsteMonitor') : '' }))
   await repo.cacheSet(key, n + 1, 36 * 3600_000)
 }
 
@@ -71,7 +72,7 @@ type Obj = Record<string, unknown>
 
 export async function draftFromText(text: string, currentCurrency = 'BRL'): Promise<AiDraft> {
   const clean = text.trim().slice(0, 3000)
-  if (clean.length < 8) throw new Error('Descreva a viagem com um pouco mais de detalhe.')
+  if (clean.length < 8) throw new Error(tt('flights.descrevaAViagemComUm'))
   const today = todayLocal()
   const cacheKey = `ai:draft:${hash(`${today.slice(0, 7)}|${clean}`)}`
   let raw = await repo.cacheGet<Obj>(cacheKey)
@@ -181,7 +182,7 @@ export async function structureImportText(text: string, monitorId: number, aiLim
 
 /** Comentário curto sobre trade-offs das melhores opções — dados já normalizados, 1 linha por oferta. */
 export async function insights(m: FlightMonitor, rows: string[]): Promise<{ text: string; cached: boolean }> {
-  if (!rows.length) throw new Error('Sem ofertas elegíveis para analisar.')
+  if (!rows.length) throw new Error(tt('flights.semOfertasElegiveisParaAnalisar'))
   const compact = rows.slice(0, 12).join('\n')
   const cacheKey = `ai:insights:${m.id}:${hash(compact)}`
   const hit = await repo.cacheGet<string>(cacheKey)

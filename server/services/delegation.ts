@@ -17,6 +17,7 @@ import { notify } from './notifications'
 import { broadcast } from '../events'
 import { repoTargets, localTargets, isWorkspace } from './projectRepos'
 import { createWorkspaceWorktree, readWorkspaceManifest, removeWorkspaceWorktree } from '../aiconv/git'
+import { tt } from '../i18n'
 
 /**
  * "🤖 Delegar": a próxima ação do projeto é executada pelo Claude num worktree
@@ -62,10 +63,10 @@ export async function recoverDelegations(): Promise<void> {
 
 export async function delegateNextAction(projectId: number, action: string | null, instructions: string | null): Promise<DbProjectDelegation> {
   const p = await getProject(projectId)
-  if (!p) throw new Error('Projeto não encontrado')
+  if (!p) throw new Error(tt('services.projetoNaoEncontrado'))
   const task = (action ?? p.nextAction ?? '').trim()
-  if (!task) throw new Error('Defina a próxima ação antes de delegar.')
-  if (!p.localPath) throw new Error('Defina o caminho local do projeto (repositório git).')
+  if (!task) throw new Error(tt('services.definaAProximaAcaoAntes'))
+  if (!p.localPath) throw new Error(tt('services.definaOCaminhoLocalDo'))
   const repo = path.resolve(expandHome(p.localPath))
   const targets = await repoTargets(p)
   const workspace = isWorkspace(targets)
@@ -77,7 +78,7 @@ export async function delegateNextAction(projectId: number, action: string | nul
   if (workspace) {
     // projeto com vários repos: pasta-espelho com um worktree de cada repo (mesma branch)
     const repos = localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }))
-    if (!repos.length) throw new Error('Nenhum repositório do projeto foi encontrado na pasta local.')
+    if (!repos.length) throw new Error(tt('services.nenhumRepositorioDoProjetoFoi'))
     const ws = await createWorkspaceWorktree(repo, repos, task)
     top = ws.repoPath
     base = 'HEAD'
@@ -85,7 +86,7 @@ export async function delegateNextAction(projectId: number, action: string | nul
     wtDir = ws.cwd
   } else {
     const t = (await gitQuiet(repo, ['rev-parse', '--show-toplevel']))?.trim()
-    if (!t) throw new Error('O caminho local não é um repositório git.')
+    if (!t) throw new Error(tt('services.oCaminhoLocalNaoE'))
     top = t
     base = (await gitQuiet(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() || 'HEAD'
     const name = `rickos-${slugify(task)}-${stamp()}`
@@ -93,7 +94,7 @@ export async function delegateNextAction(projectId: number, action: string | nul
     wtDir = path.join(path.dirname(top), '.worktrees', `${path.basename(top)}-${name}`)
     fs.mkdirSync(path.dirname(wtDir), { recursive: true })
     const added = await gitQuiet(top, ['worktree', 'add', '-b', branch, wtDir, 'HEAD'])
-    if (added == null || !fs.existsSync(wtDir)) throw new Error('Não consegui criar o worktree (git worktree add falhou).')
+    if (added == null || !fs.existsSync(wtDir)) throw new Error(tt('services.naoConseguiCriarOWorktree'))
   }
   const wsRepos = workspace ? (readWorkspaceManifest(wtDir)?.repos ?? []) : []
 
@@ -143,7 +144,7 @@ No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O
       if (cur?.status === 'cancelada') return
       await updateDelegation(d.id, { status: 'pronta', output: out, finishedAt: new Date().toISOString() })
       await addProjectEvent(projectId, 'delegacao', `🤖 Delegação pronta para revisão: ${task}`)
-      void notify({ title: `🤖 ${p.name}: delegação pronta`, body: task, source: 'ia', page: 'projects' })
+      void notify({ title: tt('services.delegacaoPronta', { name: p.name }), body: task, source: 'ia', page: 'projects' })
       changed(projectId)
     })
     .catch(async (e) => {
@@ -151,7 +152,7 @@ No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O
       const cur = await getDelegation(d.id)
       if (cur?.status === 'cancelada') return
       await updateDelegation(d.id, { status: 'erro', error: e instanceof Error ? e.message : String(e), finishedAt: new Date().toISOString() })
-      void notify({ title: `⚠️ ${p.name}: delegação falhou`, body: task, source: 'ia', page: 'projects' })
+      void notify({ title: tt('services.delegacaoFalhou', { name: p.name }), body: task, source: 'ia', page: 'projects' })
       changed(projectId)
     })
 
@@ -220,7 +221,7 @@ export interface DelegationReview {
 
 export async function reviewDelegation(id: number): Promise<DelegationReview> {
   const d = await getDelegation(id)
-  if (!d) throw new Error('Delegação não encontrada')
+  if (!d) throw new Error(tt('services.delegacaoNaoEncontrada'))
   const ws = readWorkspaceManifest(d.worktreePath)
   if (ws) {
     // workspace: junta commits/diff/pendências de cada repo, com o nome do repo na frente
@@ -265,7 +266,7 @@ export async function reviewDelegation(id: number): Promise<DelegationReview> {
 export async function discardDelegation(id: number): Promise<void> {
   const d = await getDelegation(id)
   if (!d) return
-  if (d.status === 'rodando') throw new Error('Cancele a execução antes de descartar.')
+  if (d.status === 'rodando') throw new Error(tt('services.canceleAExecucaoAntesDe'))
   if (readWorkspaceManifest(d.worktreePath)) await removeWorkspaceWorktree(d.worktreePath)
   else if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ['worktree', 'remove', '--force', d.worktreePath])
   await gitQuiet(d.repoPath, ['worktree', 'prune'])
@@ -286,7 +287,7 @@ export async function acceptDelegation(id: number): Promise<void> {
 /** Push da branch + PR via gh (reaproveita o fluxo da tela de Worktrees). */
 export async function prDelegation(id: number): Promise<{ url: string }> {
   const d = await getDelegation(id)
-  if (!d) throw new Error('Delegação não encontrada')
+  if (!d) throw new Error(tt('services.delegacaoNaoEncontrada'))
   await scanGit({}) // o PR exige que a branch esteja no último scan
   const ws = readWorkspaceManifest(d.worktreePath)
   if (ws) {
@@ -299,7 +300,7 @@ export async function prDelegation(id: number): Promise<{ url: string }> {
       urls.push(pr.url)
       await addProjectEvent(d.projectId, 'delegacao', `🔀 PR aberto (${r.name}): ${pr.url}`)
     }
-    if (!urls.length) throw new Error('Nenhum repositório tem commits nesta branch.')
+    if (!urls.length) throw new Error(tt('services.nenhumRepositorioTemCommitsNesta'))
     await updateDelegation(id, { prUrl: urls[0] })
     changed(d.projectId)
     return { url: urls[0] }

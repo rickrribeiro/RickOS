@@ -14,6 +14,7 @@ import * as repo from './repo'
 import { configErrors } from './validate'
 import { displayTarget, loadFx, scoredOffers } from './views'
 import { diversify, sortScored } from './evaluate'
+import { tt } from '../i18n'
 
 /**
  * Executor de buscas. Roda dentro do servidor (sem Redis/BullMQ: app local de um usuário),
@@ -84,12 +85,12 @@ export interface StartOptions {
  */
 export async function startRun(monitorId: number, trigger: RunInfo['trigger'], opts: StartOptions = {}): Promise<RunInfo> {
   const m = await repo.getMonitor(monitorId)
-  if (!m) throw new Error('Monitoramento não encontrado.')
+  if (!m) throw new Error(tt('flights.monitoramentoNaoEncontrado'))
   const existing = await repo.activeRun(monitorId)
   if (existing) return existing
   const errs = configErrors(m.config, todayLocal())
-  if (errs.length) throw new Error(`Configuração incompleta: ${errs[0]}`)
-  if (m.status === 'paused' && trigger === 'schedule') throw new Error('Monitoramento pausado.')
+  if (errs.length) throw new Error(tt('flights.configuracaoIncompleta', { p0: errs[0] }))
+  if (m.status === 'paused' && trigger === 'schedule') throw new Error(tt('flights.monitoramentoPausado'))
   const { list, reasons } = await usableProviders(m)
   if (!list.length) {
     throw new Error(

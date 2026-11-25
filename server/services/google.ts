@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import { getSetting, setSetting, replaceGoogleEvents } from '../database/queries'
 import { decodeSecret, encodeSecret } from './secrets'
+import { tt } from '../i18n'
 
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth'
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token'
@@ -20,7 +21,7 @@ async function creds(): Promise<{ clientId: string; clientSecret: string }> {
   const clientId = (await getSetting('google_client_id')) ?? ''
   const clientSecret = decodeSecret(await getSetting('google_client_secret')) ?? ''
   if (!clientId || !clientSecret) {
-    throw new Error('Configure o Client ID e o Client Secret do Google em Configurações.')
+    throw new Error(tt('services.configureOClientIdE'))
   }
   return { clientId, clientSecret }
 }
@@ -78,7 +79,7 @@ export async function uploadFileToDrive(
   email?: string
 ): Promise<{ name: string; link: string | null; account: string }> {
   const accounts = await getAccounts()
-  if (!accounts.length) throw new Error('Nenhuma conta Google conectada.')
+  if (!accounts.length) throw new Error(tt('services.nenhumaContaGoogleConectada'))
   const acc = (email && accounts.find((a) => a.email === email)) || accounts[0]
   const token = await accessTokenFor(acc.refreshToken)
 
@@ -103,9 +104,9 @@ export async function uploadFileToDrive(
   if (!res.ok) {
     const t = await res.text().catch(() => '')
     if (res.status === 403 || /insufficient|scope/i.test(t)) {
-      throw new Error('Sem permissão de Drive nesta conta. Reconecte-a em Configurações (escopo drive.file).')
+      throw new Error(tt('services.semPermissaoDeDriveNesta'))
     }
-    throw new Error(`Upload ao Drive falhou (${res.status}). ${t.slice(0, 120)}`)
+    throw new Error(tt('services.uploadAoDriveFalhou', { status: res.status, p1: t.slice(0, 120) }))
   }
   const j = (await res.json()) as { name?: string; webViewLink?: string }
   return { name: j.name || fileName, link: j.webViewLink ?? null, account: acc.email }
@@ -147,11 +148,11 @@ export async function finishGoogleConnect(params: URLSearchParams): Promise<stri
   }
   const err = params.get('error')
   if (err) {
-    done(false, new Error(`Google negou: ${err}`))
+    done(false, new Error(tt('services.googleNegou', { err })))
     return resultPage('Autorização cancelada.')
   }
   if (params.get('state') !== p.state) {
-    done(false, new Error('state inválido no callback do Google.'))
+    done(false, new Error(tt('services.stateInvalidoNoCallbackDo')))
     return resultPage('Falha de segurança (state).')
   }
   try {
@@ -170,7 +171,7 @@ export async function finishGoogleConnect(params: URLSearchParams): Promise<stri
     })
     const json = (await tokenRes.json()) as { refresh_token?: string; access_token?: string; error?: string }
     if (!tokenRes.ok || !json.refresh_token) {
-      done(false, new Error(json.error || 'Sem refresh_token (revogue o acesso e tente de novo).'))
+      done(false, new Error(json.error || tt('services.semRefreshTokenRevogueO')))
       return resultPage('Falha ao trocar o código.')
     }
     // identify the account by its primary calendar id (= the account email)
@@ -193,7 +194,7 @@ export async function beginGoogleConnect(publicUrl: string): Promise<{ authUrl: 
   const { clientId } = await creds()
   if (pending) {
     pending.cleanup()
-    pending.reject(new Error('Substituída por uma nova tentativa de conexão.'))
+    pending.reject(new Error(tt('services.substituidaPorUmaNovaTentativa')))
     pending = null
   }
   const verifier = base64url(crypto.randomBytes(32))
@@ -231,7 +232,7 @@ export async function beginGoogleConnect(publicUrl: string): Promise<{ authUrl: 
     if (pending?.state === state) {
       pending.cleanup()
       pending = null
-      reject(new Error('Tempo esgotado aguardando a autorização do Google.'))
+      reject(new Error(tt('services.tempoEsgotadoAguardandoAAutorizacao')))
     }
   }, 300_000)
   pending = {
@@ -302,9 +303,9 @@ async function accessTokenFor(refreshToken: string): Promise<string> {
   if (!res.ok || !json.access_token) {
     if (json.error === 'invalid_grant') {
       // Revogado, senha trocada, ou app OAuth em modo "Testing" (refresh token expira em 7 dias).
-      throw new Error('autorização expirada ou revogada (invalid_grant). Reconecte a conta em Configurações.')
+      throw new Error(tt('services.autorizacaoExpiradaOuRevogadaInvalid'))
     }
-    throw new Error(json.error || 'Falha ao renovar o token do Google.')
+    throw new Error(json.error || tt('services.falhaAoRenovarOToken'))
   }
   return json.access_token
 }
@@ -347,7 +348,7 @@ async function fetchEventsFor(token: string, timeMin: Date, timeMax: Date): Prom
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(`Google Calendar falhou (${res.status}). ${body.slice(0, 120)}`)
+    throw new Error(tt('services.googleCalendarFalhou', { status: res.status, p1: body.slice(0, 120) }))
   }
   const data = (await res.json()) as { items?: GCalEvent[] }
   return (data.items ?? [])
@@ -367,7 +368,7 @@ async function fetchEventsFor(token: string, timeMin: Date, timeMax: Date): Prom
  */
 export async function syncGoogleCalendar(): Promise<number> {
   const accounts = await getAccounts()
-  if (!accounts.length) throw new Error('Google não conectado. Clique em Conectar em Configurações.')
+  if (!accounts.length) throw new Error(tt('services.googleNaoConectadoCliqueEm'))
 
   const now = new Date()
   const in7 = new Date(now.getTime() + 7 * 86400000)
@@ -390,7 +391,7 @@ export async function syncGoogleCalendar(): Promise<number> {
       all.push(...(await fetchEventsFor(token, now, in7)))
       okCount++
     } catch (e) {
-      lastErr = new Error(`Google (${acc.email}): ${e instanceof Error ? e.message : String(e)}`)
+      lastErr = new Error(tt('services.google', { email: acc.email, p1: e instanceof Error ? e.message : String(e) }))
     }
   }
 
@@ -405,7 +406,7 @@ const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA']
 
 function scopeError(status: number, t: string): Error | null {
   if (status === 403 || /insufficient|scope/i.test(t)) {
-    return new Error('Esta conta Google só tem permissão de leitura. Reconecte-a em Configurações para permitir criar eventos.')
+    return new Error(tt('services.estaContaGoogleSoTem'))
   }
   return null
 }
@@ -424,11 +425,11 @@ export async function upsertRecurringBlock(opts: {
   email?: string | null
 }): Promise<{ eventId: string; account: string; link: string | null }> {
   const accounts = await getAccounts()
-  if (!accounts.length) throw new Error('Nenhuma conta Google conectada (Configurações).')
+  if (!accounts.length) throw new Error(tt('services.nenhumaContaGoogleConectadaConfiguracoes'))
   const acc = (opts.email && accounts.find((a) => a.email === opts.email)) || accounts[0]
   const token = await accessTokenFor(acc.refreshToken)
   const days = [...new Set(opts.days)].filter((d) => d >= 0 && d <= 6).sort()
-  if (!days.length) throw new Error('Escolha ao menos um dia da semana.')
+  if (!days.length) throw new Error(tt('services.escolhaAoMenosUmDia'))
   const [hh, mm] = opts.start.split(':').map(Number)
   // primeira ocorrência: o próximo dia (a partir de hoje) que esteja na lista
   const first = new Date()
@@ -455,7 +456,7 @@ export async function upsertRecurringBlock(opts: {
   }
   if (!res.ok) {
     const t = await res.text().catch(() => '')
-    throw scopeError(res.status, t) ?? new Error(`Google Calendar recusou (${res.status}). ${t.slice(0, 160)}`)
+    throw scopeError(res.status, t) ?? new Error(tt('services.googleCalendarRecusou', { status: res.status, p1: t.slice(0, 160) }))
   }
   const j = (await res.json()) as { id: string; htmlLink?: string }
   return { eventId: j.id, account: acc.email, link: j.htmlLink ?? null }
@@ -469,6 +470,6 @@ export async function deleteRecurringBlock(eventId: string, email?: string | nul
   const res = await fetch(`${CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok && res.status !== 404 && res.status !== 410) {
     const t = await res.text().catch(() => '')
-    throw scopeError(res.status, t) ?? new Error(`Falha ao remover o evento (${res.status}).`)
+    throw scopeError(res.status, t) ?? new Error(tt('services.falhaAoRemoverOEvento', { status: res.status }))
   }
 }

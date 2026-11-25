@@ -214,6 +214,7 @@ import {
   deleteNotification,
   clearNotifications
 } from './database/queries'
+import { setServerLocale, tt } from './i18n'
 import type { NotificationInput, NotificationScope, TodoListFilters } from './database/queries'
 import type { DbTransaction, DbSkill, DbAgent, StudyBundle, DbStayFavorite, DbStayWatch, DbStayPricePoint } from './database/queries'
 import { syncGithubIssues, createIssueViaClaude } from './services/github'
@@ -275,7 +276,7 @@ const ipcMain = {
 
 export async function callRpc(channel: string, args: unknown[]): Promise<unknown> {
   const fn = handlers.get(channel)
-  if (!fn) throw new Error(`Canal RPC desconhecido: ${channel}`)
+  if (!fn) throw new Error(tt('rpc.canalRpcDesconhecido', { channel }))
   return fn({ source: 'rpc' }, ...args)
 }
 
@@ -313,7 +314,7 @@ async function maybeDailyGoogleSync(): Promise<void> {
     await runGoogleSync()
   } catch (e) {
     await notify({
-      title: '📅 Falha ao sincronizar o Google Calendar',
+      title: tt('rpc.falhaAoSincronizarOGoogle'),
       body: e instanceof Error ? e.message : String(e),
       source: 'google',
       page: 'settings'
@@ -348,15 +349,15 @@ async function maybeMonthlyInvestmentSync(): Promise<void> {
     await setSetting('pluggy_investments_autosync_error_at', '')
     const extra = r.vanished.length ? ` · ${r.vanished.length} não aparecem mais no banco (abra Investimentos para decidir)` : ''
     await notify({
-      title: '📈 Investimentos atualizados',
-      body: `Open Finance: ${r.created} novos, ${r.updated} atualizados, ${r.closed} encerrados${extra}.`,
+      title: tt('rpc.investimentosAtualizados'),
+      body: tt('rpc.openFinanceNovosAtualizadosEncerrados', { created: r.created, updated: r.updated, closed: r.closed, extra }),
       source: 'automacao',
       page: 'investments'
     })
   } catch (e) {
     await setSetting('pluggy_investments_autosync_error_at', new Date().toISOString())
     await notify({
-      title: '📈 Falha ao atualizar investimentos',
+      title: tt('rpc.falhaAoAtualizarInvestimentos'),
       body: e instanceof Error ? e.message : String(e),
       source: 'automacao',
       page: 'settings'
@@ -385,8 +386,8 @@ async function maybeMonthlyReservedReminder(): Promise<void> {
     await setSetting('finance_reserved_reminder_month', month)
     if (!pending) return
     await notify({
-      title: '🔒 Revisar saldo separado',
-      body: `Começo de mês: confira o saldo separado de ${pending === 1 ? '1 conta' : `${pending} contas`} no painel de Finanças.`,
+      title: tt('rpc.revisarSaldoSeparado'),
+      body: tt('rpc.comecoDeMesConfiraO', { count: pending }),
       source: 'automacao',
       page: 'finance-dashboard'
     })
@@ -639,7 +640,7 @@ async function runScheduledJobs(): Promise<void> {
         if (text) {
           await createTodo(`🤖 ${job.name}`, text.slice(0, 4000), 'inbox', 'agent', 1, null, null, 1)
           broadcast('inbox:updated', { jobId: job.id })
-          void notify({ title: `🤖 ${job.name}`, body: 'O agente agendado terminou — resultado no Inbox.', source: 'agendador', page: 'inbox' })
+          void notify({ title: `🤖 ${job.name}`, body: tt('rpc.oAgenteAgendadoTerminouResultado'), source: 'agendador', page: 'inbox' })
         }
       } catch {
         // leave it marked as run today; try again tomorrow
@@ -956,7 +957,10 @@ ipcMain.handle('habits:completionsForDate', (_, date: string) => getHabitComplet
 // Sensitive values (tokens) are encrypted at rest via safeStorage — see services/secrets.
 
 ipcMain.handle('settings:get', async (_, key: string) => (SERVER_ONLY_KEYS.has(key) ? null : decodeSecret(await getSetting(key))))
-ipcMain.handle('settings:set', (_, key: string, value: string) => setSetting(key, encodeSecret(key, value)))
+ipcMain.handle('settings:set', (_, key: string, value: string) => {
+  if (key === 'language') setServerLocale(value)
+  return setSetting(key, encodeSecret(key, value))
+})
 ipcMain.handle('settings:legacySecrets', () => legacySecrets())
 ipcMain.handle('settings:getAll', async () => {
   const all = await getAllSettings()
@@ -1068,7 +1072,7 @@ ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[])
 /** Manutenção: backup completo do banco e depois zera transações, investimentos e contas. */
 ipcMain.handle('finance:resetImportedData', async () => {
   const backup = backupDbFile('timetracker.backup-pre-reset-financas')
-  if (!backup) throw new Error('Banco não carregado; nada foi apagado.')
+  if (!backup) throw new Error(tt('rpc.bancoNaoCarregadoNadaFoi'))
   const removed = await resetFinanceImportedData()
   saveDb()
   return { backup, removed }
@@ -1281,7 +1285,7 @@ ipcMain.handle('study:exportJson', async (_, topicId: number): Promise<ExportFil
 })
 
 ipcMain.handle('study:importBundle', async (_, bundle: StudyBundle) => {
-  if (!bundle || !bundle.topic) return { ok: false, error: 'Arquivo inválido (sem tópico).' }
+  if (!bundle || !bundle.topic) return { ok: false, error: tt('rpc.arquivoInvalidoSemTopico') }
   try {
     const topicId = await importStudyBundle(bundle)
     return { ok: true, topicId }
@@ -1610,7 +1614,7 @@ ipcMain.handle('app:exportDbToDrive', async (_, email?: string) => {
     const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`
     const fileName = `timetracker_snapshot_${stamp}.sqlite`
     const r = await uploadFileToDrive(dbFilePath(), fileName, email)
-    return { ok: true, target: 'drive', message: `Enviado ao Google Drive (${r.account}): ${r.name}`, link: r.link }
+    return { ok: true, target: 'drive', message: tt('rpc.enviadoAoGoogleDrive', { account: r.account, name: r.name }), link: r.link }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
@@ -1621,7 +1625,7 @@ ipcMain.handle('app:importDbData', async (_, base64: string) => {
   const bytes = Buffer.from(base64.includes(',') ? base64.split(',')[1] : base64, 'base64')
   // SQLite files start with "SQLite format 3\0"
   if (bytes.subarray(0, 15).toString('latin1') !== 'SQLite format 3') {
-    return { ok: false, error: 'O arquivo não é um banco SQLite.' }
+    return { ok: false, error: tt('rpc.oArquivoNaoEUm') }
   }
   replaceDbFile(bytes)
   await getDb()

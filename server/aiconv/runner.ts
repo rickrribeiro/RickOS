@@ -10,6 +10,7 @@ import { buildPath, usageFromResult, type ResultEvent } from '../services/claude
 import { notify } from '../services/notifications'
 import { createWorktree, createWorkspaceWorktree } from './git'
 import * as repo from './repo'
+import { tt } from '../i18n'
 
 /**
  * Executor das conversas do Prompt Runner. Cada mensagem vira um processo do Claude CLI:
@@ -305,9 +306,9 @@ function isDefaultConfigDir(dir: string | null): boolean {
 }
 
 async function startTurn(conversationId: string, message: AiQueuedMessage): Promise<void> {
-  if (!deps) throw new Error('Executor de conversas não inicializado.')
+  if (!deps) throw new Error(tt('aiconv.executorDeConversasNaoInicializado'))
   let conv = await repo.getConversation(conversationId)
-  if (!conv) throw new Error('Conversa não encontrada.')
+  if (!conv) throw new Error(tt('aiconv.conversaNaoEncontrada'))
   const prompt = message.text
 
   if (!conv.title) {
@@ -346,11 +347,11 @@ async function startTurn(conversationId: string, message: AiQueuedMessage): Prom
     // Diretório: o da sessão (o --resume só acha a sessão nele) → worktree novo → projeto → home.
     if (conv.cwd) {
       cwd = conv.cwd
-      if (!fs.existsSync(cwd)) throw new Error(`O diretório desta conversa não existe mais: ${cwd}`)
+      if (!fs.existsSync(cwd)) throw new Error(tt('aiconv.oDiretorioDestaConversaNao', { cwd }))
     } else {
       const projectDir = await deps.resolveProjectCwd(conv.projectId)
       if (conv.useWorktree) {
-        if (!projectDir || !fs.existsSync(projectDir)) throw new Error('O worktree isolado precisa de um projeto com pasta local.')
+        if (!projectDir || !fs.existsSync(projectDir)) throw new Error(tt('aiconv.oWorktreeIsoladoPrecisaDe'))
         turn.blocks.push({ type: 'notice', text: '🌿 Criando worktree isolado…' })
         emitTurn(run, true)
         const wsRepos = await deps.projectWorkspaceRepos(conv.projectId)
@@ -417,7 +418,7 @@ async function startTurn(conversationId: string, message: AiQueuedMessage): Prom
  */
 function spawnCli(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<ChildProcess> {
   const bin = (command || '').trim() || 'claude'
-  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(`Comando inválido: "${bin}".`))
+  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(tt('aiconv.comandoInvalido', { bin })))
   const trySpawn = (viaShell: boolean): Promise<ChildProcess> =>
     new Promise((resolve, reject) => {
       const shell = process.env.SHELL || '/bin/zsh'
@@ -650,8 +651,8 @@ function handleEvent(run: LiveRun, conv: AiConversation, evt: StreamEvent): void
 function scheduleAttentionNotice(run: LiveRun, requestId: string, toolName: string, conv: AiConversation): void {
   setTimeout(() => {
     if (!run.pending.has(requestId) || live.get(run.conversationId) !== run) return
-    const what = toolName === 'AskUserQuestion' ? 'tem uma pergunta' : toolName === 'ExitPlanMode' ? 'quer aprovar um plano' : `pede permissão para ${toolName}`
-    void notify({ title: `🤚 Claude ${what}`, body: conv.title || 'Prompt Runner', source: 'claude', page: 'ai-runner' })
+    const what = toolName === 'AskUserQuestion' ? tt('aiconv.what.question') : toolName === 'ExitPlanMode' ? tt('aiconv.what.plan') : tt('aiconv.what.permission', { tool: toolName })
+    void notify({ title: tt('aiconv.claude', { what }), body: conv.title || tt('aiconv.promptRunner'), source: 'claude', page: 'ai-runner' })
   }, 15_000)
 }
 
@@ -696,7 +697,7 @@ async function finishTurn(run: LiveRun, error: string | null): Promise<void> {
   if (Date.now() - run.startedAt >= 60_000 && !run.cancelled) {
     const conv = await repo.getConversation(run.conversationId)
     void notify({
-      title: turn.status === 'done' ? '✅ Claude terminou' : '⚠️ Claude parou com erro',
+      title: turn.status === 'done' ? tt('aiconv.claudeTerminou') : tt('aiconv.claudeParouComErro'),
       body: conv?.title || turn.prompt.slice(0, 120),
       source: 'claude',
       page: 'ai-runner'

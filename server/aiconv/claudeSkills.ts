@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import type { ClaudeSkillInfo, SlashCommandInfo } from '../../shared/aiConversations'
 import { configDirs } from './transcripts'
+import { tt } from '../i18n'
 
 /**
  * Skills e comandos do Claude Code criados por você:
@@ -146,14 +147,14 @@ export function skillFile(id: string, projects: ProjectRef[]): ClaudeSkillInfo |
 
 export function readSkill(id: string, projects: ProjectRef[]): { info: ClaudeSkillInfo; content: string } {
   const info = skillFile(id, projects)
-  if (!info) throw new Error('Skill não encontrada.')
+  if (!info) throw new Error(tt('aiconv.skillNaoEncontrada'))
   return { info, content: fs.readFileSync(info.path, 'utf8') }
 }
 
 export function saveSkill(id: string, content: string, projects: ProjectRef[]): ClaudeSkillInfo {
   const info = skillFile(id, projects)
-  if (!info) throw new Error('Skill não encontrada.')
-  if (typeof content !== 'string' || content.length > MAX_FILE) throw new Error('Conteúdo inválido.')
+  if (!info) throw new Error(tt('aiconv.skillNaoEncontrada'))
+  if (typeof content !== 'string' || content.length > MAX_FILE) throw new Error(tt('aiconv.conteudoInvalido'))
   fs.writeFileSync(info.path, content, 'utf8')
   cache = null
   return skillFile(id, projects) ?? info

@@ -27,6 +27,7 @@ import {
   type InvestmentDetails
 } from '../../shared/finance'
 import { categorizeNew } from './financeRules'
+import { tt } from '../i18n'
 
 const PLUGGY_API = 'https://api.pluggy.ai'
 const OUTROS_CATEGORY_ID = 6 // seeded "Outros"
@@ -120,7 +121,7 @@ async function apiKey(): Promise<string> {
   const clientId = (decodeSecret(await getSetting('pluggy_client_id')) ?? '').trim()
   const clientSecret = (decodeSecret(await getSetting('pluggy_client_secret')) ?? '').trim()
   if (!clientId || !clientSecret) {
-    throw new Error('Configure o Client ID e o Client Secret do Pluggy em Configurações.')
+    throw new Error(tt('services.configureOClientIdE2'))
   }
   let res: Response
   try {
@@ -130,7 +131,7 @@ async function apiKey(): Promise<string> {
       body: JSON.stringify({ clientId, clientSecret })
     })
   } catch (e) {
-    throw new Error(`Sem conexão com o Pluggy: ${e instanceof Error ? e.message : String(e)}`)
+    throw new Error(tt('services.semConexaoComOPluggy', { p0: e instanceof Error ? e.message : String(e) }))
   }
   const body = await res.text().catch(() => '')
   let json: { apiKey?: string; message?: string } = {}
@@ -141,7 +142,7 @@ async function apiKey(): Promise<string> {
   }
   if (!res.ok || !json.apiKey) {
     const detail = json.message || body.slice(0, 160) || res.statusText
-    throw new Error(`Falha ao autenticar no Pluggy (${res.status}). ${detail}`)
+    throw new Error(tt('services.falhaAoAutenticarNoPluggy', { status: res.status, detail }))
   }
   return json.apiKey
 }
@@ -160,7 +161,7 @@ export async function createConnectToken(): Promise<string> {
       body: JSON.stringify({})
     })
   } catch (e) {
-    throw new Error(`Sem conexão com o Pluggy: ${e instanceof Error ? e.message : String(e)}`)
+    throw new Error(tt('services.semConexaoComOPluggy', { p0: e instanceof Error ? e.message : String(e) }))
   }
   const body = await res.text().catch(() => '')
   let json: { accessToken?: string; message?: string } = {}
@@ -170,7 +171,7 @@ export async function createConnectToken(): Promise<string> {
     // non-JSON
   }
   if (!res.ok || !json.accessToken) {
-    throw new Error(`Falha ao criar connect token (${res.status}). ${json.message || body.slice(0, 160)}`)
+    throw new Error(tt('services.falhaAoCriarConnectToken', { status: res.status, p1: json.message || body.slice(0, 160) }))
   }
   return json.accessToken
 }
@@ -179,7 +180,7 @@ async function get<T>(path: string, key: string): Promise<T> {
   const res = await fetch(`${PLUGGY_API}${path}`, { headers: { 'X-API-KEY': key } })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(`Pluggy ${path} falhou (${res.status}). ${body.slice(0, 120)}`)
+    throw new Error(tt('services.pluggyFalhou', { path, status: res.status, p2: body.slice(0, 120) }))
   }
   return (await res.json()) as T
 }
@@ -247,14 +248,14 @@ const legacyKey = (t: { date: string; amount: number; description?: string | nul
  * é apagado aqui.
  */
 export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
-  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`)
+  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(tt('services.mesInvalido', { month }))
   const itemId = (await getSetting('pluggy_item_id')) ?? ''
-  if (!itemId) throw new Error('Configure o Item ID do Pluggy (banco conectado) em Configurações.')
+  if (!itemId) throw new Error(tt('services.configureOItemIdDo'))
 
   const key = await apiKey()
   const accounts = (await get<{ results: PluggyAccount[] }>(`/accounts?itemId=${encodeURIComponent(itemId)}`, key)).results
   if (!accounts || accounts.length === 0) {
-    throw new Error('Nenhuma conta encontrada para esse Item ID. Verifique se o Item está conectado e pronto no Pluggy (e se o Item ID está correto).')
+    throw new Error(tt('services.nenhumaContaEncontradaParaEsse'))
   }
 
   const defaultAccountId = await syncBankAccount(accounts)
@@ -424,7 +425,7 @@ const monthKey = (d = new Date()): string => `${d.getFullYear()}-${String(d.getM
  */
 export async function syncPluggyInvestments(): Promise<PluggyInvestmentSyncResult> {
   const itemId = (await getSetting('pluggy_item_id')) ?? ''
-  if (!itemId) throw new Error('Configure o Item ID do Pluggy (banco conectado) em Configurações.')
+  if (!itemId) throw new Error(tt('services.configureOItemIdDo'))
   const key = await apiKey()
 
   const remote: PluggyInvestment[] = []
@@ -531,7 +532,7 @@ export async function syncPluggyInvestments(): Promise<PluggyInvestmentSyncResul
  */
 export async function reclassifyInvestmentFlags(): Promise<{ checked: number; toInvestment: string[]; fromInvestment: string[] }> {
   const itemId = (await getSetting('pluggy_item_id')) ?? ''
-  if (!itemId) throw new Error('Configure o Item ID do Pluggy em Configurações.')
+  if (!itemId) throw new Error(tt('services.configureOItemIdDo2'))
   const key = await apiKey()
   const accounts = (await get<{ results: PluggyAccount[] }>(`/accounts?itemId=${encodeURIComponent(itemId)}`, key)).results ?? []
   const derived = new Map<string, boolean>()

@@ -13,6 +13,7 @@ import { getDb, saveDb } from '../database/db'
 import { VERIFICATION_RANK } from './evaluate'
 import type { TaskLite, TaskSpec } from './planner'
 import { normalizeConfig } from './validate'
+import { tt } from '../i18n'
 
 /**
  * Acesso ao banco do monitoramento de passagens. Diferente dos helpers de queries.ts
@@ -130,7 +131,7 @@ export async function createMonitor(name: string, status: MonitorStatus, config:
 export async function updateMonitor(id: number, patch: { name?: string; status?: MonitorStatus; config?: MonitorConfig; tripId?: number | null }): Promise<void> {
   await tx((db) => {
     const cur = one<MonitorRow>(db, 'SELECT * FROM flight_monitors WHERE id = ?', [id])
-    if (!cur) throw new Error('Monitoramento não encontrado.')
+    if (!cur) throw new Error(tt('flights.monitoramentoNaoEncontrado'))
     exec(db, 'UPDATE flight_monitors SET name = ?, status = ?, tripId = ?, config = ?, updatedAt = ? WHERE id = ?', [
       patch.name ?? cur.name,
       patch.status ?? cur.status,

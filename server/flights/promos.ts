@@ -5,6 +5,7 @@ import { notify } from '../services/notifications'
 import { broadcast } from '../events'
 import { countryName, expandSet } from './geo'
 import * as repo from './repo'
+import { tt } from '../i18n'
 
 /**
  * Radar de promoções: RSS de blogs de passagens (feito para ser lido por programas).
@@ -89,7 +90,7 @@ async function fetchFeed(url: string, force = false): Promise<FeedCache> {
       await new Promise((r) => setTimeout(r, 1500))
       return get()
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) throw new Error(tt('flights.http', { status: res.status }))
     const items = parseRss(await res.text(), new URL(url).hostname)
     out = { items, fetchedAt: new Date().toISOString(), error: items.length ? null : 'Feed sem itens (formato não reconhecido?)' }
   } catch (e) {
@@ -196,7 +197,7 @@ export async function checkPromoAlerts(monitors: FlightMonitor[]): Promise<numbe
       const msg = `${p.title}${p.prices.length ? ` (${p.prices[0]})` : ''} — ${p.source}`
       if (await repo.recordAlert(m.id, null, 'promo_post', `${m.id}:promo:${p.link}`, msg)) {
         fired++
-        await notify({ title: `🏷️ Promoção: ${m.name}`, body: `${msg}\nMenciona: ${p.matches.join(', ')}`, source: 'passagens', page: 'trip-monitoring' })
+        await notify({ title: tt('flights.promocao', { name: m.name }), body: `${msg}\nMenciona: ${p.matches.join(', ')}`, source: 'passagens', page: 'trip-monitoring' })
       }
     }
     if (fired) broadcast('flights:updated', { monitorId: m.id, runId: null })

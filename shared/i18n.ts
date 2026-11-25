@@ -44,3 +44,15 @@ export function labeled<T extends { label: string }>(prefix: string, idKey: keyo
     return copy
   })
 }
+
+export type TParams = Record<string, string | number | null | undefined>
+
+/** Interpolação `{nome}` e plural com `|` ("{count} item|{count} itens") — usada pelo front e pelo servidor. */
+export function formatMessage(msg: string, params: TParams | undefined, loc: string): string {
+  if (params && typeof params.count === 'number' && msg.includes('|')) {
+    const [one, other] = msg.split('|')
+    msg = new Intl.PluralRules(loc).select(params.count) === 'one' ? one : (other ?? one)
+  }
+  if (params) msg = msg.replace(/\{(\w+)\}/g, (m, name: string) => (params[name] == null ? m : String(params[name])))
+  return msg
+}

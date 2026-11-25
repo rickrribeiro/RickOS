@@ -7,6 +7,7 @@ import { loadConfig } from './config'
 import * as repo from './repo'
 import { cachedMessages, getMessages } from './service'
 import type { RemoteMessage } from './providers/types'
+import { tt } from '../i18n'
 
 /**
  * IA da Central de Mensagens.
@@ -82,12 +83,12 @@ async function loadSelected(chatId: number, ids: string[]): Promise<RemoteMessag
 }
 
 async function prepare(chatId: number, ids: string[], includeNotes: boolean): Promise<Prepared> {
-  if (!ids.length) throw new Error('Selecione ao menos uma mensagem.')
-  if (ids.length > 40) throw new Error('Selecione no máximo 40 mensagens.')
+  if (!ids.length) throw new Error(tt('chats.selecioneAoMenosUmaMensagem'))
+  if (ids.length > 40) throw new Error(tt('chats.selecioneNoMaximo40Mensagens'))
   const chat = await repo.fullRow(chatId)
-  if (!chat) throw new Error('Conversa não encontrada.')
+  if (!chat) throw new Error(tt('chats.conversaNaoEncontrada'))
   const msgs = await loadSelected(chatId, ids)
-  if (!msgs.length) throw new Error('As mensagens selecionadas não estão mais carregadas. Reabra a conversa e selecione de novo.')
+  if (!msgs.length) throw new Error(tt('chats.asMensagensSelecionadasNaoEstao'))
   let contactNotes: string | null = null
   if (includeNotes && chat.contactId) {
     const c = await repo.contactLite(chat.contactId)
@@ -160,7 +161,7 @@ export async function suggestReplies(req: AiSuggestRequest): Promise<AiSuggestRe
       priority: PRIORITIES.includes(s.priority as ChatPriority) ? (s.priority as ChatPriority) : null,
       reason: s.reason ? String(s.reason).slice(0, 300) : null
     }))
-    if (!suggestions.length) throw new Error('A IA não gerou sugestões.')
+    if (!suggestions.length) throw new Error(tt('chats.aIaNaoGerouSugestoes'))
     return { chatId: req.chatId, suggestions, error: null }
   } catch (e) {
     return { chatId: req.chatId, suggestions: [], error: e instanceof Error ? e.message : String(e) }

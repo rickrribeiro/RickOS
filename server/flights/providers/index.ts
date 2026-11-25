@@ -2,6 +2,7 @@ import type { ProviderCapabilities } from '../../../shared/flights'
 import { duffel } from './duffel'
 import { travelpayouts } from './travelpayouts'
 import type { FlightProvider } from './types'
+import { tt } from '../../i18n'
 
 const none: ProviderCapabilities = {
   oneWay: true,
@@ -20,7 +21,9 @@ const none: ProviderCapabilities = {
 /** Importação manual: JSON/CSV estruturado ou texto de alerta (a IA só estrutura o texto). */
 const manualImport: FlightProvider = {
   id: 'import',
-  label: 'Importação de resultados',
+  get label() {
+    return tt('flights.provider.import')
+  },
   kind: 'import',
   capabilities: none,
   docs: 'docs/passagens.md#importação',

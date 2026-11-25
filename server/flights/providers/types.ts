@@ -1,5 +1,6 @@
 import type { Cabin, NormalizedOffer, ProviderCapabilities } from '../../../shared/flights'
 import { minorDigits } from '../../../shared/flights'
+import { tt } from '../../i18n'
 
 /** Uma consulta atômica a um provedor. `departDate` pode ser 'YYYY-MM' quando o provedor tem `monthRange`. */
 export interface SearchQuery {
@@ -65,7 +66,7 @@ export interface FlightProvider {
 export function decimalToMinor(value: string | number, currency: string): number {
   const digits = minorDigits(currency)
   const s = typeof value === 'number' ? value.toFixed(digits) : String(value).trim()
-  if (!/^-?\d+(\.\d+)?$/.test(s)) throw new Error(`Valor monetário inválido: ${value}`)
+  if (!/^-?\d+(\.\d+)?$/.test(s)) throw new Error(tt('flights.valorMonetarioInvalido', { value }))
   const neg = s.startsWith('-')
   const [int, frac = ''] = s.replace('-', '').split('.')
   const padded = (frac + '0'.repeat(digits)).slice(0, digits)

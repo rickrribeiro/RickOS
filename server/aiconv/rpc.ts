@@ -11,6 +11,7 @@ import * as runner from './runner'
 import type { RunnerDeps } from './runner'
 import { findTranscript, listTerminalSessions, parseTranscript } from './transcripts'
 import { getUsageLimits } from './usageLimits'
+import { tt } from '../i18n'
 
 /**
  * Canais `conv:*` do Prompt Runner (conversas com o Claude CLI). Eventos ao vivo saem
@@ -59,10 +60,10 @@ const MAX_THUMB = 80 * 1024
 
 function sanitizeImages(raw: unknown): AiImageInput[] {
   if (!Array.isArray(raw)) return []
-  if (raw.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`Máximo de ${MAX_IMAGES_PER_MESSAGE} imagens por mensagem.`)
+  if (raw.length > MAX_IMAGES_PER_MESSAGE) throw new Error(tt('aiconv.maximoDeImagensPorMensagem', { MAX_IMAGES_PER_MESSAGE }))
   return raw.map((x: Partial<AiImageInput>) => {
-    if (!x || !IMAGE_MEDIA_TYPES.includes(x.mediaType as AiImageInput['mediaType'])) throw new Error('Formato de imagem não suportado.')
-    if (typeof x.data !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(x.data) || x.data.length > MAX_IMAGE_B64) throw new Error('Imagem inválida ou grande demais.')
+    if (!x || !IMAGE_MEDIA_TYPES.includes(x.mediaType as AiImageInput['mediaType'])) throw new Error(tt('aiconv.formatoDeImagemNaoSuportado'))
+    if (typeof x.data !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(x.data) || x.data.length > MAX_IMAGE_B64) throw new Error(tt('aiconv.imagemInvalidaOuGrandeDemais'))
     const thumb = typeof x.thumb === 'string' && x.thumb.startsWith('data:image/') && x.thumb.length <= MAX_THUMB ? x.thumb : ''
     return { mediaType: x.mediaType as AiImageInput['mediaType'], data: x.data, thumb }
   })
@@ -178,8 +179,8 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   /** Ramifica: conversa nova com o mesmo histórico, que continua numa sessão separada. */
   handle('conv:fork', async (_e, id: string) => {
     const c = await repo.getConversation(id)
-    if (!c?.sessionId) throw new Error('A conversa ainda não tem sessão para ramificar.')
-    if (runner.isRunning(id)) throw new Error('Espere a execução terminar para ramificar.')
+    if (!c?.sessionId) throw new Error(tt('aiconv.aConversaAindaNaoTem'))
+    if (runner.isRunning(id)) throw new Error(tt('aiconv.espereAExecucaoTerminarPara'))
     const turns = await repo.listTurns(id)
     const f = await repo.createConversation({
       title: `↳ ${c.title}`.slice(0, 200),
@@ -210,9 +211,9 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   /** Pasta git da operação: a da conversa ou, em workspace, o repo filho `repoRel` (conferido). */
   const convDir = async (id: string, repoRel?: string | null): Promise<{ dir: string; baseRef: string | null }> => {
     const c = await repo.getConversation(id)
-    if (!c) throw new Error('Conversa não encontrada.')
+    if (!c) throw new Error(tt('aiconv.conversaNaoEncontrada'))
     const root = c.cwd || (await deps.resolveProjectCwd(c.projectId))
-    if (!root) throw new Error('Esta conversa não tem pasta de trabalho.')
+    if (!root) throw new Error(tt('aiconv.estaConversaNaoTemPasta'))
     if (!repoRel) return { dir: root, baseRef: c.baseRef }
     const rel = String(repoRel)
     return { dir: gitc.resolveRepoDir(root, rel), baseRef: gitc.workspaceBaseRef(root, rel) }
@@ -232,7 +233,7 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     return gitc.commit(dir, String(message ?? ''), Array.isArray(paths) ? paths.map(String) : null)
   })
   handle('conv:discard', async (_e, id: string, filePath: string, repoRel?: string | null) => {
-    if (runner.isRunning(id)) throw new Error('Espere a execução terminar.')
+    if (runner.isRunning(id)) throw new Error(tt('aiconv.espereAExecucaoTerminar'))
     const { dir } = await convDir(id, repoRel)
     await gitc.discard(dir, String(filePath))
     return true
@@ -245,7 +246,7 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
     const c = await repo.getConversation(id)
     const { dir } = await convDir(id, repoRel)
     const ctx = await gitc.commitContext(dir)
-    if (!ctx.trim()) throw new Error('Nada para descrever.')
+    if (!ctx.trim()) throw new Error(tt('aiconv.nadaParaDescrever'))
     const out = await runClaude(
       `Escreva UMA mensagem de commit para as mudanças abaixo, no mesmo estilo e idioma dos commits recentes (ex.: convencional "tipo(escopo): resumo"). Responda só com a mensagem, sem aspas nem explicação; corpo opcional depois de uma linha em branco.\n\n${ctx}`,
       c ? await deps.resolveCommand(c) : 'claude',
@@ -256,8 +257,8 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   /** Apaga o worktree e a branch de uma conversa (e arquiva a conversa). */
   handle('conv:removeWorktree', async (_e, id: string) => {
     const c = await repo.getConversation(id)
-    if (!c?.useWorktree || !c.repoPath || !c.cwd) throw new Error('Esta conversa não tem worktree.')
-    if (runner.isRunning(id)) throw new Error('Espere a execução terminar.')
+    if (!c?.useWorktree || !c.repoPath || !c.cwd) throw new Error(tt('aiconv.estaConversaNaoTemWorktree'))
+    if (runner.isRunning(id)) throw new Error(tt('aiconv.espereAExecucaoTerminar'))
     await gitc.removeWorktree(c.repoPath, c.cwd, c.worktreeBranch)
     await repo.updateConversation(id, { archived: true })
     await emitConv(id)
@@ -301,7 +302,7 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   /** Importa (ou re-sincroniza) uma sessão do terminal como conversa. */
   handle('conv:importTerminal', async (_e, sessionId: string, configDir?: string | null) => {
     const found = findTranscript(sessionId, configDir)
-    if (!found) throw new Error('Transcript da sessão não encontrado.')
+    if (!found) throw new Error(tt('aiconv.transcriptDaSessaoNaoEncontrado'))
     const parsed = parseTranscript(found.file)
     const existing = await repo.findConversationBySession(sessionId)
     if (existing) {
@@ -331,10 +332,10 @@ export function registerAiConvRpc(handle: Handle, deps: AiConvDeps): void {
   /** Recarrega os turnos a partir do transcript (ex.: depois de continuar no terminal). */
   handle('conv:resync', async (_e, id: string) => {
     const c = await repo.getConversation(id)
-    if (!c?.sessionId) throw new Error('Esta conversa ainda não tem sessão.')
-    if (runner.isRunning(id)) throw new Error('A conversa está executando.')
+    if (!c?.sessionId) throw new Error(tt('aiconv.estaConversaAindaNaoTem'))
+    if (runner.isRunning(id)) throw new Error(tt('aiconv.aConversaEstaExecutando'))
     const found = findTranscript(c.sessionId, c.configDir)
-    if (!found) throw new Error('Transcript da sessão não encontrado.')
+    if (!found) throw new Error(tt('aiconv.transcriptDaSessaoNaoEncontrado'))
     const parsed = parseTranscript(found.file)
     // Os turnos do rickOS têm custo/duração; os do transcript não. Só substitui se o
     // transcript tiver mais turnos (ou seja, a conversa continuou fora daqui).

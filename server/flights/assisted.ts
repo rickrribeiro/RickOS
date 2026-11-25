@@ -15,6 +15,7 @@ import { buildUniverse, interleavePairs, newSpecs, paxKey, TaskSpec } from './pl
 import * as repo from './repo'
 import { configErrors } from './validate'
 import { scoredOffers } from './views'
+import { tt } from '../i18n'
 
 /**
  * Skyscanner via Claude Code + Chrome — SOB DEMANDA, com o usuário presente.
@@ -163,7 +164,7 @@ export async function pickCombos(m: FlightMonitor, count: number): Promise<Combo
 
 /** Valida as escolhas do usuário contra o universo do monitor (pares e datas) e remonta as URLs no servidor. */
 export function validatePicks(m: FlightMonitor, picks: unknown): Combo[] {
-  if (!Array.isArray(picks)) throw new Error('Nenhuma combinação escolhida.')
+  if (!Array.isArray(picks)) throw new Error(tt('flights.nenhumaCombinacaoEscolhida'))
   const u = buildUniverse(m.config, todayLocal())
   const today = todayLocal()
   const pairSet = new Set(u.pairs.map((p) => `${p.o.iata}|${p.d.iata}`))
@@ -177,8 +178,8 @@ export function validatePicks(m: FlightMonitor, picks: unknown): Combo[] {
     seen.add(k)
     out.push({ ...p, url: skyscannerUrl(p.origin, p.destination, p.depart, p.ret, m) })
   }
-  if (!out.length) throw new Error('Nenhuma combinação válida para este monitoramento.')
-  if (out.length > MAX_PER_RUN) throw new Error(`No máximo ${MAX_PER_RUN} combinações por execução (escolhidas: ${out.length}).`)
+  if (!out.length) throw new Error(tt('flights.nenhumaCombinacaoValidaParaEste'))
+  if (out.length > MAX_PER_RUN) throw new Error(tt('flights.noMaximoCombinacoesPorExecucao', { MAX_PER_RUN, count: out.length }))
   return out
 }
 
@@ -359,14 +360,14 @@ export function stopAssisted(): void {
  * se o usuário cancelar.
  */
 export async function startSkyscanner(monitorId: number, picks: SkyPick[] | number): Promise<AssistedStart> {
-  if ((await getSetting('flights_chrome_assisted')) !== '1') throw new Error('Ative "Skyscanner via Claude + Chrome" em Fontes e execução.')
-  if (busy) throw new Error('Já há uma busca no Chrome em andamento (uma por vez — é o seu navegador).')
+  if ((await getSetting('flights_chrome_assisted')) !== '1') throw new Error(tt('flights.ativeSkyscannerViaClaudeChrome'))
+  if (busy) throw new Error(tt('flights.jaHaUmaBuscaNo'))
   const m = await repo.getMonitor(monitorId)
-  if (!m) throw new Error('Monitoramento não encontrado.')
+  if (!m) throw new Error(tt('flights.monitoramentoNaoEncontrado'))
   const errs = configErrors(m.config, todayLocal())
-  if (errs.length) throw new Error(`Configuração incompleta: ${errs[0]}`)
+  if (errs.length) throw new Error(tt('flights.configuracaoIncompleta', { p0: errs[0] }))
   const combos = typeof picks === 'number' ? await pickCombos(m, Math.max(1, Math.min(MAX_PER_RUN, picks))) : validatePicks(m, picks)
-  if (!combos.length) throw new Error('Todas as combinações sugeridas já foram consultadas no Skyscanner nas últimas 12 h.')
+  if (!combos.length) throw new Error(tt('flights.todasAsCombinacoesSugeridasJa'))
 
   const runId = await repo.createRun(monitorId, 'assisted')
   // o que você pesquisa passa a ser acompanhado (aba "Acompanhadas": preço dia a dia)
@@ -487,7 +488,7 @@ export async function startSkyscanner(monitorId: number, picks: SkyPick[] | numb
         if (!ans) {
           badSessions++
           lastMsg = `Sessão ${session}: resposta do Claude ilegível (${unread.length} combinação(ões) voltaram para a fila).`
-          if (badSessions >= 2) throw new Error('Duas sessões seguidas sem resposta legível do Claude — parei para não gastar à toa.')
+          if (badSessions >= 2) throw new Error(tt('flights.duasSessoesSeguidasSemResposta'))
         } else {
           badSessions = 0
           if (ans.message) lastMsg = ans.message.slice(0, 200)

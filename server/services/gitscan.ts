@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { getProjects, getProjectRepos, getSetting } from '../database/queries'
 import { repoTargetsFrom } from './projectRepos'
+import { tt } from '../i18n'
 
 /**
  * Worktrees & branches of every local repo (projects' localPath + scan roots).
@@ -90,7 +91,7 @@ function run(cmd: string, args: string[], cwd: string, timeoutMs = 20000): Promi
     let err = ''
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
-      reject(new Error(`${cmd} ${args[0]} demorou demais`))
+      reject(new Error(tt('services.demorouDemais', { cmd, p1: args[0] })))
     }, timeoutMs)
     child.stdout.on('data', (d) => (out += d.toString()))
     child.stderr.on('data', (d) => (err += d.toString()))
@@ -101,7 +102,7 @@ function run(cmd: string, args: string[], cwd: string, timeoutMs = 20000): Promi
     child.on('close', (code) => {
       clearTimeout(timer)
       if (code === 0) resolve(out)
-      else reject(new Error(err.trim() || `${cmd} saiu com código ${code}`))
+      else reject(new Error(err.trim() || tt('services.saiuComCodigo', { cmd, code })))
     })
   })
 }
@@ -484,7 +485,7 @@ export async function cachedScan(maxAgeMs: number): Promise<GitScan> {
 /** Only paths that came out of a scan can be acted on. */
 async function assertKnownRepo(repoPath: string): Promise<void> {
   const scan = lastScan ?? (await scanGit({ prs: false }))
-  if (!scan.repos.some((r) => r.path === repoPath)) throw new Error('Repositório desconhecido — atualize a lista.')
+  if (!scan.repos.some((r) => r.path === repoPath)) throw new Error(tt('services.repositorioDesconhecidoAtualizeALista'))
 }
 function knownBranch(repoPath: string, branch: string): BranchInfo | undefined {
   return lastScan?.branches.find((b) => b.repoPath === repoPath && b.branch === branch)
@@ -536,9 +537,9 @@ export async function fetchRepo(repoPath: string): Promise<string> {
 export async function deleteMergedBranch(repoPath: string, branch: string): Promise<string> {
   await assertKnownRepo(repoPath)
   const b = knownBranch(repoPath, branch)
-  if (!b) throw new Error('Branch não encontrada — atualize a lista.')
-  if (b.isBase) throw new Error('Não dá para apagar a branch principal.')
-  if (b.status !== 'merged') throw new Error('Só branches já mergeadas podem ser apagadas por aqui.')
+  if (!b) throw new Error(tt('services.branchNaoEncontradaAtualizeA'))
+  if (b.isBase) throw new Error(tt('services.naoDaParaApagarA'))
+  if (b.status !== 'merged') throw new Error(tt('services.soBranchesJaMergeadasPodem'))
   if (b.worktreePath) {
     // no --force: git refuses if the worktree has changes
     await git(repoPath, ['worktree', 'remove', b.worktreePath])
@@ -552,7 +553,7 @@ export async function deleteMergedBranch(repoPath: string, branch: string): Prom
 export async function createPullRequest(repoPath: string, branch: string): Promise<{ url: string }> {
   await assertKnownRepo(repoPath)
   const b = knownBranch(repoPath, branch)
-  if (!b || b.isBase) throw new Error('Branch inválida para PR.')
+  if (!b || b.isBase) throw new Error(tt('services.branchInvalidaParaPr'))
   if (b.pr?.state === 'OPEN') return { url: b.pr.url }
   const { baseBranch } = await resolveBase(repoPath)
   if (!b.upstream || b.upstreamGone || (b.localOnly ?? 0) > 0) {
@@ -568,8 +569,8 @@ export async function createPullRequest(repoPath: string, branch: string): Promi
 export async function openPath(target: string, app: 'vscode' | 'finder' | 'terminal'): Promise<void> {
   const scan = lastScan ?? (await scanGit({ prs: false }))
   const allowed = scan.repos.some((r) => r.path === target) || scan.branches.some((b) => b.worktreePath === target)
-  if (!allowed || !fs.existsSync(target)) throw new Error('Pasta desconhecida ou inexistente.')
-  if (process.platform !== 'darwin') throw new Error('Abrir pastas só é suportado no macOS.')
+  if (!allowed || !fs.existsSync(target)) throw new Error(tt('services.pastaDesconhecidaOuInexistente'))
+  if (process.platform !== 'darwin') throw new Error(tt('services.abrirPastasSoESuportado'))
   const args =
     app === 'vscode' ? ['-a', 'Visual Studio Code', target] : app === 'terminal' ? ['-a', 'Terminal', target] : [target]
   await run('open', args, os.homedir(), 10000)

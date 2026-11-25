@@ -6,6 +6,7 @@ import type { BeeperTransport, TransportRequest, TransportResponse } from './tra
 import { routeAllowed } from './transport'
 import { ProviderAuthError, ProviderUnavailableError } from './providers/types'
 import type { ProviderEvent } from './providers/types'
+import { tt } from '../i18n'
 
 /**
  * Relay do agente local (modo "Beeper no Mac, rickOS remoto").
@@ -67,7 +68,7 @@ export function agentTransport(): BeeperTransport {
     wsUrl: () => null,
     authHeader: () => ({}),
     request(req) {
-      if (!routeAllowed(req.method, req.path)) return Promise.reject(new Error(`Rota não permitida: ${req.method} ${req.path}`))
+      if (!routeAllowed(req.method, req.path)) return Promise.reject(new Error(tt('chats.rotaNaoPermitida', { method: req.method, path: req.path })))
       if (!agentOnline()) return Promise.reject(new ProviderUnavailableError('Agente local do Beeper offline (o Mac está ligado e com o agente rodando?).'))
       return new Promise<TransportResponse>((resolve, reject) => {
         const p: Pending = {
@@ -116,7 +117,7 @@ export function registerChatAgentRoutes(app: FastifyInstance, requireAuth: Auth)
     if (reply.sent) return
     const given = String(req.headers['x-rickos-agent-key'] || '')
     if (!keyMatches(given, await expectedKey())) {
-      reply.code(401).send({ ok: false, error: 'agent key inválida' })
+      reply.code(401).send({ ok: false, error: tt('chats.agentKeyInvalida') })
     }
   }
 

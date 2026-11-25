@@ -3,7 +3,7 @@ import { ptBR, type Messages, type MessageKey } from './locales/pt-BR'
 import { en } from './locales/en'
 import { es } from './locales/es'
 import { SHARED_LABELS } from './sharedLabels'
-import { setSharedTranslator } from '../../shared/i18n'
+import { formatMessage, setSharedTranslator, type TParams } from '../../shared/i18n'
 
 /**
  * i18n do rickOS, feito à mão (sem lib):
@@ -93,18 +93,12 @@ export function getLocale(): Locale {
   return useLocaleStore.getState().locale
 }
 
-export type TParams = Record<string, string | number | null | undefined>
+export type { TParams }
 
 /** Traduz `key` no idioma atual. Cai no pt-BR e, em último caso, na própria chave. */
 export function t(key: MessageKey, params?: TParams): string {
   const locale = getLocale()
-  let msg: string = DICTS[locale][key] ?? ptBR[key] ?? key
-  if (params && typeof params.count === 'number' && msg.includes('|')) {
-    const [one, other] = msg.split('|')
-    msg = new Intl.PluralRules(locale).select(params.count) === 'one' ? one : (other ?? one)
-  }
-  if (params) msg = msg.replace(/\{(\w+)\}/g, (m, name: string) => (params[name] == null ? m : String(params[name])))
-  return msg
+  return formatMessage(DICTS[locale][key] ?? ptBR[key] ?? key, params, locale)
 }
 
 /** Hook para componentes que precisam do idioma em si (o `t` já basta para textos). */

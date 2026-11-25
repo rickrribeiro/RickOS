@@ -25,6 +25,7 @@ import { gitQuiet } from './gitscan'
 import { notify } from './notifications'
 import { repoTargets, repoTargetsFrom, localTargets, isWorkspace, RepoTarget } from './projectRepos'
 import { numberRoadmap } from '../../shared/roadmap'
+import { tt } from '../i18n'
 
 /**
  * Central de Projetos — visão consolidada de cada projeto: horas (timer), TODOs,
@@ -160,10 +161,10 @@ export async function readRoadmap(projectId: number): Promise<{ path: string | n
 export async function setRoadmapItem(projectId: number, line: number, expected: string, mark: ' ' | 'x' | '~' | '-'): Promise<{ content: string }> {
   const p = await getProject(projectId)
   const file = p ? roadmapPath(p) : null
-  if (!file || !fs.existsSync(file)) throw new Error('ROADMAP_RICKOS.md não encontrado')
+  if (!file || !fs.existsSync(file)) throw new Error(tt('services.roadmapRickosMdNaoEncontrado'))
   const lines = fs.readFileSync(file, 'utf8').split('\n')
   const cur = lines[line]
-  if (cur == null || !cur.includes(expected)) throw new Error('O arquivo mudou — recarregue o roadmap')
+  if (cur == null || !cur.includes(expected)) throw new Error(tt('services.oArquivoMudouRecarregueO'))
   lines[line] = cur.replace(/\[( |x|X|~|-)\]/, `[${mark}]`)
   const content = lines.join('\n')
   fs.writeFileSync(file, content, 'utf8')
@@ -174,7 +175,7 @@ export async function setRoadmapItem(projectId: number, line: number, expected: 
 export async function numberRoadmapFile(projectId: number): Promise<{ content: string; added: number }> {
   const p = await getProject(projectId)
   const file = p ? roadmapPath(p) : null
-  if (!file || !fs.existsSync(file)) throw new Error('ROADMAP_RICKOS.md não encontrado')
+  if (!file || !fs.existsSync(file)) throw new Error(tt('services.roadmapRickosMdNaoEncontrado'))
   const r = numberRoadmap(fs.readFileSync(file, 'utf8'))
   if (r.added) fs.writeFileSync(file, r.content, 'utf8')
   return r
@@ -184,11 +185,11 @@ export async function numberRoadmapFile(projectId: number): Promise<{ content: s
 export async function setRoadmapItems(projectId: number, items: { line: number; expected: string }[], mark: ' ' | 'x' | '~' | '-'): Promise<{ content: string }> {
   const p = await getProject(projectId)
   const file = p ? roadmapPath(p) : null
-  if (!file || !fs.existsSync(file)) throw new Error('ROADMAP_RICKOS.md não encontrado')
+  if (!file || !fs.existsSync(file)) throw new Error(tt('services.roadmapRickosMdNaoEncontrado'))
   const lines = fs.readFileSync(file, 'utf8').split('\n')
   for (const it of items) {
     const cur = lines[it.line]
-    if (cur == null || !cur.includes(it.expected)) throw new Error('O arquivo mudou — recarregue o roadmap')
+    if (cur == null || !cur.includes(it.expected)) throw new Error(tt('services.oArquivoMudouRecarregueO'))
   }
   for (const it of items) lines[it.line] = lines[it.line].replace(/\[( |x|X|~|-)\]/, `[${mark}]`)
   const content = lines.join('\n')
@@ -199,7 +200,7 @@ export async function setRoadmapItems(projectId: number, items: { line: number; 
 export async function createRoadmapTemplate(projectId: number): Promise<{ content: string }> {
   const p = await getProject(projectId)
   const file = p ? roadmapPath(p) : null
-  if (!p || !file) throw new Error('Defina o caminho local do projeto primeiro')
+  if (!p || !file) throw new Error(tt('services.definaOCaminhoLocalDo2'))
   if (fs.existsSync(file)) return { content: fs.readFileSync(file, 'utf8') }
   const content = `# Roadmap — ${p.name}
 
@@ -295,25 +296,25 @@ export async function projectsOverview(): Promise<ProjectOverview[]> {
 
     const alerts: ProjectAlert[] = []
     const open = p.status !== 'concluido' && p.status !== 'encerrado'
-    if (p.status === 'foco' && !p.nextAction) alerts.push({ kind: 'sem_proxima_acao', severity: 'alta', text: 'Em foco sem próxima ação' })
-    if (open && p.blocker) alerts.push({ kind: 'travado', severity: 'alta', text: `Travado: ${p.blocker}` })
-    if (p.status === 'pausado' && p.resumeAt && p.resumeAt <= today) alerts.push({ kind: 'pausa_vencida', severity: 'alta', text: `Pausa venceu em ${p.resumeAt} — retomar ou decidir` })
+    if (p.status === 'foco' && !p.nextAction) alerts.push({ kind: 'sem_proxima_acao', severity: 'alta', text: tt('services.alert.noNextAction') })
+    if (open && p.blocker) alerts.push({ kind: 'travado', severity: 'alta', text: tt('services.alert.blocked', { blocker: p.blocker }) })
+    if (p.status === 'pausado' && p.resumeAt && p.resumeAt <= today) alerts.push({ kind: 'pausa_vencida', severity: 'alta', text: tt('services.alert.pauseDue', { date: p.resumeAt }) })
     if (p.status === 'foco' && (idleDays == null || idleDays >= 7)) alerts.push({ kind: 'parado', severity: 'media', text: idleDays == null ? 'Em foco sem nenhuma atividade' : `Em foco, mas parado há ${idleDays} dias` })
     if ((p.status === 'fila' || p.status === 'incubadora') && idleDays != null && idleDays >= 45)
-      alerts.push({ kind: 'esquecido', severity: 'baixa', text: `Esquecido há ${idleDays} dias` })
+      alerts.push({ kind: 'esquecido', severity: 'baixa', text: tt('services.alert.forgotten', { days: idleDays }) })
     // baixa prioridade: andar devagar é o combinado — só avisa depois de 3 meses sem nada
     else if (p.status === 'baixa' && idleDays != null && idleDays >= 90)
-      alerts.push({ kind: 'esquecido', severity: 'baixa', text: `Esquecido há ${idleDays} dias` })
+      alerts.push({ kind: 'esquecido', severity: 'baixa', text: tt('services.alert.forgotten', { days: idleDays }) })
     if (activeCycle?.dueDate) {
-      if (activeCycle.dueDate < today) alerts.push({ kind: 'ciclo_vencido', severity: 'alta', text: `Ciclo "${activeCycle.name}" venceu em ${activeCycle.dueDate}` })
+      if (activeCycle.dueDate < today) alerts.push({ kind: 'ciclo_vencido', severity: 'alta', text: tt('services.alert.cycleOverdue', { name: activeCycle.name, date: activeCycle.dueDate }) })
       else if (new Date(`${activeCycle.dueDate}T12:00:00`).getTime() - Date.now() <= 3 * DAY)
-        alerts.push({ kind: 'ciclo_vence', severity: 'media', text: `Ciclo "${activeCycle.name}" vence em ${activeCycle.dueDate}` })
+        alerts.push({ kind: 'ciclo_vence', severity: 'media', text: tt('services.alert.cycleDue', { name: activeCycle.name, date: activeCycle.dueDate }) })
     }
     const lateMs = ms.filter((m) => !m.doneAt && m.targetDate && m.targetDate < today)
-    if (open && lateMs.length) alerts.push({ kind: 'marco_vencido', severity: 'media', text: `${lateMs.length} marco(s) atrasado(s): ${lateMs[0].title}` })
-    if (p.status === 'foco' && !p.finishLine) alerts.push({ kind: 'sem_linha_chegada', severity: 'baixa', text: 'Sem linha de chegada ("pronto quando…")' })
-    if (p.status === 'foco' && inFocus > focusLimit) alerts.push({ kind: 'foco_excedido', severity: 'baixa', text: `${inFocus} projetos em foco (limite ${focusLimit})` })
-    if (!p.triagedAt && open) alerts.push({ kind: 'sem_triagem', severity: 'baixa', text: 'Ainda não passou pela triagem' })
+    if (open && lateMs.length) alerts.push({ kind: 'marco_vencido', severity: 'media', text: tt('services.alert.lateMilestones', { n: lateMs.length, title: lateMs[0].title }) })
+    if (p.status === 'foco' && !p.finishLine) alerts.push({ kind: 'sem_linha_chegada', severity: 'baixa', text: tt('services.alert.noFinishLine') })
+    if (p.status === 'foco' && inFocus > focusLimit) alerts.push({ kind: 'foco_excedido', severity: 'baixa', text: tt('services.alert.focusExceeded', { n: inFocus, limit: focusLimit }) })
+    if (!p.triagedAt && open) alerts.push({ kind: 'sem_triagem', severity: 'baixa', text: tt('services.alert.notTriaged') })
 
     const file = p.localPath ? path.join(expandHome(p.localPath), ROADMAP_FILE) : null
 
@@ -357,7 +358,7 @@ export async function checkProjectRadar(force = false): Promise<number> {
   let sent = 0
   if (important.length) {
     await notify({
-      title: `🗂 ${important.length} alerta(s) nos projetos`,
+      title: tt('services.alertaSNosProjetos', { count: important.length }),
       body: important.slice(0, 6).join('\n') + (important.length > 6 ? `\n… e mais ${important.length - 6}` : ''),
       source: 'projetos',
       page: 'projects'
@@ -368,7 +369,7 @@ export async function checkProjectRadar(force = false): Promise<number> {
   const dow = new Date().getDay()
   const lastReview = await getSetting('projects_last_review')
   if ((dow === 0 || dow === 1) && (!lastReview || Date.now() - new Date(lastReview).getTime() > 7 * DAY)) {
-    await notify({ title: '🗓️ Revisão semanal dos projetos', body: 'Gere a revisão no Dashboard e decida: continuar, pausar, retomar ou encerrar.', source: 'projetos', page: 'home' })
+    await notify({ title: tt('services.revisaoSemanalDosProjetos'), body: tt('services.gereARevisaoNoDashboard'), source: 'projetos', page: 'home' })
     sent++
   }
   return sent
@@ -393,7 +394,7 @@ export interface CycleCommit {
 
 export async function cycleCommits(cycleId: number): Promise<CycleCommit[]> {
   const c = await getProjectCycle(cycleId)
-  if (!c) throw new Error('Ciclo não encontrado')
+  if (!c) throw new Error(tt('services.cicloNaoEncontrado'))
   const p = await getProject(c.projectId)
   if (!p) return []
   const until = c.closedAt ?? new Date().toISOString()
@@ -431,7 +432,7 @@ export function groupedChangelog(name: string, commits: CycleCommit[]): string {
 
 export async function generateCycleChangelog(cycleId: number, useAi: boolean): Promise<string> {
   const c = await getProjectCycle(cycleId)
-  if (!c) throw new Error('Ciclo não encontrado')
+  if (!c) throw new Error(tt('services.cicloNaoEncontrado'))
   const p = await getProject(c.projectId)
   const commits = await cycleCommits(cycleId)
   let md = groupedChangelog(c.name, commits)
@@ -465,7 +466,7 @@ export async function setProjectSchedule(
   syncCalendar: boolean
 ): Promise<{ eventLink: string | null }> {
   const p = await getProject(projectId)
-  if (!p) throw new Error('Projeto não encontrado')
+  if (!p) throw new Error(tt('services.projetoNaoEncontrado'))
   const clean = [...new Set(days)].filter((d) => d >= 0 && d <= 6).sort()
   await patchProject(projectId, { workDays: clean.length ? JSON.stringify(clean) : null, workStart: start, workMinutes: minutes })
   let eventLink: string | null = null

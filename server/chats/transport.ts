@@ -1,4 +1,5 @@
 import { ProviderAuthError, ProviderUnavailableError } from './providers/types'
+import { tt } from '../i18n'
 
 /**
  * Como o servidor fala com a API do Beeper:
@@ -91,11 +92,11 @@ export function validateBeeperUrl(raw: string): { ok: true; url: string } | { ok
   try {
     u = new URL(raw.trim())
   } catch {
-    return { ok: false, error: 'URL inválida.' }
+    return { ok: false, error: tt('chats.urlInvalida') }
   }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, error: 'Use http:// ou https://.' }
-  if (u.username || u.password) return { ok: false, error: 'Não inclua usuário/senha na URL.' }
-  if ((u.pathname && u.pathname !== '/') || u.search || u.hash) return { ok: false, error: 'Informe só o endereço base (ex.: http://127.0.0.1:23373).' }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, error: tt('chats.useHttpOuHttps') }
+  if (u.username || u.password) return { ok: false, error: tt('chats.naoIncluaUsuarioSenhaNa') }
+  if ((u.pathname && u.pathname !== '/') || u.search || u.hash) return { ok: false, error: tt('chats.informeSoOEnderecoBase') }
   const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase()
   const ok =
     host === 'localhost' ||
@@ -104,7 +105,7 @@ export function validateBeeperUrl(raw: string): { ok: true; url: string } | { ok
     host.endsWith('.ts.net') ||
     host.endsWith('.local') ||
     /^f[cd][0-9a-f]{2}:/.test(host) // IPv6 ULA
-  if (!ok) return { ok: false, error: 'Por segurança, só endereços locais, de rede privada ou Tailscale são aceitos.' }
+  if (!ok) return { ok: false, error: tt('chats.porSegurancaSoEnderecosLocais') }
   return { ok: true, url: `${u.protocol}//${u.host}` }
 }
 

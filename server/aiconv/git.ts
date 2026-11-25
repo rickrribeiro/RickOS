@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import type { ConvChangedFile, ConvChanges } from '../../shared/aiConversations'
 import { buildPath } from '../services/claude'
+import { tt } from '../i18n'
 
 /**
  * Git da pasta de uma conversa: worktree isolado, mudanças (status + diff), commit,
@@ -26,7 +27,7 @@ function run(cmd: string, args: string[], cwd: string, timeoutMs = 30_000): Prom
     let err = ''
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
-      reject(new Error(`${cmd} ${args[0]} demorou demais`))
+      reject(new Error(tt('aiconv.demorouDemais', { cmd, p1: args[0] })))
     }, timeoutMs)
     child.stdout.on('data', (d) => (out += d.toString()))
     child.stderr.on('data', (d) => (err += d.toString()))
@@ -37,7 +38,7 @@ function run(cmd: string, args: string[], cwd: string, timeoutMs = 30_000): Prom
     child.on('close', (code) => {
       clearTimeout(timer)
       if (code === 0) resolve(out)
-      else reject(new Error(err.trim() || out.trim() || `${cmd} saiu com código ${code}`))
+      else reject(new Error(err.trim() || out.trim() || tt('aiconv.saiuComCodigo', { cmd, code })))
     })
   })
 }
@@ -74,14 +75,14 @@ function stamp(): string {
  */
 export async function createWorktree(projectDir: string, title: string): Promise<{ cwd: string; repoPath: string; branch: string; baseRef: string }> {
   const top = await repoTop(projectDir)
-  if (!top) throw new Error('A pasta do projeto não é um repositório git; desmarque o worktree isolado.')
+  if (!top) throw new Error(tt('aiconv.aPastaDoProjetoNao'))
   const baseRef = (await gitOk(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() || 'HEAD'
   const name = `rickos-${slugify(title)}-${stamp()}`
   const branch = `claude/${name}`
   const wtDir = path.join(path.dirname(top), '.worktrees', `${path.basename(top)}-${name}`)
   fs.mkdirSync(path.dirname(wtDir), { recursive: true })
   await git(top, ['worktree', 'add', '-b', branch, wtDir, 'HEAD'], 60_000)
-  if (!fs.existsSync(wtDir)) throw new Error('Não consegui criar o worktree (git worktree add falhou).')
+  if (!fs.existsSync(wtDir)) throw new Error(tt('aiconv.naoConseguiCriarOWorktree'))
   // mantém a mesma subpasta do projeto dentro do worktree (monorepo)
   const rel = path.relative(top, path.resolve(projectDir))
   const cwd = rel && !rel.startsWith('..') ? path.join(wtDir, rel) : wtDir
@@ -152,7 +153,7 @@ export async function createWorkspaceWorktree(
   try {
     for (let i = 0; i < repos.length; i++) {
       const top = await repoTop(repos[i].dir)
-      if (!top) throw new Error(`"${repos[i].name}" (${repos[i].rel}) não é um repositório git.`)
+      if (!top) throw new Error(tt('aiconv.naoEUmRepositorioGit', { name: repos[i].name, rel: repos[i].rel }))
       const baseRef = (await gitOk(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() || 'HEAD'
       const wt = path.join(wsDir, rels[i])
       fs.mkdirSync(path.dirname(wt), { recursive: true })
@@ -237,7 +238,7 @@ export function childRepos(dir: string): { name: string; rel: string; dir: strin
 export function resolveRepoDir(dir: string, repoRel?: string | null): string {
   if (!repoRel) return dir
   const hit = childRepos(dir).find((r) => r.rel === repoRel)
-  if (!hit) throw new Error(`Repositório "${repoRel}" não encontrado nesta pasta.`)
+  if (!hit) throw new Error(tt('aiconv.repositorioNaoEncontradoNestaPasta', { repoRel }))
   return hit.dir
 }
 
@@ -249,7 +250,7 @@ export function workspaceBaseRef(wsDir: string, repoRel: string): string | null 
 /** Remove os worktrees de todos os repos do workspace, as branches e a pasta-espelho. */
 export async function removeWorkspaceWorktree(wsDir: string): Promise<void> {
   const m = readWorkspaceManifest(wsDir)
-  if (!m) throw new Error('Manifesto do workspace não encontrado.')
+  if (!m) throw new Error(tt('aiconv.manifestoDoWorkspaceNaoEncontrado'))
   for (const r of m.repos) {
     const wt = path.join(wsDir, r.rel)
     if (fs.existsSync(wt)) await gitOk(r.repoPath, ['worktree', 'remove', '--force', wt])
@@ -359,7 +360,7 @@ export async function getChanges(dir: string, baseRef: string | null): Promise<C
 /** Diff de um arquivo alterado (só os que estão no `git status`). */
 export async function fileDiff(dir: string, filePath: string): Promise<{ diff: string; truncated: boolean; binary: boolean }> {
   const top = await repoTop(dir)
-  if (!top) throw new Error('Não é um repositório git.')
+  if (!top) throw new Error(tt('aiconv.naoEUmRepositorioGit2'))
   const [e] = await checkedPaths(top, [filePath])
   let diff = ''
   if (e.status === '??') {
@@ -391,17 +392,17 @@ async function checkedPaths(top: string, paths: string[] | null): Promise<Status
   if (!paths) return entries
   const wanted = new Set(paths)
   const ok = entries.filter((e) => wanted.has(e.path))
-  if (ok.length !== wanted.size) throw new Error('Arquivo fora da lista de alterados.')
+  if (ok.length !== wanted.size) throw new Error(tt('aiconv.arquivoForaDaListaDe'))
   return ok
 }
 
 export async function commit(dir: string, message: string, paths: string[] | null): Promise<string> {
   const top = await repoTop(dir)
-  if (!top) throw new Error('Não é um repositório git.')
+  if (!top) throw new Error(tt('aiconv.naoEUmRepositorioGit2'))
   const msg = message.trim()
-  if (!msg) throw new Error('Escreva a mensagem do commit.')
+  if (!msg) throw new Error(tt('aiconv.escrevaAMensagemDoCommit'))
   const entries = await checkedPaths(top, paths)
-  if (!entries.length) throw new Error('Nada para commitar.')
+  if (!entries.length) throw new Error(tt('aiconv.nadaParaCommitar'))
   await git(top, ['add', '-A', '--', ...entries.map((e) => e.path)])
   await git(top, ['commit', '-m', msg, '--', ...entries.map((e) => e.path)], 60_000)
   return ((await gitOk(top, ['rev-parse', '--short', 'HEAD'])) ?? '').trim()
@@ -409,11 +410,11 @@ export async function commit(dir: string, message: string, paths: string[] | nul
 
 export async function discard(dir: string, filePath: string): Promise<void> {
   const top = await repoTop(dir)
-  if (!top) throw new Error('Não é um repositório git.')
+  if (!top) throw new Error(tt('aiconv.naoEUmRepositorioGit2'))
   const [e] = await checkedPaths(top, [filePath])
   if (e.status === '??') {
     const abs = path.resolve(top, e.path)
-    if (!abs.startsWith(top + path.sep)) throw new Error('Caminho inválido.')
+    if (!abs.startsWith(top + path.sep)) throw new Error(tt('aiconv.caminhoInvalido'))
     fs.rmSync(abs, { force: true })
     return
   }
@@ -427,10 +428,10 @@ export async function discard(dir: string, filePath: string): Promise<void> {
 /** Push da branch + PR com `gh` contra a base. */
 export async function openPullRequest(dir: string, baseRef: string | null): Promise<string> {
   const top = await repoTop(dir)
-  if (!top) throw new Error('Não é um repositório git.')
+  if (!top) throw new Error(tt('aiconv.naoEUmRepositorioGit2'))
   const branch = (await gitOk(top, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim()
-  if (!branch || branch === 'HEAD') throw new Error('HEAD destacado: não há branch para o PR.')
-  if (baseRef && branch === baseRef) throw new Error(`Você está na própria branch base (${branch}); use um worktree isolado para abrir PR.`)
+  if (!branch || branch === 'HEAD') throw new Error(tt('aiconv.headDestacadoNaoHaBranch'))
+  if (baseRef && branch === baseRef) throw new Error(tt('aiconv.voceEstaNaPropriaBranch', { branch }))
   await git(top, ['push', '-u', 'origin', branch], 120_000)
   const args = ['pr', 'create', '--fill', '--head', branch, ...(baseRef ? ['--base', baseRef] : [])]
   try {

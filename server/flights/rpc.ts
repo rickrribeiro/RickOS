@@ -16,6 +16,7 @@ import { cancelRun, evaluateAlerts, setting, startRun, usableProviders } from '.
 import { configErrors, normalizeConfig } from './validate'
 import * as views from './views'
 import { getSetting } from '../database/queries'
+import { tt } from '../i18n'
 
 /**
  * Canais RPC `flightMon:*`. Nada de busca externa síncrona: `run` só enfileira e devolve
@@ -28,7 +29,7 @@ const changed = (monitorId: number | null): void => broadcast('flights:updated',
 
 async function mustGet(id: number): Promise<FlightMonitor> {
   const m = await repo.getMonitor(Number(id))
-  if (!m) throw new Error('Monitoramento não encontrado.')
+  if (!m) throw new Error(tt('flights.monitoramentoNaoEncontrado'))
   return m
 }
 
@@ -94,7 +95,7 @@ export function registerFlightRpc(handle: Handle): void {
   })
   handle('flightMon:setStatus', async (_, id: number, status: MonitorStatus) => {
     const m = await mustGet(id)
-    if (status === 'active' && configErrors(m.config, todayLocal()).length) throw new Error(`Complete a configuração: ${configErrors(m.config, todayLocal())[0]}`)
+    if (status === 'active' && configErrors(m.config, todayLocal()).length) throw new Error(tt('flights.completeAConfiguracao', { p0: configErrors(m.config, todayLocal())[0] }))
     await repo.updateMonitor(m.id, { status })
     await repo.setMonitorMeta(m.id, { nextRunAt: null })
     changed(m.id)
@@ -139,7 +140,7 @@ export function registerFlightRpc(handle: Handle): void {
   handle('flightMon:nearby', (_, ref: LocationRef, radiusKm: number, withGround: boolean) => nearbyAirports(ref, Number(radiusKm) || 300, !!withGround))
   handle('flightMon:ground', async (_, iata: string, to: LocationRef) => {
     const c = refCenter(to)
-    if (!c) throw new Error('Destino final sem coordenadas (escolha uma cidade ou aeroporto).')
+    if (!c) throw new Error(tt('flights.destinoFinalSemCoordenadasEscolha'))
     return estimateGround(iata, c)
   })
 
@@ -212,7 +213,7 @@ export function registerFlightRpc(handle: Handle): void {
   })
   handle('flightMon:testProvider', async (_, id: string) => {
     const p = getProvider(id)
-    if (!p?.test) throw new Error('Este provedor não tem teste de conexão.')
+    if (!p?.test) throw new Error(tt('flights.esteProvedorNaoTemTeste'))
     const ctl = new AbortController()
     return p.test({ getSetting: setting, signal: ctl.signal, now: () => new Date() })
   })

@@ -12,6 +12,7 @@ import { subscribe } from './events'
 import { finishGoogleConnect } from './services/google'
 import { registerChatAgentRoutes } from './chats/agentRelay'
 import { fetchAsset } from './chats/service'
+import { loadServerLocale, tt } from './i18n'
 
 export interface StartedServer {
   app: FastifyInstance
@@ -38,10 +39,11 @@ export async function startServer(overrides: Partial<ServerConfig> = {}): Promis
   setConfig(overrides)
   const cfg = getConfig()
   if (!isLocalHost(cfg.host) && !cfg.token) {
-    throw new Error(`RICKOS_TOKEN é obrigatório quando o servidor escuta em ${cfg.host} (fora do localhost).`)
+    throw new Error(tt('rpc.rickosTokenEObrigatorioQuando', { host: cfg.host }))
   }
 
   await getDb()
+  await loadServerLocale()
   snapshotDailyIfNeeded()
 
   const app = Fastify({ bodyLimit: 200 * 1024 * 1024 })
@@ -120,7 +122,7 @@ export async function startServer(overrides: Partial<ServerConfig> = {}): Promis
       reply.header('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; media-src 'self'")
       return reply.send(a.body)
     } catch (e) {
-      return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : 'anexo indisponível' })
+      return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : tt('rpc.anexoIndisponivel') })
     }
   })
 
@@ -145,7 +147,7 @@ export async function startServer(overrides: Partial<ServerConfig> = {}): Promis
   if (fs.existsSync(path.join(staticDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: staticDir, prefix: '/' })
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/')) return reply.code(404).send({ ok: false, error: 'not found' })
+      if (req.url.startsWith('/api/')) return reply.code(404).send({ ok: false, error: tt('rpc.notFound') })
       return reply.sendFile('index.html')
     })
   }

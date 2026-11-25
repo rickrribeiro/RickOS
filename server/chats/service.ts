@@ -29,6 +29,7 @@ import type { ChatProvider, OutgoingImage, RemoteMessage } from './providers/typ
 import { sniffImage } from './providers/localAsset'
 import { ProviderUnavailableError } from './providers/types'
 import { directTransport } from './transport'
+import { tt } from '../i18n'
 
 // ── Provedor ativo ────────────────────────────────────────────────────────────
 
@@ -433,7 +434,7 @@ function dedupe(list: RemoteMessage[]): RemoteMessage[] {
  */
 export async function getMessages(chatId: number, cursor?: string | null): Promise<MessagePage> {
   const chat = await repo.chatById(chatId)
-  if (!chat) throw new Error('Conversa não encontrada.')
+  if (!chat) throw new Error(tt('chats.conversaNaoEncontrada'))
   const cfg = await loadConfig()
   const provider = await activeProvider(cfg)
   const self = await selfInfo(chat.accountKey)
@@ -543,7 +544,7 @@ export async function scanChat(provider: ChatProvider, chatId: number): Promise<
 
 async function requireProviderFor(chatId: number): Promise<{ provider: ChatProvider; chat: repo.ChatRow }> {
   const chat = await repo.chatById(chatId)
-  if (!chat) throw new Error('Conversa não encontrada.')
+  if (!chat) throw new Error(tt('chats.conversaNaoEncontrada'))
   const provider = await activeProvider()
   if (!provider) throw new ProviderUnavailableError('Central de Mensagens desativada.')
   if (provider.id !== chat.providerId) throw new ProviderUnavailableError('Esta conversa é de um provedor que não está ativo: envio bloqueado.')
@@ -555,12 +556,12 @@ async function requireProviderFor(chatId: number): Promise<{ provider: ChatProvi
 export function parseOutgoingImage(input: OutgoingImageInput | null | undefined): OutgoingImage | null {
   if (!input) return null
   const b64 = String(input.base64 ?? '').replace(/^data:[^,]*,/, '')
-  if (!b64 || b64.length > Math.ceil((MAX_SEND_IMAGE_BYTES * 4) / 3) + 8) throw new Error('Imagem grande demais (máx. 15 MB).')
+  if (!b64 || b64.length > Math.ceil((MAX_SEND_IMAGE_BYTES * 4) / 3) + 8) throw new Error(tt('chats.imagemGrandeDemaisMax15'))
   const data = Buffer.from(b64, 'base64')
-  if (!data.length) throw new Error('Imagem vazia.')
-  if (data.length > MAX_SEND_IMAGE_BYTES) throw new Error('Imagem grande demais (máx. 15 MB).')
+  if (!data.length) throw new Error(tt('chats.imagemVazia'))
+  if (data.length > MAX_SEND_IMAGE_BYTES) throw new Error(tt('chats.imagemGrandeDemaisMax15'))
   const mimeType = sniffImage(data)
-  if (!mimeType) throw new Error('Formato não suportado: envie JPEG, PNG, GIF ou WebP.')
+  if (!mimeType) throw new Error(tt('chats.formatoNaoSuportadoEnvieJpeg'))
   const ext = mimeType.split('/')[1].replace('jpeg', 'jpg')
   const base = String(input.fileName ?? '')
     .replace(/\.[^.]*$/, '')
@@ -574,11 +575,11 @@ export function parseOutgoingImage(input: OutgoingImageInput | null | undefined)
 export async function sendMessage(chatId: number, text: string, replyToId: string | null, imageInput?: OutgoingImageInput | null): Promise<{ ok: true; pendingId: string | null }> {
   const body = text.trim()
   const image = parseOutgoingImage(imageInput)
-  if (!body && !image) throw new Error('Mensagem vazia.')
-  if (body.length > 10_000) throw new Error('Mensagem longa demais.')
+  if (!body && !image) throw new Error(tt('chats.mensagemVazia'))
+  if (body.length > 10_000) throw new Error(tt('chats.mensagemLongaDemais'))
   const { provider, chat } = await requireProviderFor(chatId)
-  if (!provider.capabilities().sendMessages) throw new Error('Este provedor não envia mensagens.')
-  if (image && !provider.capabilities().sendImages) throw new Error('Este provedor não envia imagens.')
+  if (!provider.capabilities().sendMessages) throw new Error(tt('chats.esteProvedorNaoEnviaMensagens'))
+  if (image && !provider.capabilities().sendImages) throw new Error(tt('chats.esteProvedorNaoEnviaImagens'))
   const r = await provider.sendMessage(chat.remoteId, body, replyToId, image)
   const now = new Date().toISOString()
   const cfg = await loadConfig()
@@ -607,8 +608,8 @@ export async function sendMessage(chatId: number, text: string, replyToId: strin
 /** Confere no cache se a mensagem é sua (o provedor confere de novo; isto só dá um erro mais claro). */
 function ownMessage(chatId: number, messageId: string): RemoteMessage | null {
   const m = msgCache.get(chatId)?.items.find((x) => x.id === messageId) ?? null
-  if (m && !m.isMine) throw new Error('Só dá para alterar mensagens enviadas por você.')
-  if (m?.deleted) throw new Error('Esta mensagem já foi apagada.')
+  if (m && !m.isMine) throw new Error(tt('chats.soDaParaAlterarMensagens'))
+  if (m?.deleted) throw new Error(tt('chats.estaMensagemJaFoiApagada'))
   return m
 }
 
@@ -630,13 +631,13 @@ async function refreshAfterChange(provider: ChatProvider, chatId: number): Promi
 /** Edita o texto de uma mensagem SUA. Ação explícita do usuário (nunca automática). */
 export async function editMessage(chatId: number, messageId: string, text: string): Promise<{ ok: true }> {
   const body = text.trim()
-  if (!messageId) throw new Error('Mensagem inválida.')
-  if (!body) throw new Error('O texto não pode ficar vazio (para remover, apague a mensagem).')
-  if (body.length > 10_000) throw new Error('Mensagem longa demais.')
+  if (!messageId) throw new Error(tt('chats.mensagemInvalida'))
+  if (!body) throw new Error(tt('chats.oTextoNaoPodeFicar'))
+  if (body.length > 10_000) throw new Error(tt('chats.mensagemLongaDemais'))
   const { provider, chat } = await requireProviderFor(chatId)
-  if (!provider.editMessage || !provider.capabilities().editMessages) throw new Error('Este provedor não permite editar mensagens.')
+  if (!provider.editMessage || !provider.capabilities().editMessages) throw new Error(tt('chats.esteProvedorNaoPermiteEditar'))
   const m = ownMessage(chatId, messageId)
-  if (m?.attachments.length) throw new Error('Mensagens com anexo não podem ser editadas.')
+  if (m?.attachments.length) throw new Error(tt('chats.mensagensComAnexoNaoPodem'))
   if (m && m.text === body) return { ok: true }
   await provider.editMessage(chat.remoteId, messageId, body)
   await refreshAfterChange(provider, chatId)
@@ -645,9 +646,9 @@ export async function editMessage(chatId: number, messageId: string, text: strin
 
 /** Apaga uma mensagem SUA: para todos (quando a rede permite) ou só para você. */
 export async function deleteMessage(chatId: number, messageId: string, forEveryone: boolean): Promise<{ ok: true }> {
-  if (!messageId) throw new Error('Mensagem inválida.')
+  if (!messageId) throw new Error(tt('chats.mensagemInvalida'))
   const { provider, chat } = await requireProviderFor(chatId)
-  if (!provider.deleteMessage || !provider.capabilities().deleteMessages) throw new Error('Este provedor não permite apagar mensagens.')
+  if (!provider.deleteMessage || !provider.capabilities().deleteMessages) throw new Error(tt('chats.esteProvedorNaoPermiteApagar'))
   ownMessage(chatId, messageId)
   await provider.deleteMessage(chat.remoteId, messageId, forEveryone)
   await refreshAfterChange(provider, chatId)
@@ -657,11 +658,11 @@ export async function deleteMessage(chatId: number, messageId: string, forEveryo
 export async function markRead(chatId: number, read: boolean): Promise<void> {
   const { provider, chat } = await requireProviderFor(chatId)
   if (read) {
-    if (!provider.markRead) throw new Error('Este provedor não permite marcar como lida.')
+    if (!provider.markRead) throw new Error(tt('chats.esteProvedorNaoPermiteMarcar'))
     await provider.markRead(chat.remoteId, null)
     await repo.patchChatCounters(chatId, chat.unreadCount == null ? null : 0, chat.unreadMentions == null ? null : 0)
   } else {
-    if (!provider.markUnread) throw new Error('Este provedor não permite marcar como não lida.')
+    if (!provider.markUnread) throw new Error(tt('chats.esteProvedorNaoPermiteMarcar2'))
     await provider.markUnread(chat.remoteId)
     await repo.patchChatCounters(chatId, Math.max(1, chat.unreadCount ?? 0), chat.unreadMentions)
   }
@@ -696,9 +697,9 @@ export async function searchMessages(query: string, chatId?: number | null): Pro
 
 export async function fetchAsset(token: string): Promise<{ contentType: string; body: Buffer }> {
   const v = verifyAsset(token)
-  if (!v) throw new Error('Link de anexo inválido ou expirado.')
+  if (!v) throw new Error(tt('chats.linkDeAnexoInvalidoOu'))
   const { provider } = await requireProviderFor(v.chatId)
-  if (!provider.fetchAttachment) throw new Error('Este provedor não fornece anexos.')
+  if (!provider.fetchAttachment) throw new Error(tt('chats.esteProvedorNaoForneceAnexos'))
   return provider.fetchAttachment(v.ref)
 }
 

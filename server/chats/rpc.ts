@@ -9,6 +9,7 @@ import { K, loadConfig, publicConfig, saveConfig } from './config'
 import * as repo from './repo'
 import * as svc from './service'
 import { getStatus, reconfigure, syncNow } from './sync'
+import { tt } from '../i18n'
 
 /**
  * Canais `chats:*`. O front só conhece estes contratos normalizados; nada do provedor
@@ -42,7 +43,7 @@ export function registerChatRpc(handle: Handle): void {
   })
   handle('chats:test', async () => {
     const p = await svc.activeProvider()
-    if (!p) return { ok: false, message: 'Ative a Central de Mensagens primeiro.' }
+    if (!p) return { ok: false, message: tt('chats.ativeACentralDeMensagens') }
     return p.test()
   })
   handle('chats:agentKey', async () => ({ key: await rotateAgentKey() }))
@@ -111,7 +112,7 @@ export function registerChatRpc(handle: Handle): void {
 
   // ── Organização (sempre local) ──
   handle('chats:setState', async (_e, chatIds: number[], state: ManualReplyState | 'auto') => {
-    if (!STATES.includes(state)) throw new Error('Estado inválido.')
+    if (!STATES.includes(state)) throw new Error(tt('chats.estadoInvalido'))
     const list = ids(chatIds)
     const now = new Date().toISOString()
     if (state === 'auto') await repo.patchOrg(list, { manualState: null, manualAt: null })
@@ -120,7 +121,7 @@ export function registerChatRpc(handle: Handle): void {
   })
   handle('chats:snooze', async (_e, chatIds: number[], until: string | null, note?: string | null, reopenOnMessage?: boolean) => {
     const list = ids(chatIds)
-    if (until && Number.isNaN(Date.parse(until))) throw new Error('Data inválida.')
+    if (until && Number.isNaN(Date.parse(until))) throw new Error(tt('chats.dataInvalida'))
     if (!until) {
       await repo.patchOrg(list, { snoozeUntil: null, snoozedAt: null, reminderNote: null, reminderNotifiedAt: null })
     } else {
@@ -141,7 +142,7 @@ export function registerChatRpc(handle: Handle): void {
     svc.changed(list)
   })
   handle('chats:setPriority', async (_e, chatIds: number[], priority: ChatPriority | null) => {
-    if (!PRIOS.includes(priority)) throw new Error('Prioridade inválida.')
+    if (!PRIOS.includes(priority)) throw new Error(tt('chats.prioridadeInvalida'))
     const list = ids(chatIds)
     await repo.patchOrg(list, { priority })
     svc.changed(list)
@@ -170,7 +171,7 @@ export function registerChatRpc(handle: Handle): void {
     const list = ids(chatIds)
     for (const id of list) {
       const c = await repo.chatById(id)
-      if (c?.type === 'group' && contactId) throw new Error('Grupos não são pessoas: vincule participantes individualmente.')
+      if (c?.type === 'group' && contactId) throw new Error(tt('chats.gruposNaoSaoPessoasVincule'))
     }
     await repo.patchOrg(list, { contactId: contactId ? Number(contactId) : null })
     await repo.touchContactsFromOutbound()
@@ -178,8 +179,8 @@ export function registerChatRpc(handle: Handle): void {
   })
   handle('chats:createContact', async (_e, id: number, name: string) => {
     const chat = await repo.chatById(Number(id))
-    if (!chat) throw new Error('Conversa não encontrada.')
-    if (chat.type === 'group') throw new Error('Grupos não são pessoas.')
+    if (!chat) throw new Error(tt('chats.conversaNaoEncontrada'))
+    if (chat.type === 'group') throw new Error(tt('chats.gruposNaoSaoPessoas'))
     const n = String(name ?? '').trim() || chat.title
     const ctx = `Criada a partir de conversa no ${networkInfo(chat.network).label}${chat.peerHandle ? ` (${chat.peerHandle})` : ''}.`
     const contactId = await repo.createContactFromChat(n.slice(0, 120), ctx)
@@ -192,7 +193,7 @@ export function registerChatRpc(handle: Handle): void {
   handle('chats:contactNetworks', () => svc.contactNetworks())
   handle('chats:contacts', () => repo.contactsLite())
   handle('chats:setContactPriority', async (_e, contactId: number, priority: ChatPriority, vip: boolean) => {
-    if (!['alta', 'normal', 'baixa'].includes(priority)) throw new Error('Prioridade inválida.')
+    if (!['alta', 'normal', 'baixa'].includes(priority)) throw new Error(tt('chats.prioridadeInvalida'))
     await repo.setContactPriority(Number(contactId), priority, !!vip)
     svc.changed()
   })
@@ -201,7 +202,7 @@ export function registerChatRpc(handle: Handle): void {
   handle('chats:labels', () => repo.listLabels())
   handle('chats:saveLabel', async (_e, id: number | null, name: string, color: string) => {
     const n = String(name ?? '').trim().slice(0, 40)
-    if (!n) throw new Error('Nome obrigatório.')
+    if (!n) throw new Error(tt('chats.nomeObrigatorio'))
     const col = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#6366f1'
     const l = await repo.saveLabel(id ? Number(id) : null, n, col)
     svc.changed()
@@ -212,7 +213,7 @@ export function registerChatRpc(handle: Handle): void {
     svc.changed()
   })
   handle('chats:setLabels', async (_e, entity: 'chat' | 'contact', entityIds: number[], add: number[], remove: number[]) => {
-    if (entity !== 'chat' && entity !== 'contact') throw new Error('Entidade inválida.')
+    if (entity !== 'chat' && entity !== 'contact') throw new Error(tt('chats.entidadeInvalida'))
     await repo.setLabels(entity, ids(entityIds), ids(add), ids(remove))
     svc.changed(entity === 'chat' ? ids(entityIds) : [])
   })
@@ -222,10 +223,10 @@ export function registerChatRpc(handle: Handle): void {
   // ── TODOs ──
   handle('chats:createTodo', async (_e, id: number, title: string, dueDate: string | null, messageId: string | null) => {
     const chat = await repo.fullRow(Number(id))
-    if (!chat) throw new Error('Conversa não encontrada.')
+    if (!chat) throw new Error(tt('chats.conversaNaoEncontrada'))
     const t = String(title ?? '').trim().slice(0, 200)
-    if (!t) throw new Error('Título obrigatório.')
-    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error('Data inválida.')
+    if (!t) throw new Error(tt('chats.tituloObrigatorio'))
+    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error(tt('chats.dataInvalida'))
     const notes = `💬 Conversa: ${chat.title} (${networkInfo(chat.network).label})${chat.contactName ? ` · Pessoa: ${chat.contactName}` : ''}\nAbrir: #/chats?c=${chat.id}`
     const todoId = await repo.createChatTodo(chat.id, t, notes, dueDate, messageId)
     broadcast('inbox:updated', { source: 'chats' })
@@ -255,7 +256,7 @@ export function registerChatRpc(handle: Handle): void {
   })
   handle('chats:templates', () => repo.listTemplates())
   handle('chats:saveTemplate', async (_e, id: number | null, title: string, body: string) => {
-    if (!String(title ?? '').trim() || !String(body ?? '').trim()) throw new Error('Título e texto são obrigatórios.')
+    if (!String(title ?? '').trim() || !String(body ?? '').trim()) throw new Error(tt('chats.tituloETextoSaoObrigatorios'))
     await repo.saveTemplate(id ? Number(id) : null, String(title).slice(0, 80), String(body).slice(0, 4000))
   })
   handle('chats:deleteTemplate', (_e, id: number) => repo.deleteTemplate(Number(id)))
