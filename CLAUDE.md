@@ -15,7 +15,7 @@ npm run build:web && npm start           # produção web (dist/ + dist-server/)
 npm run screenshots                      # prints desktop×celular×skins em docs/screenshots/ (exige dev:web rodando)
 ```
 
-* Testes automatizados no monitoramento de passagens, na Central de Mensagens, no parser de transcripts do Prompt Runner e na Memória Pessoal: `npm test` (`node:test` via tsx, em `server/flights/__tests__/`, `server/chats/__tests__/`, `server/aiconv/__tests__/` e `server/memory/__tests__/`). Extração da memória com LLM real: `npm run memory:evals` (sob demanda). No resto, a verificação é typecheck + uso real.
+* Testes automatizados no monitoramento de passagens, na Central de Mensagens, no parser de transcripts do Prompt Runner, na Memória Pessoal e o guardrail do catálogo de IA: `npm test` (`node:test` via tsx, em `server/flights/__tests__/`, `server/chats/__tests__/`, `server/aiconv/__tests__/`, `server/memory/__tests__/` e `server/ia/__tests__/`). Extração da memória com LLM real: `npm run memory:evals` (sob demanda). No resto, a verificação é typecheck + uso real.
 * **Nunca** use `tsc -b` nem `tsc` sem `--noEmit`: ele gera `.js` ao lado dos fontes.
 * Mudou `server/` ou `electron/`? Reinicie o `npm run dev`. O `dev:web` recarrega o servidor sozinho.
 
@@ -79,7 +79,8 @@ Molde simples para copiar: `todos` / `habits`.
 * Efeitos colaterais (CLI, rede, arquivos) ficam em `server/`, que não importa nada de Electron.
 * Servidor → clientes: `broadcast()` no servidor + `subscribe()` de `src/api/transport.ts`. Os canais estão listados em `server/events.ts`.
 * sql.js **não aceita parâmetros em `db.exec`**: use `getAll`/`getOne`/`run` (prepare/step).
-* **Prompt de IA nunca fica cru no código**: crie `shared/prompts/<módulo>/<nome>.ts` (comentário no topo com o que faz, onde é usado e o modelo), adicione a linha no índice `shared/prompts/README.md` e a entrada em `shared/prompts/catalogo.ts` (motor, modelo, effort, exemplo; nome em `settings.iaChamada.<id>` nos 3 idiomas). O chamador só junta os dados e chama `promptXxx({ … })`.
+* 🚨 **REGRA ABSOLUTA — toda chamada de IA está no catálogo.** Criou, mudou ou removeu qualquer lugar que chama IA (Claude Code, Codex, Gemini, `window.api.ai.*`, `runJson`/`runText`, CLI direto): atualize **no mesmo commit** a entrada em `shared/prompts/catalogo.ts` (motor, modelo, effort, prompt de exemplo; nome em `settings.iaChamada.<id>` nos 3 idiomas) e o `MANIFESTO` de `server/ia/__tests__/guardrails.test.ts`. Sem exceção: é o que aparece em Configurações → IA → "Onde a IA é usada". O guardrail (`npm test`) quebra se houver chamada fora do catálogo; **nunca** contorne o teste (nada de adicionar o arquivo em `TRANSPORTE` para silenciá-lo).
+* **Prompt de IA nunca fica cru no código**: crie `shared/prompts/<módulo>/<nome>.ts` (comentário no topo com o que faz, onde é usado e o modelo) e adicione a linha no índice `shared/prompts/README.md`. O chamador só junta os dados e chama `promptXxx({ … })`.
 * **Nova IA não consome nem produz Memória Pessoal por padrão.** Nunca injete memória em `runClaude`, `ai:*` ou `buildProjectContext`. Integração = política em `server/memory/policy.ts` + aprovação do usuário + canal dedicado em `server/memory/integrations.ts` chamando `getMemoryContext` (ver `docs/memoria/README.md` e `docs/memoria/integracoes.md`).
 * **Sempre que adicionar ou alterar uma funcionalidade de IA, PERGUNTE ao usuário se ele quer integrá-la à Memória Pessoal** (consumir contexto pessoal, produzir sugestões, ambos ou nenhum), explicando o benefício e o custo em tokens. Sem resposta afirmativa, não integre.
 * Credenciais: chaves em `SENSITIVE_KEYS` (`server/services/secrets.ts`) são criptografadas com AES-GCM ao salvar. Nunca logue nem commite segredos.
@@ -109,7 +110,7 @@ Molde simples para copiar: `todos` / `habits`.
 
 ## Antes de concluir
 
-1. Os dois `tsc --noEmit` passam.
+1. Os dois `tsc --noEmit` passam, e `npm test` também (inclui o guardrail do catálogo de IA).
 2. Testou no desktop e na web, inclusive em viewport de 390px.
 
 ## Outros docs
