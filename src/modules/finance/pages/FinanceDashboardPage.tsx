@@ -104,28 +104,18 @@ export function FinanceDashboardPage(): React.ReactElement {
           <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{formatMoney(incomeBase, base)}</div>
           <div className="stat-card-sub">com extras</div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success)', marginTop: 6 }}>{formatMoney(fixedBase, base)}</div>
-          <div className="stat-card-sub">sem extras (só salário fixo)</div>
+          <div className="stat-card-sub">
+            sem extras (salário fixo{categories.some((c) => c.fixedIncome) ? `: ${categories.filter((c) => c.fixedIncome).map((c) => c.name).join(', ')}` : ''})
+          </div>
+          <div className="stat-card-sub" style={{ marginTop: 6 }}>
+            entradas extras {formatMoney(sumInBase(extraIncome, base, rates), base)} · {extraIncome.length}{' '}
+            {extraIncome.length === 1 ? 'entrada' : 'entradas'}
+          </div>
           {Object.keys(redemptionsByCur).length > 0 && (
             <div className="stat-card-sub" title="Resgates de investimento: não contam como receita">
               + resgates de investimento {money(redemptionsByCur)}
             </div>
           )}
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-label">Salário fixo</div>
-          <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{money(sumByCurrency(fixedIncome))}</div>
-          <div className="stat-card-sub">
-            {fixedIncome.length === 0
-              ? 'nada recebido em categoria fixa'
-              : `${fixedIncome.length} ${fixedIncome.length === 1 ? 'entrada' : 'entradas'} · ${categories.filter((c) => c.fixedIncome).map((c) => c.name).join(', ')}`}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-label">Entradas extras</div>
-          <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{money(sumByCurrency(extraIncome))}</div>
-          <div className="stat-card-sub">
-            {extraIncome.length} {extraIncome.length === 1 ? 'entrada' : 'entradas'} fora do salário
-          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Gastos do mês</div>
