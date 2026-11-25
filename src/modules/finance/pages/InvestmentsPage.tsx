@@ -79,6 +79,18 @@ function InvestmentRow({
     setDraft(value != null ? String(value) : '')
   }, [value, isExplicit])
 
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(investment.name)
+  useEffect(() => setNameDraft(investment.name), [investment.name])
+
+  function commitName(): void {
+    setEditingName(false)
+    // vazio = volta ao nome que veio do banco (se for do Open Finance)
+    const n = nameDraft.trim() || investment.externalName?.trim() || ''
+    if (n && n !== investment.name) onRename(n)
+    else setNameDraft(investment.name)
+  }
+
   const parsed = parseFloat(draft)
   const dirty = draft.trim() !== '' && !isNaN(parsed) && (value == null || parsed !== value)
 
@@ -91,20 +103,44 @@ function InvestmentRow({
     <div className="list-row" style={{ flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: '1 1 220px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <span className="list-row-title" style={{ flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={investment.externalName ?? investment.name}>
-            {investment.name}
-          </span>
-          <button
-            className="btn btn-secondary btn-sm"
-            style={{ padding: '0 6px', flexShrink: 0, alignSelf: 'center', lineHeight: 1.4 }}
-            title="Renomear (ex.: nome da caixinha)"
-            onClick={() => {
-              const n = prompt('Nome do investimento:', investment.name)?.trim()
-              if (n && n !== investment.name) onRename(n)
-            }}
-          >
-            ✎
-          </button>
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') {
+                  setNameDraft(investment.name)
+                  setEditingName(false)
+                }
+              }}
+              placeholder={investment.externalName ?? 'Nome do investimento'}
+              title="Enter salva · Esc cancela (vazio volta ao nome do banco, se houver)"
+              style={{ flex: 1, minWidth: 0, fontSize: 14, padding: '2px 6px' }}
+            />
+          ) : (
+            <>
+              <span
+                className="list-row-title"
+                style={{ flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}
+                title={`${investment.externalName ?? investment.name} — clique duas vezes para renomear`}
+                onDoubleClick={() => setEditingName(true)}
+              >
+                {investment.name}
+              </span>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '0 6px', flexShrink: 0, alignSelf: 'center', lineHeight: 1.4 }}
+                title="Renomear (ex.: nome da caixinha)"
+                onClick={() => setEditingName(true)}
+              >
+                ✎
+              </button>
+            </>
+          )}
         </span>
         {detailsLine(investment) && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{detailsLine(investment)}</span>}
       </div>
