@@ -1335,6 +1335,22 @@ export async function assignAccountToUnlinked(accountId: number): Promise<number
   return n
 }
 
+/**
+ * Zera os dados importados do financeiro (transações, investimentos + histórico, contas) para
+ * reimportar do Open Finance. Categorias, metas, regras, decisões de recorrência e pendências ficam.
+ */
+export async function resetFinanceImportedData(): Promise<{ transactions: number; investments: number; accounts: number }> {
+  const db = await getDb()
+  const count = (t: string): number => getOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM ${t}`)?.n ?? 0
+  const out = { transactions: count('transactions'), investments: count('investments'), accounts: count('accounts') }
+  run(db, 'DELETE FROM transactions')
+  run(db, 'DELETE FROM investment_history')
+  run(db, 'DELETE FROM investments')
+  run(db, 'DELETE FROM accounts')
+  run(db, "DELETE FROM settings WHERE key = 'finance_default_account'")
+  return out
+}
+
 // ── Transactions ──
 export async function getTransactions(month?: string): Promise<DbTransaction[]> {
   const db = await getDb()

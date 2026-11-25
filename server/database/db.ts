@@ -580,6 +580,18 @@ export function closeDb(): void {
   }
 }
 
+/** Backup avulso do banco inteiro em `<dataDir>/<prefixo>-<data-hora>.db` (fora da rotação de snapshots). */
+export function backupDbFile(prefix: string): string | null {
+  if (!dbPath) return null
+  saveDb()
+  const now = new Date()
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  const target = path.join(dataDir(), `${prefix}-${stamp}.db`)
+  fs.copyFileSync(dbPath, target)
+  return target
+}
+
 // ── Daily local snapshots (versioning) ────────────────────────────────────────
 const SNAP_KEEP = 3
 

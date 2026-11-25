@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import os from 'os'
 import { join } from 'path'
 import fs from 'fs'
-import { getDb, saveDb, dbFilePath, replaceDbFile, listSnapshots, restoreSnapshot } from './database/db'
+import { getDb, saveDb, dbFilePath, replaceDbFile, listSnapshots, restoreSnapshot, backupDbFile } from './database/db'
 import {
   getAllTags,
   getAllTasks,
@@ -91,6 +91,7 @@ import {
   getTransactions,
   setTransactionIgnored,
   setTransactionKind,
+  resetFinanceImportedData,
   setTransactionPaymentMethod,
   setRecurringOverride,
   getRecurringOverrides,
@@ -1015,6 +1016,15 @@ ipcMain.handle('transactions:setIgnored', async (_, id: number, reason: string |
 ipcMain.handle('transactions:setPaymentMethod', (_, id: number, method: string | null) => setTransactionPaymentMethod(id, method))
 ipcMain.handle('transactions:setKind', async (_, id: number, kind: TransactionKind) => afterTxChange(await setTransactionKind(id, kind)))
 ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[]) => afterTxChange(await bulkInsertTransactions(await categorizeNew(rows))))
+
+/** Manutenção: backup completo do banco e depois zera transações, investimentos e contas. */
+ipcMain.handle('finance:resetImportedData', async () => {
+  const backup = backupDbFile('timetracker.backup-pre-reset-financas')
+  if (!backup) throw new Error('Banco não carregado; nada foi apagado.')
+  const removed = await resetFinanceImportedData()
+  saveDb()
+  return { backup, removed }
+})
 
 ipcMain.handle('financeRules:getAll', () => getFinanceRules())
 ipcMain.handle('financeRules:create', (_, categoryId: number, keywords: string) => createFinanceRule(categoryId, keywords))
