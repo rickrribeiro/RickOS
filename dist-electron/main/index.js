@@ -1267,6 +1267,36 @@ function seedAiLibrary(db2) {
     }
   }
 }
+let locale = "pt-BR";
+function sharedLocale() {
+  return locale;
+}
+function st(key, pt) {
+  return pt;
+}
+function labels(prefix, pt) {
+  const out = {};
+  for (const k of Object.keys(pt)) {
+    Object.defineProperty(out, k, { get: () => st(`${prefix}.${k}`, pt[k]), enumerable: true });
+  }
+  return out;
+}
+function labeled(prefix, idKey, items) {
+  return items.map((item) => {
+    const copy = { ...item };
+    const pt = item.label;
+    Object.defineProperty(copy, "label", { get: () => st(`${prefix}.${String(item[idKey])}`, pt), enumerable: true });
+    return copy;
+  });
+}
+function formatMessage(msg, params, loc) {
+  if (params && typeof params.count === "number" && msg.includes("|")) {
+    const [one2, other] = msg.split("|");
+    msg = new Intl.PluralRules(loc).select(params.count) === "one" ? one2 : other ?? one2;
+  }
+  if (params) msg = msg.replace(/\{(\w+)\}/g, (m, name) => params[name] == null ? m : String(params[name]));
+  return msg;
+}
 const PLUGGY_INVESTMENT_CATEGORIES = new Set(
   [
     "investments",
@@ -1318,6 +1348,16 @@ function detectOwnTransfer(description, category) {
   if (category && normalizeText(category).startsWith("same person transfer")) return true;
   return /\b(transfer[eê]ncia entre contas|entre contas pr[oó]prias|mesma titularidade)\b/i.test(description ?? "");
 }
+labeled("shared.finance.payment", "id", [
+  { id: "credito", label: "Cartão de crédito", icon: "💳" },
+  { id: "debito", label: "Cartão de débito", icon: "💳" },
+  { id: "pix", label: "Pix", icon: "⚡" },
+  { id: "ted", label: "TED/DOC", icon: "🏦" },
+  { id: "boleto", label: "Boleto", icon: "🧾" },
+  { id: "transferencia", label: "Transferência", icon: "🔄" },
+  { id: "saque", label: "Saque", icon: "💵" },
+  { id: "deposito", label: "Depósito", icon: "📥" }
+]);
 const OPERATION_TYPE_MAP = {
   PIX: "pix",
   TED: "ted",
@@ -1353,7 +1393,7 @@ function detectPaymentMethod(description, hints = {}) {
   if (/\b(cartao de credito|credito de ")/.test(d)) return "credito";
   return null;
 }
-const PLUGGY_KIND = {
+const PLUGGY_KIND = labels("shared.finance.pluggyKind", {
   CDB: "CDB",
   LCI: "LCI",
   LCA: "LCA",
@@ -1382,12 +1422,12 @@ const PLUGGY_KIND = {
   OPTION: "Opção",
   ETF: "ETF",
   STRUCTURED_NOTE: "COE"
-};
+});
 function pluggyInvestmentKind(type, subtype) {
-  return PLUGGY_KIND[subtype ?? ""] ?? PLUGGY_KIND[type ?? ""] ?? (type === "FIXED_INCOME" ? "Renda fixa" : "Investimento");
+  return PLUGGY_KIND[subtype ?? ""] ?? PLUGGY_KIND[type ?? ""] ?? (type === "FIXED_INCOME" ? st("shared.finance.fixedIncome", "Renda fixa") : st("shared.finance.investment", "Investimento"));
 }
 function pluggyRateText(rate, rateType, fixedAnnualRate) {
-  const fmt = (n) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  const fmt = (n) => n.toLocaleString(sharedLocale(), { maximumFractionDigits: 2 });
   if (rateType && rate != null) {
     if (rateType === "IPCA" || rateType === "IGPM") return `${rateType}${fixedAnnualRate ? ` + ${fmt(fixedAnnualRate)}% a.a.` : ""}`;
     return `${fmt(rate)}% ${rateType}`;
@@ -1513,15 +1553,15 @@ function pairRefunds(txs) {
   }
   return out;
 }
-const INVESTMENT_GROUPS = [
+const INVESTMENT_GROUPS = labeled("shared.finance.investGroup", "id", [
   { id: "renda-fixa", label: "Renda fixa", icon: "🏦" },
   { id: "bolsa", label: "Bolsa de valores", icon: "📊" },
   { id: "fundos", label: "Fundos de investimento", icon: "🧺" },
   { id: "crypto", label: "Crypto", icon: "🪙" },
   { id: "tesouro", label: "Tesouro direto", icon: "🇧🇷" },
   { id: "outros", label: "Outros", icon: "📦" }
-];
-let db = null;
+]);
+let db$3 = null;
 let dbPath;
 const MIGRATIONS = [
   {
@@ -1889,9 +1929,9 @@ const MIGRATIONS = [
       const now = (/* @__PURE__ */ new Date()).toISOString();
       for (const [name, color] of defaults) {
         try {
-          const st = db2.prepare("INSERT OR IGNORE INTO labels (name, color, createdAt) VALUES (?, ?, ?)");
-          st.run([name, color, now]);
-          st.free();
+          const st2 = db2.prepare("INSERT OR IGNORE INTO labels (name, color, createdAt) VALUES (?, ?, ?)");
+          st2.run([name, color, now]);
+          st2.free();
         } catch {
         }
       }
@@ -2196,17 +2236,17 @@ function getUserVersion(database) {
   return typeof v === "number" ? v : 0;
 }
 function runMigrations(database) {
-  const current = getUserVersion(database);
+  const current2 = getUserVersion(database);
   const target = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0);
-  if (current >= target) return;
+  if (current2 >= target) return;
   for (const m of MIGRATIONS) {
-    if (m.version > current) m.run(database);
+    if (m.version > current2) m.run(database);
   }
   database.run(`PRAGMA user_version = ${target}`);
 }
 let opening = null;
 async function getDb() {
-  if (db) return db;
+  if (db$3) return db$3;
   if (!opening) {
     opening = openDb().finally(() => {
       opening = null;
@@ -2227,7 +2267,7 @@ async function openDb() {
   fresh.run(SCHEMA);
   runMigrations(fresh);
   seedAiLibrary(fresh);
-  db = fresh;
+  db$3 = fresh;
   saveDb();
   return fresh;
 }
@@ -2242,16 +2282,16 @@ function registerFunctions(database) {
   database.create_function("ulower", (s2) => s2 == null ? null : String(s2).toLowerCase());
 }
 function saveDb() {
-  if (!db || !dbPath) return;
-  const data2 = db.export();
-  registerFunctions(db);
+  if (!db$3 || !dbPath) return;
+  const data2 = db$3.export();
+  registerFunctions(db$3);
   fs.writeFileSync(dbPath, Buffer.from(data2));
 }
 function closeDb() {
-  if (db) {
+  if (db$3) {
     saveDb();
-    db.close();
-    db = null;
+    db$3.close();
+    db$3 = null;
   }
 }
 function backupDbFile(prefix) {
@@ -2308,7 +2348,7 @@ function restoreSnapshot(snapPath) {
   return true;
 }
 const skyKey = (p) => `${p.origin}|${p.destination}|${p.depart}|${p.ret ?? "-"}`;
-const REGIONS = [
+const REGIONS = labeled("shared.flights.region", "id", [
   { id: "southeast_asia", label: "Sudeste Asiático", countries: ["VN", "TH", "MY", "SG", "LA", "KH", "ID", "PH", "MM", "BN", "TL"] },
   { id: "east_asia", label: "Leste Asiático", countries: ["JP", "KR", "CN", "TW", "HK", "MO", "MN"] },
   { id: "south_asia", label: "Sul da Ásia", countries: ["IN", "LK", "NP", "BD", "PK", "MV", "BT"] },
@@ -2322,10 +2362,30 @@ const REGIONS = [
   { id: "north_africa", label: "Norte da África", countries: ["MA", "DZ", "TN", "EG"] },
   { id: "sub_saharan_africa", label: "África Subsaariana", countries: ["ZA", "KE", "ET", "NG", "GH", "SN", "TZ", "MZ", "AO", "CV", "MU"] },
   { id: "br_northeast", label: "Nordeste do Brasil", countries: [] }
-];
+]);
 const REGION_STATES = {
   br_northeast: ["BR-BA", "BR-SE", "BR-AL", "BR-PE", "BR-PB", "BR-RN", "BR-CE", "BR-PI", "BR-MA"]
 };
+labels("shared.flights.cabin", {
+  economy: "Econômica",
+  premium_economy: "Premium economy",
+  business: "Executiva",
+  first: "Primeira"
+});
+labels("shared.flights.strategy", {
+  value: "Melhor custo-benefício",
+  price: "Menor tarifa aérea",
+  total_cost: "Menor custo total",
+  duration: "Menor duração de voo",
+  door_to_door: "Menor tempo porta a porta",
+  stops: "Menos conexões"
+});
+labels("shared.flights.verification", {
+  live: "Preço ao vivo",
+  cached: "Cache do provedor",
+  imported: "Importado",
+  assisted: "Busca assistida"
+});
 const DEFAULT_WEIGHTS = { price: 5, duration: 3, stops: 2, connections: 2, schedule: 1, carriers: 1 };
 function defaultMonitorConfig() {
   return {
@@ -2373,7 +2433,7 @@ function formatMoney(m) {
   if (!m) return "—";
   const digits = minorDigits(m.currency);
   try {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: m.currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(
+    return new Intl.NumberFormat(sharedLocale(), { style: "currency", currency: m.currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(
       m.amountMinor / 10 ** digits
     );
   } catch {
@@ -2395,7 +2455,7 @@ function fmtMinutes(min) {
   const m = Math.round(min % 60);
   return h ? `${h}h${m ? String(m).padStart(2, "0") : ""}` : `${m}min`;
 }
-const flights = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const flights$3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   DEFAULT_WEIGHTS,
   REGIONS,
@@ -2408,6 +2468,762 @@ const flights = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePrope
   skyKey,
   toMinor
 }, Symbol.toStringTag, { value: "Module" }));
+const common$2 = {
+  "common.unknownError": "erro desconhecido"
+};
+const rpc$3 = {
+  "rpc.canalRpcDesconhecido": "Canal RPC desconhecido: {channel}",
+  "rpc.falhaAoSincronizarOGoogle": "📅 Falha ao sincronizar o Google Calendar",
+  "rpc.investimentosAtualizados": "📈 Investimentos atualizados",
+  "rpc.openFinanceNovosAtualizadosEncerrados": "Open Finance: {created} novos, {updated} atualizados, {closed} encerrados{extra}.",
+  "rpc.falhaAoAtualizarInvestimentos": "📈 Falha ao atualizar investimentos",
+  "rpc.revisarSaldoSeparado": "🔒 Revisar saldo separado",
+  "rpc.comecoDeMesConfiraO": "Começo de mês: confira o saldo separado de {count} conta no painel de Finanças.|Começo de mês: confira o saldo separado de {count} contas no painel de Finanças.",
+  "rpc.oAgenteAgendadoTerminouResultado": "O agente agendado terminou — resultado no Inbox.",
+  "rpc.bancoNaoCarregadoNadaFoi": "Banco não carregado; nada foi apagado.",
+  "rpc.arquivoInvalidoSemTopico": "Arquivo inválido (sem tópico).",
+  "rpc.enviadoAoGoogleDrive": "Enviado ao Google Drive ({account}): {name}",
+  "rpc.oArquivoNaoEUm": "O arquivo não é um banco SQLite.",
+  "rpc.rickosTokenEObrigatorioQuando": "RICKOS_TOKEN é obrigatório quando o servidor escuta em {host} (fora do localhost).",
+  "rpc.anexoIndisponivel": "anexo indisponível",
+  "rpc.notFound": "not found"
+};
+const services$2 = {
+  "services.abraAlgumasNoticiasEmLer": 'Abra algumas notícias em "Ler mais" (ou cadastre categorias próprias) antes de sugerir memórias.',
+  "services.googleNewsRespondeu": "Google News respondeu {status}",
+  "services.projetoNaoEncontrado": "Projeto não encontrado",
+  "services.definaAProximaAcaoAntes": "Defina a próxima ação antes de delegar.",
+  "services.definaOCaminhoLocalDo": "Defina o caminho local do projeto (repositório git).",
+  "services.nenhumRepositorioDoProjetoFoi": "Nenhum repositório do projeto foi encontrado na pasta local.",
+  "services.oCaminhoLocalNaoE": "O caminho local não é um repositório git.",
+  "services.naoConseguiCriarOWorktree": "Não consegui criar o worktree (git worktree add falhou).",
+  "services.delegacaoPronta": "🤖 {name}: delegação pronta",
+  "services.delegacaoFalhou": "⚠️ {name}: delegação falhou",
+  "services.delegacaoNaoEncontrada": "Delegação não encontrada",
+  "services.canceleAExecucaoAntesDe": "Cancele a execução antes de descartar.",
+  "services.nenhumRepositorioTemCommitsNesta": "Nenhum repositório tem commits nesta branch.",
+  "services.ghSaiuComCodigo": "gh saiu com código {code}.",
+  "services.githubTokenNaoConfiguradoVa": "GitHub token não configurado. Vá em Configurações e adicione um token.",
+  "services.tokenInvalidoOuExpirado401": "Token inválido ou expirado (401).",
+  "services.githubApiFalhou": "GitHub API falhou ({status}). {p1}",
+  "services.ghGithubCliNaoEncontrado": "`gh` (GitHub CLI) não encontrado. Instale e rode `gh auth login`, ou use o modo Token.",
+  "services.falhaNoGh": "Falha no gh: {msg}",
+  "services.demorouDemais": "{cmd} {p1} demorou demais",
+  "services.saiuComCodigo": "{cmd} saiu com código {code}",
+  "services.repositorioDesconhecidoAtualizeALista": "Repositório desconhecido — atualize a lista.",
+  "services.branchNaoEncontradaAtualizeA": "Branch não encontrada — atualize a lista.",
+  "services.naoDaParaApagarA": "Não dá para apagar a branch principal.",
+  "services.soBranchesJaMergeadasPodem": "Só branches já mergeadas podem ser apagadas por aqui.",
+  "services.branchInvalidaParaPr": "Branch inválida para PR.",
+  "services.pastaDesconhecidaOuInexistente": "Pasta desconhecida ou inexistente.",
+  "services.abrirPastasSoESuportado": "Abrir pastas só é suportado no macOS.",
+  "services.pastaNaoEncontrada": "Pasta não encontrada",
+  "services.esteProjetoNaoCorrespondeA": "Este projeto não corresponde a nenhum repositório do workspace.",
+  "services.roadmapRickosMdNaoEncontrado": "ROADMAP_RICKOS.md não encontrado",
+  "services.oArquivoMudouRecarregueO": "O arquivo mudou — recarregue o roadmap",
+  "services.definaOCaminhoLocalDo2": "Defina o caminho local do projeto primeiro",
+  "services.alertaSNosProjetos": "🗂 {count} alerta(s) nos projetos",
+  "services.revisaoSemanalDosProjetos": "🗓️ Revisão semanal dos projetos",
+  "services.gereARevisaoNoDashboard": "Gere a revisão no Dashboard e decida: continuar, pausar, retomar ou encerrar.",
+  "services.cicloNaoEncontrado": "Ciclo não encontrado",
+  "services.configureOClientIdE": "Configure o Client ID e o Client Secret do Google em Configurações.",
+  "services.nenhumaContaGoogleConectada": "Nenhuma conta Google conectada.",
+  "services.semPermissaoDeDriveNesta": "Sem permissão de Drive nesta conta. Reconecte-a em Configurações (escopo drive.file).",
+  "services.uploadAoDriveFalhou": "Upload ao Drive falhou ({status}). {p1}",
+  "services.googleNegou": "Google negou: {err}",
+  "services.stateInvalidoNoCallbackDo": "state inválido no callback do Google.",
+  "services.semRefreshTokenRevogueO": "Sem refresh_token (revogue o acesso e tente de novo).",
+  "services.substituidaPorUmaNovaTentativa": "Substituída por uma nova tentativa de conexão.",
+  "services.tempoEsgotadoAguardandoAAutorizacao": "Tempo esgotado aguardando a autorização do Google.",
+  "services.autorizacaoExpiradaOuRevogadaInvalid": "autorização expirada ou revogada (invalid_grant). Reconecte a conta em Configurações.",
+  "services.falhaAoRenovarOToken": "Falha ao renovar o token do Google.",
+  "services.googleCalendarFalhou": "Google Calendar falhou ({status}). {p1}",
+  "services.googleNaoConectadoCliqueEm": "Google não conectado. Clique em Conectar em Configurações.",
+  "services.google": "Google ({email}): {p1}",
+  "services.estaContaGoogleSoTem": "Esta conta Google só tem permissão de leitura. Reconecte-a em Configurações para permitir criar eventos.",
+  "services.nenhumaContaGoogleConectadaConfiguracoes": "Nenhuma conta Google conectada (Configurações).",
+  "services.escolhaAoMenosUmDia": "Escolha ao menos um dia da semana.",
+  "services.googleCalendarRecusou": "Google Calendar recusou ({status}). {p1}",
+  "services.falhaAoRemoverOEvento": "Falha ao remover o evento ({status}).",
+  "services.tempoEsgotadoSExecutandoO": "Tempo esgotado ({p0}s) executando o Claude CLI.",
+  "services.falhaAoAbrirOsFluxos": "Falha ao abrir os fluxos de saída do Claude CLI.",
+  "services.claudeCliSaiuComCodigo": "Claude CLI saiu com código {code}.",
+  "services.configureOClientIdE2": "Configure o Client ID e o Client Secret do Pluggy em Configurações.",
+  "services.semConexaoComOPluggy": "Sem conexão com o Pluggy: {p0}",
+  "services.falhaAoAutenticarNoPluggy": "Falha ao autenticar no Pluggy ({status}). {detail}",
+  "services.falhaAoCriarConnectToken": "Falha ao criar connect token ({status}). {p1}",
+  "services.pluggyFalhou": "Pluggy {path} falhou ({status}). {p2}",
+  "services.mesInvalido": "Mês inválido: {month}",
+  "services.configureOItemIdDo": "Configure o Item ID do Pluggy (banco conectado) em Configurações.",
+  "services.nenhumaContaEncontradaParaEsse": "Nenhuma conta encontrada para esse Item ID. Verifique se o Item está conectado e pronto no Pluggy (e se o Item ID está correto).",
+  "services.configureOItemIdDo2": "Configure o Item ID do Pluggy em Configurações.",
+  "services.alert.noNextAction": "Em foco sem próxima ação",
+  "services.alert.blocked": "Travado: {blocker}",
+  "services.alert.pauseDue": "Pausa venceu em {date} — retomar ou decidir",
+  "services.alert.forgotten": "Esquecido há {days} dias",
+  "services.alert.cycleOverdue": 'Ciclo "{name}" venceu em {date}',
+  "services.alert.cycleDue": 'Ciclo "{name}" vence em {date}',
+  "services.alert.lateMilestones": "{n} marco(s) atrasado(s): {title}",
+  "services.alert.noFinishLine": 'Sem linha de chegada ("pronto quando…")',
+  "services.alert.focusExceeded": "{n} projetos em foco (limite {limit})",
+  "services.alert.notTriaged": "Ainda não passou pela triagem"
+};
+const flights$2 = {
+  "flights.http": "HTTP {status}",
+  "flights.promocao": "🏷️ Promoção: {name}",
+  "flights.nenhumaCombinacaoEscolhida": "Nenhuma combinação escolhida.",
+  "flights.nenhumaCombinacaoValidaParaEste": "Nenhuma combinação válida para este monitoramento.",
+  "flights.noMaximoCombinacoesPorExecucao": "No máximo {MAX_PER_RUN} combinações por execução (escolhidas: {count}).",
+  "flights.ativeSkyscannerViaClaudeChrome": 'Ative "Skyscanner via Claude + Chrome" em Fontes e execução.',
+  "flights.jaHaUmaBuscaNo": "Já há uma busca no Chrome em andamento (uma por vez — é o seu navegador).",
+  "flights.monitoramentoNaoEncontrado": "Monitoramento não encontrado.",
+  "flights.configuracaoIncompleta": "Configuração incompleta: {p0}",
+  "flights.todasAsCombinacoesSugeridasJa": "Todas as combinações sugeridas já foram consultadas no Skyscanner nas últimas 12 h.",
+  "flights.duasSessoesSeguidasSemResposta": "Duas sessões seguidas sem resposta legível do Claude — parei para não gastar à toa.",
+  "flights.completeAConfiguracao": "Complete a configuração: {p0}",
+  "flights.destinoFinalSemCoordenadasEscolha": "Destino final sem coordenadas (escolha uma cidade ou aeroporto).",
+  "flights.esteProvedorNaoTemTeste": "Este provedor não tem teste de conexão.",
+  "flights.limiteDeChamadaSDe": 'Limite de {limit} chamada(s) de IA por dia atingido{p1}. Ajuste em "Fontes e execução".',
+  "flights.descrevaAViagemComUm": "Descreva a viagem com um pouco mais de detalhe.",
+  "flights.semOfertasElegiveisParaAnalisar": "Sem ofertas elegíveis para analisar.",
+  "flights.monitoramentoPausado": "Monitoramento pausado.",
+  "flights.valorMonetarioInvalido": "Valor monetário inválido: {value}",
+  "flights.provider.import": "Importação de resultados",
+  "flights.provider.duffel": "Duffel (preço ao vivo)",
+  "flights.paraEsteMonitor": " para este monitor"
+};
+const chats$2 = {
+  "chats.rotaNaoPermitida": "Rota não permitida: {method} {path}",
+  "chats.agentKeyInvalida": "agent key inválida",
+  "chats.ativeACentralDeMensagens": "Ative a Central de Mensagens primeiro.",
+  "chats.estadoInvalido": "Estado inválido.",
+  "chats.dataInvalida": "Data inválida.",
+  "chats.prioridadeInvalida": "Prioridade inválida.",
+  "chats.gruposNaoSaoPessoasVincule": "Grupos não são pessoas: vincule participantes individualmente.",
+  "chats.conversaNaoEncontrada": "Conversa não encontrada.",
+  "chats.gruposNaoSaoPessoas": "Grupos não são pessoas.",
+  "chats.nomeObrigatorio": "Nome obrigatório.",
+  "chats.entidadeInvalida": "Entidade inválida.",
+  "chats.tituloObrigatorio": "Título obrigatório.",
+  "chats.tituloETextoSaoObrigatorios": "Título e texto são obrigatórios.",
+  "chats.selecioneAoMenosUmaMensagem": "Selecione ao menos uma mensagem.",
+  "chats.selecioneNoMaximo40Mensagens": "Selecione no máximo 40 mensagens.",
+  "chats.asMensagensSelecionadasNaoEstao": "As mensagens selecionadas não estão mais carregadas. Reabra a conversa e selecione de novo.",
+  "chats.aIaNaoGerouSugestoes": "A IA não gerou sugestões.",
+  "chats.urlInvalida": "URL inválida.",
+  "chats.useHttpOuHttps": "Use http:// ou https://.",
+  "chats.naoIncluaUsuarioSenhaNa": "Não inclua usuário/senha na URL.",
+  "chats.informeSoOEnderecoBase": "Informe só o endereço base (ex.: http://127.0.0.1:23373).",
+  "chats.porSegurancaSoEnderecosLocais": "Por segurança, só endereços locais, de rede privada ou Tailscale são aceitos.",
+  "chats.provedorDesconhecido": "Provedor desconhecido.",
+  "chats.modeloInvalido": "Modelo inválido.",
+  "chats.imagemGrandeDemaisMax15": "Imagem grande demais (máx. 15 MB).",
+  "chats.imagemVazia": "Imagem vazia.",
+  "chats.formatoNaoSuportadoEnvieJpeg": "Formato não suportado: envie JPEG, PNG, GIF ou WebP.",
+  "chats.mensagemVazia": "Mensagem vazia.",
+  "chats.mensagemLongaDemais": "Mensagem longa demais.",
+  "chats.esteProvedorNaoEnviaMensagens": "Este provedor não envia mensagens.",
+  "chats.esteProvedorNaoEnviaImagens": "Este provedor não envia imagens.",
+  "chats.soDaParaAlterarMensagens": "Só dá para alterar mensagens enviadas por você.",
+  "chats.estaMensagemJaFoiApagada": "Esta mensagem já foi apagada.",
+  "chats.mensagemInvalida": "Mensagem inválida.",
+  "chats.oTextoNaoPodeFicar": "O texto não pode ficar vazio (para remover, apague a mensagem).",
+  "chats.esteProvedorNaoPermiteEditar": "Este provedor não permite editar mensagens.",
+  "chats.mensagensComAnexoNaoPodem": "Mensagens com anexo não podem ser editadas.",
+  "chats.esteProvedorNaoPermiteApagar": "Este provedor não permite apagar mensagens.",
+  "chats.esteProvedorNaoPermiteMarcar": "Este provedor não permite marcar como lida.",
+  "chats.esteProvedorNaoPermiteMarcar2": "Este provedor não permite marcar como não lida.",
+  "chats.linkDeAnexoInvalidoOu": "Link de anexo inválido ou expirado.",
+  "chats.esteProvedorNaoForneceAnexos": "Este provedor não fornece anexos.",
+  "chats.mandouMensagem": "💬 {p0} mandou mensagem",
+  "chats.pessoaImportanteEsperandoResposta": "Pessoa importante esperando resposta.",
+  "chats.mencionaramVoceEm": "@ Mencionaram você em {title}",
+  "chats.mencaoOes": "{unreadMentions} menção(ões){p1}.",
+  "chats.responder": "⏰ Responder: {title}",
+  "chats.lembreteDaCentralDeMensagens": "Lembrete da Central de Mensagens.",
+  "chats.beeperRespondeu": "{what}: Beeper respondeu {status}{p2}",
+  "chats.conectadoAoBeeperContaS": "Conectado ao Beeper{p0} ({p1}). {n} conta(s).",
+  "chats.enviarImagem": "Enviar imagem: {p0}",
+  "chats.anexoInvalido": "Anexo inválido.",
+  "chats.anexoIndisponivel": "Anexo indisponível.",
+  "chats.viaAgenteLocal": "via agente local",
+  "chats.direto": "direto",
+  "chats.estimativaParen": " (estimativa)"
+};
+const aiconv$2 = {
+  "aiconv.oClaudeCliDemorouDemais": "O Claude CLI demorou demais para responder.",
+  "aiconv.claudeCliNaoEncontradoNo": "Claude CLI não encontrado no PATH.",
+  "aiconv.claudeSaiuComCodigo": "claude saiu com código {code}",
+  "aiconv.oCodexDemorouDemaisPara": "O Codex demorou demais para responder.",
+  "aiconv.codexSaiuComCodigo": "codex saiu com código {code}",
+  "aiconv.erroDoCodex": "Erro do Codex.",
+  "aiconv.maximoDeImagensPorMensagem": "Máximo de {MAX_IMAGES_PER_MESSAGE} imagens por mensagem.",
+  "aiconv.formatoDeImagemNaoSuportado": "Formato de imagem não suportado.",
+  "aiconv.imagemInvalidaOuGrandeDemais": "Imagem inválida ou grande demais.",
+  "aiconv.aConversaAindaNaoTem": "A conversa ainda não tem sessão para ramificar.",
+  "aiconv.espereAExecucaoTerminarPara": "Espere a execução terminar para ramificar.",
+  "aiconv.conversaNaoEncontrada": "Conversa não encontrada.",
+  "aiconv.estaConversaNaoTemPasta": "Esta conversa não tem pasta de trabalho.",
+  "aiconv.espereAExecucaoTerminar": "Espere a execução terminar.",
+  "aiconv.nadaParaDescrever": "Nada para descrever.",
+  "aiconv.estaConversaNaoTemWorktree": "Esta conversa não tem worktree.",
+  "aiconv.transcriptDaSessaoNaoEncontrado": "Transcript da sessão não encontrado.",
+  "aiconv.estaConversaAindaNaoTem": "Esta conversa ainda não tem sessão.",
+  "aiconv.aConversaEstaExecutando": "A conversa está executando.",
+  "aiconv.executorDeConversasNaoInicializado": "Executor de conversas não inicializado.",
+  "aiconv.oDiretorioDestaConversaNao": "O diretório desta conversa não existe mais: {cwd}",
+  "aiconv.oWorktreeIsoladoPrecisaDe": "O worktree isolado precisa de um projeto com pasta local.",
+  "aiconv.comandoInvalido": 'Comando inválido: "{bin}".',
+  "aiconv.claude": "🤚 Claude {what}",
+  "aiconv.promptRunner": "Prompt Runner",
+  "aiconv.claudeTerminou": "✅ Claude terminou",
+  "aiconv.claudeParouComErro": "⚠️ Claude parou com erro",
+  "aiconv.demorouDemais": "{cmd} {p1} demorou demais",
+  "aiconv.saiuComCodigo": "{cmd} saiu com código {code}",
+  "aiconv.aPastaDoProjetoNao": "A pasta do projeto não é um repositório git; desmarque o worktree isolado.",
+  "aiconv.naoConseguiCriarOWorktree": "Não consegui criar o worktree (git worktree add falhou).",
+  "aiconv.naoEUmRepositorioGit": '"{name}" ({rel}) não é um repositório git.',
+  "aiconv.repositorioNaoEncontradoNestaPasta": 'Repositório "{repoRel}" não encontrado nesta pasta.',
+  "aiconv.manifestoDoWorkspaceNaoEncontrado": "Manifesto do workspace não encontrado.",
+  "aiconv.naoEUmRepositorioGit2": "Não é um repositório git.",
+  "aiconv.arquivoForaDaListaDe": "Arquivo fora da lista de alterados.",
+  "aiconv.escrevaAMensagemDoCommit": "Escreva a mensagem do commit.",
+  "aiconv.nadaParaCommitar": "Nada para commitar.",
+  "aiconv.caminhoInvalido": "Caminho inválido.",
+  "aiconv.headDestacadoNaoHaBranch": "HEAD destacado: não há branch para o PR.",
+  "aiconv.voceEstaNaPropriaBranch": "Você está na própria branch base ({branch}); use um worktree isolado para abrir PR.",
+  "aiconv.skillNaoEncontrada": "Skill não encontrada.",
+  "aiconv.conteudoInvalido": "Conteúdo inválido.",
+  "aiconv.what.question": "tem uma pergunta",
+  "aiconv.what.plan": "quer aprovar um plano",
+  "aiconv.what.permission": "pede permissão para {tool}"
+};
+const db$2 = {
+  "db.naoDaParaIncorporarUm": "Não dá para incorporar um projeto nele mesmo.",
+  "db.projetoNaoEncontrado": "Projeto não encontrado.",
+  "db.mesInvalido": "Mês inválido: {month}",
+  "db.projetoNaoEncontrado2": "Projeto não encontrado",
+  "db.situacaoInvalida": "Situação inválida: {status}"
+};
+const ptBR = {
+  ...common$2,
+  ...rpc$3,
+  ...services$2,
+  ...flights$2,
+  ...chats$2,
+  ...aiconv$2,
+  ...db$2
+};
+const common$1 = {
+  "common.unknownError": "unknown error"
+};
+const services$1 = {
+  "services.alert.noNextAction": "In focus with no next action",
+  "services.alert.blocked": "Blocked: {blocker}",
+  "services.alert.pauseDue": "Pause ended on {date} — resume or decide",
+  "services.alert.forgotten": "Forgotten for {days} days",
+  "services.alert.cycleOverdue": 'Cycle "{name}" was due on {date}',
+  "services.alert.cycleDue": 'Cycle "{name}" is due on {date}',
+  "services.alert.lateMilestones": "{n} late milestone(s): {title}",
+  "services.alert.noFinishLine": 'No finish line ("done when…")',
+  "services.alert.focusExceeded": "{n} projects in focus (limit {limit})",
+  "services.alert.notTriaged": "Not triaged yet",
+  "services.abraAlgumasNoticiasEmLer": 'Open some news via "Read more" (or add your own categories) before suggesting memories.',
+  "services.googleNewsRespondeu": "Google News responded {status}",
+  "services.projetoNaoEncontrado": "Project not found",
+  "services.definaAProximaAcaoAntes": "Set the next action before delegating.",
+  "services.definaOCaminhoLocalDo": "Set the project's local path (git repository).",
+  "services.nenhumRepositorioDoProjetoFoi": "No project repository was found in the local folder.",
+  "services.oCaminhoLocalNaoE": "The local path isn't a git repository.",
+  "services.naoConseguiCriarOWorktree": "Couldn't create the worktree (git worktree add failed).",
+  "services.delegacaoPronta": "🤖 {name}: delegation ready",
+  "services.delegacaoFalhou": "⚠️ {name}: delegation failed",
+  "services.delegacaoNaoEncontrada": "Delegation not found",
+  "services.canceleAExecucaoAntesDe": "Cancel the run before discarding.",
+  "services.nenhumRepositorioTemCommitsNesta": "No repository has commits on this branch.",
+  "services.ghSaiuComCodigo": "gh exited with code {code}.",
+  "services.githubTokenNaoConfiguradoVa": "GitHub token not configured. Go to Settings and add a token.",
+  "services.tokenInvalidoOuExpirado401": "Invalid or expired token (401).",
+  "services.githubApiFalhou": "GitHub API failed ({status}). {p1}",
+  "services.ghGithubCliNaoEncontrado": "`gh` (GitHub CLI) not found. Install it and run `gh auth login`, or use Token mode.",
+  "services.falhaNoGh": "gh failed: {msg}",
+  "services.demorouDemais": "{cmd} {p1} took too long",
+  "services.saiuComCodigo": "{cmd} exited with code {code}",
+  "services.repositorioDesconhecidoAtualizeALista": "Unknown repository — refresh the list.",
+  "services.branchNaoEncontradaAtualizeA": "Branch not found — refresh the list.",
+  "services.naoDaParaApagarA": "The main branch can't be deleted.",
+  "services.soBranchesJaMergeadasPodem": "Only already merged branches can be deleted here.",
+  "services.branchInvalidaParaPr": "Invalid branch for a PR.",
+  "services.pastaDesconhecidaOuInexistente": "Unknown or nonexistent folder.",
+  "services.abrirPastasSoESuportado": "Opening folders is only supported on macOS.",
+  "services.pastaNaoEncontrada": "Folder not found",
+  "services.esteProjetoNaoCorrespondeA": "This project doesn't match any workspace repository.",
+  "services.roadmapRickosMdNaoEncontrado": "ROADMAP_RICKOS.md not found",
+  "services.oArquivoMudouRecarregueO": "The file changed — reload the roadmap",
+  "services.definaOCaminhoLocalDo2": "Set the project's local path first",
+  "services.alertaSNosProjetos": "🗂 {count} alert(s) on projects",
+  "services.revisaoSemanalDosProjetos": "🗓️ Weekly project review",
+  "services.gereARevisaoNoDashboard": "Generate the review on the Dashboard and decide: continue, pause, resume or close.",
+  "services.cicloNaoEncontrado": "Cycle not found",
+  "services.configureOClientIdE": "Set the Google Client ID and Client Secret in Settings.",
+  "services.nenhumaContaGoogleConectada": "No Google account connected.",
+  "services.semPermissaoDeDriveNesta": "No Drive permission on this account. Reconnect it in Settings (drive.file scope).",
+  "services.uploadAoDriveFalhou": "Drive upload failed ({status}). {p1}",
+  "services.googleNegou": "Google denied: {err}",
+  "services.stateInvalidoNoCallbackDo": "Invalid state in the Google callback.",
+  "services.semRefreshTokenRevogueO": "No refresh_token (revoke access and try again).",
+  "services.substituidaPorUmaNovaTentativa": "Replaced by a new connection attempt.",
+  "services.tempoEsgotadoAguardandoAAutorizacao": "Timed out waiting for Google authorization.",
+  "services.autorizacaoExpiradaOuRevogadaInvalid": "authorization expired or revoked (invalid_grant). Reconnect the account in Settings.",
+  "services.falhaAoRenovarOToken": "Failed to refresh the Google token.",
+  "services.googleCalendarFalhou": "Google Calendar failed ({status}). {p1}",
+  "services.googleNaoConectadoCliqueEm": "Google not connected. Click Connect in Settings.",
+  "services.google": "Google ({email}): {p1}",
+  "services.estaContaGoogleSoTem": "This Google account only has read permission. Reconnect it in Settings to allow creating events.",
+  "services.nenhumaContaGoogleConectadaConfiguracoes": "No Google account connected (Settings).",
+  "services.escolhaAoMenosUmDia": "Choose at least one weekday.",
+  "services.googleCalendarRecusou": "Google Calendar refused ({status}). {p1}",
+  "services.falhaAoRemoverOEvento": "Failed to remove the event ({status}).",
+  "services.tempoEsgotadoSExecutandoO": "Timed out ({p0}s) running the Claude CLI.",
+  "services.falhaAoAbrirOsFluxos": "Failed to open the Claude CLI output streams.",
+  "services.claudeCliSaiuComCodigo": "Claude CLI exited with code {code}.",
+  "services.configureOClientIdE2": "Set the Pluggy Client ID and Client Secret in Settings.",
+  "services.semConexaoComOPluggy": "No connection to Pluggy: {p0}",
+  "services.falhaAoAutenticarNoPluggy": "Failed to authenticate with Pluggy ({status}). {detail}",
+  "services.falhaAoCriarConnectToken": "Failed to create connect token ({status}). {p1}",
+  "services.pluggyFalhou": "Pluggy {path} failed ({status}). {p2}",
+  "services.mesInvalido": "Invalid month: {month}",
+  "services.configureOItemIdDo": "Set the Pluggy Item ID (connected bank) in Settings.",
+  "services.nenhumaContaEncontradaParaEsse": "No account found for that Item ID. Check that the Item is connected and ready in Pluggy (and that the Item ID is correct).",
+  "services.configureOItemIdDo2": "Set the Pluggy Item ID in Settings."
+};
+const flights$1 = {
+  "flights.provider.import": "Results import",
+  "flights.provider.duffel": "Duffel (live price)",
+  "flights.paraEsteMonitor": " for this monitor",
+  "flights.http": "HTTP {status}",
+  "flights.promocao": "🏷️ Deal: {name}",
+  "flights.nenhumaCombinacaoEscolhida": "No combination chosen.",
+  "flights.nenhumaCombinacaoValidaParaEste": "No valid combination for this monitor.",
+  "flights.noMaximoCombinacoesPorExecucao": "At most {MAX_PER_RUN} combinations per run (chosen: {count}).",
+  "flights.ativeSkyscannerViaClaudeChrome": 'Enable "Skyscanner via Claude + Chrome" in Sources and execution.',
+  "flights.jaHaUmaBuscaNo": "There's already a Chrome search in progress (one at a time — it's your browser).",
+  "flights.monitoramentoNaoEncontrado": "Monitor not found.",
+  "flights.configuracaoIncompleta": "Incomplete configuration: {p0}",
+  "flights.todasAsCombinacoesSugeridasJa": "All suggested combinations were already checked on Skyscanner in the last 12 h.",
+  "flights.duasSessoesSeguidasSemResposta": "Two sessions in a row with no readable response from Claude — stopped to avoid wasting money.",
+  "flights.completeAConfiguracao": "Complete the configuration: {p0}",
+  "flights.destinoFinalSemCoordenadasEscolha": "Final destination without coordinates (choose a city or airport).",
+  "flights.esteProvedorNaoTemTeste": "This provider has no connection test.",
+  "flights.limiteDeChamadaSDe": 'Limit of {limit} AI call(s) per day reached{p1}. Adjust it in "Sources and execution".',
+  "flights.descrevaAViagemComUm": "Describe the trip in a bit more detail.",
+  "flights.semOfertasElegiveisParaAnalisar": "No eligible offers to analyze.",
+  "flights.monitoramentoPausado": "Monitor paused.",
+  "flights.valorMonetarioInvalido": "Invalid monetary value: {value}"
+};
+const chats$1 = {
+  "chats.viaAgenteLocal": "via local agent",
+  "chats.direto": "direct",
+  "chats.estimativaParen": " (estimate)",
+  "chats.rotaNaoPermitida": "Route not allowed: {method} {path}",
+  "chats.agentKeyInvalida": "invalid agent key",
+  "chats.ativeACentralDeMensagens": "Enable the Message Center first.",
+  "chats.estadoInvalido": "Invalid state.",
+  "chats.dataInvalida": "Invalid date.",
+  "chats.prioridadeInvalida": "Invalid priority.",
+  "chats.gruposNaoSaoPessoasVincule": "Groups aren't people: link participants individually.",
+  "chats.conversaNaoEncontrada": "Conversation not found.",
+  "chats.gruposNaoSaoPessoas": "Groups aren't people.",
+  "chats.nomeObrigatorio": "Name required.",
+  "chats.entidadeInvalida": "Invalid entity.",
+  "chats.tituloObrigatorio": "Title required.",
+  "chats.tituloETextoSaoObrigatorios": "Title and text are required.",
+  "chats.selecioneAoMenosUmaMensagem": "Select at least one message.",
+  "chats.selecioneNoMaximo40Mensagens": "Select at most 40 messages.",
+  "chats.asMensagensSelecionadasNaoEstao": "The selected messages are no longer loaded. Reopen the conversation and select again.",
+  "chats.aIaNaoGerouSugestoes": "The AI didn't generate suggestions.",
+  "chats.urlInvalida": "Invalid URL.",
+  "chats.useHttpOuHttps": "Use http:// or https://.",
+  "chats.naoIncluaUsuarioSenhaNa": "Don't include user/password in the URL.",
+  "chats.informeSoOEnderecoBase": "Enter only the base address (e.g. http://127.0.0.1:23373).",
+  "chats.porSegurancaSoEnderecosLocais": "For security, only local, private network or Tailscale addresses are accepted.",
+  "chats.provedorDesconhecido": "Unknown provider.",
+  "chats.modeloInvalido": "Invalid model.",
+  "chats.imagemGrandeDemaisMax15": "Image too large (max. 15 MB).",
+  "chats.imagemVazia": "Empty image.",
+  "chats.formatoNaoSuportadoEnvieJpeg": "Unsupported format: send JPEG, PNG, GIF or WebP.",
+  "chats.mensagemVazia": "Empty message.",
+  "chats.mensagemLongaDemais": "Message too long.",
+  "chats.esteProvedorNaoEnviaMensagens": "This provider doesn't send messages.",
+  "chats.esteProvedorNaoEnviaImagens": "This provider doesn't send images.",
+  "chats.soDaParaAlterarMensagens": "You can only change messages you sent.",
+  "chats.estaMensagemJaFoiApagada": "This message was already deleted.",
+  "chats.mensagemInvalida": "Invalid message.",
+  "chats.oTextoNaoPodeFicar": "The text can't be empty (to remove it, delete the message).",
+  "chats.esteProvedorNaoPermiteEditar": "This provider doesn't allow editing messages.",
+  "chats.mensagensComAnexoNaoPodem": "Messages with attachments can't be edited.",
+  "chats.esteProvedorNaoPermiteApagar": "This provider doesn't allow deleting messages.",
+  "chats.esteProvedorNaoPermiteMarcar": "This provider doesn't allow marking as read.",
+  "chats.esteProvedorNaoPermiteMarcar2": "This provider doesn't allow marking as unread.",
+  "chats.linkDeAnexoInvalidoOu": "Invalid or expired attachment link.",
+  "chats.esteProvedorNaoForneceAnexos": "This provider doesn't provide attachments.",
+  "chats.mandouMensagem": "💬 {p0} sent a message",
+  "chats.pessoaImportanteEsperandoResposta": "An important person is waiting for a reply.",
+  "chats.mencionaramVoceEm": "@ You were mentioned in {title}",
+  "chats.mencaoOes": "{unreadMentions} mention(s){p1}.",
+  "chats.responder": "⏰ Reply: {title}",
+  "chats.lembreteDaCentralDeMensagens": "Message Center reminder.",
+  "chats.beeperRespondeu": "{what}: Beeper responded {status}{p2}",
+  "chats.conectadoAoBeeperContaS": "Connected to Beeper{p0} ({p1}). {n} account(s).",
+  "chats.enviarImagem": "Send image: {p0}",
+  "chats.anexoInvalido": "Invalid attachment.",
+  "chats.anexoIndisponivel": "Attachment unavailable."
+};
+const aiconv$1 = {
+  "aiconv.what.question": "has a question",
+  "aiconv.what.plan": "wants a plan approved",
+  "aiconv.what.permission": "asks permission for {tool}",
+  "aiconv.oClaudeCliDemorouDemais": "The Claude CLI took too long to respond.",
+  "aiconv.claudeCliNaoEncontradoNo": "Claude CLI not found in PATH.",
+  "aiconv.claudeSaiuComCodigo": "claude exited with code {code}",
+  "aiconv.oCodexDemorouDemaisPara": "Codex took too long to respond.",
+  "aiconv.codexSaiuComCodigo": "codex exited with code {code}",
+  "aiconv.erroDoCodex": "Codex error.",
+  "aiconv.maximoDeImagensPorMensagem": "Maximum of {MAX_IMAGES_PER_MESSAGE} images per message.",
+  "aiconv.formatoDeImagemNaoSuportado": "Unsupported image format.",
+  "aiconv.imagemInvalidaOuGrandeDemais": "Invalid or too large image.",
+  "aiconv.aConversaAindaNaoTem": "The conversation doesn't have a session to branch yet.",
+  "aiconv.espereAExecucaoTerminarPara": "Wait for the run to finish before branching.",
+  "aiconv.conversaNaoEncontrada": "Conversation not found.",
+  "aiconv.estaConversaNaoTemPasta": "This conversation has no working folder.",
+  "aiconv.espereAExecucaoTerminar": "Wait for the run to finish.",
+  "aiconv.nadaParaDescrever": "Nothing to describe.",
+  "aiconv.estaConversaNaoTemWorktree": "This conversation has no worktree.",
+  "aiconv.transcriptDaSessaoNaoEncontrado": "Session transcript not found.",
+  "aiconv.estaConversaAindaNaoTem": "This conversation doesn't have a session yet.",
+  "aiconv.aConversaEstaExecutando": "The conversation is running.",
+  "aiconv.executorDeConversasNaoInicializado": "Conversation runner not initialized.",
+  "aiconv.oDiretorioDestaConversaNao": "This conversation's folder no longer exists: {cwd}",
+  "aiconv.oWorktreeIsoladoPrecisaDe": "The isolated worktree needs a project with a local folder.",
+  "aiconv.comandoInvalido": 'Invalid command: "{bin}".',
+  "aiconv.claude": "🤚 Claude {what}",
+  "aiconv.promptRunner": "Prompt Runner",
+  "aiconv.claudeTerminou": "✅ Claude finished",
+  "aiconv.claudeParouComErro": "⚠️ Claude stopped with an error",
+  "aiconv.demorouDemais": "{cmd} {p1} took too long",
+  "aiconv.saiuComCodigo": "{cmd} exited with code {code}",
+  "aiconv.aPastaDoProjetoNao": "The project folder isn't a git repository; uncheck the isolated worktree.",
+  "aiconv.naoConseguiCriarOWorktree": "Couldn't create the worktree (git worktree add failed).",
+  "aiconv.naoEUmRepositorioGit": `"{name}" ({rel}) isn't a git repository.`,
+  "aiconv.repositorioNaoEncontradoNestaPasta": 'Repository "{repoRel}" not found in this folder.',
+  "aiconv.manifestoDoWorkspaceNaoEncontrado": "Workspace manifest not found.",
+  "aiconv.naoEUmRepositorioGit2": "Not a git repository.",
+  "aiconv.arquivoForaDaListaDe": "File not in the changed list.",
+  "aiconv.escrevaAMensagemDoCommit": "Write the commit message.",
+  "aiconv.nadaParaCommitar": "Nothing to commit.",
+  "aiconv.caminhoInvalido": "Invalid path.",
+  "aiconv.headDestacadoNaoHaBranch": "Detached HEAD: there's no branch for the PR.",
+  "aiconv.voceEstaNaPropriaBranch": "You're on the base branch itself ({branch}); use an isolated worktree to open a PR.",
+  "aiconv.skillNaoEncontrada": "Skill not found.",
+  "aiconv.conteudoInvalido": "Invalid content."
+};
+const db$1 = {
+  "db.naoDaParaIncorporarUm": "A project can't be merged into itself.",
+  "db.projetoNaoEncontrado": "Project not found.",
+  "db.mesInvalido": "Invalid month: {month}",
+  "db.projetoNaoEncontrado2": "Project not found",
+  "db.situacaoInvalida": "Invalid status: {status}"
+};
+const rpc$2 = {
+  "rpc.canalRpcDesconhecido": "Unknown RPC channel: {channel}",
+  "rpc.falhaAoSincronizarOGoogle": "📅 Failed to sync Google Calendar",
+  "rpc.investimentosAtualizados": "📈 Investments updated",
+  "rpc.openFinanceNovosAtualizadosEncerrados": "Open Finance: {created} new, {updated} updated, {closed} closed{extra}.",
+  "rpc.falhaAoAtualizarInvestimentos": "📈 Failed to update investments",
+  "rpc.revisarSaldoSeparado": "🔒 Review set-aside balance",
+  "rpc.comecoDeMesConfiraO": "Start of the month: check the set-aside balance of {count} account in the Finance dashboard.|Start of the month: check the set-aside balance of {count} accounts in the Finance dashboard.",
+  "rpc.oAgenteAgendadoTerminouResultado": "The scheduled agent finished — result in the Inbox.",
+  "rpc.bancoNaoCarregadoNadaFoi": "Database not loaded; nothing was deleted.",
+  "rpc.arquivoInvalidoSemTopico": "Invalid file (no topic).",
+  "rpc.enviadoAoGoogleDrive": "Sent to Google Drive ({account}): {name}",
+  "rpc.oArquivoNaoEUm": "The file isn't a SQLite database.",
+  "rpc.rickosTokenEObrigatorioQuando": "RICKOS_TOKEN is required when the server listens on {host} (outside localhost).",
+  "rpc.anexoIndisponivel": "attachment unavailable",
+  "rpc.notFound": "not found"
+};
+const en = {
+  ...common$1,
+  ...services$1,
+  ...flights$1,
+  ...chats$1,
+  ...aiconv$1,
+  ...db$1,
+  ...rpc$2
+};
+const common = {
+  "common.unknownError": "error desconocido"
+};
+const services = {
+  "services.alert.noNextAction": "En foco sin próxima acción",
+  "services.alert.blocked": "Bloqueado: {blocker}",
+  "services.alert.pauseDue": "La pausa venció el {date} — retomar o decidir",
+  "services.alert.forgotten": "Olvidado hace {days} días",
+  "services.alert.cycleOverdue": 'El ciclo "{name}" venció el {date}',
+  "services.alert.cycleDue": 'El ciclo "{name}" vence el {date}',
+  "services.alert.lateMilestones": "{n} hito(s) atrasado(s): {title}",
+  "services.alert.noFinishLine": 'Sin línea de meta ("listo cuando…")',
+  "services.alert.focusExceeded": "{n} proyectos en foco (límite {limit})",
+  "services.alert.notTriaged": "Aún no pasó por el triaje",
+  "services.abraAlgumasNoticiasEmLer": 'Abre algunas noticias en "Leer más" (o registra categorías propias) antes de sugerir recuerdos.',
+  "services.googleNewsRespondeu": "Google Noticias respondió {status}",
+  "services.projetoNaoEncontrado": "Proyecto no encontrado",
+  "services.definaAProximaAcaoAntes": "Define la próxima acción antes de delegar.",
+  "services.definaOCaminhoLocalDo": "Define la ruta local del proyecto (repositorio git).",
+  "services.nenhumRepositorioDoProjetoFoi": "No se encontró ningún repositorio del proyecto en la carpeta local.",
+  "services.oCaminhoLocalNaoE": "La ruta local no es un repositorio git.",
+  "services.naoConseguiCriarOWorktree": "No pude crear el worktree (git worktree add falló).",
+  "services.delegacaoPronta": "🤖 {name}: delegación lista",
+  "services.delegacaoFalhou": "⚠️ {name}: la delegación falló",
+  "services.delegacaoNaoEncontrada": "Delegación no encontrada",
+  "services.canceleAExecucaoAntesDe": "Cancela la ejecución antes de descartar.",
+  "services.nenhumRepositorioTemCommitsNesta": "Ningún repositorio tiene commits en esta rama.",
+  "services.ghSaiuComCodigo": "gh salió con código {code}.",
+  "services.githubTokenNaoConfiguradoVa": "Token de GitHub no configurado. Ve a Configuración y añade un token.",
+  "services.tokenInvalidoOuExpirado401": "Token no válido o caducado (401).",
+  "services.githubApiFalhou": "La API de GitHub falló ({status}). {p1}",
+  "services.ghGithubCliNaoEncontrado": "`gh` (GitHub CLI) no encontrado. Instálalo y ejecuta `gh auth login`, o usa el modo Token.",
+  "services.falhaNoGh": "Falló gh: {msg}",
+  "services.demorouDemais": "{cmd} {p1} tardó demasiado",
+  "services.saiuComCodigo": "{cmd} salió con código {code}",
+  "services.repositorioDesconhecidoAtualizeALista": "Repositorio desconocido — actualiza la lista.",
+  "services.branchNaoEncontradaAtualizeA": "Rama no encontrada — actualiza la lista.",
+  "services.naoDaParaApagarA": "No se puede borrar la rama principal.",
+  "services.soBranchesJaMergeadasPodem": "Solo las ramas ya mergeadas se pueden borrar aquí.",
+  "services.branchInvalidaParaPr": "Rama no válida para PR.",
+  "services.pastaDesconhecidaOuInexistente": "Carpeta desconocida o inexistente.",
+  "services.abrirPastasSoESuportado": "Abrir carpetas solo está soportado en macOS.",
+  "services.pastaNaoEncontrada": "Carpeta no encontrada",
+  "services.esteProjetoNaoCorrespondeA": "Este proyecto no corresponde a ningún repositorio del workspace.",
+  "services.roadmapRickosMdNaoEncontrado": "ROADMAP_RICKOS.md no encontrado",
+  "services.oArquivoMudouRecarregueO": "El archivo cambió — recarga el roadmap",
+  "services.definaOCaminhoLocalDo2": "Define primero la ruta local del proyecto",
+  "services.alertaSNosProjetos": "🗂 {count} alerta(s) en los proyectos",
+  "services.revisaoSemanalDosProjetos": "🗓️ Revisión semanal de los proyectos",
+  "services.gereARevisaoNoDashboard": "Genera la revisión en el Panel y decide: continuar, pausar, retomar o cerrar.",
+  "services.cicloNaoEncontrado": "Ciclo no encontrado",
+  "services.configureOClientIdE": "Configura el Client ID y el Client Secret de Google en Configuración.",
+  "services.nenhumaContaGoogleConectada": "Ninguna cuenta de Google conectada.",
+  "services.semPermissaoDeDriveNesta": "Sin permiso de Drive en esta cuenta. Vuelve a conectarla en Configuración (alcance drive.file).",
+  "services.uploadAoDriveFalhou": "La subida a Drive falló ({status}). {p1}",
+  "services.googleNegou": "Google denegó: {err}",
+  "services.stateInvalidoNoCallbackDo": "state no válido en el callback de Google.",
+  "services.semRefreshTokenRevogueO": "Sin refresh_token (revoca el acceso e inténtalo de nuevo).",
+  "services.substituidaPorUmaNovaTentativa": "Sustituida por un nuevo intento de conexión.",
+  "services.tempoEsgotadoAguardandoAAutorizacao": "Tiempo agotado esperando la autorización de Google.",
+  "services.autorizacaoExpiradaOuRevogadaInvalid": "autorización caducada o revocada (invalid_grant). Vuelve a conectar la cuenta en Configuración.",
+  "services.falhaAoRenovarOToken": "No se pudo renovar el token de Google.",
+  "services.googleCalendarFalhou": "Google Calendar falló ({status}). {p1}",
+  "services.googleNaoConectadoCliqueEm": "Google no conectado. Haz clic en Conectar en Configuración.",
+  "services.google": "Google ({email}): {p1}",
+  "services.estaContaGoogleSoTem": "Esta cuenta de Google solo tiene permiso de lectura. Vuelve a conectarla en Configuración para permitir crear eventos.",
+  "services.nenhumaContaGoogleConectadaConfiguracoes": "Ninguna cuenta de Google conectada (Configuración).",
+  "services.escolhaAoMenosUmDia": "Elige al menos un día de la semana.",
+  "services.googleCalendarRecusou": "Google Calendar rechazó ({status}). {p1}",
+  "services.falhaAoRemoverOEvento": "Error al eliminar el evento ({status}).",
+  "services.tempoEsgotadoSExecutandoO": "Tiempo agotado ({p0}s) ejecutando el Claude CLI.",
+  "services.falhaAoAbrirOsFluxos": "Error al abrir los flujos de salida del Claude CLI.",
+  "services.claudeCliSaiuComCodigo": "Claude CLI salió con código {code}.",
+  "services.configureOClientIdE2": "Configura el Client ID y el Client Secret de Pluggy en Configuración.",
+  "services.semConexaoComOPluggy": "Sin conexión con Pluggy: {p0}",
+  "services.falhaAoAutenticarNoPluggy": "Error al autenticar en Pluggy ({status}). {detail}",
+  "services.falhaAoCriarConnectToken": "Error al crear el connect token ({status}). {p1}",
+  "services.pluggyFalhou": "Pluggy {path} falló ({status}). {p2}",
+  "services.mesInvalido": "Mes no válido: {month}",
+  "services.configureOItemIdDo": "Configura el Item ID de Pluggy (banco conectado) en Configuración.",
+  "services.nenhumaContaEncontradaParaEsse": "No se encontró ninguna cuenta para ese Item ID. Comprueba que el Item esté conectado y listo en Pluggy (y que el Item ID sea correcto).",
+  "services.configureOItemIdDo2": "Configura el Item ID de Pluggy en Configuración."
+};
+const flights = {
+  "flights.provider.import": "Importación de resultados",
+  "flights.provider.duffel": "Duffel (precio en vivo)",
+  "flights.paraEsteMonitor": " para este monitoreo",
+  "flights.http": "HTTP {status}",
+  "flights.promocao": "🏷️ Oferta: {name}",
+  "flights.nenhumaCombinacaoEscolhida": "Ninguna combinación elegida.",
+  "flights.nenhumaCombinacaoValidaParaEste": "Ninguna combinación válida para este monitoreo.",
+  "flights.noMaximoCombinacoesPorExecucao": "Como máximo {MAX_PER_RUN} combinaciones por ejecución (elegidas: {count}).",
+  "flights.ativeSkyscannerViaClaudeChrome": 'Activa "Skyscanner vía Claude + Chrome" en Fuentes y ejecución.',
+  "flights.jaHaUmaBuscaNo": "Ya hay una búsqueda en Chrome en curso (una a la vez — es tu navegador).",
+  "flights.monitoramentoNaoEncontrado": "Monitoreo no encontrado.",
+  "flights.configuracaoIncompleta": "Configuración incompleta: {p0}",
+  "flights.todasAsCombinacoesSugeridasJa": "Todas las combinaciones sugeridas ya se consultaron en Skyscanner en las últimas 12 h.",
+  "flights.duasSessoesSeguidasSemResposta": "Dos sesiones seguidas sin respuesta legible de Claude — me detuve para no gastar en vano.",
+  "flights.completeAConfiguracao": "Completa la configuración: {p0}",
+  "flights.destinoFinalSemCoordenadasEscolha": "Destino final sin coordenadas (elige una ciudad o aeropuerto).",
+  "flights.esteProvedorNaoTemTeste": "Este proveedor no tiene prueba de conexión.",
+  "flights.limiteDeChamadaSDe": 'Límite de {limit} llamada(s) de IA por día alcanzado{p1}. Ajústalo en "Fuentes y ejecución".',
+  "flights.descrevaAViagemComUm": "Describe el viaje con un poco más de detalle.",
+  "flights.semOfertasElegiveisParaAnalisar": "Sin ofertas elegibles para analizar.",
+  "flights.monitoramentoPausado": "Monitoreo en pausa.",
+  "flights.valorMonetarioInvalido": "Valor monetario no válido: {value}"
+};
+const chats = {
+  "chats.viaAgenteLocal": "vía agente local",
+  "chats.direto": "directo",
+  "chats.estimativaParen": " (estimación)",
+  "chats.rotaNaoPermitida": "Ruta no permitida: {method} {path}",
+  "chats.agentKeyInvalida": "agent key no válida",
+  "chats.ativeACentralDeMensagens": "Activa el Centro de mensajes primero.",
+  "chats.estadoInvalido": "Estado no válido.",
+  "chats.dataInvalida": "Fecha no válida.",
+  "chats.prioridadeInvalida": "Prioridad no válida.",
+  "chats.gruposNaoSaoPessoasVincule": "Los grupos no son personas: vincula a los participantes individualmente.",
+  "chats.conversaNaoEncontrada": "Conversación no encontrada.",
+  "chats.gruposNaoSaoPessoas": "Los grupos no son personas.",
+  "chats.nomeObrigatorio": "Nombre obligatorio.",
+  "chats.entidadeInvalida": "Entidad no válida.",
+  "chats.tituloObrigatorio": "Título obligatorio.",
+  "chats.tituloETextoSaoObrigatorios": "Título y texto son obligatorios.",
+  "chats.selecioneAoMenosUmaMensagem": "Selecciona al menos un mensaje.",
+  "chats.selecioneNoMaximo40Mensagens": "Selecciona como máximo 40 mensajes.",
+  "chats.asMensagensSelecionadasNaoEstao": "Los mensajes seleccionados ya no están cargados. Vuelve a abrir la conversación y selecciona de nuevo.",
+  "chats.aIaNaoGerouSugestoes": "La IA no generó sugerencias.",
+  "chats.urlInvalida": "URL no válida.",
+  "chats.useHttpOuHttps": "Usa http:// o https://.",
+  "chats.naoIncluaUsuarioSenhaNa": "No incluyas usuario/contraseña en la URL.",
+  "chats.informeSoOEnderecoBase": "Indica solo la dirección base (ej.: http://127.0.0.1:23373).",
+  "chats.porSegurancaSoEnderecosLocais": "Por seguridad, solo se aceptan direcciones locales, de red privada o Tailscale.",
+  "chats.provedorDesconhecido": "Proveedor desconocido.",
+  "chats.modeloInvalido": "Modelo no válido.",
+  "chats.imagemGrandeDemaisMax15": "Imagen demasiado grande (máx. 15 MB).",
+  "chats.imagemVazia": "Imagen vacía.",
+  "chats.formatoNaoSuportadoEnvieJpeg": "Formato no admitido: envía JPEG, PNG, GIF o WebP.",
+  "chats.mensagemVazia": "Mensaje vacío.",
+  "chats.mensagemLongaDemais": "Mensaje demasiado largo.",
+  "chats.esteProvedorNaoEnviaMensagens": "Este proveedor no envía mensajes.",
+  "chats.esteProvedorNaoEnviaImagens": "Este proveedor no envía imágenes.",
+  "chats.soDaParaAlterarMensagens": "Solo se pueden modificar mensajes enviados por ti.",
+  "chats.estaMensagemJaFoiApagada": "Este mensaje ya se borró.",
+  "chats.mensagemInvalida": "Mensaje no válido.",
+  "chats.oTextoNaoPodeFicar": "El texto no puede quedar vacío (para quitarlo, borra el mensaje).",
+  "chats.esteProvedorNaoPermiteEditar": "Este proveedor no permite editar mensajes.",
+  "chats.mensagensComAnexoNaoPodem": "Los mensajes con adjuntos no se pueden editar.",
+  "chats.esteProvedorNaoPermiteApagar": "Este proveedor no permite borrar mensajes.",
+  "chats.esteProvedorNaoPermiteMarcar": "Este proveedor no permite marcar como leído.",
+  "chats.esteProvedorNaoPermiteMarcar2": "Este proveedor no permite marcar como no leído.",
+  "chats.linkDeAnexoInvalidoOu": "Enlace de adjunto no válido o caducado.",
+  "chats.esteProvedorNaoForneceAnexos": "Este proveedor no proporciona adjuntos.",
+  "chats.mandouMensagem": "💬 {p0} envió un mensaje",
+  "chats.pessoaImportanteEsperandoResposta": "Una persona importante espera respuesta.",
+  "chats.mencionaramVoceEm": "@ Te mencionaron en {title}",
+  "chats.mencaoOes": "{unreadMentions} mención(es){p1}.",
+  "chats.responder": "⏰ Responder: {title}",
+  "chats.lembreteDaCentralDeMensagens": "Recordatorio del Centro de mensajes.",
+  "chats.beeperRespondeu": "{what}: Beeper respondió {status}{p2}",
+  "chats.conectadoAoBeeperContaS": "Conectado a Beeper{p0} ({p1}). {n} cuenta(s).",
+  "chats.enviarImagem": "Enviar imagen: {p0}",
+  "chats.anexoInvalido": "Adjunto no válido.",
+  "chats.anexoIndisponivel": "Adjunto no disponible."
+};
+const aiconv = {
+  "aiconv.what.question": "tiene una pregunta",
+  "aiconv.what.plan": "quiere aprobar un plan",
+  "aiconv.what.permission": "pide permiso para {tool}",
+  "aiconv.oClaudeCliDemorouDemais": "El Claude CLI tardó demasiado en responder.",
+  "aiconv.claudeCliNaoEncontradoNo": "Claude CLI no encontrado en el PATH.",
+  "aiconv.claudeSaiuComCodigo": "claude salió con código {code}",
+  "aiconv.oCodexDemorouDemaisPara": "Codex tardó demasiado en responder.",
+  "aiconv.codexSaiuComCodigo": "codex salió con código {code}",
+  "aiconv.erroDoCodex": "Error de Codex.",
+  "aiconv.maximoDeImagensPorMensagem": "Máximo de {MAX_IMAGES_PER_MESSAGE} imágenes por mensaje.",
+  "aiconv.formatoDeImagemNaoSuportado": "Formato de imagen no admitido.",
+  "aiconv.imagemInvalidaOuGrandeDemais": "Imagen no válida o demasiado grande.",
+  "aiconv.aConversaAindaNaoTem": "La conversación aún no tiene sesión para ramificar.",
+  "aiconv.espereAExecucaoTerminarPara": "Espera a que termine la ejecución para ramificar.",
+  "aiconv.conversaNaoEncontrada": "Conversación no encontrada.",
+  "aiconv.estaConversaNaoTemPasta": "Esta conversación no tiene carpeta de trabajo.",
+  "aiconv.espereAExecucaoTerminar": "Espera a que termine la ejecución.",
+  "aiconv.nadaParaDescrever": "Nada que describir.",
+  "aiconv.estaConversaNaoTemWorktree": "Esta conversación no tiene worktree.",
+  "aiconv.transcriptDaSessaoNaoEncontrado": "Transcripción de la sesión no encontrada.",
+  "aiconv.estaConversaAindaNaoTem": "Esta conversación aún no tiene sesión.",
+  "aiconv.aConversaEstaExecutando": "La conversación se está ejecutando.",
+  "aiconv.executorDeConversasNaoInicializado": "Ejecutor de conversaciones no inicializado.",
+  "aiconv.oDiretorioDestaConversaNao": "La carpeta de esta conversación ya no existe: {cwd}",
+  "aiconv.oWorktreeIsoladoPrecisaDe": "El worktree aislado necesita un proyecto con carpeta local.",
+  "aiconv.comandoInvalido": 'Comando no válido: "{bin}".',
+  "aiconv.claude": "🤚 Claude {what}",
+  "aiconv.promptRunner": "Prompt Runner",
+  "aiconv.claudeTerminou": "✅ Claude terminó",
+  "aiconv.claudeParouComErro": "⚠️ Claude se detuvo con un error",
+  "aiconv.demorouDemais": "{cmd} {p1} tardó demasiado",
+  "aiconv.saiuComCodigo": "{cmd} salió con código {code}",
+  "aiconv.aPastaDoProjetoNao": "La carpeta del proyecto no es un repositorio git; desmarca el worktree aislado.",
+  "aiconv.naoConseguiCriarOWorktree": "No pude crear el worktree (git worktree add falló).",
+  "aiconv.naoEUmRepositorioGit": '"{name}" ({rel}) no es un repositorio git.',
+  "aiconv.repositorioNaoEncontradoNestaPasta": 'Repositorio "{repoRel}" no encontrado en esta carpeta.',
+  "aiconv.manifestoDoWorkspaceNaoEncontrado": "Manifiesto del workspace no encontrado.",
+  "aiconv.naoEUmRepositorioGit2": "No es un repositorio git.",
+  "aiconv.arquivoForaDaListaDe": "Archivo fuera de la lista de modificados.",
+  "aiconv.escrevaAMensagemDoCommit": "Escribe el mensaje del commit.",
+  "aiconv.nadaParaCommitar": "Nada para hacer commit.",
+  "aiconv.caminhoInvalido": "Ruta no válida.",
+  "aiconv.headDestacadoNaoHaBranch": "HEAD desacoplado: no hay rama para el PR.",
+  "aiconv.voceEstaNaPropriaBranch": "Estás en la propia rama base ({branch}); usa un worktree aislado para abrir PR.",
+  "aiconv.skillNaoEncontrada": "Skill no encontrada.",
+  "aiconv.conteudoInvalido": "Contenido no válido."
+};
+const db = {
+  "db.naoDaParaIncorporarUm": "No se puede incorporar un proyecto en sí mismo.",
+  "db.projetoNaoEncontrado": "Proyecto no encontrado.",
+  "db.mesInvalido": "Mes no válido: {month}",
+  "db.projetoNaoEncontrado2": "Proyecto no encontrado",
+  "db.situacaoInvalida": "Situación no válida: {status}"
+};
+const rpc$1 = {
+  "rpc.canalRpcDesconhecido": "Canal RPC desconocido: {channel}",
+  "rpc.falhaAoSincronizarOGoogle": "📅 Error al sincronizar Google Calendar",
+  "rpc.investimentosAtualizados": "📈 Inversiones actualizadas",
+  "rpc.openFinanceNovosAtualizadosEncerrados": "Open Finance: {created} nuevos, {updated} actualizados, {closed} cerrados{extra}.",
+  "rpc.falhaAoAtualizarInvestimentos": "📈 Error al actualizar inversiones",
+  "rpc.revisarSaldoSeparado": "🔒 Revisar saldo reservado",
+  "rpc.comecoDeMesConfiraO": "Inicio de mes: revisa el saldo reservado de {count} cuenta en el panel de Finanzas.|Inicio de mes: revisa el saldo reservado de {count} cuentas en el panel de Finanzas.",
+  "rpc.oAgenteAgendadoTerminouResultado": "El agente programado terminó — resultado en la Bandeja.",
+  "rpc.bancoNaoCarregadoNadaFoi": "Base de datos no cargada; no se borró nada.",
+  "rpc.arquivoInvalidoSemTopico": "Archivo no válido (sin tema).",
+  "rpc.enviadoAoGoogleDrive": "Enviado a Google Drive ({account}): {name}",
+  "rpc.oArquivoNaoEUm": "El archivo no es una base de datos SQLite.",
+  "rpc.rickosTokenEObrigatorioQuando": "RICKOS_TOKEN es obligatorio cuando el servidor escucha en {host} (fuera de localhost).",
+  "rpc.anexoIndisponivel": "adjunto no disponible",
+  "rpc.notFound": "no encontrado"
+};
+const es = {
+  ...common,
+  ...services,
+  ...flights,
+  ...chats,
+  ...aiconv,
+  ...db,
+  ...rpc$1
+};
+const DICTS = { "pt-BR": ptBR, en, es };
+let current = "pt-BR";
+function isLocale(v) {
+  return v === "pt-BR" || v === "en" || v === "es";
+}
+async function loadServerLocale() {
+  try {
+    const v = await getSetting("language");
+    if (isLocale(v)) current = v;
+  } catch {
+  }
+}
+function setServerLocale(v) {
+  if (isLocale(v)) current = v;
+}
+function tt(key, params) {
+  return formatMessage(DICTS[current][key] ?? ptBR[key] ?? key, params, current);
+}
 function getOne(db2, sql, params = []) {
   const stmt = db2.prepare(sql);
   if (params.length) stmt.bind(params);
@@ -2878,14 +3694,14 @@ const ABSORB_TEXT_FIELDS = [
 ];
 async function absorbProject(targetId, sourceId) {
   const db2 = await getDb();
-  if (targetId === sourceId) throw new Error("Não dá para incorporar um projeto nele mesmo.");
+  if (targetId === sourceId) throw new Error(tt("db.naoDaParaIncorporarUm"));
   const target = getOne(db2, "SELECT * FROM projects WHERE id = ?", [targetId]);
   const source = getOne(db2, "SELECT * FROM projects WHERE id = ?", [sourceId]);
-  if (!target || !source) throw new Error("Projeto não encontrado.");
+  if (!target || !source) throw new Error(tt("db.projetoNaoEncontrado"));
   const exec2 = (sql, params) => {
-    const st = db2.prepare(sql);
-    st.run(params);
-    st.free();
+    const st2 = db2.prepare(sql);
+    st2.run(params);
+    st2.free();
   };
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const texts = ABSORB_TEXT_FIELDS.map(([k, label]) => [label, source[k]]).filter(([, v]) => typeof v === "string" && v.trim());
@@ -3240,7 +4056,7 @@ async function getAccountReservedHistory() {
   return getAll(db2, "SELECT accountId, month, amount, updatedAt FROM account_reserved_history ORDER BY month");
 }
 async function setAccountReserved(accountId, month, amount) {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(tt("db.mesInvalido", { month }));
   const db2 = await getDb();
   run$2(
     db2,
@@ -3851,9 +4667,9 @@ async function createGoal(month, title, kind, refId, target, unit) {
   );
   return getOne(db2, "SELECT * FROM goals WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateGoal(id, title, target, current, unit, done) {
+async function updateGoal(id, title, target, current2, unit, done) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE goals SET title = ?, target = ?, current = ?, unit = ?, done = ? WHERE id = ?", [title, target, current, unit, done, id]);
+  run$2(db2, "UPDATE goals SET title = ?, target = ?, current = ?, unit = ?, done = ? WHERE id = ?", [title, target, current2, unit, done, id]);
   return getOne(db2, "SELECT * FROM goals WHERE id = ?", [id]);
 }
 async function deleteGoal(id) {
@@ -4292,7 +5108,7 @@ const PROJECT_PATCHABLE = /* @__PURE__ */ new Set([
 async function patchProject(id, fields, opts = {}) {
   const db2 = await getDb();
   const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
-  if (!prev) throw new Error("Projeto não encontrado");
+  if (!prev) throw new Error(tt("db.projetoNaoEncontrado2"));
   const cols = [];
   const params = [];
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -4324,10 +5140,10 @@ async function patchProject(id, fields, opts = {}) {
   return next;
 }
 async function setProjectStatus(id, status2, payload = {}) {
-  if (!PROJECT_STATUSES.includes(status2)) throw new Error(`Situação inválida: ${status2}`);
+  if (!PROJECT_STATUSES.includes(status2)) throw new Error(tt("db.situacaoInvalida", { status: status2 }));
   const db2 = await getDb();
   const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
-  if (!prev) throw new Error("Projeto não encontrado");
+  if (!prev) throw new Error(tt("db.projetoNaoEncontrado2"));
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const closed = status2 === "concluido" || status2 === "encerrado";
   const sets = ["status = ?", "statusChangedAt = ?", "archived = ?", "triagedAt = COALESCE(triagedAt, ?)"];
@@ -4393,7 +5209,7 @@ function ensureNextActionTodo(db2, projectId, text, todoId) {
 async function completeNextAction(id, next, size = null, nextTodoId = null) {
   const db2 = await getDb();
   const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
-  if (!prev) throw new Error("Projeto não encontrado");
+  if (!prev) throw new Error(tt("db.projetoNaoEncontrado2"));
   const now = (/* @__PURE__ */ new Date()).toISOString();
   if (prev.nextAction) {
     run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "acao_concluida", prev.nextAction, now]);
@@ -4800,13 +5616,13 @@ function attempt(bin, prompt, viaShell, opts = {}) {
       if (settled) return;
       settled = true;
       child.kill("SIGKILL");
-      reject2(new Error(`Tempo esgotado (${Math.round(timeoutMs / 1e3)}s) executando o Claude CLI.`));
+      reject2(new Error(tt("services.tempoEsgotadoSExecutandoO", { p0: Math.round(timeoutMs / 1e3) })));
     }, timeoutMs) : null;
     const clear = () => {
       if (timer2) clearTimeout(timer2);
     };
     if (!child.stdout || !child.stderr) {
-      reject2(new Error("Falha ao abrir os fluxos de saída do Claude CLI."));
+      reject2(new Error(tt("services.falhaAoAbrirOsFluxos")));
       return;
     }
     child.stdout.on("data", (d) => {
@@ -4851,7 +5667,7 @@ function attempt(bin, prompt, viaShell, opts = {}) {
       if (code === 0) {
         resolve(parsedMode ? finalText ?? (assistantText.trim() || stdout.trim()) : stdout.trim());
       } else {
-        reject2(new Error(stderr.trim() || (parsedMode ? finalText ?? "" : "") || `Claude CLI saiu com código ${code}.`));
+        reject2(new Error(stderr.trim() || (parsedMode ? finalText ?? "" : "") || tt("services.claudeCliSaiuComCodigo", { code })));
       }
     });
   });
@@ -71101,9 +71917,9 @@ function airportsNear(center, radiusKm, opts = {}) {
 }
 function summarizeSet(set) {
   if (!set.include.length) return "—";
-  const labels = set.include.map((r) => r.label.replace(/ \(todos\)$/, ""));
-  const head = labels.slice(0, 3).join(", ");
-  return labels.length > 3 ? `${head} +${labels.length - 3}` : head;
+  const labels2 = set.include.map((r) => r.label.replace(/ \(todos\)$/, ""));
+  const head = labels2.slice(0, 3).join(", ");
+  return labels2.length > 3 ? `${head} +${labels2.length - 3}` : head;
 }
 const geo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -71507,7 +72323,7 @@ class ProviderError extends Error {
 function decimalToMinor(value, currency2) {
   const digits = minorDigits(currency2);
   const s2 = typeof value === "number" ? value.toFixed(digits) : String(value).trim();
-  if (!/^-?\d+(\.\d+)?$/.test(s2)) throw new Error(`Valor monetário inválido: ${value}`);
+  if (!/^-?\d+(\.\d+)?$/.test(s2)) throw new Error(tt("flights.valorMonetarioInvalido", { value }));
   const neg = s2.startsWith("-");
   const [int2, frac = ""] = s2.replace("-", "").split(".");
   const padded = (frac + "0".repeat(digits)).slice(0, digits);
@@ -72073,20 +72889,20 @@ function configErrors(cfg, today2) {
   return errs;
 }
 function all$3(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  if (params.length) st.bind(params);
+  const st2 = db2.prepare(sql);
+  if (params.length) st2.bind(params);
   const out = [];
-  while (st.step()) out.push(st.getAsObject());
-  st.free();
+  while (st2.step()) out.push(st2.getAsObject());
+  st2.free();
   return out;
 }
 function one$3(db2, sql, params = []) {
   return all$3(db2, sql, params)[0] ?? null;
 }
 function exec$3(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  st.run(params);
-  st.free();
+  const st2 = db2.prepare(sql);
+  st2.run(params);
+  st2.free();
   return db2.getRowsModified();
 }
 function lastId$2(db2) {
@@ -72153,7 +72969,7 @@ async function createMonitor(name, status2, config2, tripId) {
 async function updateMonitor(id, patch) {
   await tx$2((db2) => {
     const cur = one$3(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
-    if (!cur) throw new Error("Monitoramento não encontrado.");
+    if (!cur) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
     exec$3(db2, "UPDATE flight_monitors SET name = ?, status = ?, tripId = ?, config = ?, updatedAt = ? WHERE id = ?", [
       patch.name ?? cur.name,
       patch.status ?? cur.status,
@@ -72825,7 +73641,7 @@ async function pickCombos(m, count2) {
   return (await buildPreview(m, count2)).recommended.slice(0, count2);
 }
 function validatePicks(m, picks) {
-  if (!Array.isArray(picks)) throw new Error("Nenhuma combinação escolhida.");
+  if (!Array.isArray(picks)) throw new Error(tt("flights.nenhumaCombinacaoEscolhida"));
   const u = buildUniverse(m.config, todayLocal());
   const today2 = todayLocal();
   const pairSet = new Set(u.pairs.map((p) => `${p.o.iata}|${p.d.iata}`));
@@ -72839,8 +73655,8 @@ function validatePicks(m, picks) {
     seen2.add(k);
     out.push({ ...p, url: skyscannerUrl(p.origin, p.destination, p.depart, p.ret, m) });
   }
-  if (!out.length) throw new Error("Nenhuma combinação válida para este monitoramento.");
-  if (out.length > MAX_PER_RUN) throw new Error(`No máximo ${MAX_PER_RUN} combinações por execução (escolhidas: ${out.length}).`);
+  if (!out.length) throw new Error(tt("flights.nenhumaCombinacaoValidaParaEste"));
+  if (out.length > MAX_PER_RUN) throw new Error(tt("flights.noMaximoCombinacoesPorExecucao", { MAX_PER_RUN, count: out.length }));
   return out;
 }
 function buildPrompt(m, combos) {
@@ -72938,8 +73754,8 @@ function toOffers(combo, offers, observedAt) {
 }
 async function applyOne(m, runId, c, taskId, r, fallback, started2, tot) {
   const pk = paxKey(m.config);
-  const st = String(r?.status ?? fallback);
-  if (st === "ok" || st === "empty") {
+  const st2 = String(r?.status ?? fallback);
+  if (st2 === "ok" || st2 === "empty") {
     const parsed = toOffers(c, Array.isArray(r?.offers) ? r.offers : [], started2);
     tot.errors.push(...parsed.errors.map((e) => `${c.origin}→${c.destination}: ${e}`));
     await upsertOffers(m.id, parsed.offers.map((o) => ({ offer: o, fp: fingerprint(o, pk) })), pk, runId);
@@ -72947,7 +73763,7 @@ async function applyOne(m, runId, c, taskId, r, fallback, started2, tot) {
     await finishTask(taskId, { status: "done", resultCount: parsed.offers.length, minPriceMinor: min, currency: m.config.currency });
     tot.done++;
     tot.found += parsed.offers.length;
-  } else if (st === "blocked") {
+  } else if (st2 === "blocked") {
     tot.blocked = true;
     await finishTask(taskId, { status: "pending", error: "Skyscanner pediu verificação; não foi contornada." });
   } else {
@@ -72979,14 +73795,14 @@ function stopAssisted() {
   }
 }
 async function startSkyscanner(monitorId, picks) {
-  if (await getSetting("flights_chrome_assisted") !== "1") throw new Error('Ative "Skyscanner via Claude + Chrome" em Fontes e execução.');
-  if (busy) throw new Error("Já há uma busca no Chrome em andamento (uma por vez — é o seu navegador).");
+  if (await getSetting("flights_chrome_assisted") !== "1") throw new Error(tt("flights.ativeSkyscannerViaClaudeChrome"));
+  if (busy) throw new Error(tt("flights.jaHaUmaBuscaNo"));
   const m = await getMonitor(monitorId);
-  if (!m) throw new Error("Monitoramento não encontrado.");
+  if (!m) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
   const errs = configErrors(m.config, todayLocal());
-  if (errs.length) throw new Error(`Configuração incompleta: ${errs[0]}`);
+  if (errs.length) throw new Error(tt("flights.configuracaoIncompleta", { p0: errs[0] }));
   const combos = typeof picks === "number" ? await pickCombos(m, Math.max(1, Math.min(MAX_PER_RUN, picks))) : validatePicks(m, picks);
-  if (!combos.length) throw new Error("Todas as combinações sugeridas já foram consultadas no Skyscanner nas últimas 12 h.");
+  if (!combos.length) throw new Error(tt("flights.todasAsCombinacoesSugeridasJa"));
   const runId = await createRun(monitorId, "assisted");
   await addTracked(monitorId, combos);
   const pk = paxKey(m.config);
@@ -73097,7 +73913,7 @@ async function startSkyscanner(monitorId, picks) {
         if (!ans) {
           badSessions++;
           lastMsg = `Sessão ${session}: resposta do Claude ilegível (${unread.length} combinação(ões) voltaram para a fila).`;
-          if (badSessions >= 2) throw new Error("Duas sessões seguidas sem resposta legível do Claude — parei para não gastar à toa.");
+          if (badSessions >= 2) throw new Error(tt("flights.duasSessoesSeguidasSemResposta"));
         } else {
           badSessions = 0;
           if (ans.message) lastMsg = ans.message.slice(0, 200);
@@ -73264,7 +74080,7 @@ function run$1(cmd, args, cwd, timeoutMs = 3e4) {
     let err = "";
     const timer2 = setTimeout(() => {
       child.kill("SIGKILL");
-      reject2(new Error(`${cmd} ${args[0]} demorou demais`));
+      reject2(new Error(tt("aiconv.demorouDemais", { cmd, p1: args[0] })));
     }, timeoutMs);
     child.stdout.on("data", (d) => out += d.toString());
     child.stderr.on("data", (d) => err += d.toString());
@@ -73275,7 +74091,7 @@ function run$1(cmd, args, cwd, timeoutMs = 3e4) {
     child.on("close", (code) => {
       clearTimeout(timer2);
       if (code === 0) resolve(out);
-      else reject2(new Error(err.trim() || out.trim() || `${cmd} saiu com código ${code}`));
+      else reject2(new Error(err.trim() || out.trim() || tt("aiconv.saiuComCodigo", { cmd, code })));
     });
   });
 }
@@ -73295,14 +74111,14 @@ function stamp$1() {
 }
 async function createWorktree(projectDir, title) {
   const top = await repoTop(projectDir);
-  if (!top) throw new Error("A pasta do projeto não é um repositório git; desmarque o worktree isolado.");
+  if (!top) throw new Error(tt("aiconv.aPastaDoProjetoNao"));
   const baseRef = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
   const name = `rickos-${slugify$2(title)}-${stamp$1()}`;
   const branch = `claude/${name}`;
   const wtDir = path.join(path.dirname(top), ".worktrees", `${path.basename(top)}-${name}`);
   fs.mkdirSync(path.dirname(wtDir), { recursive: true });
   await git$1(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"], 6e4);
-  if (!fs.existsSync(wtDir)) throw new Error("Não consegui criar o worktree (git worktree add falhou).");
+  if (!fs.existsSync(wtDir)) throw new Error(tt("aiconv.naoConseguiCriarOWorktree"));
   const rel = path.relative(top, path.resolve(projectDir));
   const cwd = rel && !rel.startsWith("..") ? path.join(wtDir, rel) : wtDir;
   return { cwd: fs.existsSync(cwd) ? cwd : wtDir, repoPath: top, branch, baseRef };
@@ -73340,7 +74156,7 @@ async function createWorkspaceWorktree(rootDir, repos, title) {
   try {
     for (let i = 0; i < repos.length; i++) {
       const top = await repoTop(repos[i].dir);
-      if (!top) throw new Error(`"${repos[i].name}" (${repos[i].rel}) não é um repositório git.`);
+      if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit", { name: repos[i].name, rel: repos[i].rel }));
       const baseRef = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
       const wt = path.join(wsDir, rels[i]);
       fs.mkdirSync(path.dirname(wt), { recursive: true });
@@ -73409,7 +74225,7 @@ function childRepos(dir) {
 function resolveRepoDir(dir, repoRel) {
   if (!repoRel) return dir;
   const hit = childRepos(dir).find((r) => r.rel === repoRel);
-  if (!hit) throw new Error(`Repositório "${repoRel}" não encontrado nesta pasta.`);
+  if (!hit) throw new Error(tt("aiconv.repositorioNaoEncontradoNestaPasta", { repoRel }));
   return hit.dir;
 }
 function workspaceBaseRef(wsDir, repoRel) {
@@ -73417,7 +74233,7 @@ function workspaceBaseRef(wsDir, repoRel) {
 }
 async function removeWorkspaceWorktree(wsDir) {
   const m = readWorkspaceManifest(wsDir);
-  if (!m) throw new Error("Manifesto do workspace não encontrado.");
+  if (!m) throw new Error(tt("aiconv.manifestoDoWorkspaceNaoEncontrado"));
   for (const r of m.repos) {
     const wt = path.join(wsDir, r.rel);
     if (fs.existsSync(wt)) await gitOk$1(r.repoPath, ["worktree", "remove", "--force", wt]);
@@ -73443,8 +74259,8 @@ async function statusEntries(top) {
     const xy = p.slice(0, 2);
     const file = p.slice(3);
     if (xy[0] === "R" || xy[0] === "C") i++;
-    const st = xy === "??" ? "??" : (xy[0] !== " " ? xy[0] : xy[1]).trim() || "M";
-    out.push({ path: file, status: st });
+    const st2 = xy === "??" ? "??" : (xy[0] !== " " ? xy[0] : xy[1]).trim() || "M";
+    out.push({ path: file, status: st2 });
   }
   return out;
 }
@@ -73485,8 +74301,8 @@ async function getChanges(dir, baseRef) {
     let binary = false;
     if (e.status === "??") {
       try {
-        const st = fs.statSync(path.join(top, e.path));
-        if (st.isFile() && st.size <= NEW_FILE_STAT_MAX) {
+        const st2 = fs.statSync(path.join(top, e.path));
+        if (st2.isFile() && st2.size <= NEW_FILE_STAT_MAX) {
           const buf = fs.readFileSync(path.join(top, e.path));
           if (buf.includes(0)) binary = true;
           else additions = buf.length ? buf.toString("utf8").split("\n").length - (buf[buf.length - 1] === 10 ? 1 : 0) : 0;
@@ -73508,13 +74324,13 @@ async function getChanges(dir, baseRef) {
 }
 async function fileDiff(dir, filePath) {
   const top = await repoTop(dir);
-  if (!top) throw new Error("Não é um repositório git.");
+  if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit2"));
   const [e] = await checkedPaths(top, [filePath]);
   let diff = "";
   if (e.status === "??") {
     const abs = path.resolve(top, e.path);
-    const st = fs.statSync(abs);
-    if (!st.isFile()) return { diff: "", truncated: false, binary: false };
+    const st2 = fs.statSync(abs);
+    if (!st2.isFile()) return { diff: "", truncated: false, binary: false };
     const buf = fs.readFileSync(abs);
     if (buf.includes(0)) return { diff: "", truncated: false, binary: true };
     const txt = buf.toString("utf8");
@@ -73533,27 +74349,27 @@ async function checkedPaths(top, paths) {
   if (!paths) return entries;
   const wanted = new Set(paths);
   const ok = entries.filter((e) => wanted.has(e.path));
-  if (ok.length !== wanted.size) throw new Error("Arquivo fora da lista de alterados.");
+  if (ok.length !== wanted.size) throw new Error(tt("aiconv.arquivoForaDaListaDe"));
   return ok;
 }
 async function commit(dir, message, paths) {
   const top = await repoTop(dir);
-  if (!top) throw new Error("Não é um repositório git.");
+  if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit2"));
   const msg = message.trim();
-  if (!msg) throw new Error("Escreva a mensagem do commit.");
+  if (!msg) throw new Error(tt("aiconv.escrevaAMensagemDoCommit"));
   const entries = await checkedPaths(top, paths);
-  if (!entries.length) throw new Error("Nada para commitar.");
+  if (!entries.length) throw new Error(tt("aiconv.nadaParaCommitar"));
   await git$1(top, ["add", "-A", "--", ...entries.map((e) => e.path)]);
   await git$1(top, ["commit", "-m", msg, "--", ...entries.map((e) => e.path)], 6e4);
   return (await gitOk$1(top, ["rev-parse", "--short", "HEAD"]) ?? "").trim();
 }
 async function discard(dir, filePath) {
   const top = await repoTop(dir);
-  if (!top) throw new Error("Não é um repositório git.");
+  if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit2"));
   const [e] = await checkedPaths(top, [filePath]);
   if (e.status === "??") {
     const abs = path.resolve(top, e.path);
-    if (!abs.startsWith(top + path.sep)) throw new Error("Caminho inválido.");
+    if (!abs.startsWith(top + path.sep)) throw new Error(tt("aiconv.caminhoInvalido"));
     fs.rmSync(abs, { force: true });
     return;
   }
@@ -73565,10 +74381,10 @@ async function discard(dir, filePath) {
 }
 async function openPullRequest(dir, baseRef) {
   const top = await repoTop(dir);
-  if (!top) throw new Error("Não é um repositório git.");
+  if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit2"));
   const branch = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim();
-  if (!branch || branch === "HEAD") throw new Error("HEAD destacado: não há branch para o PR.");
-  if (baseRef && branch === baseRef) throw new Error(`Você está na própria branch base (${branch}); use um worktree isolado para abrir PR.`);
+  if (!branch || branch === "HEAD") throw new Error(tt("aiconv.headDestacadoNaoHaBranch"));
+  if (baseRef && branch === baseRef) throw new Error(tt("aiconv.voceEstaNaPropriaBranch", { branch }));
   await git$1(top, ["push", "-u", "origin", branch], 12e4);
   const args = ["pr", "create", "--fill", "--head", branch, ...baseRef ? ["--base", baseRef] : []];
   try {
@@ -73599,13 +74415,19 @@ async function commitContext(dir) {
     (diff ?? "").slice(0, 14e3)
   ].join("\n");
 }
-const CONV_EFFORTS = [
+labels("shared.ai.permission", {
+  default: "Perguntar",
+  acceptEdits: "Aceitar edições",
+  plan: "Planejar",
+  bypassPermissions: "Executar tudo"
+});
+const CONV_EFFORTS = labeled("shared.ai.effort", "v", [
   { v: "low", label: "Baixo" },
   { v: "medium", label: "Médio" },
   { v: "high", label: "Alto" },
   { v: "xhigh", label: "Muito alto" },
   { v: "max", label: "Máximo" }
-];
+]);
 const CONV_DEFAULT_MODEL_KEY = "prompt_runner_model";
 const CONV_DEFAULT_EFFORT_KEY = "prompt_runner_effort";
 const CONV_FALLBACK_MODEL = "opus";
@@ -73623,20 +74445,20 @@ const CONV_TURNS_PAGE_SIZE = 20;
 const IMAGE_MEDIA_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const MAX_IMAGES_PER_MESSAGE = 8;
 function all$2(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  if (params.length) st.bind(params);
+  const st2 = db2.prepare(sql);
+  if (params.length) st2.bind(params);
   const out = [];
-  while (st.step()) out.push(st.getAsObject());
-  st.free();
+  while (st2.step()) out.push(st2.getAsObject());
+  st2.free();
   return out;
 }
 function one$2(db2, sql, params = []) {
   return all$2(db2, sql, params)[0] ?? null;
 }
 function exec$2(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  st.run(params);
-  st.free();
+  const st2 = db2.prepare(sql);
+  st2.run(params);
+  st2.free();
 }
 const nowIso$2 = () => (/* @__PURE__ */ new Date()).toISOString();
 function parseJson(raw, fallback) {
@@ -74155,9 +74977,9 @@ function isDefaultConfigDir(dir) {
   return path.resolve(dir) === path.join(os.homedir(), ".claude");
 }
 async function startTurn(conversationId, message) {
-  if (!deps) throw new Error("Executor de conversas não inicializado.");
+  if (!deps) throw new Error(tt("aiconv.executorDeConversasNaoInicializado"));
   let conv = await getConversation(conversationId);
-  if (!conv) throw new Error("Conversa não encontrada.");
+  if (!conv) throw new Error(tt("aiconv.conversaNaoEncontrada"));
   const prompt = message.text;
   if (!conv.title) {
     const title = (prompt || "Imagem").replace(/\s+/g, " ").trim().slice(0, 60);
@@ -74192,11 +75014,11 @@ async function startTurn(conversationId, message) {
   try {
     if (conv.cwd) {
       cwd = conv.cwd;
-      if (!fs.existsSync(cwd)) throw new Error(`O diretório desta conversa não existe mais: ${cwd}`);
+      if (!fs.existsSync(cwd)) throw new Error(tt("aiconv.oDiretorioDestaConversaNao", { cwd }));
     } else {
       const projectDir = await deps.resolveProjectCwd(conv.projectId);
       if (conv.useWorktree) {
-        if (!projectDir || !fs.existsSync(projectDir)) throw new Error("O worktree isolado precisa de um projeto com pasta local.");
+        if (!projectDir || !fs.existsSync(projectDir)) throw new Error(tt("aiconv.oWorktreeIsoladoPrecisaDe"));
         turn.blocks.push({ type: "notice", text: "🌿 Criando worktree isolado…" });
         emitTurn(run2, true);
         const wsRepos = await deps.projectWorkspaceRepos(conv.projectId);
@@ -74251,7 +75073,7 @@ async function startTurn(conversationId, message) {
 }
 function spawnCli(command, args, cwd, env) {
   const bin = (command || "").trim() || "claude";
-  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(`Comando inválido: "${bin}".`));
+  if (!/^[A-Za-z0-9_./-]+$/.test(bin)) return Promise.reject(new Error(tt("aiconv.comandoInvalido", { bin })));
   const trySpawn = (viaShell) => new Promise((resolve, reject2) => {
     const shell = process.env.SHELL || "/bin/zsh";
     const child = viaShell ? child_process.spawn(shell, ["-ilc", `${bin} "$@"`, shell, ...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] }) : child_process.spawn(bin, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
@@ -74432,8 +75254,8 @@ function handleEvent(run2, conv, evt) {
 function scheduleAttentionNotice(run2, requestId, toolName, conv) {
   setTimeout(() => {
     if (!run2.pending.has(requestId) || live.get(run2.conversationId) !== run2) return;
-    const what = toolName === "AskUserQuestion" ? "tem uma pergunta" : toolName === "ExitPlanMode" ? "quer aprovar um plano" : `pede permissão para ${toolName}`;
-    void notify({ title: `🤚 Claude ${what}`, body: conv.title || "Prompt Runner", source: "claude", page: "ai-runner" });
+    const what = toolName === "AskUserQuestion" ? tt("aiconv.what.question") : toolName === "ExitPlanMode" ? tt("aiconv.what.plan") : tt("aiconv.what.permission", { tool: toolName });
+    void notify({ title: tt("aiconv.claude", { what }), body: conv.title || tt("aiconv.promptRunner"), source: "claude", page: "ai-runner" });
   }, 15e3);
 }
 async function finishTurn(run2, error) {
@@ -74474,7 +75296,7 @@ async function finishTurn(run2, error) {
   if (Date.now() - run2.startedAt >= 6e4 && !run2.cancelled) {
     const conv = await getConversation(run2.conversationId);
     void notify({
-      title: turn.status === "done" ? "✅ Claude terminou" : "⚠️ Claude parou com erro",
+      title: turn.status === "done" ? tt("aiconv.claudeTerminou") : tt("aiconv.claudeParouComErro"),
       body: conv?.title || turn.prompt.slice(0, 120),
       source: "claude",
       page: "ai-runner"
@@ -74598,7 +75420,7 @@ function httpsUrl(remote) {
 }
 async function detectChildRepos(localPath) {
   const root = expandHome$5(localPath.trim());
-  if (!root || !fs.existsSync(root)) throw new Error("Pasta não encontrada");
+  if (!root || !fs.existsSync(root)) throw new Error(tt("services.pastaNaoEncontrada"));
   const found = [];
   const skip = (n) => n.startsWith(".") || n === "node_modules";
   for (const e of fs.readdirSync(root, { withFileTypes: true })) {
@@ -74650,7 +75472,7 @@ async function workspaceDuplicates(targetId) {
 }
 async function absorbIntoWorkspace(targetId, sourceId) {
   const dup = (await workspaceDuplicates(targetId)).find((d) => d.projectId === sourceId);
-  if (!dup) throw new Error("Este projeto não corresponde a nenhum repositório do workspace.");
+  if (!dup) throw new Error(tt("services.esteProjetoNaoCorrespondeA"));
   const [projects, rows] = await Promise.all([getProjects(), getProjectRepos(targetId)]);
   const source = projects.find((p) => p.id === sourceId);
   const repo = rows.find((r) => r.name === dup.repoName);
@@ -74679,7 +75501,7 @@ function runGh(args) {
     child.on("error", (e) => reject2(e));
     child.on(
       "close",
-      (code) => code === 0 ? resolve(out) : reject2(new Error(err.trim() || `gh saiu com código ${code}.`))
+      (code) => code === 0 ? resolve(out) : reject2(new Error(err.trim() || tt("services.ghSaiuComCodigo", { code })))
     );
   });
   return attempt2(false).catch((e) => {
@@ -74695,8 +75517,8 @@ function repoFromIssue(issue) {
   }
   return "?";
 }
-function labelNames(labels) {
-  return labels.map((l) => typeof l === "string" ? l : l.name).filter(Boolean);
+function labelNames(labels2) {
+  return labels2.map((l) => typeof l === "string" ? l : l.name).filter(Boolean);
 }
 function parseNextLink(linkHeader) {
   if (!linkHeader) return null;
@@ -74725,7 +75547,7 @@ function mapIssue(i) {
 async function fetchIssuesViaToken(query) {
   const token2 = decodeSecret(await getSetting("github_token"));
   if (!token2) {
-    throw new Error("GitHub token não configurado. Vá em Configurações e adicione um token.");
+    throw new Error(tt("services.githubTokenNaoConfiguradoVa"));
   }
   const headers = {
     Authorization: `Bearer ${token2}`,
@@ -74740,8 +75562,8 @@ async function fetchIssuesViaToken(query) {
     const res = await fetch(url2, { headers });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      if (res.status === 401) throw new Error("Token inválido ou expirado (401).");
-      throw new Error(`GitHub API falhou (${res.status}). ${body.slice(0, 140)}`);
+      if (res.status === 401) throw new Error(tt("services.tokenInvalidoOuExpirado401"));
+      throw new Error(tt("services.githubApiFalhou", { status: res.status, p1: body.slice(0, 140) }));
     }
     data2.push(...await res.json());
     url2 = parseNextLink(res.headers.get("link"));
@@ -74756,9 +75578,9 @@ async function fetchIssuesViaGh(query) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (e?.code === "ENOENT") {
-      throw new Error("`gh` (GitHub CLI) não encontrado. Instale e rode `gh auth login`, ou use o modo Token.");
+      throw new Error(tt("services.ghGithubCliNaoEncontrado"));
     }
-    throw new Error(`Falha no gh: ${msg}`);
+    throw new Error(tt("services.falhaNoGh", { msg }));
   }
   try {
     return JSON.parse(out);
@@ -74814,7 +75636,7 @@ async function creds() {
   const clientId = await getSetting("google_client_id") ?? "";
   const clientSecret = decodeSecret(await getSetting("google_client_secret")) ?? "";
   if (!clientId || !clientSecret) {
-    throw new Error("Configure o Client ID e o Client Secret do Google em Configurações.");
+    throw new Error(tt("services.configureOClientIdE"));
   }
   return { clientId, clientSecret };
 }
@@ -74848,7 +75670,7 @@ async function listGoogleAccounts() {
 }
 async function uploadFileToDrive(filePath, fileName, email) {
   const accounts = await getAccounts();
-  if (!accounts.length) throw new Error("Nenhuma conta Google conectada.");
+  if (!accounts.length) throw new Error(tt("services.nenhumaContaGoogleConectada"));
   const acc = email && accounts.find((a) => a.email === email) || accounts[0];
   const token2 = await accessTokenFor(acc.refreshToken);
   const bytes = fs.readFileSync(filePath);
@@ -74880,9 +75702,9 @@ Content-Type: application/octet-stream\r
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     if (res.status === 403 || /insufficient|scope/i.test(t)) {
-      throw new Error("Sem permissão de Drive nesta conta. Reconecte-a em Configurações (escopo drive.file).");
+      throw new Error(tt("services.semPermissaoDeDriveNesta"));
     }
-    throw new Error(`Upload ao Drive falhou (${res.status}). ${t.slice(0, 120)}`);
+    throw new Error(tt("services.uploadAoDriveFalhou", { status: res.status, p1: t.slice(0, 120) }));
   }
   const j = await res.json();
   return { name: j.name || fileName, link: j.webViewLink ?? null, account: acc.email };
@@ -74902,11 +75724,11 @@ async function finishGoogleConnect(params) {
   };
   const err = params.get("error");
   if (err) {
-    done(false, new Error(`Google negou: ${err}`));
+    done(false, new Error(tt("services.googleNegou", { err })));
     return resultPage("Autorização cancelada.");
   }
   if (params.get("state") !== p.state) {
-    done(false, new Error("state inválido no callback do Google."));
+    done(false, new Error(tt("services.stateInvalidoNoCallbackDo")));
     return resultPage("Falha de segurança (state).");
   }
   try {
@@ -74925,7 +75747,7 @@ async function finishGoogleConnect(params) {
     });
     const json2 = await tokenRes.json();
     if (!tokenRes.ok || !json2.refresh_token) {
-      done(false, new Error(json2.error || "Sem refresh_token (revogue o acesso e tente de novo)."));
+      done(false, new Error(json2.error || tt("services.semRefreshTokenRevogueO")));
       return resultPage("Falha ao trocar o código.");
     }
     let email = "conta google";
@@ -74945,7 +75767,7 @@ async function beginGoogleConnect(publicUrl) {
   const { clientId } = await creds();
   if (pending) {
     pending.cleanup();
-    pending.reject(new Error("Substituída por uma nova tentativa de conexão."));
+    pending.reject(new Error(tt("services.substituidaPorUmaNovaTentativa")));
     pending = null;
   }
   const verifier = base64url(crypto.randomBytes(32));
@@ -74983,7 +75805,7 @@ async function beginGoogleConnect(publicUrl) {
     if (pending?.state === state) {
       pending.cleanup();
       pending = null;
-      reject2(new Error("Tempo esgotado aguardando a autorização do Google."));
+      reject2(new Error(tt("services.tempoEsgotadoAguardandoAAutorizacao")));
     }
   }, 3e5);
   pending = {
@@ -75041,9 +75863,9 @@ async function accessTokenFor(refreshToken) {
   const json2 = await res.json();
   if (!res.ok || !json2.access_token) {
     if (json2.error === "invalid_grant") {
-      throw new Error("autorização expirada ou revogada (invalid_grant). Reconecte a conta em Configurações.");
+      throw new Error(tt("services.autorizacaoExpiradaOuRevogadaInvalid"));
     }
-    throw new Error(json2.error || "Falha ao renovar o token do Google.");
+    throw new Error(json2.error || tt("services.falhaAoRenovarOToken"));
   }
   return json2.access_token;
 }
@@ -75068,7 +75890,7 @@ async function fetchEventsFor(token2, timeMin, timeMax) {
   const res = await fetch(url2, { headers: { Authorization: `Bearer ${token2}` } });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Google Calendar falhou (${res.status}). ${body.slice(0, 120)}`);
+    throw new Error(tt("services.googleCalendarFalhou", { status: res.status, p1: body.slice(0, 120) }));
   }
   const data2 = await res.json();
   return (data2.items ?? []).map((e) => ({
@@ -75080,7 +75902,7 @@ async function fetchEventsFor(token2, timeMin, timeMax) {
 }
 async function syncGoogleCalendar() {
   const accounts = await getAccounts();
-  if (!accounts.length) throw new Error("Google não conectado. Clique em Conectar em Configurações.");
+  if (!accounts.length) throw new Error(tt("services.googleNaoConectadoCliqueEm"));
   const now = /* @__PURE__ */ new Date();
   const in7 = new Date(now.getTime() + 7 * 864e5);
   const all2 = [];
@@ -75100,7 +75922,7 @@ async function syncGoogleCalendar() {
       all2.push(...await fetchEventsFor(token2, now, in7));
       okCount++;
     } catch (e) {
-      lastErr = new Error(`Google (${acc.email}): ${e instanceof Error ? e.message : String(e)}`);
+      lastErr = new Error(tt("services.google", { email: acc.email, p1: e instanceof Error ? e.message : String(e) }));
     }
   }
   if (emailsChanged) await saveAccounts(accounts);
@@ -75111,17 +75933,17 @@ async function syncGoogleCalendar() {
 const BYDAY = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 function scopeError(status2, t) {
   if (status2 === 403 || /insufficient|scope/i.test(t)) {
-    return new Error("Esta conta Google só tem permissão de leitura. Reconecte-a em Configurações para permitir criar eventos.");
+    return new Error(tt("services.estaContaGoogleSoTem"));
   }
   return null;
 }
 async function upsertRecurringBlock(opts) {
   const accounts = await getAccounts();
-  if (!accounts.length) throw new Error("Nenhuma conta Google conectada (Configurações).");
+  if (!accounts.length) throw new Error(tt("services.nenhumaContaGoogleConectadaConfiguracoes"));
   const acc = opts.email && accounts.find((a) => a.email === opts.email) || accounts[0];
   const token2 = await accessTokenFor(acc.refreshToken);
   const days2 = [...new Set(opts.days)].filter((d) => d >= 0 && d <= 6).sort();
-  if (!days2.length) throw new Error("Escolha ao menos um dia da semana.");
+  if (!days2.length) throw new Error(tt("services.escolhaAoMenosUmDia"));
   const [hh, mm] = opts.start.split(":").map(Number);
   const first = /* @__PURE__ */ new Date();
   first.setHours(hh || 0, mm || 0, 0, 0);
@@ -75144,7 +75966,7 @@ async function upsertRecurringBlock(opts) {
   }
   if (!res.ok) {
     const t = await res.text().catch(() => "");
-    throw scopeError(res.status, t) ?? new Error(`Google Calendar recusou (${res.status}). ${t.slice(0, 160)}`);
+    throw scopeError(res.status, t) ?? new Error(tt("services.googleCalendarRecusou", { status: res.status, p1: t.slice(0, 160) }));
   }
   const j = await res.json();
   return { eventId: j.id, account: acc.email, link: j.htmlLink ?? null };
@@ -75157,7 +75979,7 @@ async function deleteRecurringBlock(eventId, email) {
   const res = await fetch(`${CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`, { method: "DELETE", headers: { Authorization: `Bearer ${token2}` } });
   if (!res.ok && res.status !== 404 && res.status !== 410) {
     const t = await res.text().catch(() => "");
-    throw scopeError(res.status, t) ?? new Error(`Falha ao remover o evento (${res.status}).`);
+    throw scopeError(res.status, t) ?? new Error(tt("services.falhaAoRemoverOEvento", { status: res.status }));
   }
 }
 const FALLBACK_CATEGORY_ID = 6;
@@ -75227,7 +76049,7 @@ async function apiKey() {
   const clientId = (decodeSecret(await getSetting("pluggy_client_id")) ?? "").trim();
   const clientSecret = (decodeSecret(await getSetting("pluggy_client_secret")) ?? "").trim();
   if (!clientId || !clientSecret) {
-    throw new Error("Configure o Client ID e o Client Secret do Pluggy em Configurações.");
+    throw new Error(tt("services.configureOClientIdE2"));
   }
   let res;
   try {
@@ -75237,7 +76059,7 @@ async function apiKey() {
       body: JSON.stringify({ clientId, clientSecret })
     });
   } catch (e) {
-    throw new Error(`Sem conexão com o Pluggy: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(tt("services.semConexaoComOPluggy", { p0: e instanceof Error ? e.message : String(e) }));
   }
   const body = await res.text().catch(() => "");
   let json2 = {};
@@ -75247,7 +76069,7 @@ async function apiKey() {
   }
   if (!res.ok || !json2.apiKey) {
     const detail = json2.message || body.slice(0, 160) || res.statusText;
-    throw new Error(`Falha ao autenticar no Pluggy (${res.status}). ${detail}`);
+    throw new Error(tt("services.falhaAoAutenticarNoPluggy", { status: res.status, detail }));
   }
   return json2.apiKey;
 }
@@ -75261,7 +76083,7 @@ async function createConnectToken() {
       body: JSON.stringify({})
     });
   } catch (e) {
-    throw new Error(`Sem conexão com o Pluggy: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(tt("services.semConexaoComOPluggy", { p0: e instanceof Error ? e.message : String(e) }));
   }
   const body = await res.text().catch(() => "");
   let json2 = {};
@@ -75270,7 +76092,7 @@ async function createConnectToken() {
   } catch {
   }
   if (!res.ok || !json2.accessToken) {
-    throw new Error(`Falha ao criar connect token (${res.status}). ${json2.message || body.slice(0, 160)}`);
+    throw new Error(tt("services.falhaAoCriarConnectToken", { status: res.status, p1: json2.message || body.slice(0, 160) }));
   }
   return json2.accessToken;
 }
@@ -75278,7 +76100,7 @@ async function get(path2, key) {
   const res = await fetch(`${PLUGGY_API}${path2}`, { headers: { "X-API-KEY": key } });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Pluggy ${path2} falhou (${res.status}). ${body.slice(0, 120)}`);
+    throw new Error(tt("services.pluggyFalhou", { path: path2, status: res.status, p2: body.slice(0, 120) }));
   }
   return await res.json();
 }
@@ -75305,13 +76127,13 @@ async function fetchAllTransactions(accountId, key) {
 }
 const legacyKey = (t) => `${t.date}|${t.amount}|${t.description ?? ""}`;
 async function syncPluggy(month) {
-  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`);
+  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(tt("services.mesInvalido", { month }));
   const itemId = await getSetting("pluggy_item_id") ?? "";
-  if (!itemId) throw new Error("Configure o Item ID do Pluggy (banco conectado) em Configurações.");
+  if (!itemId) throw new Error(tt("services.configureOItemIdDo"));
   const key = await apiKey();
   const accounts = (await get(`/accounts?itemId=${encodeURIComponent(itemId)}`, key)).results;
   if (!accounts || accounts.length === 0) {
-    throw new Error("Nenhuma conta encontrada para esse Item ID. Verifique se o Item está conectado e pronto no Pluggy (e se o Item ID está correto).");
+    throw new Error(tt("services.nenhumaContaEncontradaParaEsse"));
   }
   const defaultAccountId = await syncBankAccount(accounts);
   const fx = await loadFx();
@@ -75416,7 +76238,7 @@ async function pluggyConfigured() {
 const monthKey = (d = /* @__PURE__ */ new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 async function syncPluggyInvestments() {
   const itemId = await getSetting("pluggy_item_id") ?? "";
-  if (!itemId) throw new Error("Configure o Item ID do Pluggy (banco conectado) em Configurações.");
+  if (!itemId) throw new Error(tt("services.configureOItemIdDo"));
   const key = await apiKey();
   const remote = [];
   for (let page = 1; page <= 50; page++) {
@@ -75509,7 +76331,7 @@ async function syncPluggyInvestments() {
 }
 async function reclassifyInvestmentFlags() {
   const itemId = await getSetting("pluggy_item_id") ?? "";
-  if (!itemId) throw new Error("Configure o Item ID do Pluggy em Configurações.");
+  if (!itemId) throw new Error(tt("services.configureOItemIdDo2"));
   const key = await apiKey();
   const accounts = (await get(`/accounts?itemId=${encodeURIComponent(itemId)}`, key)).results ?? [];
   const derived = /* @__PURE__ */ new Map();
@@ -75637,7 +76459,7 @@ function firstJson$1(text) {
 async function spendAi(monitorId, limit) {
   const key = `ai:count:${monitorId ?? "new"}:${todayLocal()}`;
   const n = await cacheGet(key) ?? 0;
-  if (n >= limit) throw new Error(`Limite de ${limit} chamada(s) de IA por dia atingido${monitorId ? " para este monitor" : ""}. Ajuste em "Fontes e execução".`);
+  if (n >= limit) throw new Error(tt("flights.limiteDeChamadaSDe", { limit, p1: monitorId ? tt("flights.paraEsteMonitor") : "" }));
   await cacheSet(key, n + 1, 36 * 36e5);
 }
 const DRAFT_SCHEMA = `{
@@ -75661,7 +76483,7 @@ const DRAFT_SCHEMA = `{
 }`;
 async function draftFromText(text, currentCurrency = "BRL") {
   const clean = text.trim().slice(0, 3e3);
-  if (clean.length < 8) throw new Error("Descreva a viagem com um pouco mais de detalhe.");
+  if (clean.length < 8) throw new Error(tt("flights.descrevaAViagemComUm"));
   const today2 = todayLocal();
   const cacheKey = `ai:draft:${hash$1(`${today2.slice(0, 7)}|${clean}`)}`;
   let raw = await cacheGet(cacheKey);
@@ -75763,7 +76585,7 @@ async function structureImportText(text, monitorId, aiLimit) {
   return parseImport(JSON.stringify(json2), { source: "Alerta importado (IA)", verification: "imported" });
 }
 async function insights(m, rows) {
-  if (!rows.length) throw new Error("Sem ofertas elegíveis para analisar.");
+  if (!rows.length) throw new Error(tt("flights.semOfertasElegiveisParaAnalisar"));
   const compact = rows.slice(0, 12).join("\n");
   const cacheKey = `ai:insights:${m.id}:${hash$1(compact)}`;
   const hit = await cacheGet(cacheKey);
@@ -75830,7 +76652,7 @@ async function fetchFeed(url2, force = false) {
       await new Promise((r) => setTimeout(r, 1500));
       return get2();
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(tt("flights.http", { status: res.status }));
     const items = parseRss$1(await res.text(), new URL(url2).hostname);
     out = { items, fetchedAt: (/* @__PURE__ */ new Date()).toISOString(), error: items.length ? null : "Feed sem itens (formato não reconhecido?)" };
   } catch (e) {
@@ -75911,7 +76733,7 @@ async function checkPromoAlerts(monitors) {
       const msg = `${p.title}${p.prices.length ? ` (${p.prices[0]})` : ""} — ${p.source}`;
       if (await recordAlert(m.id, null, "promo_post", `${m.id}:promo:${p.link}`, msg)) {
         fired++;
-        await notify({ title: `🏷️ Promoção: ${m.name}`, body: `${msg}
+        await notify({ title: tt("flights.promocao", { name: m.name }), body: `${msg}
 Menciona: ${p.matches.join(", ")}`, source: "passagens", page: "trip-monitoring" });
       }
     }
@@ -76006,7 +76828,9 @@ async function token(getSetting2) {
 }
 const duffel = {
   id: "duffel",
-  label: "Duffel (preço ao vivo)",
+  get label() {
+    return tt("flights.provider.duffel");
+  },
   kind: "api",
   capabilities: {
     oneWay: true,
@@ -76203,7 +77027,9 @@ const none = {
 };
 const manualImport = {
   id: "import",
-  label: "Importação de resultados",
+  get label() {
+    return tt("flights.provider.import");
+  },
   kind: "import",
   capabilities: none,
   docs: "docs/passagens.md#importação",
@@ -76276,20 +77102,20 @@ async function usableProviders(m) {
       reasons.push(`${p.label}: desativado.`);
       continue;
     }
-    const st = await p.status({ getSetting: setting });
-    if (st.available) list.push(p);
-    else reasons.push(`${p.label}: ${st.reason}`);
+    const st2 = await p.status({ getSetting: setting });
+    if (st2.available) list.push(p);
+    else reasons.push(`${p.label}: ${st2.reason}`);
   }
   return { list, reasons };
 }
 async function startRun(monitorId, trigger, opts = {}) {
   const m = await getMonitor(monitorId);
-  if (!m) throw new Error("Monitoramento não encontrado.");
+  if (!m) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
   const existing = await activeRun(monitorId);
   if (existing) return existing;
   const errs = configErrors(m.config, todayLocal());
-  if (errs.length) throw new Error(`Configuração incompleta: ${errs[0]}`);
-  if (m.status === "paused" && trigger === "schedule") throw new Error("Monitoramento pausado.");
+  if (errs.length) throw new Error(tt("flights.configuracaoIncompleta", { p0: errs[0] }));
+  if (m.status === "paused" && trigger === "schedule") throw new Error(tt("flights.monitoramentoPausado"));
   const { list, reasons } = await usableProviders(m);
   if (!list.length) {
     throw new Error(
@@ -76610,7 +77436,7 @@ async function schedulerTick() {
 async function bootFlights() {
   const n = await recoverInterrupted();
   if (n) log("boot.recovered", { runs: n });
-  const { defaultMonitorConfig: defaultMonitorConfig2 } = await Promise.resolve().then(() => flights);
+  const { defaultMonitorConfig: defaultMonitorConfig2 } = await Promise.resolve().then(() => flights$3);
   const { searchPlaces: searchPlaces2 } = await Promise.resolve().then(() => geo);
   const migrated = await migrateLegacyWatches((text) => {
     if (!text?.trim()) return null;
@@ -76630,7 +77456,7 @@ async function bootFlights() {
 const changed$3 = (monitorId) => broadcast("flights:updated", { monitorId, runId: null });
 async function mustGet(id) {
   const m = await getMonitor(Number(id));
-  if (!m) throw new Error("Monitoramento não encontrado.");
+  if (!m) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
   return m;
 }
 function prepare$1(input) {
@@ -76683,7 +77509,7 @@ function registerFlightRpc(handle) {
   });
   handle("flightMon:setStatus", async (_, id, status2) => {
     const m = await mustGet(id);
-    if (status2 === "active" && configErrors(m.config, todayLocal()).length) throw new Error(`Complete a configuração: ${configErrors(m.config, todayLocal())[0]}`);
+    if (status2 === "active" && configErrors(m.config, todayLocal()).length) throw new Error(tt("flights.completeAConfiguracao", { p0: configErrors(m.config, todayLocal())[0] }));
     await updateMonitor(m.id, { status: status2 });
     await setMonitorMeta(m.id, { nextRunAt: null });
     changed$3(m.id);
@@ -76722,7 +77548,7 @@ function registerFlightRpc(handle) {
   handle("flightMon:nearby", (_, ref, radiusKm, withGround) => nearbyAirports(ref, Number(radiusKm) || 300, !!withGround));
   handle("flightMon:ground", async (_, iata, to) => {
     const c = refCenter(to);
-    if (!c) throw new Error("Destino final sem coordenadas (escolha uma cidade ou aeroporto).");
+    if (!c) throw new Error(tt("flights.destinoFinalSemCoordenadasEscolha"));
     return estimateGround(iata, c);
   });
   handle("flightMon:aiDraft", (_, text, currency2) => draftFromText(String(text ?? ""), currency2));
@@ -76765,16 +77591,16 @@ function registerFlightRpc(handle) {
     const day = todayLocal();
     return Promise.all(
       PROVIDERS.map(async (p) => {
-        const st = await p.status({ getSetting: setting });
+        const st2 = await p.status({ getSetting: setting });
         const enabled = await getSetting(`flights_provider_${p.id}_enabled`) !== "0";
         return {
           id: p.id,
           label: p.label,
           kind: p.kind,
-          configured: st.configured,
+          configured: st2.configured,
           enabled,
-          available: st.available && enabled,
-          reason: enabled ? st.reason : "Desativado.",
+          available: st2.available && enabled,
+          reason: enabled ? st2.reason : "Desativado.",
           capabilities: p.capabilities,
           usedToday: await usageOn(p.id, day),
           docs: p.docs,
@@ -76785,7 +77611,7 @@ function registerFlightRpc(handle) {
   });
   handle("flightMon:testProvider", async (_, id) => {
     const p = getProvider(id);
-    if (!p?.test) throw new Error("Este provedor não tem teste de conexão.");
+    if (!p?.test) throw new Error(tt("flights.esteProvedorNaoTemTeste"));
     const ctl = new AbortController();
     return p.test({ getSetting: setting, signal: ctl.signal, now: () => /* @__PURE__ */ new Date() });
   });
@@ -76805,7 +77631,7 @@ const NETWORK_LABELS = {
   matrix: { label: "Matrix", icon: "🟩", color: "#0dbd8b" }
 };
 function networkInfo(n) {
-  return NETWORK_LABELS[n] ?? { label: n ? n[0].toUpperCase() + n.slice(1) : "Outra", icon: "💭", color: "#888888" };
+  return NETWORK_LABELS[n] ?? { label: n ? n[0].toUpperCase() + n.slice(1) : st("shared.chats.otherNetwork", "Outra"), icon: "💭", color: "#888888" };
 }
 function normalizeNetwork(raw) {
   const s2 = (raw ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -76824,6 +77650,20 @@ function normalizeNetwork(raw) {
   if (s2.includes("beeper") || s2.includes("matrix")) return "matrix";
   return s2;
 }
+labels("shared.chats.replyState", {
+  needs_reply: "Preciso responder",
+  waiting: "Aguardando resposta",
+  none: "Não requer resposta",
+  resolved: "Resolvido",
+  snoozed: "Adiado"
+});
+labels("shared.chats.aiStyle", {
+  natural: "Natural",
+  curto: "Curto",
+  descontraido: "Descontraído",
+  profissional: "Profissional",
+  elaborado: "Mais elaborado"
+});
 const DEFAULT_PRIORITY_WEIGHTS = {
   mention: 50,
   vip: 40,
@@ -76836,6 +77676,10 @@ const DEFAULT_PRIORITY_WEIGHTS = {
   bigGroupPenalty: 15,
   mutedPenalty: 25
 };
+labeled("shared.chats.provider", "id", [
+  { id: "beeper", label: "Beeper Desktop API" },
+  { id: "mock", label: "Demonstração (dados fictícios)", demo: true }
+]);
 const NO_CAPABILITIES = {
   readMessages: false,
   sendMessages: false,
@@ -76908,14 +77752,14 @@ function validateBeeperUrl(raw) {
   try {
     u = new URL(raw.trim());
   } catch {
-    return { ok: false, error: "URL inválida." };
+    return { ok: false, error: tt("chats.urlInvalida") };
   }
-  if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "Use http:// ou https://." };
-  if (u.username || u.password) return { ok: false, error: "Não inclua usuário/senha na URL." };
-  if (u.pathname && u.pathname !== "/" || u.search || u.hash) return { ok: false, error: "Informe só o endereço base (ex.: http://127.0.0.1:23373)." };
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: tt("chats.useHttpOuHttps") };
+  if (u.username || u.password) return { ok: false, error: tt("chats.naoIncluaUsuarioSenhaNa") };
+  if (u.pathname && u.pathname !== "/" || u.search || u.hash) return { ok: false, error: tt("chats.informeSoOEnderecoBase") };
   const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const ok = host === "localhost" || host === "::1" || isPrivateIpv4(host) || host.endsWith(".ts.net") || host.endsWith(".local") || /^f[cd][0-9a-f]{2}:/.test(host);
-  if (!ok) return { ok: false, error: "Por segurança, só endereços locais, de rede privada ou Tailscale são aceitos." };
+  if (!ok) return { ok: false, error: tt("chats.porSegurancaSoEnderecosLocais") };
   return { ok: true, url: `${u.protocol}//${u.host}` };
 }
 const TIMEOUT_MS$1 = 2e4;
@@ -77005,7 +77849,7 @@ function agentTransport() {
     wsUrl: () => null,
     authHeader: () => ({}),
     request(req) {
-      if (!routeAllowed(req.method, req.path)) return Promise.reject(new Error(`Rota não permitida: ${req.method} ${req.path}`));
+      if (!routeAllowed(req.method, req.path)) return Promise.reject(new Error(tt("chats.rotaNaoPermitida", { method: req.method, path: req.path })));
       if (!agentOnline()) return Promise.reject(new ProviderUnavailableError("Agente local do Beeper offline (o Mac está ligado e com o agente rodando?)."));
       return new Promise((resolve, reject2) => {
         const p = {
@@ -77047,7 +77891,7 @@ function registerChatAgentRoutes(app, requireAuth) {
     if (reply.sent) return;
     const given = String(req.headers["x-rickos-agent-key"] || "");
     if (!keyMatches(given, await expectedKey())) {
-      reply.code(401).send({ ok: false, error: "agent key inválida" });
+      reply.code(401).send({ ok: false, error: tt("chats.agentKeyInvalida") });
     }
   };
   app.post("/api/chats/agent/poll", { preHandler: agentAuth }, async (req) => {
@@ -77192,7 +78036,7 @@ async function saveConfig(p) {
   if (p.beeperToken !== void 0) await set(K.beeperToken, encodeSecret(K.beeperToken, p.beeperToken.trim()));
   if (p.enabled !== void 0) await set(K.enabled, b2(p.enabled));
   if (p.providerId !== void 0) {
-    if (!["beeper", "mock"].includes(p.providerId)) throw new Error("Provedor desconhecido.");
+    if (!["beeper", "mock"].includes(p.providerId)) throw new Error(tt("chats.provedorDesconhecido"));
     await set(K.provider, p.providerId);
   }
   if (p.beeperMode !== void 0) await set(K.beeperMode, p.beeperMode === "agent" ? "agent" : "direct");
@@ -77206,7 +78050,7 @@ async function saveConfig(p) {
   if (p.markReadOnReply !== void 0) await set(K.markReadOnReply, b2(p.markReadOnReply));
   if (p.aiModel !== void 0) {
     const m = p.aiModel.trim();
-    if (m && !/^[A-Za-z0-9._:-]+$/.test(m)) throw new Error("Modelo inválido.");
+    if (m && !/^[A-Za-z0-9._:-]+$/.test(m)) throw new Error(tt("chats.modeloInvalido"));
     await set(K.aiModel, m);
   }
   if (p.aiStyleInstructions !== void 0) await set(K.aiStyle, p.aiStyleInstructions.slice(0, 2e3));
@@ -77221,20 +78065,20 @@ async function saveConfig(p) {
   if (p.professionalLabels !== void 0) await set(K.professional, JSON.stringify(p.professionalLabels.map((x) => x.trim()).filter(Boolean)));
 }
 function all$1(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  if (params.length) st.bind(params);
+  const st2 = db2.prepare(sql);
+  if (params.length) st2.bind(params);
   const out = [];
-  while (st.step()) out.push(st.getAsObject());
-  st.free();
+  while (st2.step()) out.push(st2.getAsObject());
+  st2.free();
   return out;
 }
 function one$1(db2, sql, params = []) {
   return all$1(db2, sql, params)[0] ?? null;
 }
 function exec$1(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  st.run(params);
-  st.free();
+  const st2 = db2.prepare(sql);
+  st2.run(params);
+  st2.free();
   return db2.getRowsModified();
 }
 function lastId$1(db2) {
@@ -77303,12 +78147,12 @@ function previewOf(text, store) {
   const t = text.replace(/\s+/g, " ").trim();
   return t.length > PREVIEW_MAX ? `${t.slice(0, PREVIEW_MAX - 1)}…` : t;
 }
-async function upsertChats(providerId, chats, storePreviews) {
+async function upsertChats(providerId, chats2, storePreviews) {
   return tx$1((db2) => {
     const now = nowIso$1();
     const changed2 = [];
     const ids2 = [];
-    for (const c of chats) {
+    for (const c of chats2) {
       const key = chatKey(providerId, c.remoteId);
       const prev = one$1(
         db2,
@@ -77465,9 +78309,9 @@ async function deleteChatsByRemote(providerId, remoteIds) {
 }
 function hasOrgData(db2, chatId) {
   const o = one$1(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]);
-  const labels = one$1(db2, "SELECT COUNT(*) AS n FROM label_links WHERE entityType = 'chat' AND entityId = ?", [chatId])?.n ?? 0;
+  const labels2 = one$1(db2, "SELECT COUNT(*) AS n FROM label_links WHERE entityType = 'chat' AND entityId = ?", [chatId])?.n ?? 0;
   const todos = one$1(db2, "SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?", [chatId])?.n ?? 0;
-  if (labels || todos) return true;
+  if (labels2 || todos) return true;
   if (!o) return false;
   return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes || o.pinnedAt);
 }
@@ -77881,8 +78725,8 @@ function readBeeperImage(ref, roots) {
   const p = resolveBeeperFile(ref, roots);
   if (!p) return null;
   try {
-    const st = fs.statSync(p);
-    if (!st.isFile() || st.size > MAX_BYTES) return null;
+    const st2 = fs.statSync(p);
+    if (!st2.isFile() || st2.size > MAX_BYTES) return null;
     const body = fs.readFileSync(p);
     const contentType = sniffImage(body);
     return contentType ? { contentType, body } : null;
@@ -77894,7 +78738,7 @@ function ensureOk(r, what) {
   if (r.status >= 200 && r.status < 300) return r.json;
   const msg = r.json?.message ?? r.json?.error;
   if (r.status === 404) throw new Error(`${what}: não encontrado.`);
-  throw new Error(`${what}: Beeper respondeu ${r.status}${msg ? ` — ${String(msg).slice(0, 200)}` : ""}`);
+  throw new Error(tt("chats.beeperRespondeu", { what, status: r.status, p2: msg ? ` — ${String(msg).slice(0, 200)}` : "" }));
 }
 const userName = (u) => u.fullName || u.username || u.phoneNumber || u.email || u.id;
 const handleOf = (u) => u.phoneNumber || u.username || u.email || null;
@@ -77998,7 +78842,7 @@ function createBeeperProvider(transport, opts = {}) {
         ensureOk(r, "Contas");
         version = r.headers?.["x-beeper-desktop-version"] ?? version;
         const n = Array.isArray(r.json) ? r.json.length : 0;
-        return { ok: true, message: `Conectado ao Beeper${version ? ` ${version}` : ""} (${transport.mode === "agent" ? "via agente local" : "direto"}). ${n} conta(s).`, version };
+        return { ok: true, message: tt("chats.conectadoAoBeeperContaS", { p0: version ? ` ${version}` : "", p1: transport.mode === "agent" ? tt("chats.viaAgenteLocal") : tt("chats.direto"), n }), version };
       } catch (e) {
         return { ok: false, message: e instanceof Error ? e.message : String(e) };
       }
@@ -78051,7 +78895,7 @@ function createBeeperProvider(transport, opts = {}) {
           { method: "POST", path: "/v1/assets/upload/base64", body: { content: image.data.toString("base64"), fileName: image.fileName, mimeType: image.mimeType } },
           "Enviar imagem"
         );
-        if (!up?.uploadID) throw new Error(`Enviar imagem: ${up?.error || "o Beeper não aceitou o arquivo."}`);
+        if (!up?.uploadID) throw new Error(tt("chats.enviarImagem", { p0: up?.error || "o Beeper não aceitou o arquivo." }));
         attachment = { uploadID: up.uploadID, mimeType: image.mimeType, fileName: image.fileName, type: image.mimeType === "image/gif" ? "gif" : "image" };
       }
       const body = await call(
@@ -78084,9 +78928,9 @@ function createBeeperProvider(transport, opts = {}) {
       return (body?.items ?? []).map(mapMessage);
     },
     async fetchAttachment(ref) {
-      if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error("Anexo inválido.");
+      if (!/^(mxc|localmxc|file):\/\//.test(ref)) throw new Error(tt("chats.anexoInvalido"));
       const failedAt = failedAssets.get(ref);
-      if (failedAt && Date.now() - failedAt < FAIL_TTL_MS) throw new Error("Anexo indisponível.");
+      if (failedAt && Date.now() - failedAt < FAIL_TTL_MS) throw new Error(tt("chats.anexoIndisponivel"));
       let r = null;
       try {
         r = await transport.request({ method: "GET", path: "/v1/assets/serve", query: { url: ref }, binary: true });
@@ -78101,7 +78945,7 @@ function createBeeperProvider(transport, opts = {}) {
       if (local) return local;
       failedAssets.set(ref, Date.now());
       if (failedAssets.size > 5e3) failedAssets.delete(failedAssets.keys().next().value);
-      throw new Error("Anexo indisponível.");
+      throw new Error(tt("chats.anexoIndisponivel"));
     },
     subscribe(onEvent2, onState) {
       if (transport.mode === "agent") {
@@ -78401,10 +79245,10 @@ function createMockControl() {
 }
 function createMockProvider(control = createMockControl()) {
   const now = Date.now();
-  const chats = defs();
+  const chats2 = defs();
   const store = /* @__PURE__ */ new Map();
   const selfOf = (acc) => SELF[acc] ?? "me";
-  for (const c of chats) {
+  for (const c of chats2) {
     store.set(
       c.id,
       c.msgs.map(([ago, mine, text, mention], i) => ({
@@ -78453,7 +79297,7 @@ function createMockProvider(control = createMockControl()) {
       capabilities: {}
     };
   };
-  const sorted = () => [...chats].sort((a, b2) => {
+  const sorted = () => [...chats2].sort((a, b2) => {
     const la = store.get(a.id)?.slice(-1)[0]?.timestamp ?? "";
     const lb = store.get(b2.id)?.slice(-1)[0]?.timestamp ?? "";
     return lb.localeCompare(la);
@@ -78505,7 +79349,7 @@ function createMockProvider(control = createMockControl()) {
     },
     async getChat(remoteId) {
       guard();
-      const c = chats.find((x) => x.id === remoteId);
+      const c = chats2.find((x) => x.id === remoteId);
       return c ? toChat(c) : null;
     },
     async listMessages(remoteChatId, { cursor }) {
@@ -78518,7 +79362,7 @@ function createMockProvider(control = createMockControl()) {
     async sendMessage(remoteChatId, text, replyToId, image) {
       guard();
       const list = store.get(remoteChatId);
-      const c = chats.find((x) => x.id === remoteChatId);
+      const c = chats2.find((x) => x.id === remoteChatId);
       if (!list || !c) throw new Error("Conversa não encontrada.");
       const ts2 = Date.now();
       const msg = {
@@ -78569,7 +79413,7 @@ function createMockProvider(control = createMockControl()) {
     },
     async markRead(remoteChatId) {
       guard();
-      const c = chats.find((x) => x.id === remoteChatId);
+      const c = chats2.find((x) => x.id === remoteChatId);
       if (c) {
         c.unread = 0;
         if (c.mentions !== null) c.mentions = 0;
@@ -78577,7 +79421,7 @@ function createMockProvider(control = createMockControl()) {
     },
     async markUnread(remoteChatId) {
       guard();
-      const c = chats.find((x) => x.id === remoteChatId);
+      const c = chats2.find((x) => x.id === remoteChatId);
       if (c && c.unread === 0) c.unread = 1;
     },
     async searchMessages(query, { chatIds, limit }) {
@@ -78592,7 +79436,7 @@ function createMockProvider(control = createMockControl()) {
     },
     receive(chatId, text, mentionMe = false, id) {
       const list = store.get(chatId);
-      const c = chats.find((x) => x.id === chatId);
+      const c = chats2.find((x) => x.id === chatId);
       if (!list || !c) throw new Error("Conversa não encontrada.");
       const ts2 = Date.now();
       const msg = {
@@ -78667,7 +79511,7 @@ async function summaryCtx(cfg) {
   };
 }
 function summarize$3(r, ctx) {
-  const labels = ctx.chatLabels.get(r.id) ?? [];
+  const labels2 = ctx.chatLabels.get(r.id) ?? [];
   const personLabels = r.contactId ? ctx.contactLabels.get(r.contactId) ?? [] : [];
   const reviewed = r.mentionsReviewedCount != null && (r.unreadMentions ?? 0) <= r.mentionsReviewedCount;
   const pendingMentions = reviewed ? 0 : r.unreadMentions ?? 0;
@@ -78690,7 +79534,7 @@ function summarize$3(r, ctx) {
     now: ctx.now
   });
   const reminderDue = !!r.snoozeUntil && Date.parse(r.snoozeUntil) <= ctx.now;
-  const professional = [...labels, ...personLabels].some((l) => ctx.professional.has(l.name.toLowerCase()));
+  const professional = [...labels2, ...personLabels].some((l) => ctx.professional.has(l.name.toLowerCase()));
   const contactPriority = r.contactPriority ?? null;
   const pendingSince = reply.state === "needs_reply" ? r.pendingSince ?? r.lastInboundAt : null;
   const score = priorityScore(
@@ -78753,7 +79597,7 @@ function summarize$3(r, ctx) {
     reopened: reply.reopened,
     notes: r.notes,
     pinnedAt: r.pinnedAt ?? null,
-    labels,
+    labels: labels2,
     score,
     suggestedPriority: suggestedPriority(score),
     todoCount: r.todoCount ?? 0
@@ -78971,7 +79815,7 @@ function dedupe(list) {
 }
 async function getMessages(chatId, cursor) {
   const chat = await chatById(chatId);
-  if (!chat) throw new Error("Conversa não encontrada.");
+  if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
   const cfg = await loadConfig();
   const provider = await activeProvider(cfg);
   const self = await selfInfo(chat.accountKey);
@@ -79052,7 +79896,7 @@ async function scanChat(provider, chatId) {
 }
 async function requireProviderFor(chatId) {
   const chat = await chatById(chatId);
-  if (!chat) throw new Error("Conversa não encontrada.");
+  if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
   const provider = await activeProvider();
   if (!provider) throw new ProviderUnavailableError("Central de Mensagens desativada.");
   if (provider.id !== chat.providerId) throw new ProviderUnavailableError("Esta conversa é de um provedor que não está ativo: envio bloqueado.");
@@ -79061,12 +79905,12 @@ async function requireProviderFor(chatId) {
 function parseOutgoingImage(input) {
   if (!input) return null;
   const b64 = String(input.base64 ?? "").replace(/^data:[^,]*,/, "");
-  if (!b64 || b64.length > Math.ceil(MAX_SEND_IMAGE_BYTES * 4 / 3) + 8) throw new Error("Imagem grande demais (máx. 15 MB).");
+  if (!b64 || b64.length > Math.ceil(MAX_SEND_IMAGE_BYTES * 4 / 3) + 8) throw new Error(tt("chats.imagemGrandeDemaisMax15"));
   const data2 = Buffer.from(b64, "base64");
-  if (!data2.length) throw new Error("Imagem vazia.");
-  if (data2.length > MAX_SEND_IMAGE_BYTES) throw new Error("Imagem grande demais (máx. 15 MB).");
+  if (!data2.length) throw new Error(tt("chats.imagemVazia"));
+  if (data2.length > MAX_SEND_IMAGE_BYTES) throw new Error(tt("chats.imagemGrandeDemaisMax15"));
   const mimeType = sniffImage(data2);
-  if (!mimeType) throw new Error("Formato não suportado: envie JPEG, PNG, GIF ou WebP.");
+  if (!mimeType) throw new Error(tt("chats.formatoNaoSuportadoEnvieJpeg"));
   const ext = mimeType.split("/")[1].replace("jpeg", "jpg");
   const base = String(input.fileName ?? "").replace(/\.[^.]*$/, "").replace(/[^\p{L}\p{N} ._-]/gu, "").replace(/^[.\s]+/, "").trim().slice(0, 80);
   return { data: data2, mimeType, fileName: `${base || "imagem"}.${ext}` };
@@ -79074,11 +79918,11 @@ function parseOutgoingImage(input) {
 async function sendMessage(chatId, text, replyToId, imageInput) {
   const body = text.trim();
   const image = parseOutgoingImage(imageInput);
-  if (!body && !image) throw new Error("Mensagem vazia.");
-  if (body.length > 1e4) throw new Error("Mensagem longa demais.");
+  if (!body && !image) throw new Error(tt("chats.mensagemVazia"));
+  if (body.length > 1e4) throw new Error(tt("chats.mensagemLongaDemais"));
   const { provider, chat } = await requireProviderFor(chatId);
-  if (!provider.capabilities().sendMessages) throw new Error("Este provedor não envia mensagens.");
-  if (image && !provider.capabilities().sendImages) throw new Error("Este provedor não envia imagens.");
+  if (!provider.capabilities().sendMessages) throw new Error(tt("chats.esteProvedorNaoEnviaMensagens"));
+  if (image && !provider.capabilities().sendImages) throw new Error(tt("chats.esteProvedorNaoEnviaImagens"));
   const r = await provider.sendMessage(chat.remoteId, body, replyToId, image);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const cfg = await loadConfig();
@@ -79102,8 +79946,8 @@ async function sendMessage(chatId, text, replyToId, imageInput) {
 }
 function ownMessage(chatId, messageId) {
   const m = msgCache.get(chatId)?.items.find((x) => x.id === messageId) ?? null;
-  if (m && !m.isMine) throw new Error("Só dá para alterar mensagens enviadas por você.");
-  if (m?.deleted) throw new Error("Esta mensagem já foi apagada.");
+  if (m && !m.isMine) throw new Error(tt("chats.soDaParaAlterarMensagens"));
+  if (m?.deleted) throw new Error(tt("chats.estaMensagemJaFoiApagada"));
   return m;
 }
 async function refreshAfterChange(provider, chatId) {
@@ -79120,22 +79964,22 @@ async function refreshAfterChange(provider, chatId) {
 }
 async function editMessage(chatId, messageId, text) {
   const body = text.trim();
-  if (!messageId) throw new Error("Mensagem inválida.");
-  if (!body) throw new Error("O texto não pode ficar vazio (para remover, apague a mensagem).");
-  if (body.length > 1e4) throw new Error("Mensagem longa demais.");
+  if (!messageId) throw new Error(tt("chats.mensagemInvalida"));
+  if (!body) throw new Error(tt("chats.oTextoNaoPodeFicar"));
+  if (body.length > 1e4) throw new Error(tt("chats.mensagemLongaDemais"));
   const { provider, chat } = await requireProviderFor(chatId);
-  if (!provider.editMessage || !provider.capabilities().editMessages) throw new Error("Este provedor não permite editar mensagens.");
+  if (!provider.editMessage || !provider.capabilities().editMessages) throw new Error(tt("chats.esteProvedorNaoPermiteEditar"));
   const m = ownMessage(chatId, messageId);
-  if (m?.attachments.length) throw new Error("Mensagens com anexo não podem ser editadas.");
+  if (m?.attachments.length) throw new Error(tt("chats.mensagensComAnexoNaoPodem"));
   if (m && m.text === body) return { ok: true };
   await provider.editMessage(chat.remoteId, messageId, body);
   await refreshAfterChange(provider, chatId);
   return { ok: true };
 }
 async function deleteMessage(chatId, messageId, forEveryone) {
-  if (!messageId) throw new Error("Mensagem inválida.");
+  if (!messageId) throw new Error(tt("chats.mensagemInvalida"));
   const { provider, chat } = await requireProviderFor(chatId);
-  if (!provider.deleteMessage || !provider.capabilities().deleteMessages) throw new Error("Este provedor não permite apagar mensagens.");
+  if (!provider.deleteMessage || !provider.capabilities().deleteMessages) throw new Error(tt("chats.esteProvedorNaoPermiteApagar"));
   ownMessage(chatId, messageId);
   await provider.deleteMessage(chat.remoteId, messageId, forEveryone);
   await refreshAfterChange(provider, chatId);
@@ -79144,11 +79988,11 @@ async function deleteMessage(chatId, messageId, forEveryone) {
 async function markRead(chatId, read2) {
   const { provider, chat } = await requireProviderFor(chatId);
   if (read2) {
-    if (!provider.markRead) throw new Error("Este provedor não permite marcar como lida.");
+    if (!provider.markRead) throw new Error(tt("chats.esteProvedorNaoPermiteMarcar"));
     await provider.markRead(chat.remoteId, null);
     await patchChatCounters(chatId, chat.unreadCount == null ? null : 0, chat.unreadMentions == null ? null : 0);
   } else {
-    if (!provider.markUnread) throw new Error("Este provedor não permite marcar como não lida.");
+    if (!provider.markUnread) throw new Error(tt("chats.esteProvedorNaoPermiteMarcar2"));
     await provider.markUnread(chat.remoteId);
     await patchChatCounters(chatId, Math.max(1, chat.unreadCount ?? 0), chat.unreadMentions);
   }
@@ -79181,9 +80025,9 @@ async function searchMessages(query, chatId) {
 }
 async function fetchAsset(token2) {
   const v = verifyAsset(token2);
-  if (!v) throw new Error("Link de anexo inválido ou expirado.");
+  if (!v) throw new Error(tt("chats.linkDeAnexoInvalidoOu"));
   const { provider } = await requireProviderFor(v.chatId);
-  if (!provider.fetchAttachment) throw new Error("Este provedor não fornece anexos.");
+  if (!provider.fetchAttachment) throw new Error(tt("chats.esteProvedorNaoForneceAnexos"));
   return provider.fetchAttachment(v.ref);
 }
 async function suggestContacts(chatId) {
@@ -79203,10 +80047,10 @@ async function suggestContacts(chatId) {
       score = 90;
       reason = "Mesmo nome";
     } else {
-      const common = nWords.filter((w) => tWords.includes(w)).length;
-      if (common) {
-        score = 40 + common * 20;
-        reason = `Nome parecido (${common} palavra${common > 1 ? "s" : ""} em comum)`;
+      const common2 = nWords.filter((w) => tWords.includes(w)).length;
+      if (common2) {
+        score = 40 + common2 * 20;
+        reason = `Nome parecido (${common2} palavra${common2 > 1 ? "s" : ""} em comum)`;
       }
     }
     const ctxText = norm$1(`${c.context ?? ""} ${c.interests ?? ""}`);
@@ -79355,12 +80199,12 @@ async function loadSelected(chatId, ids2) {
   return msgs;
 }
 async function prepare(chatId, ids2, includeNotes) {
-  if (!ids2.length) throw new Error("Selecione ao menos uma mensagem.");
-  if (ids2.length > 40) throw new Error("Selecione no máximo 40 mensagens.");
+  if (!ids2.length) throw new Error(tt("chats.selecioneAoMenosUmaMensagem"));
+  if (ids2.length > 40) throw new Error(tt("chats.selecioneNoMaximo40Mensagens"));
   const chat = await fullRow(chatId);
-  if (!chat) throw new Error("Conversa não encontrada.");
+  if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
   const msgs = await loadSelected(chatId, ids2);
-  if (!msgs.length) throw new Error("As mensagens selecionadas não estão mais carregadas. Reabra a conversa e selecione de novo.");
+  if (!msgs.length) throw new Error(tt("chats.asMensagensSelecionadasNaoEstao"));
   let contactNotes = null;
   if (includeNotes && chat.contactId) {
     const c = await contactLite(chat.contactId);
@@ -79429,7 +80273,7 @@ async function suggestReplies(req) {
       priority: PRIORITIES.includes(s2.priority) ? s2.priority : null,
       reason: s2.reason ? String(s2.reason).slice(0, 300) : null
     }));
-    if (!suggestions.length) throw new Error("A IA não gerou sugestões.");
+    if (!suggestions.length) throw new Error(tt("chats.aIaNaoGerouSugestoes"));
     return { chatId: req.chatId, suggestions, error: null };
   } catch (e) {
     return { chatId: req.chatId, suggestions: [], error: e instanceof Error ? e.message : String(e) };
@@ -79734,16 +80578,16 @@ async function flushEvents() {
   pendingChats.clear();
   const cfg = await loadConfig();
   const enabled = new Set((await listAccounts(provider.id)).filter((a) => a.syncEnabled && a.status !== "removed").map((a) => a.remoteId));
-  const chats = [];
+  const chats2 = [];
   for (const id of ids2.slice(0, 50)) {
     try {
       const c = await provider.getChat(id);
-      if (c && enabled.has(c.accountId)) chats.push(c);
+      if (c && enabled.has(c.accountId)) chats2.push(c);
     } catch {
     }
   }
   if (ids2.length > 50) void syncNow();
-  const res = await upsertChats(provider.id, chats, cfg.storePreviews);
+  const res = await upsertChats(provider.id, chats2, cfg.storePreviews);
   const local = await chatIdsByRemote(provider.id, ids2);
   local.forEach((id) => invalidateMessages(id));
   await scanMany(provider, local);
@@ -79763,10 +80607,10 @@ async function notifyImportant(ids2) {
     const vip = s2.contactVip || s2.contactPriority === "alta" || s2.priority === "alta";
     if (cfg.notifyVipWaiting && vip && s2.replyState === "needs_reply" && !s2.lastMessageFromMe) {
       notified.set(id, stamp2);
-      await notify({ title: `💬 ${s2.contactName ?? s2.title} mandou mensagem`, body: "Pessoa importante esperando resposta.", source: "mensagens", page: "chats" });
+      await notify({ title: tt("chats.mandouMensagem", { p0: s2.contactName ?? s2.title }), body: tt("chats.pessoaImportanteEsperandoResposta"), source: "mensagens", page: "chats" });
     } else if (cfg.notifyMentions && s2.type === "group" && (s2.unreadMentions ?? 0) > 0 && !s2.mentionsReviewed) {
       notified.set(id, stamp2);
-      await notify({ title: `@ Mencionaram você em ${s2.title}`, body: `${s2.unreadMentions} menção(ões)${s2.mentionsEstimated ? " (estimativa)" : ""}.`, source: "mensagens", page: "chats" });
+      await notify({ title: tt("chats.mencionaramVoceEm", { title: s2.title }), body: tt("chats.mencaoOes", { unreadMentions: s2.unreadMentions, p1: s2.mentionsEstimated ? tt("chats.estimativaParen") : "" }), source: "mensagens", page: "chats" });
     }
   }
 }
@@ -79778,7 +80622,7 @@ async function checkReminders() {
   if (!due.length) return;
   for (const r of due) {
     if (cfg.notifyReminders) {
-      await notify({ title: `⏰ Responder: ${r.title}`, body: r.reminderNote || "Lembrete da Central de Mensagens.", source: "mensagens", page: "chats" });
+      await notify({ title: tt("chats.responder", { title: r.title }), body: r.reminderNote || tt("chats.lembreteDaCentralDeMensagens"), source: "mensagens", page: "chats" });
     }
   }
   await patchOrg(
@@ -79809,7 +80653,7 @@ function registerChatRpc(handle) {
   });
   handle("chats:test", async () => {
     const p = await activeProvider();
-    if (!p) return { ok: false, message: "Ative a Central de Mensagens primeiro." };
+    if (!p) return { ok: false, message: tt("chats.ativeACentralDeMensagens") };
     return p.test();
   });
   handle("chats:agentKey", async () => ({ key: await rotateAgentKey() }));
@@ -79871,7 +80715,7 @@ function registerChatRpc(handle) {
   handle("chats:search", (_e, query, chatId) => searchMessages(String(query ?? ""), chatId ? Number(chatId) : null));
   handle("chats:pendingMessages", (_e, id) => pendingMessages(Number(id)));
   handle("chats:setState", async (_e, chatIds, state) => {
-    if (!STATES.includes(state)) throw new Error("Estado inválido.");
+    if (!STATES.includes(state)) throw new Error(tt("chats.estadoInvalido"));
     const list = ids(chatIds);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     if (state === "auto") await patchOrg(list, { manualState: null, manualAt: null });
@@ -79880,7 +80724,7 @@ function registerChatRpc(handle) {
   });
   handle("chats:snooze", async (_e, chatIds, until, note, reopenOnMessage) => {
     const list = ids(chatIds);
-    if (until && Number.isNaN(Date.parse(until))) throw new Error("Data inválida.");
+    if (until && Number.isNaN(Date.parse(until))) throw new Error(tt("chats.dataInvalida"));
     if (!until) {
       await patchOrg(list, { snoozeUntil: null, snoozedAt: null, reminderNote: null, reminderNotifiedAt: null });
     } else {
@@ -79900,7 +80744,7 @@ function registerChatRpc(handle) {
     changed$2(list);
   });
   handle("chats:setPriority", async (_e, chatIds, priority) => {
-    if (!PRIOS.includes(priority)) throw new Error("Prioridade inválida.");
+    if (!PRIOS.includes(priority)) throw new Error(tt("chats.prioridadeInvalida"));
     const list = ids(chatIds);
     await patchOrg(list, { priority });
     changed$2(list);
@@ -79927,7 +80771,7 @@ function registerChatRpc(handle) {
     const list = ids(chatIds);
     for (const id of list) {
       const c = await chatById(id);
-      if (c?.type === "group" && contactId) throw new Error("Grupos não são pessoas: vincule participantes individualmente.");
+      if (c?.type === "group" && contactId) throw new Error(tt("chats.gruposNaoSaoPessoasVincule"));
     }
     await patchOrg(list, { contactId: contactId ? Number(contactId) : null });
     await touchContactsFromOutbound();
@@ -79935,8 +80779,8 @@ function registerChatRpc(handle) {
   });
   handle("chats:createContact", async (_e, id, name) => {
     const chat = await chatById(Number(id));
-    if (!chat) throw new Error("Conversa não encontrada.");
-    if (chat.type === "group") throw new Error("Grupos não são pessoas.");
+    if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
+    if (chat.type === "group") throw new Error(tt("chats.gruposNaoSaoPessoas"));
     const n = String(name ?? "").trim() || chat.title;
     const ctx = `Criada a partir de conversa no ${networkInfo(chat.network).label}${chat.peerHandle ? ` (${chat.peerHandle})` : ""}.`;
     const contactId = await createContactFromChat(n.slice(0, 120), ctx);
@@ -79949,14 +80793,14 @@ function registerChatRpc(handle) {
   handle("chats:contactNetworks", () => contactNetworks());
   handle("chats:contacts", () => contactsLite());
   handle("chats:setContactPriority", async (_e, contactId, priority, vip) => {
-    if (!["alta", "normal", "baixa"].includes(priority)) throw new Error("Prioridade inválida.");
+    if (!["alta", "normal", "baixa"].includes(priority)) throw new Error(tt("chats.prioridadeInvalida"));
     await setContactPriority(Number(contactId), priority, !!vip);
     changed$2();
   });
   handle("chats:labels", () => listLabels());
   handle("chats:saveLabel", async (_e, id, name, color) => {
     const n = String(name ?? "").trim().slice(0, 40);
-    if (!n) throw new Error("Nome obrigatório.");
+    if (!n) throw new Error(tt("chats.nomeObrigatorio"));
     const col = /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#6366f1";
     const l = await saveLabel(id ? Number(id) : null, n, col);
     changed$2();
@@ -79967,7 +80811,7 @@ function registerChatRpc(handle) {
     changed$2();
   });
   handle("chats:setLabels", async (_e, entity, entityIds, add, remove) => {
-    if (entity !== "chat" && entity !== "contact") throw new Error("Entidade inválida.");
+    if (entity !== "chat" && entity !== "contact") throw new Error(tt("chats.entidadeInvalida"));
     await setLabels(entity, ids(entityIds), ids(add), ids(remove));
     changed$2(entity === "chat" ? ids(entityIds) : []);
   });
@@ -79975,10 +80819,10 @@ function registerChatRpc(handle) {
   handle("chats:contactLabelMap", async () => Object.fromEntries(await labelMap("contact")));
   handle("chats:createTodo", async (_e, id, title, dueDate, messageId) => {
     const chat = await fullRow(Number(id));
-    if (!chat) throw new Error("Conversa não encontrada.");
+    if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
     const t = String(title ?? "").trim().slice(0, 200);
-    if (!t) throw new Error("Título obrigatório.");
-    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error("Data inválida.");
+    if (!t) throw new Error(tt("chats.tituloObrigatorio"));
+    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error(tt("chats.dataInvalida"));
     const notes = `💬 Conversa: ${chat.title} (${networkInfo(chat.network).label})${chat.contactName ? ` · Pessoa: ${chat.contactName}` : ""}
 Abrir: #/chats?c=${chat.id}`;
     const todoId = await createChatTodo(chat.id, t, notes, dueDate, messageId);
@@ -80007,7 +80851,7 @@ Abrir: #/chats?c=${chat.id}`;
   });
   handle("chats:templates", () => listTemplates());
   handle("chats:saveTemplate", async (_e, id, title, body) => {
-    if (!String(title ?? "").trim() || !String(body ?? "").trim()) throw new Error("Título e texto são obrigatórios.");
+    if (!String(title ?? "").trim() || !String(body ?? "").trim()) throw new Error(tt("chats.tituloETextoSaoObrigatorios"));
     await saveTemplate(id ? Number(id) : null, String(title).slice(0, 80), String(body).slice(0, 4e3));
   });
   handle("chats:deleteTemplate", (_e, id) => deleteTemplate(Number(id)));
@@ -80026,7 +80870,7 @@ const STABILITIES = ["permanent", "stable", "evolving", "transient"];
 const RELATION_KINDS = ["RELATED_TO", "SUPPORTS", "CONTRADICTS", "DERIVED_FROM", "SUPERSEDES", "PART_OF"];
 const SUGGESTION_OPS = ["CREATE", "UPDATE", "MERGE", "ARCHIVE", "RESOLVE", "ASK"];
 const FEEDBACK_VERDICTS = ["approved", "approved_edited", "rejected", "snoozed", "irrelevant", "incorrect", "duplicate", "too_personal", "other"];
-const TYPE_LABEL = {
+const TYPE_LABEL = labels("shared.memory.type", {
   FACT: "Fato",
   PREFERENCE: "Preferência",
   GOAL: "Objetivo",
@@ -80036,7 +80880,61 @@ const TYPE_LABEL = {
   EXPERIENCE: "Experiência",
   LEARNING: "Aprendizado",
   INFERENCE: "Inferência"
-};
+});
+labels("shared.memory.layer", {
+  semantic: "Semântica",
+  episodic: "Episódica",
+  procedural: "Procedural",
+  temporal: "Temporal",
+  reflective: "Reflexiva"
+});
+labels("shared.memory.status", {
+  active: "Ativa",
+  unconfirmed: "Não confirmada",
+  outdated: "Desatualizada",
+  archived: "Arquivada",
+  superseded: "Substituída",
+  expired: "Expirada"
+});
+labels("shared.memory.sensitivity", { NORMAL: "Normal", PRIVATE: "Privada", RESTRICTED: "Restrita" });
+labels("shared.memory.reliability", { stated: "Declarada por mim", observed: "Observada", inferred: "Inferida pela IA" });
+labels("shared.memory.stability", { permanent: "Permanente", stable: "Estável", evolving: "Muda com o tempo", transient: "Temporária" });
+labels("shared.memory.origin", {
+  manual: "Manual",
+  import: "Importação",
+  migration: "Migração da Base",
+  agent: "Memory Agent",
+  interview: "Me conheça melhor",
+  consolidation: "Consolidação",
+  text: "Texto livre"
+});
+labels("shared.memory.relation", {
+  RELATED_TO: "Relacionada a",
+  SUPPORTS: "Sustenta",
+  CONTRADICTS: "Contradiz",
+  DERIVED_FROM: "Derivada de",
+  SUPERSEDES: "Substitui",
+  PART_OF: "Parte de"
+});
+labels("shared.memory.op", {
+  CREATE: "Nova memória",
+  UPDATE: "Atualizar",
+  MERGE: "Consolidar",
+  ARCHIVE: "Arquivar",
+  RESOLVE: "Resolver conflito",
+  ASK: "Pergunta"
+});
+labels("shared.memory.verdict", {
+  approved: "Aprovada",
+  approved_edited: "Aprovada com edição",
+  rejected: "Rejeitada",
+  snoozed: "Adiada",
+  irrelevant: "Irrelevante",
+  incorrect: "Incorreta",
+  duplicate: "Duplicada",
+  too_personal: "Pessoal demais",
+  other: "Outro motivo"
+});
 function defaultLayer(type) {
   switch (type) {
     case "EXPERIENCE":
@@ -80087,19 +80985,19 @@ class AiBudgetError extends Error {
 }
 const today = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
 async function callsToday() {
-  let st = { day: today(), n: 0 };
+  let st2 = { day: today(), n: 0 };
   try {
     const v = JSON.parse(await getSetting("memory_llm_calls") || "{}");
-    if (v?.day === st.day) st = { day: v.day, n: Number(v.n) || 0 };
+    if (v?.day === st2.day) st2 = { day: v.day, n: Number(v.n) || 0 };
   } catch {
   }
   const limit = Math.max(0, Number(await getSetting("memory_max_llm_calls_day") ?? 40) || 0);
-  return { ...st, limit };
+  return { ...st2, limit };
 }
 async function callAi(op, system, prompt) {
-  const st = await callsToday();
-  if (st.n >= st.limit) throw new AiBudgetError(`Limite diário de chamadas de IA da Memória atingido (${st.limit}). Ajuste em Configurações.`);
-  await setSetting("memory_llm_calls", JSON.stringify({ day: st.day, n: st.n + 1 }));
+  const st2 = await callsToday();
+  if (st2.n >= st2.limit) throw new AiBudgetError(`Limite diário de chamadas de IA da Memória atingido (${st2.limit}). Ajuste em Configurações.`);
+  await setSetting("memory_llm_calls", JSON.stringify({ day: st2.day, n: st2.n + 1 }));
   return engine.complete(system, prompt, { model: await modelFor(op), op });
 }
 function parseJsonObject(text) {
@@ -80368,20 +81266,20 @@ function publicPolicies() {
   return MEMORY_POLICIES.map((p) => ({ ...p, types: p.consume && p.consume.types ? p.consume.types : MEMORY_TYPES }));
 }
 function all(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  if (params.length) st.bind(params);
+  const st2 = db2.prepare(sql);
+  if (params.length) st2.bind(params);
   const out = [];
-  while (st.step()) out.push(st.getAsObject());
-  st.free();
+  while (st2.step()) out.push(st2.getAsObject());
+  st2.free();
   return out;
 }
 function one(db2, sql, params = []) {
   return all(db2, sql, params)[0] ?? null;
 }
 function exec(db2, sql, params = []) {
-  const st = db2.prepare(sql);
-  st.run(params);
-  st.free();
+  const st2 = db2.prepare(sql);
+  st2.run(params);
+  st2.free();
   return db2.getRowsModified();
 }
 function lastId(db2) {
@@ -81320,13 +82218,13 @@ async function listSuggestions(owner2, f = {}) {
   return read((db2) => {
     const where = ["ownerId = ?"];
     const params = [owner2];
-    const st = f.status ?? "open";
-    if (st === "open") {
+    const st2 = f.status ?? "open";
+    if (st2 === "open") {
       where.push(`(status IN ('pending','needs_info') OR (status = 'snoozed' AND (snoozedUntil IS NULL OR snoozedUntil <= ?)))`);
       params.push(nowIso());
-    } else if (st !== "all") {
+    } else if (st2 !== "all") {
       where.push("status = ?");
-      params.push(st);
+      params.push(st2);
     }
     if (f.op) {
       where.push("op = ?");
@@ -81832,7 +82730,7 @@ async function processEventBatch() {
   for (const [producer, evs] of byProducer) {
     const evIds = evs.map((e) => e.id);
     try {
-      const st = await extractFromText({
+      const st2 = await extractFromText({
         useCase: producer,
         text: evs.map((e) => `--- evento ${e.id}${e.sourceRef ? ` (${e.sourceRef})` : ""}
 ${e.payload}`).join("\n\n"),
@@ -81840,8 +82738,8 @@ ${e.payload}`).join("\n\n"),
         sourceRef: producer,
         op: "agente"
       });
-      out.calls += st.calls;
-      out.proposed += st.proposed;
+      out.calls += st2.calls;
+      out.proposed += st2.proposed;
       exec(db2, `UPDATE memory_events SET status='done', error=NULL, processedAt=? WHERE id IN (${evIds.map(() => "?").join(",")})`, [nowIso(), ...evIds]);
     } catch (e) {
       out.failed += evs.length;
@@ -82045,10 +82943,10 @@ async function answerGap(id, answer) {
   const db2 = await getDb();
   const g = one(db2, "SELECT question, topic FROM memory_gaps WHERE id = ? AND ownerId = ?", [id, owner2]);
   if (!g) throw new MemoryError("Lacuna não encontrada.", "not_found");
-  const st = await extractFromText({ useCase: "memory.interview", text: answer, sourceKind: "interview", sourceRef: `lacuna#${id}`, op: "entrevista", hint: `Resposta à pergunta: "${g.question}"` });
+  const st2 = await extractFromText({ useCase: "memory.interview", text: answer, sourceKind: "interview", sourceRef: `lacuna#${id}`, op: "entrevista", hint: `Resposta à pergunta: "${g.question}"` });
   exec(db2, "UPDATE memory_gaps SET status = 'answered', resolvedAt = ? WHERE id = ? AND ownerId = ?", [nowIso(), id, owner2]);
   saveDb();
-  return st;
+  return st2;
 }
 function interviewSync(db2, owner2, id) {
   const r = one(db2, "SELECT * FROM memory_interviews WHERE id = ? AND ownerId = ?", [id, owner2]);
@@ -82699,8 +83597,8 @@ async function migrateLegacy(opts) {
   if (prev && !opts.force) return { ...jparse(prev.stats, { created: 0, suggested: 0, skipped: 0, reasons: {} }), alreadyImported: true };
   let result;
   if (opts.ai) {
-    const st = await extractFromText({ useCase: "memory.migration", text, sourceKind: "migration", sourceRef: "knowledge_base", op: "migracao" });
-    result = { created: 0, suggested: st.proposed, skipped: Object.values(st.dropped).reduce((a, b2) => a + b2, 0), reasons: st.dropped, ai: st };
+    const st2 = await extractFromText({ useCase: "memory.migration", text, sourceKind: "migration", sourceRef: "knowledge_base", op: "migracao" });
+    result = { created: 0, suggested: st2.proposed, skipped: Object.values(st2.dropped).reduce((a, b2) => a + b2, 0), reasons: st2.dropped, ai: st2 };
   } else {
     result = await importMarkdownItems(text, "migration", "knowledge_base", "memory.migration");
   }
@@ -82785,7 +83683,7 @@ async function newsReadingEvidence() {
   const custom = (await getNewsCategories()).filter((c) => !NEWS_DEFAULT_CATEGORIES.includes(c));
   const reads = await getReads();
   if (!reads.length && !custom.length) {
-    throw new Error('Abra algumas notícias em "Ler mais" (ou cadastre categorias próprias) antes de sugerir memórias.');
+    throw new Error(tt("services.abraAlgumasNoticiasEmLer"));
   }
   const lines = [
     "Evidência de interesses vinda do meu Resumo Diário de Notícias (comportamento, não afirmações explícitas).",
@@ -82829,7 +83727,7 @@ async function collect(category, targetDate, tzOffsetMin2) {
     headers: { "User-Agent": "Mozilla/5.0 (rickOS news digest)" },
     signal: AbortSignal.timeout(2e4)
   });
-  if (!res.ok) throw new Error(`Google News respondeu ${res.status}`);
+  if (!res.ok) throw new Error(tt("services.googleNewsRespondeu", { status: res.status }));
   const items = parseRss(await res.text());
   const seen2 = /* @__PURE__ */ new Set();
   return items.filter((it) => {
@@ -83411,8 +84309,8 @@ function listTerminalSessions(limit = 60) {
         if (!n.endsWith(".jsonl")) continue;
         const file = path.join(dir, n);
         try {
-          const st = fs.statSync(file);
-          if (st.isFile() && st.size > 0) files.push({ file, configDir: cfg, mtime: st.mtimeMs, size: st.size });
+          const st2 = fs.statSync(file);
+          if (st2.isFile() && st2.size > 0) files.push({ file, configDir: cfg, mtime: st2.mtimeMs, size: st2.size });
         } catch {
         }
       }
@@ -83577,14 +84475,14 @@ function parseTranscript(file) {
   let title = "";
   for (let i = entries.length - 1; i >= 0 && !title; i--) title = entries[i].customTitle || entries[i].aiTitle || "";
   if (!title && turns[0]) title = oneLine(turns[0].prompt, 60);
-  const st = fs.statSync(file);
+  const st2 = fs.statSync(file);
   return {
     cwd,
     title,
     turns,
     contextTokens,
-    createdAt: turns[0]?.createdAt ?? new Date(st.birthtimeMs || st.mtimeMs).toISOString(),
-    updatedAt: new Date(st.mtimeMs).toISOString()
+    createdAt: turns[0]?.createdAt ?? new Date(st2.birthtimeMs || st2.mtimeMs).toISOString(),
+    updatedAt: new Date(st2.mtimeMs).toISOString()
   };
 }
 const MAX_FILE = 512 * 1024;
@@ -83617,8 +84515,8 @@ function configLabel(dir) {
 }
 function readInfo(file, kind, name, base) {
   try {
-    const st = fs.statSync(file);
-    if (!st.isFile() || st.size > MAX_FILE) return null;
+    const st2 = fs.statSync(file);
+    if (!st2.isFile() || st2.size > MAX_FILE) return null;
     const { data: data2, body } = parseFrontmatter(fs.readFileSync(file, "utf8"));
     const firstLine = body.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";
     return {
@@ -83629,7 +84527,7 @@ function readInfo(file, kind, name, base) {
       argumentHint: data2["argument-hint"] || null,
       kind,
       path: file,
-      updatedAt: st.mtime.toISOString()
+      updatedAt: st2.mtime.toISOString()
     };
   } catch {
     return null;
@@ -83700,13 +84598,13 @@ function skillFile(id, projects) {
 }
 function readSkill(id, projects) {
   const info = skillFile(id, projects);
-  if (!info) throw new Error("Skill não encontrada.");
+  if (!info) throw new Error(tt("aiconv.skillNaoEncontrada"));
   return { info, content: fs.readFileSync(info.path, "utf8") };
 }
 function saveSkill(id, content, projects) {
   const info = skillFile(id, projects);
-  if (!info) throw new Error("Skill não encontrada.");
-  if (typeof content !== "string" || content.length > MAX_FILE) throw new Error("Conteúdo inválido.");
+  if (!info) throw new Error(tt("aiconv.skillNaoEncontrada"));
+  if (typeof content !== "string" || content.length > MAX_FILE) throw new Error(tt("aiconv.conteudoInvalido"));
   fs.writeFileSync(info.path, content, "utf8");
   cache$1 = null;
   return skillFile(id, projects) ?? info;
@@ -83822,18 +84720,18 @@ function runUsage(configDir) {
     let err = "";
     const timer2 = setTimeout(() => {
       child.kill("SIGTERM");
-      reject2(new Error("O Claude CLI demorou demais para responder."));
+      reject2(new Error(tt("aiconv.oClaudeCliDemorouDemais")));
     }, TIMEOUT_MS);
     child.stdout.on("data", (b2) => out += b2.toString());
     child.stderr.on("data", (b2) => err += b2.toString());
     child.on("error", (e) => {
       clearTimeout(timer2);
-      reject2(new Error(e.code === "ENOENT" ? "Claude CLI não encontrado no PATH." : e.message));
+      reject2(new Error(e.code === "ENOENT" ? tt("aiconv.claudeCliNaoEncontradoNo") : e.message));
     });
     child.on("close", (code) => {
       clearTimeout(timer2);
       if (code === 0 || out.trim()) resolve(out);
-      else reject2(new Error(err.trim().split("\n").pop() || `claude saiu com código ${code}`));
+      else reject2(new Error(err.trim().split("\n").pop() || tt("aiconv.claudeSaiuComCodigo", { code })));
     });
   });
 }
@@ -83904,7 +84802,7 @@ function readCodexRateLimits() {
       child.kill("SIGTERM");
       fn();
     };
-    const timer2 = setTimeout(() => finish(() => reject2(new Error("O Codex demorou demais para responder."))), TIMEOUT_MS);
+    const timer2 = setTimeout(() => finish(() => reject2(new Error(tt("aiconv.oCodexDemorouDemaisPara")))), TIMEOUT_MS);
     const send = (msg) => {
       child.stdin.write(JSON.stringify(msg) + "\n");
     };
@@ -83912,7 +84810,7 @@ function readCodexRateLimits() {
     child.stdin.on("error", () => void 0);
     child.stderr.on("data", (b2) => err += b2.toString());
     child.on("close", (code) => {
-      finish(() => code === 127 ? resolve(null) : reject2(new Error(err.trim().split("\n").pop() || `codex saiu com código ${code}`)));
+      finish(() => code === 127 ? resolve(null) : reject2(new Error(err.trim().split("\n").pop() || tt("aiconv.codexSaiuComCodigo", { code }))));
     });
     child.stdout.on("data", (b2) => {
       buf += b2.toString();
@@ -83931,7 +84829,7 @@ function readCodexRateLimits() {
           send({ method: "initialized" });
           send({ method: "account/rateLimits/read", id: 2 });
         } else if (msg.id === 2) {
-          finish(() => msg.error ? reject2(new Error(msg.error.message || "Erro do Codex.")) : resolve(msg.result));
+          finish(() => msg.error ? reject2(new Error(msg.error.message || tt("aiconv.erroDoCodex"))) : resolve(msg.result));
         }
       }
     });
@@ -83944,9 +84842,9 @@ async function fetchCodex() {
     const res = await readCodexRateLimits();
     if (!res) return null;
     const limits = codexLimits(res);
-    return { provider: "codex", configDir: "codex", label: "Codex", limits, raw: limits.length ? null : "Sem limites informados pelo Codex (login por API key?).", error: null };
+    return { provider: "codex", configDir: "codex", label: "Codex · pessoal", limits, raw: limits.length ? null : "Sem limites informados pelo Codex (login por API key?).", error: null };
   } catch (e) {
-    return { provider: "codex", configDir: "codex", label: "Codex", limits: [], raw: null, error: e instanceof Error ? e.message : String(e) };
+    return { provider: "codex", configDir: "codex", label: "Codex · pessoal", limits: [], raw: null, error: e instanceof Error ? e.message : String(e) };
   }
 }
 let cache = null;
@@ -83987,10 +84885,10 @@ const MAX_IMAGE_B64 = 7 * 1024 * 1024;
 const MAX_THUMB = 80 * 1024;
 function sanitizeImages(raw) {
   if (!Array.isArray(raw)) return [];
-  if (raw.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`Máximo de ${MAX_IMAGES_PER_MESSAGE} imagens por mensagem.`);
+  if (raw.length > MAX_IMAGES_PER_MESSAGE) throw new Error(tt("aiconv.maximoDeImagensPorMensagem", { MAX_IMAGES_PER_MESSAGE }));
   return raw.map((x) => {
-    if (!x || !IMAGE_MEDIA_TYPES.includes(x.mediaType)) throw new Error("Formato de imagem não suportado.");
-    if (typeof x.data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(x.data) || x.data.length > MAX_IMAGE_B64) throw new Error("Imagem inválida ou grande demais.");
+    if (!x || !IMAGE_MEDIA_TYPES.includes(x.mediaType)) throw new Error(tt("aiconv.formatoDeImagemNaoSuportado"));
+    if (typeof x.data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(x.data) || x.data.length > MAX_IMAGE_B64) throw new Error(tt("aiconv.imagemInvalidaOuGrandeDemais"));
     const thumb = typeof x.thumb === "string" && x.thumb.startsWith("data:image/") && x.thumb.length <= MAX_THUMB ? x.thumb : "";
     return { mediaType: x.mediaType, data: x.data, thumb };
   });
@@ -84084,8 +84982,8 @@ function registerAiConvRpc(handle, deps2) {
   });
   handle("conv:fork", async (_e, id) => {
     const c = await getConversation(id);
-    if (!c?.sessionId) throw new Error("A conversa ainda não tem sessão para ramificar.");
-    if (isRunning(id)) throw new Error("Espere a execução terminar para ramificar.");
+    if (!c?.sessionId) throw new Error(tt("aiconv.aConversaAindaNaoTem"));
+    if (isRunning(id)) throw new Error(tt("aiconv.espereAExecucaoTerminarPara"));
     const turns = await listTurns(id);
     const f = await createConversation({
       title: `↳ ${c.title}`.slice(0, 200),
@@ -84113,9 +85011,9 @@ function registerAiConvRpc(handle, deps2) {
   });
   const convDir = async (id, repoRel) => {
     const c = await getConversation(id);
-    if (!c) throw new Error("Conversa não encontrada.");
+    if (!c) throw new Error(tt("aiconv.conversaNaoEncontrada"));
     const root = c.cwd || await deps2.resolveProjectCwd(c.projectId);
-    if (!root) throw new Error("Esta conversa não tem pasta de trabalho.");
+    if (!root) throw new Error(tt("aiconv.estaConversaNaoTemPasta"));
     if (!repoRel) return { dir: root, baseRef: c.baseRef };
     const rel = String(repoRel);
     return { dir: resolveRepoDir(root, rel), baseRef: workspaceBaseRef(root, rel) };
@@ -84135,7 +85033,7 @@ function registerAiConvRpc(handle, deps2) {
     return commit(dir, String(message ?? ""), Array.isArray(paths) ? paths.map(String) : null);
   });
   handle("conv:discard", async (_e, id, filePath, repoRel) => {
-    if (isRunning(id)) throw new Error("Espere a execução terminar.");
+    if (isRunning(id)) throw new Error(tt("aiconv.espereAExecucaoTerminar"));
     const { dir } = await convDir(id, repoRel);
     await discard(dir, String(filePath));
     return true;
@@ -84148,7 +85046,7 @@ function registerAiConvRpc(handle, deps2) {
     const c = await getConversation(id);
     const { dir } = await convDir(id, repoRel);
     const ctx = await commitContext(dir);
-    if (!ctx.trim()) throw new Error("Nada para descrever.");
+    if (!ctx.trim()) throw new Error(tt("aiconv.nadaParaDescrever"));
     const out = await runClaude(
       `Escreva UMA mensagem de commit para as mudanças abaixo, no mesmo estilo e idioma dos commits recentes (ex.: convencional "tipo(escopo): resumo"). Responda só com a mensagem, sem aspas nem explicação; corpo opcional depois de uma linha em branco.
 
@@ -84160,8 +85058,8 @@ ${ctx}`,
   });
   handle("conv:removeWorktree", async (_e, id) => {
     const c = await getConversation(id);
-    if (!c?.useWorktree || !c.repoPath || !c.cwd) throw new Error("Esta conversa não tem worktree.");
-    if (isRunning(id)) throw new Error("Espere a execução terminar.");
+    if (!c?.useWorktree || !c.repoPath || !c.cwd) throw new Error(tt("aiconv.estaConversaNaoTemWorktree"));
+    if (isRunning(id)) throw new Error(tt("aiconv.espereAExecucaoTerminar"));
     await removeWorktree(c.repoPath, c.cwd, c.worktreeBranch);
     await updateConversation(id, { archived: true });
     await emitConv(id);
@@ -84192,7 +85090,7 @@ ${ctx}`,
   });
   handle("conv:importTerminal", async (_e, sessionId, configDir) => {
     const found = findTranscript(sessionId, configDir);
-    if (!found) throw new Error("Transcript da sessão não encontrado.");
+    if (!found) throw new Error(tt("aiconv.transcriptDaSessaoNaoEncontrado"));
     const parsed = parseTranscript(found.file);
     const existing = await findConversationBySession(sessionId);
     if (existing) {
@@ -84220,13 +85118,13 @@ ${ctx}`,
   });
   handle("conv:resync", async (_e, id) => {
     const c = await getConversation(id);
-    if (!c?.sessionId) throw new Error("Esta conversa ainda não tem sessão.");
-    if (isRunning(id)) throw new Error("A conversa está executando.");
+    if (!c?.sessionId) throw new Error(tt("aiconv.estaConversaAindaNaoTem"));
+    if (isRunning(id)) throw new Error(tt("aiconv.aConversaEstaExecutando"));
     const found = findTranscript(c.sessionId, c.configDir);
-    if (!found) throw new Error("Transcript da sessão não encontrado.");
+    if (!found) throw new Error(tt("aiconv.transcriptDaSessaoNaoEncontrado"));
     const parsed = parseTranscript(found.file);
-    const current = await listTurns(id);
-    if (parsed.turns.length <= current.length) return { updated: false };
+    const current2 = await listTurns(id);
+    if (parsed.turns.length <= current2.length) return { updated: false };
     await replaceTurns(id, parsed.turns);
     await setConversationRuntime(id, { contextTokens: parsed.contextTokens });
     await emitConv(id);
@@ -84522,7 +85420,7 @@ function run(cmd, args, cwd, timeoutMs = 2e4) {
     let err = "";
     const timer2 = setTimeout(() => {
       child.kill("SIGKILL");
-      reject2(new Error(`${cmd} ${args[0]} demorou demais`));
+      reject2(new Error(tt("services.demorouDemais", { cmd, p1: args[0] })));
     }, timeoutMs);
     child.stdout.on("data", (d) => out += d.toString());
     child.stderr.on("data", (d) => err += d.toString());
@@ -84533,7 +85431,7 @@ function run(cmd, args, cwd, timeoutMs = 2e4) {
     child.on("close", (code) => {
       clearTimeout(timer2);
       if (code === 0) resolve(out);
-      else reject2(new Error(err.trim() || `${cmd} saiu com código ${code}`));
+      else reject2(new Error(err.trim() || tt("services.saiuComCodigo", { cmd, code })));
     });
   });
 }
@@ -84564,9 +85462,9 @@ async function getStaleDays() {
   return Number.isFinite(n) && n > 0 ? n : 3;
 }
 async function mainRepoOf(dir) {
-  const common = await gitOk(dir, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  if (!common) return null;
-  const c = common.trim();
+  const common2 = await gitOk(dir, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  if (!common2) return null;
+  const c = common2.trim();
   return path.basename(c) === ".git" ? path.dirname(c) : c;
 }
 function findReposUnder(root) {
@@ -84754,7 +85652,7 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
     const branches = await mapLimit(refs, 6, async (r) => {
       const wt = wtByBranch.get(r.branch) ?? null;
       const isBase = r.branch === baseBranch;
-      const [lr, localOnlyOut, st] = await Promise.all([
+      const [lr, localOnlyOut, st2] = await Promise.all([
         gitOk(c.path, ["rev-list", "--left-right", "--count", `${base}...${r.branch}`]),
         remotes ? gitOk(c.path, ["rev-list", "--count", r.branch, "--not", "--remotes"]) : Promise.resolve(null),
         wt && !wt.prunable ? countStatus(wt.path) : Promise.resolve(null)
@@ -84780,8 +85678,8 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
         upstreamGone: r.track === "[gone]",
         // no remote at all → everything ahead of the base exists only on this machine
         localOnly: !remotes ? isBase ? 0 : ahead : localOnlyOut == null ? null : Number(localOnlyOut.trim()) || 0,
-        dirty: st?.dirty ?? null,
-        untracked: st?.untracked ?? null,
+        dirty: st2?.dirty ?? null,
+        untracked: st2?.untracked ?? null,
         merged: !isBase && merged.has(r.branch),
         agent: AGENT_BRANCH.test(r.branch) || !!wt && AGENT_PATH.test(wt.path),
         pr: prs.get(r.branch) ?? null,
@@ -84792,7 +85690,7 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
     for (const w of worktrees) {
       if (w.branch && refs.some((r) => r.branch === w.branch)) continue;
       if (w.isMain && !w.branch) continue;
-      const st = w.prunable ? null : await countStatus(w.path);
+      const st2 = w.prunable ? null : await countStatus(w.path);
       const info = {
         id: `${c.path}::wt:${w.path}`,
         repoPath: c.path,
@@ -84811,8 +85709,8 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
         upstream: null,
         upstreamGone: false,
         localOnly: null,
-        dirty: st?.dirty ?? null,
-        untracked: st?.untracked ?? null,
+        dirty: st2?.dirty ?? null,
+        untracked: st2?.untracked ?? null,
         merged: false,
         agent: AGENT_PATH.test(w.path),
         pr: null,
@@ -84853,7 +85751,7 @@ async function cachedScan(maxAgeMs) {
 }
 async function assertKnownRepo(repoPath) {
   const scan = lastScan ?? await scanGit({ prs: false });
-  if (!scan.repos.some((r) => r.path === repoPath)) throw new Error("Repositório desconhecido — atualize a lista.");
+  if (!scan.repos.some((r) => r.path === repoPath)) throw new Error(tt("services.repositorioDesconhecidoAtualizeALista"));
 }
 function knownBranch(repoPath, branch) {
   return lastScan?.branches.find((b2) => b2.repoPath === repoPath && b2.branch === branch);
@@ -84871,8 +85769,8 @@ async function branchDetails(repoPath, branch, worktreePath) {
     details.diffStat = (await gitOk(repoPath, ["diff", "--stat=100", `${base}...${branch}`]) || "").trim();
   }
   if (worktreePath && fs.existsSync(worktreePath)) {
-    const st = await gitOk(worktreePath, ["status", "--porcelain=v1"]);
-    details.files = (st || "").split("\n").filter((l) => l.trim()).map((l) => ({ status: l.slice(0, 2).trim() || "?", path: l.slice(3) }));
+    const st2 = await gitOk(worktreePath, ["status", "--porcelain=v1"]);
+    details.files = (st2 || "").split("\n").filter((l) => l.trim()).map((l) => ({ status: l.slice(0, 2).trim() || "?", path: l.slice(3) }));
   }
   return details;
 }
@@ -84889,9 +85787,9 @@ async function fetchRepo(repoPath) {
 async function deleteMergedBranch(repoPath, branch) {
   await assertKnownRepo(repoPath);
   const b2 = knownBranch(repoPath, branch);
-  if (!b2) throw new Error("Branch não encontrada — atualize a lista.");
-  if (b2.isBase) throw new Error("Não dá para apagar a branch principal.");
-  if (b2.status !== "merged") throw new Error("Só branches já mergeadas podem ser apagadas por aqui.");
+  if (!b2) throw new Error(tt("services.branchNaoEncontradaAtualizeA"));
+  if (b2.isBase) throw new Error(tt("services.naoDaParaApagarA"));
+  if (b2.status !== "merged") throw new Error(tt("services.soBranchesJaMergeadasPodem"));
   if (b2.worktreePath) {
     await git(repoPath, ["worktree", "remove", b2.worktreePath]);
   }
@@ -84902,7 +85800,7 @@ async function deleteMergedBranch(repoPath, branch) {
 async function createPullRequest(repoPath, branch) {
   await assertKnownRepo(repoPath);
   const b2 = knownBranch(repoPath, branch);
-  if (!b2 || b2.isBase) throw new Error("Branch inválida para PR.");
+  if (!b2 || b2.isBase) throw new Error(tt("services.branchInvalidaParaPr"));
   if (b2.pr?.state === "OPEN") return { url: b2.pr.url };
   const { baseBranch } = await resolveBase(repoPath);
   if (!b2.upstream || b2.upstreamGone || (b2.localOnly ?? 0) > 0) {
@@ -84916,8 +85814,8 @@ async function createPullRequest(repoPath, branch) {
 async function openPath(target, app) {
   const scan = lastScan ?? await scanGit({ prs: false });
   const allowed = scan.repos.some((r) => r.path === target) || scan.branches.some((b2) => b2.worktreePath === target);
-  if (!allowed || !fs.existsSync(target)) throw new Error("Pasta desconhecida ou inexistente.");
-  if (process.platform !== "darwin") throw new Error("Abrir pastas só é suportado no macOS.");
+  if (!allowed || !fs.existsSync(target)) throw new Error(tt("services.pastaDesconhecidaOuInexistente"));
+  if (process.platform !== "darwin") throw new Error(tt("services.abrirPastasSoESuportado"));
   const args = app === "vscode" ? ["-a", "Visual Studio Code", target] : app === "terminal" ? ["-a", "Terminal", target] : [target];
   await run("open", args, os.homedir(), 1e4);
 }
@@ -85010,10 +85908,10 @@ async function readRoadmap(projectId) {
 async function setRoadmapItem(projectId, line, expected, mark) {
   const p = await getProject(projectId);
   const file = p ? roadmapPath(p) : null;
-  if (!file || !fs.existsSync(file)) throw new Error("ROADMAP_RICKOS.md não encontrado");
+  if (!file || !fs.existsSync(file)) throw new Error(tt("services.roadmapRickosMdNaoEncontrado"));
   const lines = fs.readFileSync(file, "utf8").split("\n");
   const cur = lines[line];
-  if (cur == null || !cur.includes(expected)) throw new Error("O arquivo mudou — recarregue o roadmap");
+  if (cur == null || !cur.includes(expected)) throw new Error(tt("services.oArquivoMudouRecarregueO"));
   lines[line] = cur.replace(/\[( |x|X|~|-)\]/, `[${mark}]`);
   const content = lines.join("\n");
   fs.writeFileSync(file, content, "utf8");
@@ -85022,7 +85920,7 @@ async function setRoadmapItem(projectId, line, expected, mark) {
 async function numberRoadmapFile(projectId) {
   const p = await getProject(projectId);
   const file = p ? roadmapPath(p) : null;
-  if (!file || !fs.existsSync(file)) throw new Error("ROADMAP_RICKOS.md não encontrado");
+  if (!file || !fs.existsSync(file)) throw new Error(tt("services.roadmapRickosMdNaoEncontrado"));
   const r = numberRoadmap(fs.readFileSync(file, "utf8"));
   if (r.added) fs.writeFileSync(file, r.content, "utf8");
   return r;
@@ -85030,11 +85928,11 @@ async function numberRoadmapFile(projectId) {
 async function setRoadmapItems(projectId, items, mark) {
   const p = await getProject(projectId);
   const file = p ? roadmapPath(p) : null;
-  if (!file || !fs.existsSync(file)) throw new Error("ROADMAP_RICKOS.md não encontrado");
+  if (!file || !fs.existsSync(file)) throw new Error(tt("services.roadmapRickosMdNaoEncontrado"));
   const lines = fs.readFileSync(file, "utf8").split("\n");
   for (const it of items) {
     const cur = lines[it.line];
-    if (cur == null || !cur.includes(it.expected)) throw new Error("O arquivo mudou — recarregue o roadmap");
+    if (cur == null || !cur.includes(it.expected)) throw new Error(tt("services.oArquivoMudouRecarregueO"));
   }
   for (const it of items) lines[it.line] = lines[it.line].replace(/\[( |x|X|~|-)\]/, `[${mark}]`);
   const content = lines.join("\n");
@@ -85044,7 +85942,7 @@ async function setRoadmapItems(projectId, items, mark) {
 async function createRoadmapTemplate(projectId) {
   const p = await getProject(projectId);
   const file = p ? roadmapPath(p) : null;
-  if (!p || !file) throw new Error("Defina o caminho local do projeto primeiro");
+  if (!p || !file) throw new Error(tt("services.definaOCaminhoLocalDo2"));
   if (fs.existsSync(file)) return { content: fs.readFileSync(file, "utf8") };
   const content = `# Roadmap — ${p.name}
 
@@ -85131,24 +86029,24 @@ async function projectsOverview() {
     const activeCycle = cycles.find((c) => c.projectId === p.id && c.status === "ativo") ?? null;
     const alerts = [];
     const open = p.status !== "concluido" && p.status !== "encerrado";
-    if (p.status === "foco" && !p.nextAction) alerts.push({ kind: "sem_proxima_acao", severity: "alta", text: "Em foco sem próxima ação" });
-    if (open && p.blocker) alerts.push({ kind: "travado", severity: "alta", text: `Travado: ${p.blocker}` });
-    if (p.status === "pausado" && p.resumeAt && p.resumeAt <= today2) alerts.push({ kind: "pausa_vencida", severity: "alta", text: `Pausa venceu em ${p.resumeAt} — retomar ou decidir` });
+    if (p.status === "foco" && !p.nextAction) alerts.push({ kind: "sem_proxima_acao", severity: "alta", text: tt("services.alert.noNextAction") });
+    if (open && p.blocker) alerts.push({ kind: "travado", severity: "alta", text: tt("services.alert.blocked", { blocker: p.blocker }) });
+    if (p.status === "pausado" && p.resumeAt && p.resumeAt <= today2) alerts.push({ kind: "pausa_vencida", severity: "alta", text: tt("services.alert.pauseDue", { date: p.resumeAt }) });
     if (p.status === "foco" && (idleDays == null || idleDays >= 7)) alerts.push({ kind: "parado", severity: "media", text: idleDays == null ? "Em foco sem nenhuma atividade" : `Em foco, mas parado há ${idleDays} dias` });
     if ((p.status === "fila" || p.status === "incubadora") && idleDays != null && idleDays >= 45)
-      alerts.push({ kind: "esquecido", severity: "baixa", text: `Esquecido há ${idleDays} dias` });
+      alerts.push({ kind: "esquecido", severity: "baixa", text: tt("services.alert.forgotten", { days: idleDays }) });
     else if (p.status === "baixa" && idleDays != null && idleDays >= 90)
-      alerts.push({ kind: "esquecido", severity: "baixa", text: `Esquecido há ${idleDays} dias` });
+      alerts.push({ kind: "esquecido", severity: "baixa", text: tt("services.alert.forgotten", { days: idleDays }) });
     if (activeCycle?.dueDate) {
-      if (activeCycle.dueDate < today2) alerts.push({ kind: "ciclo_vencido", severity: "alta", text: `Ciclo "${activeCycle.name}" venceu em ${activeCycle.dueDate}` });
+      if (activeCycle.dueDate < today2) alerts.push({ kind: "ciclo_vencido", severity: "alta", text: tt("services.alert.cycleOverdue", { name: activeCycle.name, date: activeCycle.dueDate }) });
       else if ((/* @__PURE__ */ new Date(`${activeCycle.dueDate}T12:00:00`)).getTime() - Date.now() <= 3 * DAY)
-        alerts.push({ kind: "ciclo_vence", severity: "media", text: `Ciclo "${activeCycle.name}" vence em ${activeCycle.dueDate}` });
+        alerts.push({ kind: "ciclo_vence", severity: "media", text: tt("services.alert.cycleDue", { name: activeCycle.name, date: activeCycle.dueDate }) });
     }
     const lateMs = ms.filter((m) => !m.doneAt && m.targetDate && m.targetDate < today2);
-    if (open && lateMs.length) alerts.push({ kind: "marco_vencido", severity: "media", text: `${lateMs.length} marco(s) atrasado(s): ${lateMs[0].title}` });
-    if (p.status === "foco" && !p.finishLine) alerts.push({ kind: "sem_linha_chegada", severity: "baixa", text: 'Sem linha de chegada ("pronto quando…")' });
-    if (p.status === "foco" && inFocus > focusLimit) alerts.push({ kind: "foco_excedido", severity: "baixa", text: `${inFocus} projetos em foco (limite ${focusLimit})` });
-    if (!p.triagedAt && open) alerts.push({ kind: "sem_triagem", severity: "baixa", text: "Ainda não passou pela triagem" });
+    if (open && lateMs.length) alerts.push({ kind: "marco_vencido", severity: "media", text: tt("services.alert.lateMilestones", { n: lateMs.length, title: lateMs[0].title }) });
+    if (p.status === "foco" && !p.finishLine) alerts.push({ kind: "sem_linha_chegada", severity: "baixa", text: tt("services.alert.noFinishLine") });
+    if (p.status === "foco" && inFocus > focusLimit) alerts.push({ kind: "foco_excedido", severity: "baixa", text: tt("services.alert.focusExceeded", { n: inFocus, limit: focusLimit }) });
+    if (!p.triagedAt && open) alerts.push({ kind: "sem_triagem", severity: "baixa", text: tt("services.alert.notTriaged") });
     const file = p.localPath ? path.join(expandHome$2(p.localPath), ROADMAP_FILE) : null;
     return {
       projectId: p.id,
@@ -85185,7 +86083,7 @@ async function checkProjectRadar(force = false) {
   let sent = 0;
   if (important.length) {
     await notify({
-      title: `🗂 ${important.length} alerta(s) nos projetos`,
+      title: tt("services.alertaSNosProjetos", { count: important.length }),
       body: important.slice(0, 6).join("\n") + (important.length > 6 ? `
 … e mais ${important.length - 6}` : ""),
       source: "projetos",
@@ -85196,7 +86094,7 @@ async function checkProjectRadar(force = false) {
   const dow = (/* @__PURE__ */ new Date()).getDay();
   const lastReview = await getSetting("projects_last_review");
   if ((dow === 0 || dow === 1) && (!lastReview || Date.now() - new Date(lastReview).getTime() > 7 * DAY)) {
-    await notify({ title: "🗓️ Revisão semanal dos projetos", body: "Gere a revisão no Dashboard e decida: continuar, pausar, retomar ou encerrar.", source: "projetos", page: "home" });
+    await notify({ title: tt("services.revisaoSemanalDosProjetos"), body: tt("services.gereARevisaoNoDashboard"), source: "projetos", page: "home" });
     sent++;
   }
   return sent;
@@ -85210,7 +86108,7 @@ const GROUPS = [
 ];
 async function cycleCommits(cycleId) {
   const c = await getProjectCycle(cycleId);
-  if (!c) throw new Error("Ciclo não encontrado");
+  if (!c) throw new Error(tt("services.cicloNaoEncontrado"));
   const p = await getProject(c.projectId);
   if (!p) return [];
   const until = c.closedAt ?? (/* @__PURE__ */ new Date()).toISOString();
@@ -85244,7 +86142,7 @@ _Nenhum commit no período do ciclo._`;
 }
 async function generateCycleChangelog(cycleId, useAi) {
   const c = await getProjectCycle(cycleId);
-  if (!c) throw new Error("Ciclo não encontrado");
+  if (!c) throw new Error(tt("services.cicloNaoEncontrado"));
   const p = await getProject(c.projectId);
   const commits = await cycleCommits(cycleId);
   let md = groupedChangelog(c.name, commits);
@@ -85269,7 +86167,7 @@ ${commits.map((x) => `- ${x.date.slice(0, 10)} ${x.repo ? `[${x.repo}] ` : ""}${
 }
 async function setProjectSchedule(projectId, days2, start, minutes, syncCalendar) {
   const p = await getProject(projectId);
-  if (!p) throw new Error("Projeto não encontrado");
+  if (!p) throw new Error(tt("services.projetoNaoEncontrado"));
   const clean = [...new Set(days2)].filter((d) => d >= 0 && d <= 6).sort();
   await patchProject(projectId, { workDays: clean.length ? JSON.stringify(clean) : null, workStart: start, workMinutes: minutes });
   let eventLink = null;
@@ -85406,8 +86304,8 @@ async function projectForDir(cwd) {
   const byPath = (d) => projects.filter((p) => d === norm(p.localPath) || d.startsWith(norm(p.localPath) + "/")).sort((a, b2) => norm(b2.localPath).length - norm(a.localPath).length)[0] ?? null;
   const direct = byPath(dir);
   if (direct) return direct;
-  const common = await gitQuiet(dir, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  if (common?.trim()) return byPath(norm(path.dirname(common.trim())));
+  const common2 = await gitQuiet(dir, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  if (common2?.trim()) return byPath(norm(path.dirname(common2.trim())));
   return null;
 }
 function textOf(content) {
@@ -85523,10 +86421,10 @@ async function recoverDelegations() {
 }
 async function delegateNextAction(projectId, action, instructions) {
   const p = await getProject(projectId);
-  if (!p) throw new Error("Projeto não encontrado");
+  if (!p) throw new Error(tt("services.projetoNaoEncontrado"));
   const task = (action ?? p.nextAction ?? "").trim();
-  if (!task) throw new Error("Defina a próxima ação antes de delegar.");
-  if (!p.localPath) throw new Error("Defina o caminho local do projeto (repositório git).");
+  if (!task) throw new Error(tt("services.definaAProximaAcaoAntes"));
+  if (!p.localPath) throw new Error(tt("services.definaOCaminhoLocalDo"));
   const repo = path.resolve(expandHome(p.localPath));
   const targets = await repoTargets(p);
   const workspace = isWorkspace(targets);
@@ -85536,7 +86434,7 @@ async function delegateNextAction(projectId, action, instructions) {
   let wtDir;
   if (workspace) {
     const repos = localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }));
-    if (!repos.length) throw new Error("Nenhum repositório do projeto foi encontrado na pasta local.");
+    if (!repos.length) throw new Error(tt("services.nenhumRepositorioDoProjetoFoi"));
     const ws = await createWorkspaceWorktree(repo, repos, task);
     top = ws.repoPath;
     base = "HEAD";
@@ -85544,7 +86442,7 @@ async function delegateNextAction(projectId, action, instructions) {
     wtDir = ws.cwd;
   } else {
     const t = (await gitQuiet(repo, ["rev-parse", "--show-toplevel"]))?.trim();
-    if (!t) throw new Error("O caminho local não é um repositório git.");
+    if (!t) throw new Error(tt("services.oCaminhoLocalNaoE"));
     top = t;
     base = (await gitQuiet(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
     const name = `rickos-${slugify(task)}-${stamp()}`;
@@ -85552,7 +86450,7 @@ async function delegateNextAction(projectId, action, instructions) {
     wtDir = path.join(path.dirname(top), ".worktrees", `${path.basename(top)}-${name}`);
     fs.mkdirSync(path.dirname(wtDir), { recursive: true });
     const added = await gitQuiet(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"]);
-    if (added == null || !fs.existsSync(wtDir)) throw new Error("Não consegui criar o worktree (git worktree add falhou).");
+    if (added == null || !fs.existsSync(wtDir)) throw new Error(tt("services.naoConseguiCriarOWorktree"));
   }
   const wsRepos = workspace ? readWorkspaceManifest(wtDir)?.repos ?? [] : [];
   const d = await createDelegation({ projectId, action: task, instructions: instructions?.trim() || null, repoPath: top, branch, worktreePath: wtDir, baseRef: workspace ? null : base });
@@ -85600,14 +86498,14 @@ No final, escreva um resumo em Markdown com: **O que fiz**, **Como testar**, **O
     if (cur?.status === "cancelada") return;
     await updateDelegation(d.id, { status: "pronta", output: out, finishedAt: (/* @__PURE__ */ new Date()).toISOString() });
     await addProjectEvent(projectId, "delegacao", `🤖 Delegação pronta para revisão: ${task}`);
-    void notify({ title: `🤖 ${p.name}: delegação pronta`, body: task, source: "ia", page: "projects" });
+    void notify({ title: tt("services.delegacaoPronta", { name: p.name }), body: task, source: "ia", page: "projects" });
     changed(projectId);
   }).catch(async (e) => {
     kills.delete(d.id);
     const cur = await getDelegation(d.id);
     if (cur?.status === "cancelada") return;
     await updateDelegation(d.id, { status: "erro", error: e instanceof Error ? e.message : String(e), finishedAt: (/* @__PURE__ */ new Date()).toISOString() });
-    void notify({ title: `⚠️ ${p.name}: delegação falhou`, body: task, source: "ia", page: "projects" });
+    void notify({ title: tt("services.delegacaoFalhou", { name: p.name }), body: task, source: "ia", page: "projects" });
     changed(projectId);
   });
   return d;
@@ -85666,7 +86564,7 @@ async function cancelDelegation(id) {
 }
 async function reviewDelegation(id) {
   const d = await getDelegation(id);
-  if (!d) throw new Error("Delegação não encontrada");
+  if (!d) throw new Error(tt("services.delegacaoNaoEncontrada"));
   const ws = readWorkspaceManifest(d.worktreePath);
   if (ws) {
     const out = { commits: [], diffStat: "", uncommitted: [], worktreeExists: true };
@@ -85684,8 +86582,8 @@ async function reviewDelegation(id) {
 ${stat2}`);
       }
       const wt = path.join(d.worktreePath, r.rel);
-      const st2 = fs.existsSync(wt) ? await gitQuiet(wt, ["status", "--short"]) ?? "" : "";
-      out.uncommitted.push(...st2.split("\n").filter(Boolean).map((x) => `${r.name}: ${x}`));
+      const st22 = fs.existsSync(wt) ? await gitQuiet(wt, ["status", "--short"]) ?? "" : "";
+      out.uncommitted.push(...st22.split("\n").filter(Boolean).map((x) => `${r.name}: ${x}`));
     }
     out.diffStat = stats.join("\n\n");
     return out;
@@ -85695,21 +86593,21 @@ ${stat2}`);
   const range = base ? `${base}..${d.branch}` : `${d.branch}~20..${d.branch}`;
   const log2 = await gitQuiet(d.repoPath, ["log", "--format=%h%x1f%s", range]) ?? "";
   const stat = base ? await gitQuiet(d.repoPath, ["diff", "--stat", `${base}...${d.branch}`]) ?? "" : "";
-  const st = exists ? await gitQuiet(d.worktreePath, ["status", "--short"]) ?? "" : "";
+  const st2 = exists ? await gitQuiet(d.worktreePath, ["status", "--short"]) ?? "" : "";
   return {
     commits: log2.split("\n").filter(Boolean).map((l) => {
       const [hash2, subject] = l.split("");
       return { hash: hash2, subject };
     }),
     diffStat: stat.trim(),
-    uncommitted: st.split("\n").filter(Boolean),
+    uncommitted: st2.split("\n").filter(Boolean),
     worktreeExists: exists
   };
 }
 async function discardDelegation(id) {
   const d = await getDelegation(id);
   if (!d) return;
-  if (d.status === "rodando") throw new Error("Cancele a execução antes de descartar.");
+  if (d.status === "rodando") throw new Error(tt("services.canceleAExecucaoAntesDe"));
   if (readWorkspaceManifest(d.worktreePath)) await removeWorkspaceWorktree(d.worktreePath);
   else if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ["worktree", "remove", "--force", d.worktreePath]);
   await gitQuiet(d.repoPath, ["worktree", "prune"]);
@@ -85727,7 +86625,7 @@ async function acceptDelegation(id) {
 }
 async function prDelegation(id) {
   const d = await getDelegation(id);
-  if (!d) throw new Error("Delegação não encontrada");
+  if (!d) throw new Error(tt("services.delegacaoNaoEncontrada"));
   await scanGit({});
   const ws = readWorkspaceManifest(d.worktreePath);
   if (ws) {
@@ -85739,7 +86637,7 @@ async function prDelegation(id) {
       urls.push(pr.url);
       await addProjectEvent(d.projectId, "delegacao", `🔀 PR aberto (${r2.name}): ${pr.url}`);
     }
-    if (!urls.length) throw new Error("Nenhum repositório tem commits nesta branch.");
+    if (!urls.length) throw new Error(tt("services.nenhumRepositorioTemCommitsNesta"));
     await updateDelegation(id, { prUrl: urls[0] });
     changed(d.projectId);
     return { url: urls[0] };
@@ -85758,7 +86656,7 @@ const ipcMain = {
 };
 async function callRpc(channel, args) {
   const fn = handlers.get(channel);
-  if (!fn) throw new Error(`Canal RPC desconhecido: ${channel}`);
+  if (!fn) throw new Error(tt("rpc.canalRpcDesconhecido", { channel }));
   return fn({ source: "rpc" }, ...args);
 }
 const GOOGLE_SYNC_HOUR = 7;
@@ -85786,7 +86684,7 @@ async function maybeDailyGoogleSync() {
     await runGoogleSync();
   } catch (e) {
     await notify({
-      title: "📅 Falha ao sincronizar o Google Calendar",
+      title: tt("rpc.falhaAoSincronizarOGoogle"),
       body: e instanceof Error ? e.message : String(e),
       source: "google",
       page: "settings"
@@ -85814,15 +86712,15 @@ async function maybeMonthlyInvestmentSync() {
     await setSetting("pluggy_investments_autosync_error_at", "");
     const extra = r.vanished.length ? ` · ${r.vanished.length} não aparecem mais no banco (abra Investimentos para decidir)` : "";
     await notify({
-      title: "📈 Investimentos atualizados",
-      body: `Open Finance: ${r.created} novos, ${r.updated} atualizados, ${r.closed} encerrados${extra}.`,
+      title: tt("rpc.investimentosAtualizados"),
+      body: tt("rpc.openFinanceNovosAtualizadosEncerrados", { created: r.created, updated: r.updated, closed: r.closed, extra }),
       source: "automacao",
       page: "investments"
     });
   } catch (e) {
     await setSetting("pluggy_investments_autosync_error_at", (/* @__PURE__ */ new Date()).toISOString());
     await notify({
-      title: "📈 Falha ao atualizar investimentos",
+      title: tt("rpc.falhaAoAtualizarInvestimentos"),
       body: e instanceof Error ? e.message : String(e),
       source: "automacao",
       page: "settings"
@@ -85845,8 +86743,8 @@ async function maybeMonthlyReservedReminder() {
     await setSetting("finance_reserved_reminder_month", month);
     if (!pending2) return;
     await notify({
-      title: "🔒 Revisar saldo separado",
-      body: `Começo de mês: confira o saldo separado de ${pending2 === 1 ? "1 conta" : `${pending2} contas`} no painel de Finanças.`,
+      title: tt("rpc.revisarSaldoSeparado"),
+      body: tt("rpc.comecoDeMesConfiraO", { count: pending2 }),
       source: "automacao",
       page: "finance-dashboard"
     });
@@ -85943,14 +86841,14 @@ ipcMain.handle(
 ipcMain.handle("todos:delete", (_, id) => deleteTodo(id));
 ipcMain.handle("goals:getForMonth", (_, month) => getGoals(month));
 ipcMain.handle("goals:create", (_, month, title, kind, refId, target, unit) => createGoal(month, title, kind, refId, target, unit));
-ipcMain.handle("goals:update", (_, id, title, target, current, unit, done) => updateGoal(id, title, target, current, unit, done));
+ipcMain.handle("goals:update", (_, id, title, target, current2, unit, done) => updateGoal(id, title, target, current2, unit, done));
 ipcMain.handle("goals:delete", (_, id) => deleteGoal(id));
 ipcMain.handle("stays:favorites", () => getStayFavorites());
 ipcMain.handle("stays:addFavorite", (_, f) => addStayFavorite(f));
 ipcMain.handle("stays:removeFavorite", (_, id) => removeStayFavorite(id));
 ipcMain.handle("stays:watches", () => getStayWatches());
 ipcMain.handle("stays:addWatch", (_, w) => addStayWatch(w));
-ipcMain.handle("stays:updateWatchPrice", (_, id, current, best, at) => updateStayWatchPrice(id, current, best, at));
+ipcMain.handle("stays:updateWatchPrice", (_, id, current2, best, at) => updateStayWatchPrice(id, current2, best, at));
 ipcMain.handle("stays:removeWatch", (_, id) => removeStayWatch(id));
 ipcMain.handle("stays:priceHistory", (_, watchId) => getStayPriceHistory(watchId));
 ipcMain.handle("stays:addPricePoint", (_, p) => addStayPricePoint(p));
@@ -86018,7 +86916,7 @@ async function runScheduledJobs() {
         if (text) {
           await createTodo(`🤖 ${job.name}`, text.slice(0, 4e3), "inbox", "agent", 1, null, null, 1);
           broadcast("inbox:updated", { jobId: job.id });
-          void notify({ title: `🤖 ${job.name}`, body: "O agente agendado terminou — resultado no Inbox.", source: "agendador", page: "inbox" });
+          void notify({ title: `🤖 ${job.name}`, body: tt("rpc.oAgenteAgendadoTerminouResultado"), source: "agendador", page: "inbox" });
         }
       } catch {
       }
@@ -86287,7 +87185,10 @@ ipcMain.handle(
 );
 ipcMain.handle("habits:completionsForDate", (_, date) => getHabitCompletionsForDate(date));
 ipcMain.handle("settings:get", async (_, key) => SERVER_ONLY_KEYS.has(key) ? null : decodeSecret(await getSetting(key)));
-ipcMain.handle("settings:set", (_, key, value) => setSetting(key, encodeSecret(key, value)));
+ipcMain.handle("settings:set", (_, key, value) => {
+  if (key === "language") setServerLocale(value);
+  return setSetting(key, encodeSecret(key, value));
+});
 ipcMain.handle("settings:legacySecrets", () => legacySecrets());
 ipcMain.handle("settings:getAll", async () => {
   const all2 = await getAllSettings();
@@ -86381,7 +87282,7 @@ ipcMain.handle("transactions:setKind", async (_, id, kind) => afterTxChange(awai
 ipcMain.handle("transactions:bulk", async (_, rows) => afterTxChange(await bulkInsertTransactions(await categorizeNew(rows))));
 ipcMain.handle("finance:resetImportedData", async () => {
   const backup = backupDbFile("timetracker.backup-pre-reset-financas");
-  if (!backup) throw new Error("Banco não carregado; nada foi apagado.");
+  if (!backup) throw new Error(tt("rpc.bancoNaoCarregadoNadaFoi"));
   const removed = await resetFinanceImportedData();
   saveDb();
   return { backup, removed };
@@ -86540,7 +87441,7 @@ ipcMain.handle("study:exportJson", async (_, topicId) => {
   return { name: `${studySlug(bundle.topic.name)}.study.json`, mime: "application/json", content: JSON.stringify(bundle, null, 2) };
 });
 ipcMain.handle("study:importBundle", async (_, bundle) => {
-  if (!bundle || !bundle.topic) return { ok: false, error: "Arquivo inválido (sem tópico)." };
+  if (!bundle || !bundle.topic) return { ok: false, error: tt("rpc.arquivoInvalidoSemTopico") };
   try {
     const topicId = await importStudyBundle(bundle);
     return { ok: true, topicId };
@@ -86798,7 +87699,7 @@ ipcMain.handle("app:exportDbToDrive", async (_, email) => {
     const stamp2 = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
     const fileName = `timetracker_snapshot_${stamp2}.sqlite`;
     const r = await uploadFileToDrive(dbFilePath(), fileName, email);
-    return { ok: true, target: "drive", message: `Enviado ao Google Drive (${r.account}): ${r.name}`, link: r.link };
+    return { ok: true, target: "drive", message: tt("rpc.enviadoAoGoogleDrive", { account: r.account, name: r.name }), link: r.link };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -86806,7 +87707,7 @@ ipcMain.handle("app:exportDbToDrive", async (_, email) => {
 ipcMain.handle("app:importDbData", async (_, base64) => {
   const bytes = Buffer.from(base64.includes(",") ? base64.split(",")[1] : base64, "base64");
   if (bytes.subarray(0, 15).toString("latin1") !== "SQLite format 3") {
-    return { ok: false, error: "O arquivo não é um banco SQLite." };
+    return { ok: false, error: tt("rpc.oArquivoNaoEUm") };
   }
   replaceDbFile(bytes);
   await getDb();
@@ -86831,9 +87732,10 @@ async function startServer(overrides = {}) {
   setConfig(overrides);
   const cfg = getConfig();
   if (!isLocalHost(cfg.host) && !cfg.token) {
-    throw new Error(`RICKOS_TOKEN é obrigatório quando o servidor escuta em ${cfg.host} (fora do localhost).`);
+    throw new Error(tt("rpc.rickosTokenEObrigatorioQuando", { host: cfg.host }));
   }
   await getDb();
+  await loadServerLocale();
   snapshotDailyIfNeeded();
   const app = Fastify({ bodyLimit: 200 * 1024 * 1024 });
   app.addHook("onRequest", async (req, reply) => {
@@ -86904,7 +87806,7 @@ data: ${JSON.stringify({ channel, payload })}
       reply.header("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'");
       return reply.send(a.body);
     } catch (e) {
-      return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : "anexo indisponível" });
+      return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : tt("rpc.anexoIndisponivel") });
     }
   });
   app.get("/api/export/db", { preHandler: requireAuth }, async (_req, reply) => {
@@ -86926,7 +87828,7 @@ data: ${JSON.stringify({ channel, payload })}
   if (fs.existsSync(path.join(staticDir, "index.html"))) {
     await app.register(fastifyStatic, { root: staticDir, prefix: "/" });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith("/api/")) return reply.code(404).send({ ok: false, error: "not found" });
+      if (req.url.startsWith("/api/")) return reply.code(404).send({ ok: false, error: tt("rpc.notFound") });
       return reply.sendFile("index.html");
     });
   }
