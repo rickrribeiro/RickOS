@@ -1,0 +1,50 @@
+/* Paleta "Sintetizador" — roxo quase preto, destaque magenta e botão ciano. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='synthwave'] {
+  --pal-bg: #140f1f;
+  --pal-sidebar: #0e0a17;
+  --pal-surface: #1c1529;
+  --pal-elevated: #241b33;
+  --pal-user-bubble: #2b1f3d;
+  --pal-border: #33264a;
+  --pal-border-strong: #46365f; /* derivado */
+  --pal-text: #f2ecfa;
+  --pal-text-2: #bab0cc;
+  --pal-text-3: #a89dbd;
+  --pal-accent: #ff5fc8;
+  --pal-accent-hover: #ff8ad7; /* derivado */
+  --pal-selection: #3a1640;
+  --pal-primary: #2de2e6;
+  --pal-on-primary: #06262a;
+  --pal-success: #8ef0b8;
+  --pal-success-bg: #16332a;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(242, 236, 250, 0.06);
+  --pal-ring: rgba(255, 95, 200, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='synthwave'][data-theme='light'] {
+  --pal-bg: #faf7fd;
+  --pal-sidebar: #efe9f7;
+  --pal-surface: #ffffff;
+  --pal-elevated: #f3eef9;
+  --pal-user-bubble: #ede4f7;
+  --pal-border: #ddd2ea;
+  --pal-border-strong: #c6b7da; /* derivado */
+  --pal-text: #22163a;
+  --pal-text-2: #5c4e73;
+  --pal-text-3: #65567c;
+  --pal-accent: #b0137f;
+  --pal-accent-hover: #920f69; /* derivado */
+  --pal-selection: #f8e1f1;
+  --pal-primary: #0e7c86;
+  --pal-on-primary: #ffffff;
+  --pal-success: #2e6b45;
+  --pal-success-bg: #e1f0e5;
+  --pal-shadow: #22163a14;
+  --pal-hover: rgba(34, 22, 58, 0.05);
+  --pal-ring: rgba(176, 19, 127, 0.25);
+  --pal-scrim: rgba(34, 22, 58, 0.3);
+  color-scheme: light;
+}
