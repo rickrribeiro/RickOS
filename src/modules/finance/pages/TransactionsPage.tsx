@@ -137,10 +137,36 @@ export function TransactionsPage(): React.ReactElement {
       alert('Não consegui reconhecer o CSV. Esperado colunas de data e valor.')
       return
     }
-    const categorized = rows.filter((r) => matchCategoryId(r.description, categories) !== null).length
-    if (!confirm(`Importar ${rows.length} transações? ${categorized} auto-categorizadas; o resto vai p/ "Outros".`)) return
+    // Duplicatas: idêntica (data+valor+tipo+descrição) é sempre pulada; mesma data+valor+tipo com descrição
+    // diferente é "provável" (o Open Finance descreve diferente do CSV) e o usuário decide.
+    const existing = await window.api.transactions.getAll()
+    const exact = new Set(existing.map((t) => `${t.date}|${t.amount.toFixed(2)}|${t.type}|${normalizeText(t.description ?? '')}`))
+    const loose = new Map<string, number>()
+    for (const t of existing) {
+      const k = `${t.date}|${t.amount.toFixed(2)}|${t.type}`
+      loose.set(k, (loose.get(k) ?? 0) + 1)
+    }
+    const fresh = rows.filter((r) => !exact.has(`${r.date}|${r.amount.toFixed(2)}|${r.type}|${normalizeText(r.description)}`))
+    const exactDupes = rows.length - fresh.length
+    const probable = fresh.filter((r) => (loose.get(`${r.date}|${r.amount.toFixed(2)}|${r.type}`) ?? 0) > 0)
+    const dates = rows.map((r) => r.date).sort()
+    const categorized = fresh.filter((r) => matchCategoryId(r.description, categories) !== null).length
+    if (
+      !confirm(
+        `${rows.length} transações no arquivo (${dates[0]} a ${dates[dates.length - 1]}${rows[0]?.card ? ', fatura de cartão' : ''}).\n` +
+          (exactDupes ? `${exactDupes} já existem e serão puladas.\n` : '') +
+          `Importar ${fresh.length}? ${categorized} auto-categorizadas; o resto vai p/ "Outros" (e as Regras rodam na importação).`
+      )
+    )
+      return
+    let toImport = fresh
+    if (probable.length && confirm(`${probable.length} parecem já existir (mesma data, valor e tipo, com outra descrição — provavelmente vieram do Open Finance).\n\nOK = pular essas · Cancelar = importar mesmo assim`)) {
+      const skip = new Set(probable)
+      toImport = fresh.filter((r) => !skip.has(r))
+    }
+    const billPayment = (d: string): boolean => /\b(pagamento|pagto|pgto)\.? (de |da )?fatura\b|^\s*pagamento recebido\b/i.test(d)
     await importTransactions(
-      rows.map((r) => ({
+      toImport.map((r) => ({
         accountId: accountId === '' ? null : Number(accountId),
         categoryId: matchCategoryId(r.description, categories) ?? 6, // fallback "Outros" seed
         amount: r.amount,
@@ -150,7 +176,8 @@ export function TransactionsPage(): React.ReactElement {
         date: r.date,
         investment: detectInvestmentMove(r.description) ? 1 : 0,
         transfer: !detectInvestmentMove(r.description) && detectOwnTransfer(r.description) ? 1 : 0,
-        paymentMethod: detectPaymentMethod(r.description)
+        paymentMethod: r.card ? 'credito' : detectPaymentMethod(r.description),
+        ignoredReason: billPayment(r.description) ? 'Pagamento de fatura do cartão' : null
       }))
     )
     if (fileRef.current) fileRef.current.value = ''

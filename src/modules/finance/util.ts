@@ -201,6 +201,7 @@ export interface ParsedCsvRow {
   amount: number
   type: 'income' | 'expense'
   currency?: string
+  card?: boolean // veio de extrato/fatura de cartão de crédito
 }
 
 /** Keyword rules → seed category name. Used to auto-categorize imported rows. */
@@ -246,6 +247,9 @@ export function parseBankCsv(text: string): ParsedCsvRow[] {
   const currencyCol = findCol('currency', 'moeda', 'ccy')
 
   if (dateCol < 0 || amountCol < 0) return []
+  // Fatura de cartão (ex.: Nubank "date,title,amount"): compra vem POSITIVA e pagamento/estorno negativo —
+  // o contrário de extrato de conta (saída negativa).
+  const isCard = header.some((h) => h === 'title') && header.some((h) => h === 'amount')
 
   const rows: ParsedCsvRow[] = []
   for (let i = 1; i < lines.length; i++) {
@@ -266,7 +270,8 @@ export function parseBankCsv(text: string): ParsedCsvRow[] {
       date: normalizeDate(cols[dateCol]),
       description: descCol >= 0 ? cols[descCol] : '',
       amount: Math.abs(value),
-      type: value < 0 ? 'expense' : 'income',
+      type: (isCard ? value > 0 : value < 0) ? 'expense' : 'income',
+      card: isCard || undefined,
       currency: currency && /^[A-Z]{3}$/.test(currency) ? currency : undefined
     })
   }
