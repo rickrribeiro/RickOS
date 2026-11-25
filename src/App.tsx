@@ -105,6 +105,7 @@ const PAGES: Record<Page, React.ComponentType> = {
 const QUICK_NAV: Page[] = ['home', 'timeline', 'inbox', 'projects']
 
 const COLLAPSED_KEY = 'rickos:collapsedGroups'
+const SIDEBAR_HIDDEN_KEY = 'rickos:sidebarHidden'
 const EXPANDED_TABS_KEY = 'rickos:expandedTabGroups'
 
 export default function App(): React.ReactElement {
@@ -242,11 +243,40 @@ export default function App(): React.ReactElement {
   const [navOpen, setNavOpen] = React.useState(false)
   useEffect(() => setNavOpen(false), [currentPage])
 
+  // Desktop: sidebar can be hidden; a small arrow on the left edge brings it back.
+  const [sidebarHidden, setSidebarHidden] = React.useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_HIDDEN_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleSidebar = (hidden: boolean) => {
+    setSidebarHidden(hidden)
+    try {
+      localStorage.setItem(SIDEBAR_HIDDEN_KEY, hidden ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }
+
   const PageComponent = PAGES[currentPage] ?? TimelinePage
 
   return (
     <AuthGate>
-    <div className={`app ${navOpen ? 'nav-open' : ''}`}>
+    <div className={`app ${navOpen ? 'nav-open' : ''} ${sidebarHidden ? 'sidebar-hidden' : ''}`}>
+      {sidebarHidden && (
+        <button
+          className="sidebar-reopen-btn"
+          onClick={() => toggleSidebar(false)}
+          title={t('shell.showSidebar')}
+          aria-label={t('shell.showSidebar')}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
       <button className="mobile-menu-btn" onClick={() => setNavOpen((v) => !v)} aria-label={t('shell.openMenu')}>
         ☰
         <UnreadDot />
@@ -378,6 +408,15 @@ export default function App(): React.ReactElement {
           >
             <span className="nav-icon">📂</span>
             <span className="nav-label">{t('shell.importDb')}</span>
+          </button>
+          <button
+            className="nav-btn export-btn hide-sidebar-btn"
+            onClick={() => toggleSidebar(true)}
+            title={t('shell.hideSidebar')}
+            style={{ marginTop: '4px' }}
+          >
+            <span className="nav-icon">«</span>
+            <span className="nav-label">{t('shell.hideSidebar')}</span>
           </button>
         </div>
       </nav>

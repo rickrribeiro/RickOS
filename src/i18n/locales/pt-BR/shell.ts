@@ -16,6 +16,8 @@ export const shell = {
   'shell.importDb': 'Importar banco',
   'shell.importDbTitle': 'Importar snapshot do banco',
   'shell.importDbConfirm': 'Isso vai substituir TODOS os dados atuais pelo snapshot importado. Continuar?',
+  'shell.hideSidebar': 'Esconder sidebar',
+  'shell.showSidebar': 'Mostrar sidebar',
   'auth.invalidToken': 'Token inválido.',
   'auth.hint': 'Este servidor exige um token de acesso.',
   'auth.placeholder': 'Cole o token (RICKOS_TOKEN)',
