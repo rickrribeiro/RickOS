@@ -40,7 +40,7 @@ try {
   await browser.close()
 }
 
-const label = { classic: 'Clássico', devlytics: 'Novo (Devlytics)' }
+const label = { classic: 'Clássico', devlytics: 'Devlytics' }
 const rows = []
 for (const vp of VIEWPORTS) {
   for (const p of PAGES) {

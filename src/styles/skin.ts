@@ -19,7 +19,7 @@ export type Theme = 'dark' | 'light'
 
 /** Every visual, in the order shown in Configurações → Aparência. `chrome` = theme-color meta (PWA status bar). */
 export const SKIN_OPTIONS = [
-  { id: 'devlytics', label: 'Novo', chrome: { dark: '#18181b', light: '#f4f4f5' } },
+  { id: 'devlytics', label: 'Devlytics', chrome: { dark: '#18181b', light: '#f4f4f5' } },
   { id: 'grafite', label: 'Grafite & Coral', chrome: { dark: '#18191b', light: '#faf9f7' } },
   { id: 'vampiro', label: 'Vampiro', chrome: { dark: '#170f12', light: '#faf6f6' } },
   { id: 'floresta', label: 'Floresta', chrome: { dark: '#121a16', light: '#f6f7f2' } },
