@@ -1,0 +1,53 @@
+/*
+ * Paleta "Vampiro" — preto-vinho, texto marfim rosado, destaque rosa-sangue e
+ * botão primário vinho. Só tokens; a aplicação está em palettes.css.
+ */
+
+:root[data-skin='devlytics'][data-palette='vampiro'] {
+  --pal-bg: #170f12;
+  --pal-sidebar: #100a0c;
+  --pal-surface: #21161a;
+  --pal-elevated: #2a1d22;
+  --pal-user-bubble: #33222a;
+  --pal-border: #3a2a30;
+  --pal-border-strong: #4d3840; /* derivado: hover de borda */
+  --pal-text: #f3e9ec;
+  --pal-text-2: #bba9af;
+  --pal-text-3: #a8959c;
+  --pal-accent: #ee8199;
+  --pal-accent-hover: #f5a3b5; /* derivado: um passo mais claro */
+  --pal-selection: #3b1a24;
+  --pal-primary: #a3203f;
+  --pal-on-primary: #ffffff;
+  --pal-success: #a3cfb0;
+  --pal-success-bg: #1f2d24;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(243, 233, 236, 0.06);
+  --pal-ring: rgba(238, 129, 153, 0.35);
+  --pal-scrim: rgba(10, 4, 6, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='vampiro'][data-theme='light'] {
+  --pal-bg: #faf6f6;
+  --pal-sidebar: #f1e9ea;
+  --pal-surface: #ffffff;
+  --pal-elevated: #f4edee;
+  --pal-user-bubble: #f1e6e8;
+  --pal-border: #e2d4d7;
+  --pal-border-strong: #cdb9be; /* derivado */
+  --pal-text: #2a1a1f;
+  --pal-text-2: #6b565c;
+  --pal-text-3: #735c63;
+  --pal-accent: #8e1b33;
+  --pal-accent-hover: #741528; /* derivado: um passo mais escuro */
+  --pal-selection: #f7e1e6;
+  --pal-primary: #8e1b33;
+  --pal-on-primary: #ffffff;
+  --pal-success: #2f6446;
+  --pal-success-bg: #e2f0e6;
+  --pal-shadow: #3a101c14;
+  --pal-hover: rgba(42, 26, 31, 0.05);
+  --pal-ring: rgba(142, 27, 51, 0.25);
+  --pal-scrim: rgba(42, 26, 31, 0.3);
+  color-scheme: light;
+}

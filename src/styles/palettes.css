@@ -1,5 +1,5 @@
 /*
- * Paletas sobre a skin devlytics (Grafite & Coral, …).
+ * Paletas sobre a skin devlytics (Grafite & Coral, Vampiro, …).
  * Cada paleta só define os tokens --pal-* em seu arquivo (palette-<nome>.css);
  * este arquivo mapeia esses tokens para as variáveis do app e aplica os
  * ajustes comuns. Ativa com :root[data-skin='devlytics'][data-palette='<nome>']

@@ -30,6 +30,9 @@ export function AppearanceSection(): React.ReactElement {
           <button className={`seg-btn ${skin === 'grafite' ? 'active' : ''}`} onClick={() => pickSkin('grafite')}>
             Grafite & Coral
           </button>
+          <button className={`seg-btn ${skin === 'vampiro' ? 'active' : ''}`} onClick={() => pickSkin('vampiro')}>
+            Vampiro
+          </button>
           <button className={`seg-btn ${skin === 'classic' ? 'active' : ''}`} onClick={() => pickSkin('classic')}>
             Clássico
           </button>

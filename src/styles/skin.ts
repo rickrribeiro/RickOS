@@ -1,7 +1,7 @@
 /**
  * Visual skins. `classic` = the original look (src/index.css untouched);
  * `devlytics` = Geist + zinc + green glass (src/styles/skin-devlytics.css);
- * `grafite` = same structure as devlytics with another palette
+ * `grafite` / `vampiro` = same structure as devlytics with another palette
  * (src/styles/palettes.css + palette-<name>.css), applied as
  * data-skin='devlytics' + data-palette='<name>'.
  *
@@ -13,12 +13,12 @@ export const DEFAULT_SKIN: Record<'desktop' | 'web', Skin> = {
   web: 'devlytics'
 }
 
-export type Skin = 'classic' | 'devlytics' | 'grafite'
+export type Skin = 'classic' | 'devlytics' | 'grafite' | 'vampiro'
 export type Theme = 'dark' | 'light'
 
-const SKINS: Skin[] = ['classic', 'devlytics', 'grafite']
+const SKINS: Skin[] = ['classic', 'devlytics', 'grafite', 'vampiro']
 /** Skins that are just a palette over devlytics. */
-const PALETTE_SKINS: Skin[] = ['grafite']
+const PALETTE_SKINS: Skin[] = ['grafite', 'vampiro']
 const THEMES: Theme[] = ['dark', 'light']
 
 function platform(): 'desktop' | 'web' {
@@ -75,7 +75,8 @@ export function setTheme(theme: Theme): void {
 const CHROME_COLOR: Record<Skin, Record<Theme, string>> = {
   classic: { dark: '#0f172a', light: '#0f172a' },
   devlytics: { dark: '#18181b', light: '#f4f4f5' },
-  grafite: { dark: '#18191b', light: '#faf9f7' }
+  grafite: { dark: '#18191b', light: '#faf9f7' },
+  vampiro: { dark: '#170f12', light: '#faf6f6' }
 }
 
 export function applySkin(): void {
