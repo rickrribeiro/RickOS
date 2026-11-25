@@ -71,32 +71,43 @@ export function sumInBase(
   return items.reduce((s, t) => s + convertToBase(t.amount, t.currency, base, rates), 0)
 }
 
-/** Transação de IOF (cobrança ou estorno), detectada pela descrição. */
-export function isIof(t: { type: string; description: string | null }): boolean {
-  return t.type === 'expense' && /\biof\b/i.test(t.description ?? '')
+export type ChargeKind = 'iof' | 'juros' | 'multa'
+
+/**
+ * Encargo bancário pela descrição: IOF, juros (rotativo, mora, encargos) ou multa.
+ * Receita só conta se for estorno ("Juros" recebido é rendimento, não encargo).
+ */
+export function chargeKind(t: { type: string; description: string | null }): ChargeKind | null {
+  const d = t.description ?? ''
+  if (t.type === 'income' && !/estorno/i.test(d)) return null
+  if (/\biof\b/i.test(d)) return 'iof'
+  if (/\bmulta\b/i.test(d)) return 'multa'
+  if (/\b(juros|encargos?|mora|rotativo)\b/i.test(d)) return 'juros'
+  return null
 }
 
 /**
- * IOF líquido em `base`: cobranças somam, estornos subtraem (o banco importa
- * o estorno como gasto, então o sinal vem da descrição).
+ * Encargos líquidos em `base`, por tipo: cobranças somam, estornos subtraem (o estorno pode
+ * chegar como gasto, com "estorno" na descrição, ou como receita).
  */
-export function iofInBase(
+export function chargesInBase(
   items: { type: string; description: string | null; amount: number; currency: string }[],
   base: string,
   rates: Record<string, number>
-): { total: number; count: number } {
-  let total = 0
+): { total: number; count: number; byKind: Record<ChargeKind, number> } {
+  const byKind: Record<ChargeKind, number> = { iof: 0, juros: 0, multa: 0 }
   let count = 0
   for (const t of items) {
-    if (!isIof(t)) continue
+    const k = chargeKind(t)
+    if (!k) continue
     const v = convertToBase(t.amount, t.currency, base, rates)
-    if (/estorno/i.test(t.description ?? '')) total -= v
+    if (t.type === 'income' || /estorno/i.test(t.description ?? '')) byKind[k] -= v
     else {
-      total += v
+      byKind[k] += v
       count++
     }
   }
-  return { total, count }
+  return { total: byKind.iof + byKind.juros + byKind.multa, count, byKind }
 }
 
 /**

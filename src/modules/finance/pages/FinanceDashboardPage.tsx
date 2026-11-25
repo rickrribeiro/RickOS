@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
-import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, iofInBase, formatMoneyCompact } from '../util'
+import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
   const { accounts, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
@@ -58,10 +58,10 @@ export function FinanceDashboardPage(): React.ReactElement {
   const expenseBase = sumInBase(expense, base, rates)
   const netBase = incomeBase - expenseBase
 
-  // IOF: mês selecionado e ano corrente do mês selecionado
-  const iofMonth = iofInBase(transactions, base, rates)
+  // Encargos (IOF, juros, multa): mês selecionado e ano corrente do mês selecionado
+  const chargesMonth = chargesInBase(transactions, base, rates)
   const year = month.slice(0, 4)
-  const iofYear = iofInBase(
+  const chargesYear = chargesInBase(
     allTransactions.filter((t) => t.date.slice(0, 4) === year && t.date.slice(0, 7) <= month),
     base,
     rates
@@ -120,12 +120,16 @@ export function FinanceDashboardPage(): React.ReactElement {
           <div className="stat-card-sub">receitas {formatMoney(incomeBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">IOF do mês</div>
-          <div className="stat-card-value" style={{ fontSize: 16, color: iofMonth.total > 0 ? 'var(--danger)' : undefined }}>
-            {formatMoney(iofMonth.total, base)}
+          <div className="stat-card-label">Encargos do mês</div>
+          <div className="stat-card-value" style={{ fontSize: 16, color: chargesMonth.total > 0.004 ? 'var(--danger)' : undefined }}>
+            {formatMoney(chargesMonth.total, base)}
           </div>
           <div className="stat-card-sub">
-            {iofMonth.count} {iofMonth.count === 1 ? 'cobrança' : 'cobranças'} · {year} até agora: {formatMoney(iofYear.total, base)}
+            IOF {formatMoney(chargesMonth.byKind.iof, base)} · Juros {formatMoney(chargesMonth.byKind.juros, base)} · Multa{' '}
+            {formatMoney(chargesMonth.byKind.multa, base)}
+          </div>
+          <div className="stat-card-sub" style={{ color: 'var(--text-muted)' }}>
+            {chargesMonth.count} {chargesMonth.count === 1 ? 'cobrança' : 'cobranças'} · {year} até agora: {formatMoney(chargesYear.total, base)}
           </div>
         </div>
         <div className="stat-card">
