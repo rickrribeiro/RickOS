@@ -22,6 +22,7 @@ export const SKIN_OPTIONS = [
   { id: 'devlytics', label: 'Novo', chrome: { dark: '#18181b', light: '#f4f4f5' } },
   { id: 'grafite', label: 'Grafite & Coral', chrome: { dark: '#18191b', light: '#faf9f7' } },
   { id: 'vampiro', label: 'Vampiro', chrome: { dark: '#170f12', light: '#faf6f6' } },
+  { id: 'floresta', label: 'Floresta', chrome: { dark: '#121a16', light: '#f6f7f2' } },
   { id: 'classic', label: 'Clássico', chrome: { dark: '#0f172a', light: '#0f172a' } }
 ] as const satisfies readonly { id: string; label: string; chrome: Record<Theme, string> }[]
 

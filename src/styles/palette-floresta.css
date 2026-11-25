@@ -1,0 +1,50 @@
+/* Paleta "Floresta" — verde-musgo escuro com destaque âmbar. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='floresta'] {
+  --pal-bg: #121a16;
+  --pal-sidebar: #0c120f;
+  --pal-surface: #1a241f;
+  --pal-elevated: #212d27;
+  --pal-user-bubble: #26332b;
+  --pal-border: #2e3b34;
+  --pal-border-strong: #3e4d45; /* derivado */
+  --pal-text: #ecf0e8;
+  --pal-text-2: #aeb9b0;
+  --pal-text-3: #9da99f;
+  --pal-accent: #e8b44c;
+  --pal-accent-hover: #f2c976; /* derivado */
+  --pal-selection: #2e2a1a;
+  --pal-primary: #e0a93e;
+  --pal-on-primary: #241a05;
+  --pal-success: #a8d8b3;
+  --pal-success-bg: #1e3326;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(236, 240, 232, 0.06);
+  --pal-ring: rgba(232, 180, 76, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='floresta'][data-theme='light'] {
+  --pal-bg: #f6f7f2;
+  --pal-sidebar: #e9ede4;
+  --pal-surface: #ffffff;
+  --pal-elevated: #eef1e9;
+  --pal-user-bubble: #e6ece1;
+  --pal-border: #d3dbcd;
+  --pal-border-strong: #b9c4b2; /* derivado */
+  --pal-text: #1c2620;
+  --pal-text-2: #56645a;
+  --pal-text-3: #5e6c62;
+  --pal-accent: #8a5a0b;
+  --pal-accent-hover: #714906; /* derivado */
+  --pal-selection: #f6ebd3;
+  --pal-primary: #8a5a0b;
+  --pal-on-primary: #ffffff;
+  --pal-success: #2e6b45;
+  --pal-success-bg: #e1f0e5;
+  --pal-shadow: #1c262014;
+  --pal-hover: rgba(28, 38, 32, 0.05);
+  --pal-ring: rgba(138, 90, 11, 0.25);
+  --pal-scrim: rgba(28, 38, 32, 0.3);
+  color-scheme: light;
+}
