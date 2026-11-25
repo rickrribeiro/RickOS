@@ -30,7 +30,8 @@ function ReservedLine({
   function commit(): void {
     setEditing(false)
     const v = parseFloat(draft.replace(',', '.'))
-    if (draft.trim() === '' || isNaN(v) || v === amount) return
+    // mês sem revisão: salvar o mesmo valor também conta como revisado
+    if (draft.trim() === '' || isNaN(v) || (v === amount && explicit)) return
     onSave(Math.round(v * 100) / 100)
   }
 
@@ -68,17 +69,25 @@ function ReservedLine({
       </button>
     )
   }
+  // sem registro neste mês: valor herdado do mês anterior, falta revisar (rotina de começo de mês)
+  const pending = !explicit
+  const linkBtn: React.CSSProperties = { background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', color: pending ? 'var(--danger)' : 'var(--text-muted)', font: 'inherit' }
   return (
-    <div className="stat-card-sub">
+    <div className="stat-card-sub" style={pending ? { color: 'var(--danger)' } : undefined}>
       🔒 separado: {formatMoney(amount, currency)}
-      {!explicit && <span title="Sem registro neste mês — mantém o último valor informado"> (mantido)</span>}{' '}
-      <button
-        onClick={start}
-        style={{ background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', color: 'var(--text-muted)', font: 'inherit' }}
-        title="Editar o saldo separado deste mês"
-      >
+      {pending && (
+        <span title="Sem registro neste mês — mostrando o último valor informado. Edite ou confirme para marcar como revisado.">
+          {' '}· ⚠ falta revisar
+        </span>
+      )}{' '}
+      <button onClick={start} style={linkBtn} title="Editar o saldo separado deste mês">
         ✎
       </button>
+      {pending && (
+        <button onClick={() => onSave(amount)} style={linkBtn} title="O valor não mudou: confirmar para este mês">
+          ✓ manter
+        </button>
+      )}
     </div>
   )
 }
