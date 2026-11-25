@@ -9,6 +9,7 @@ import { ChatsSection } from '../components/ChatsSection'
 import { NewsSection } from '../components/NewsSection'
 import { SnapshotsSection } from '../components/SnapshotsSection'
 import { AppearanceSection } from '../components/AppearanceSection'
+import { LanguageSection } from '../components/LanguageSection'
 import { ModulesSection } from '../components/ModulesSection'
 import {
   CONV_DEFAULT_EFFORT_KEY,
@@ -301,6 +302,7 @@ export function SettingsPage(): React.ReactElement {
         </div>
       </div>
 
+      <LanguageSection />
       <AppearanceSection />
       <ModulesSection />
 
