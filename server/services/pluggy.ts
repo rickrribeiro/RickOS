@@ -12,7 +12,8 @@ import {
   getInvestmentLatest,
   upsertExternalAccount,
   assignAccountToUnlinked,
-  setSetting
+  setSetting,
+  setTransactionInvestmentFlag
 } from '../database/queries'
 import { decodeSecret } from './secrets'
 import {
@@ -274,7 +275,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
         description: t.description ?? null,
         date: t.date.slice(0, 10),
         ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null,
-        investment: detectInvestmentMove(t.description, t.category) ? 1 : 0,
+        investment: detectInvestmentMove(t.description, t.category, t.operationType) ? 1 : 0,
         installmentNumber: t.creditCardMetadata?.totalInstallments ? (t.creditCardMetadata.installmentNumber ?? null) : null,
         installmentTotal: t.creditCardMetadata?.totalInstallments ?? null,
         paymentMethod: detectPaymentMethod(t.description, {
@@ -282,7 +283,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
           paymentMethod: t.paymentData?.paymentMethod,
           operationType: t.operationType
         }),
-        transfer: !detectInvestmentMove(t.description, t.category) && detectOwnTransfer(t.description, t.category) ? 1 : 0,
+        transfer: !detectInvestmentMove(t.description, t.category, t.operationType) && detectOwnTransfer(t.description, t.category) ? 1 : 0,
         externalId: t.id,
         pending: t.status === 'PENDING' ? 1 : 0
       }
@@ -484,4 +485,32 @@ export async function syncPluggyInvestments(): Promise<PluggyInvestmentSyncResul
     if (latest && !latest.closed) vanished.push({ id: inv.id, name: inv.name })
   }
   return { created, updated, closed, vanished }
+}
+
+/**
+ * Manutenção: rebusca as transações no Pluggy e recalcula SÓ o flag de investimento das já
+ * importadas (pelo id externo), com o detector atual. Não apaga nem mexe em categoria/natureza manual.
+ */
+export async function reclassifyInvestmentFlags(): Promise<{ checked: number; toInvestment: string[]; fromInvestment: string[] }> {
+  const itemId = (await getSetting('pluggy_item_id')) ?? ''
+  if (!itemId) throw new Error('Configure o Item ID do Pluggy em Configurações.')
+  const key = await apiKey()
+  const accounts = (await get<{ results: PluggyAccount[] }>(`/accounts?itemId=${encodeURIComponent(itemId)}`, key)).results ?? []
+  const derived = new Map<string, boolean>()
+  for (const acc of accounts) {
+    for (const t of await fetchAllTransactions(acc.id, key)) derived.set(t.id, detectInvestmentMove(t.description, t.category, t.operationType))
+  }
+  const existing = await getTransactions()
+  const toInvestment: string[] = []
+  const fromInvestment: string[] = []
+  let checked = 0
+  for (const t of existing) {
+    if (!t.externalId || !derived.has(t.externalId)) continue
+    checked++
+    const want = derived.get(t.externalId)!
+    if (!!t.investment === want) continue
+    await setTransactionInvestmentFlag(t.id, want)
+    ;(want ? toInvestment : fromInvestment).push(`${t.date} ${t.type === 'income' ? '+' : '-'}${t.amount} ${t.description ?? ''}`)
+  }
+  return { checked, toInvestment, fromInvestment }
 }

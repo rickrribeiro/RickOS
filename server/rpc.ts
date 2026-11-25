@@ -209,7 +209,7 @@ import type { DbTransaction, DbSkill, DbAgent, StudyBundle, DbStayFavorite, DbSt
 import { syncGithubIssues, createIssueViaClaude } from './services/github'
 import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
-import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken } from './services/pluggy'
+import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken, reclassifyInvestmentFlags } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
 import { recomputeRecurring, recurringSuggestions } from './services/recurring'
 import { countsInTotals, firstBusinessDay, type TransactionKind } from '../shared/finance'
@@ -1055,6 +1055,8 @@ ipcMain.handle('pluggy:sync', async (_, month?: string) => {
   return afterTxChange(r)
 })
 ipcMain.handle('pluggy:status', () => pluggyConfigured())
+/** Manutenção: recalcula a marcação de investimento das transações importadas com o detector atual. */
+ipcMain.handle('pluggy:reclassifyInvestments', async () => afterTxChange(await reclassifyInvestmentFlags()))
 ipcMain.handle('pluggy:syncInvestments', async () => {
   const r = await syncPluggyInvestments()
   await setSetting('pluggy_investments_last_sync', new Date().toISOString())

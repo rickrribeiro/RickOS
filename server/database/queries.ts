@@ -1449,6 +1449,11 @@ export async function setTransactionPaymentMethod(id: number, method: string | n
   const db = await getDb()
   run(db, 'UPDATE transactions SET paymentMethod = ? WHERE id = ?', [method, id])
 }
+/** Só o flag de investimento (manutenção: reclassificação a partir do Open Finance). */
+export async function setTransactionInvestmentFlag(id: number, investment: boolean): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE transactions SET investment = ? WHERE id = ?', [investment ? 1 : 0, id])
+}
 /** Define a natureza: normal, aplicação/resgate de investimento ou transferência entre contas (exclusivas). */
 export async function setTransactionKind(id: number, kind: TransactionKind): Promise<void> {
   const db = await getDb()

@@ -21,14 +21,27 @@ const PLUGGY_INVESTMENT_CATEGORIES = new Set(
 
 /** Rendimento/juros/dividendos: receita real mesmo citando RDB/CDB. */
 const REAL_INCOME = /\b(rendimento|rendimentos|juros|dividendo|dividendos|proventos?|jcp)\b/i
-const MOVE_START = /^\s*(resgate|aplica[cç][aã]o|aplic\.?|investimento|dinheiro guardado|dinheiro resgatado)\b/i
+const MOVE_START = /^\s*(resgate|aplica[cç][aã]o|aplic\.?|investimento|dinheiro guardado|dinheiro resgatado)\b|\bvalor (transferido para|recebido de) investimentos?\b/i
 const PRODUCTS = /\b(rdb|cdb|lci|lca|cra|cri|tesouro direto|tesouro selic|cofrinho|caixinha)\b/i
 
-export function detectInvestmentMove(description: string | null | undefined, category?: string | null): boolean {
+/** Operações do Open Finance que são pagamento/transferência a terceiros — nunca aplicação, mesmo se a categoria disser "Investments". */
+const PAYMENT_OPERATIONS = new Set(['PIX', 'TED', 'DOC', 'BOLETO', 'CONVENIO_ARRECADACAO', 'CARTAO', 'TRANSFERENCIA_MESMA_INSTITUICAO', 'SAQUE'])
+
+/**
+ * Aplicação/resgate de investimento. Sinais, em ordem: operationType do Open Finance
+ * (RESGATE_APLIC_FINANCEIRA = resgate; RENDIMENTO_APLIC_FINANCEIRA = rendimento, receita real),
+ * descrição ("Resgate RDB", "Valor transferido para Investimentos"…) e, por último, a categoria
+ * "Investments" da Pluggy — só quando a operação não é um pagamento a terceiros (um Pix para uma
+ * corretora de câmbio como a Wise vem categorizado como "Investments", mas é gasto).
+ */
+export function detectInvestmentMove(description: string | null | undefined, category?: string | null, operationType?: string | null): boolean {
   const d = description ?? ''
+  const op = (operationType ?? '').toUpperCase()
+  if (op === 'RENDIMENTO_APLIC_FINANCEIRA') return false
   if (REAL_INCOME.test(d)) return false
-  if (category && PLUGGY_INVESTMENT_CATEGORIES.has(category.toLowerCase())) return true
-  return MOVE_START.test(d) || PRODUCTS.test(d)
+  if (op === 'RESGATE_APLIC_FINANCEIRA') return true
+  if (MOVE_START.test(d) || PRODUCTS.test(d)) return true
+  return !!category && PLUGGY_INVESTMENT_CATEGORIES.has(category.toLowerCase()) && !PAYMENT_OPERATIONS.has(op)
 }
 
 // ── Regras de categorização ────────────────────────────────────────────────────
