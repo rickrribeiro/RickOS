@@ -252,9 +252,9 @@ async function fetchCodex(): Promise<ClaudeUsageAccount | null> {
     const res = await readCodexRateLimits()
     if (!res) return null
     const limits = codexLimits(res)
-    return { provider: 'codex', configDir: 'codex', label: 'Codex', limits, raw: limits.length ? null : 'Sem limites informados pelo Codex (login por API key?).', error: null }
+    return { provider: 'codex', configDir: 'codex', label: 'Codex · pessoal', limits, raw: limits.length ? null : 'Sem limites informados pelo Codex (login por API key?).', error: null }
   } catch (e) {
-    return { provider: 'codex', configDir: 'codex', label: 'Codex', limits: [], raw: null, error: e instanceof Error ? e.message : String(e) }
+    return { provider: 'codex', configDir: 'codex', label: 'Codex · pessoal', limits: [], raw: null, error: e instanceof Error ? e.message : String(e) }
   }
 }
 
