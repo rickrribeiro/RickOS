@@ -492,6 +492,23 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE transactions ADD COLUMN refundOf INTEGER;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 39,
+    label: 'Contas: saldo por mês (histórico) — registra o saldo atual das contas do Open Finance no mês da última sync',
+    run: (db) => {
+      try {
+        db.run(`CREATE TABLE IF NOT EXISTS account_balance_history (
+          accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+          month TEXT NOT NULL,
+          balance REAL NOT NULL,
+          syncedAt TEXT NOT NULL,
+          PRIMARY KEY (accountId, month)
+        );`)
+        db.run(`INSERT OR IGNORE INTO account_balance_history (accountId, month, balance, syncedAt)
+                SELECT id, substr(syncedAt, 1, 7), balance, syncedAt FROM accounts WHERE externalId IS NOT NULL AND syncedAt IS NOT NULL;`)
+      } catch { /* tabela ausente */ }
+    }
   }
 ]
 

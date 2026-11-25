@@ -193,6 +193,15 @@ export const SCHEMA = `
     refundOf INTEGER                        -- estorno: id da compra estornada (-1 = usuário pediu para não parear)
   );
 
+  -- Saldo das contas por mês (último saldo sincronizado do Open Finance em cada mês).
+  CREATE TABLE IF NOT EXISTS account_balance_history (
+    accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    month TEXT NOT NULL,                    -- YYYY-MM
+    balance REAL NOT NULL,
+    syncedAt TEXT NOT NULL,
+    PRIMARY KEY (accountId, month)
+  );
+
   -- Exceções de recorrência por estabelecimento (chave = recurringKey): o usuário corrige a detecção.
   CREATE TABLE IF NOT EXISTS recurring_overrides (
     key TEXT PRIMARY KEY,

@@ -1086,6 +1086,9 @@ declare global {
         update: (id: number, name: string, currency: string, balance: number) => Promise<void>
         delete: (id: number) => Promise<void>
       }
+      accountsHistory: {
+        balances: () => Promise<{ accountId: number; month: string; balance: number; syncedAt: string }[]>
+      }
       financeRules: {
         getAll: () => Promise<FinanceRule[]>
         create: (categoryId: number, keywords: string) => Promise<void>

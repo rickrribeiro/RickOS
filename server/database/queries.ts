@@ -1322,12 +1322,26 @@ export async function upsertExternalAccount(externalId: string, name: string, cu
   const db = await getDb()
   const now = new Date().toISOString()
   const cur = getOne<DbAccount>(db, 'SELECT * FROM accounts WHERE externalId = ?', [externalId])
+  const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const record = (id: number): void =>
+    run(
+      db,
+      'INSERT INTO account_balance_history (accountId, month, balance, syncedAt) VALUES (?, ?, ?, ?) ON CONFLICT(accountId, month) DO UPDATE SET balance = excluded.balance, syncedAt = excluded.syncedAt',
+      [id, month, balance, now]
+    )
   if (cur) {
     run(db, 'UPDATE accounts SET balance = ?, currency = ?, syncedAt = ? WHERE id = ?', [balance, currency, now, cur.id])
+    record(cur.id)
     return { id: cur.id, created: false }
   }
   run(db, 'INSERT INTO accounts (name, currency, balance, externalId, syncedAt) VALUES (?, ?, ?, ?, ?)', [name, currency, balance, externalId, now])
-  return { id: lastInsertId(db), created: true }
+  const id = lastInsertId(db)
+  record(id)
+  return { id, created: true }
+}
+export async function getAccountBalanceHistory(): Promise<{ accountId: number; month: string; balance: number; syncedAt: string }[]> {
+  const db = await getDb()
+  return getAll(db, 'SELECT accountId, month, balance, syncedAt FROM account_balance_history ORDER BY month')
 }
 /** Liga à conta as transações que ainda não têm conta. Retorna quantas. */
 export async function assignAccountToUnlinked(accountId: number): Promise<number> {
@@ -1348,6 +1362,7 @@ export async function resetFinanceImportedData(): Promise<{ transactions: number
   run(db, 'DELETE FROM transactions')
   run(db, 'DELETE FROM investment_history')
   run(db, 'DELETE FROM investments')
+  run(db, 'DELETE FROM account_balance_history')
   run(db, 'DELETE FROM accounts')
   run(db, "DELETE FROM settings WHERE key = 'finance_default_account'")
   return out

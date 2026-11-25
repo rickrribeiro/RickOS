@@ -6,7 +6,7 @@ import { PendingNotes } from '../components/PendingNotes'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
 
 export function FinanceDashboardPage(): React.ReactElement {
-  const { accounts, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
+  const { accounts, accountBalances, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
     useFinanceStore()
 
   useEffect(() => {
@@ -23,8 +23,15 @@ export function FinanceDashboardPage(): React.ReactElement {
   const applicationsByCur = sumByCurrency(investmentMoves.filter((t) => t.type === 'expense'))
 
   // balances by currency (from accounts)
+  // Saldo do mês selecionado: contas do Open Finance usam o saldo registrado NAQUELE mês (sem registro =
+  // R$ 0); contas manuais usam o saldo cadastrado.
+  const accountMonth = accounts.map((a) => {
+    if (!a.externalId) return { a, balance: a.balance as number | null, syncedAt: null as string | null }
+    const h = accountBalances.find((x) => x.accountId === a.id && x.month === month)
+    return { a, balance: h ? h.balance : null, syncedAt: h ? h.syncedAt : null }
+  })
   const balByCur: Record<string, number> = {}
-  for (const a of accounts) balByCur[a.currency] = (balByCur[a.currency] ?? 0) + a.balance
+  for (const { a, balance } of accountMonth) balByCur[a.currency] = (balByCur[a.currency] ?? 0) + (balance ?? 0)
 
   // top expense categories this month (BRL-agnostic, sum absolute amounts)
   const byCat: Record<number, number> = {}
@@ -99,12 +106,14 @@ export function FinanceDashboardPage(): React.ReactElement {
         <div className="stat-card">
           <div className="stat-card-label">Saldo total (contas)</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{money(balByCur)}</div>
-          {accounts.map((a) => (
+          {accountMonth.map(({ a, balance, syncedAt }) => (
             <div key={a.id} className="stat-card-sub">
               {a.externalId ? '🏦 ' : ''}
               {a.name}
-              {accounts.length > 1 && ` · ${formatMoney(a.balance, a.currency)}`}
-              {a.syncedAt && ` · atualizado ${new Date(a.syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+              {accounts.length > 1 && balance != null && ` · ${formatMoney(balance, a.currency)}`}
+              {balance == null
+                ? ' · sem registro de saldo neste mês'
+                : syncedAt && ` · atualizado ${new Date(syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
             </div>
           ))}
           {accounts.length === 0 && <div className="stat-card-sub">importe do Open Finance para trazer o saldo da conta</div>}

@@ -92,6 +92,7 @@ import {
   setTransactionIgnored,
   setTransactionKind,
   resetFinanceImportedData,
+  getAccountBalanceHistory,
   setTransactionPaymentMethod,
   setRecurringOverride,
   getRecurringOverrides,
@@ -1059,6 +1060,7 @@ ipcMain.handle('pluggy:sync', async (_, month?: string) => {
   return afterTxChange(r)
 })
 ipcMain.handle('pluggy:status', () => pluggyConfigured())
+ipcMain.handle('accounts:balanceHistory', () => getAccountBalanceHistory())
 /** Manutenção: recalcula a marcação de investimento das transações importadas com o detector atual. */
 ipcMain.handle('pluggy:reclassifyInvestments', async () => afterTxChange(await reclassifyInvestmentFlags()))
 ipcMain.handle('pluggy:syncInvestments', async () => {

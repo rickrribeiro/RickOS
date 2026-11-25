@@ -28,6 +28,7 @@ interface FinanceState {
   rates: Record<string, number>
   hidden: boolean // privacy mode: mask money values
   recurringSuggestions: RecurringSuggestion[] // possíveis recorrentes aguardando confirmação do usuário
+  accountBalances: { accountId: number; month: string; balance: number; syncedAt: string }[] // saldo por mês (Open Finance)
   defaultAccountId: number | null // conta padrão (a do Open Finance), pré-selecionada em transações novas
 
   setMonth: (m: string) => void
@@ -78,6 +79,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   hidden: initialHidden,
   defaultAccountId: null,
   recurringSuggestions: [],
+  accountBalances: [],
 
   setMonth: (m) => {
     set({ month: m })
@@ -97,7 +99,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   refresh: async () => {
     const month = get().month
-    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw, recurringSuggestions] =
+    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw, recurringSuggestions, accountBalances] =
       await Promise.all([
         window.api.accounts.getAll(),
         window.api.categories.getAll(),
@@ -110,7 +112,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         window.api.settings.get('finance_base'),
         window.api.settings.get('finance_rates'),
         window.api.settings.get('finance_default_account'),
-        window.api.transactions.recurringSuggestions ? window.api.transactions.recurringSuggestions().catch(() => []) : Promise.resolve([])
+        window.api.transactions.recurringSuggestions ? window.api.transactions.recurringSuggestions().catch(() => []) : Promise.resolve([]),
+        window.api.accountsHistory ? window.api.accountsHistory.balances().catch(() => []) : Promise.resolve([])
       ])
     let rates: Record<string, number> = {}
     try {
@@ -132,6 +135,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       base: base || 'BRL',
       rates,
       recurringSuggestions,
+      accountBalances,
       defaultAccountId: defaultAccountRaw && accounts.some((a) => a.id === Number(defaultAccountRaw)) ? Number(defaultAccountRaw) : null
     })
   },
