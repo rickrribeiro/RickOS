@@ -4,6 +4,7 @@ import App from './App'
 import { createApi } from './api/createApi'
 import { subscribe } from './api/transport'
 import { applySkin } from './styles/skin'
+import { useLocaleStore } from './i18n'
 import { playNotificationSound, wireNotificationSoundUnlock } from './utils/notificationSound'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
@@ -38,8 +39,18 @@ subscribe('notify', (p) => {
 })
 subscribe('db:replaced', () => window.location.reload())
 
+// Idioma: o cache local vale de imediato; o servidor (tabela settings) é a fonte da verdade.
+void useLocaleStore.getState().syncFromServer()
+window.addEventListener('focus', () => void useLocaleStore.getState().syncFromServer())
+
+/** Trocar o idioma remonta o app inteiro, então todo `t()` (inclusive fora de componentes) é relido. */
+function Root(): React.ReactElement {
+  const locale = useLocaleStore((s) => s.locale)
+  return <App key={locale} />
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <Root />
   </React.StrictMode>
 )
