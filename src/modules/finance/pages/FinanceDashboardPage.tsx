@@ -183,11 +183,12 @@ export function FinanceDashboardPage(): React.ReactElement {
         <div className="stat-card">
           <div className="stat-card-label">Investimentos em {base}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(portfolioNow, base)}</div>
-          {portfolio.length > 1 && (
+          {portfolio.length > 1 && portfolioPrev > 0 && (
             <div className="stat-card-sub" style={{ color: portfolioDelta >= 0 ? 'var(--success)' : 'var(--danger)' }}>
               {portfolioDelta >= 0 ? '▲' : '▼'} {formatMoney(Math.abs(portfolioDelta), base)} vs. mês anterior
             </div>
           )}
+          {portfolioNow > 0 && portfolioPrev <= 0 && <div className="stat-card-sub">primeiro mês registrado — a variação aparece a partir do próximo</div>}
         </div>
       </div>
 
