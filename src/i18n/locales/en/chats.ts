@@ -203,7 +203,6 @@ export const chats = {
   'chats.estimativaLocalOProvedorNao': 'Local estimate (the provider doesn\'t report mentions)',
   'chats.mencoesNaoLidasAVoce': 'Unread mentions of you',
   'chats.mensagensNaoLidas': 'Unread messages',
-  'chats.selecionada': 'selected',
   'chats.todasVisiveis': 'all visible',
   'chats.lembrar2': '⏰ Remind',
   'chats.tags': '🏷 Tags',

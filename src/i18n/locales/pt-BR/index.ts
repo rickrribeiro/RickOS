@@ -19,6 +19,8 @@ import { finance } from './finance'
 import { projects } from './projects'
 import { travel } from './travel'
 import { flights } from './flights'
+import { ai } from './ai'
+import { misc } from './misc'
 
 /** Dicionário de referência. Cada módulo tem seu arquivo, com chaves prefixadas (`todo.*`, `finance.*`…). */
 export const ptBR = {
@@ -42,7 +44,9 @@ export const ptBR = {
   ...finance,
   ...projects,
   ...travel,
-  ...flights
+  ...flights,
+  ...ai,
+  ...misc
 }
 
 export type MessageKey = keyof typeof ptBR

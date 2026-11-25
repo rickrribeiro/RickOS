@@ -44,7 +44,7 @@ export function agoDays(iso: string | null): string {
   const d = Math.floor((Date.now() - Date.parse(iso)) / 86400_000)
   if (d <= 0) {
     const h = Math.floor((Date.now() - Date.parse(iso)) / 3600_000)
-    return h <= 0 ? 'agora' : `${h}h`
+    return h <= 0 ? t('time.now') : `${h}h`
   }
   return `${d}d`
 }

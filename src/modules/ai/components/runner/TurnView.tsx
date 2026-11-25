@@ -2,10 +2,11 @@ import React, { useState } from 'react'
 import type { AiPromptResponse, AiTurn } from '../../../../../shared/aiConversations'
 import { renderMarkdown } from '../../../estudos/markdown'
 import { ToolBlock } from './ToolBlock'
+import { t, getLocale } from '../../../../i18n'
 
 export function fmtTokens(n: number): string {
   if (!n) return '0'
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
+  if (n >= 1_000_000) return t('ai.m', { p0: (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) })
   if (n >= 1000) return `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k`
   return String(n)
 }
@@ -22,9 +23,9 @@ function fmtDuration(ms: number | null): string {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  cancelled: '⏹ Interrompido',
-  interrupted: '⚠️ Interrompido (o servidor reiniciou)',
-  error: '⚠️ Erro'
+  cancelled: t('ai.interrompido'),
+  interrupted: t('ai.interrompidoOServidorReiniciou'),
+  error: t('ai.erro')
 }
 
 async function copy(text: string): Promise<void> {
@@ -75,7 +76,7 @@ export function TurnView({ turn, onRespond, onRetry }: Props): React.ReactElemen
           if (b.type === 'thinking')
             return (
               <details key={i} className="cv-thinking" open={!!b.live}>
-                <summary>💭 Pensamento</summary>
+                <summary>{t('ai.pensamento')}</summary>
                 <div className="cv-thinking-body">{b.text}</div>
               </details>
             )
@@ -84,7 +85,7 @@ export function TurnView({ turn, onRespond, onRetry }: Props): React.ReactElemen
         })}
         {running && !lastIsLiveText && !waiting && (
           <div className="cv-working">
-            <span className="active-task-dot" style={{ width: 7, height: 7 }} /> trabalhando…
+            <span className="active-task-dot" style={{ width: 7, height: 7 }} /> {t('ai.trabalhando')}
           </div>
         )}
         {STATUS_LABEL[turn.status] && (
@@ -93,16 +94,16 @@ export function TurnView({ turn, onRespond, onRetry }: Props): React.ReactElemen
             {turn.error ? `: ${turn.error}` : ''}
             {onRetry && turn.status !== 'cancelled' && (
               <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => onRetry(turn.prompt)}>
-                ↻ Tentar de novo
+                {t('ai.tentarDeNovo')}
               </button>
             )}
           </div>
         )}
         {!running && (
           <div className="cv-meta">
-            {turn.contextTokens > 0 && <span title="Tamanho do contexto ao fim deste turno">📚 {fmtTokens(turn.contextTokens)}</span>}
-            {turn.outputTokens > 0 && <span title="Tokens gerados">✍️ {fmtTokens(turn.outputTokens)}</span>}
-            {turn.costUsd > 0 && <span title="Custo estimado deste turno">{fmtCost(turn.costUsd)}</span>}
+            {turn.contextTokens > 0 && <span title={t('ai.tamanhoDoContextoAoFim')}>📚 {fmtTokens(turn.contextTokens)}</span>}
+            {turn.outputTokens > 0 && <span title={t('ai.tokensGerados')}>✍️ {fmtTokens(turn.outputTokens)}</span>}
+            {turn.costUsd > 0 && <span title={t('ai.custoEstimadoDesteTurno')}>{fmtCost(turn.costUsd)}</span>}
             {turn.durationMs ? <span>⏱ {fmtDuration(turn.durationMs)}</span> : null}
             {answer.trim() && (
               <button
@@ -113,7 +114,7 @@ export function TurnView({ turn, onRespond, onRetry }: Props): React.ReactElemen
                   setTimeout(() => setCopied(false), 1500)
                 }}
               >
-                {copied ? '✓ copiado' : '📋 copiar'}
+                {copied ? t('ai.copiado') : t('ai.copiar2')}
               </button>
             )}
           </div>
@@ -128,7 +129,7 @@ export function ContextMeter({ used, window: win, onCompact }: { used: number; w
   const pct = win > 0 ? Math.min(100, (used / win) * 100) : 0
   const level = pct >= 85 ? 'danger' : pct >= 70 ? 'warn' : 'ok'
   return (
-    <div className={`cv-ctx cv-ctx-${level}`} title={`Contexto: ${used.toLocaleString('pt-BR')} de ${win.toLocaleString('pt-BR')} tokens`}>
+    <div className={`cv-ctx cv-ctx-${level}`} title={t('ai.contextoDeTokens', { p0: used.toLocaleString(getLocale()), p1: win.toLocaleString(getLocale()) })}>
       <div className="cv-ctx-bar">
         <div className="cv-ctx-fill" style={{ width: `${pct}%` }} />
       </div>
@@ -136,8 +137,8 @@ export function ContextMeter({ used, window: win, onCompact }: { used: number; w
         {used ? `${fmtTokens(used)} / ${fmtTokens(win)}` : `— / ${fmtTokens(win)}`}
       </span>
       {onCompact && pct >= 60 && (
-        <button className="cv-link" onClick={onCompact} title="Resume a conversa para liberar contexto (/compact)">
-          🗜️ compactar
+        <button className="cv-link" onClick={onCompact} title={t('ai.resumeAConversaParaLiberar')}>
+          {t('ai.compactar')}
         </button>
       )}
     </div>

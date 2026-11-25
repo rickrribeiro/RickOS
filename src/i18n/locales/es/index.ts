@@ -20,6 +20,8 @@ import { finance } from './finance'
 import { projects } from './projects'
 import { flights } from './flights'
 import { travel } from './travel'
+import { ai } from './ai'
+import { misc } from './misc'
 
 export const es: Messages = {
   ...common,
@@ -42,5 +44,7 @@ export const es: Messages = {
   ...finance,
   ...projects,
   ...flights,
-  ...travel
+  ...travel,
+  ...ai,
+  ...misc
 }

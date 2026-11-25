@@ -203,7 +203,6 @@ export const chats = {
   'chats.estimativaLocalOProvedorNao': 'Estimación local (el proveedor no informa menciones)',
   'chats.mencoesNaoLidasAVoce': 'Menciones no leídas a ti',
   'chats.mensagensNaoLidas': 'Mensajes no leídos',
-  'chats.selecionada': 'seleccionada',
   'chats.todasVisiveis': 'todas visibles',
   'chats.lembrar2': '⏰ Recordar',
   'chats.tags': '🏷 Etiquetas',

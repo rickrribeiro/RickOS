@@ -4,6 +4,7 @@ import { useUIStore } from '../../../store/uiStore'
 import { renderMarkdown } from '../../estudos/markdown'
 import { useSkillStore } from '../store/skillStore'
 import { DRAFT_KEY } from '../pages/PromptRunnerPage'
+import { t } from '../../../i18n'
 
 /** Corpo do arquivo sem o frontmatter (para copiar como skill do rickOS / pré-visualizar). */
 function stripFrontmatter(text: string): string {
@@ -48,36 +49,36 @@ function SkillFileModal({ skill, onClose, onSaved }: { skill: ClaudeSkillInfo; o
 
   const dirty = content != null && content !== original
   return (
-    <div className="modal-overlay" onClick={() => (!dirty || window.confirm('Descartar as alterações?')) && onClose()}>
+    <div className="modal-overlay" onClick={() => (!dirty || window.confirm(t('ai.descartarAsAlteracoes'))) && onClose()}>
       <div className="modal cc-skill-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cc-skill-modal-head">
           <h2 style={{ margin: 0 }}>/{skill.name}</h2>
-          <span className="cat-chip">{skill.kind === 'skill' ? 'skill' : 'comando'}</span>
+          <span className="cat-chip">{skill.kind === 'skill' ? t('ai.skill') : t('ai.comando')}</span>
           <span className="project-chip">{skill.source}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <button className={`btn btn-sm ${mode === 'view' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('view')}>
-              Ver
+              {t('ai.ver')}
             </button>
             <button className={`btn btn-sm ${mode === 'edit' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('edit')}>
-              Editar
+              {t('ai.editar')}
             </button>
           </div>
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '4px 0 10px', wordBreak: 'break-all' }}>{shortPath(skill.path)}</div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
-        {content == null && !error && <div className="empty-hint">Carregando…</div>}
+        {content == null && !error && <div className="empty-hint">{t('ai.carregando')}</div>}
         {content != null && mode === 'view' && <div className="cc-skill-preview">{renderMarkdown(stripFrontmatter(content))}</div>}
         {content != null && mode === 'edit' && (
           <textarea className="cc-skill-editor" value={content} onChange={(e) => setContent(e.target.value)} spellCheck={false} />
         )}
         <div className="modal-actions">
           {mode === 'edit' && (
-            <button className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={save} title="Grava o arquivo no disco">
-              {busy ? 'Salvando…' : '💾 Salvar arquivo'}
+            <button className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={save} title={t('ai.gravaOArquivoNoDisco')}>
+              {busy ? t('ai.salvando') : t('ai.salvarArquivo')}
             </button>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => (!dirty || window.confirm('Descartar as alterações?')) && onClose()}>
-            Fechar
+          <button className="btn btn-secondary btn-sm" onClick={() => (!dirty || window.confirm(t('ai.descartarAsAlteracoes'))) && onClose()}>
+            {t('ai.fechar')}
           </button>
         </div>
       </div>
@@ -139,32 +140,31 @@ export function ClaudeSkillsView({ search }: { search: string }): React.ReactEle
   async function copyToRickos(s: ClaudeSkillInfo): Promise<void> {
     const r = await window.api.claudeSkills.read(s.id)
     await create(s.name, s.description || null, 'Claude Code', [s.source], stripFrontmatter(r.content).trim())
-    flash(`“${s.name}” copiada para as skills do rickOS ✓`)
+    flash(t('ai.copiadaParaAsSkillsDo', { name: s.name }))
   }
 
   return (
     <div>
       <div className="todo-toolbar" style={{ marginBottom: 12 }}>
         <select value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="all">Todas as origens</option>
+          <option value="all">{t('ai.todasAsOrigens')}</option>
           {sources.map((x) => (
             <option key={x} value={x}>
               {x}
             </option>
           ))}
         </select>
-        <button className="btn btn-secondary btn-sm" onClick={() => load(true)} title="Ler as pastas de novo">
-          ↻ Recarregar
+        <button className="btn btn-secondary btn-sm" onClick={() => load(true)} title={t('ai.lerAsPastasDeNovo')}>
+          {t('ai.recarregar')}
         </button>
         {toast && <span className="badge-hot" style={{ background: 'var(--accent-dim)', color: 'var(--accent-hover)' }}>{toast}</span>}
       </div>
       <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-        Lidas de <code className="md-code">~/.claude*/skills</code>, <code className="md-code">~/.claude*/commands</code> e da pasta <code className="md-code">.claude/</code> de cada projeto
-        com caminho local. No Prompt Runner, use digitando <code className="md-code">/nome</code>.
+        {t('ai.lidasDe')} <code className="md-code">~/.claude*/skills</code>, <code className="md-code">~/.claude*/commands</code> {t('ai.eDaPasta')} <code className="md-code">.claude/</code> {t('ai.deCadaProjetoComCaminho')} <code className="md-code">/nome</code>.
       </p>
       {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
-      {!items && !error && <div className="empty-hint">Lendo skills…</div>}
-      {items && filtered.length === 0 && <div className="empty-hint">Nenhuma skill do Claude Code encontrada.</div>}
+      {!items && !error && <div className="empty-hint">{t('ai.lendoSkills')}</div>}
+      {items && filtered.length === 0 && <div className="empty-hint">{t('ai.nenhumaSkillDoClaudeCode')}</div>}
       {groups.map(([g, list]) => (
         <div key={g} style={{ marginBottom: 18 }}>
           <h3 className="cc-skill-group">
@@ -179,7 +179,7 @@ export function ClaudeSkillsView({ search }: { search: string }): React.ReactEle
                   </span>
                   {s.argumentHint && <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{s.argumentHint}</span>}
                   <span className="cat-chip" style={{ marginLeft: 'auto' }}>
-                    {s.kind === 'skill' ? 'skill' : 'comando'}
+                    {s.kind === 'skill' ? t('ai.skill') : t('ai.comando')}
                   </span>
                 </div>
                 {s.description && <div className="stat-card-sub cc-skill-desc">{s.description}</div>}
@@ -187,14 +187,14 @@ export function ClaudeSkillsView({ search }: { search: string }): React.ReactEle
                   {s.updatedAt.slice(0, 10)}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => openInRunner(s)} title="Abre uma conversa nova com /nome preenchido">
-                    ▶ Usar
+                  <button className="btn btn-primary btn-sm" onClick={() => openInRunner(s)} title={t('ai.abreUmaConversaNovaCom')}>
+                    {t('ai.usar')}
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={() => setOpen(s)}>
-                    Ver / editar
+                    {t('ai.verEditar')}
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => copyToRickos(s)} title="Cria uma skill do rickOS com o mesmo conteúdo">
-                    📥 Copiar p/ rickOS
+                  <button className="btn btn-secondary btn-sm" onClick={() => copyToRickos(s)} title={t('ai.criaUmaSkillDoRickos')}>
+                    {t('ai.copiarPRickos')}
                   </button>
                 </div>
               </div>

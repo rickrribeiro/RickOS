@@ -5,6 +5,7 @@ import { useCalendarStore } from '../../calendar/store/calendarStore'
 import { useTripStore } from '../../travel/store/tripStore'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import type { ConsumerBlock } from '../../memory/api'
+import { t as tr } from '../../../i18n'
 
 interface QuickAction {
   key: string
@@ -30,13 +31,13 @@ const withMemory = (prompt: string, mem: string): string => (mem ? `${prompt}\n\
 const list = (items: string[]): string => items.map((t) => `- ${t}`).join('\n') || '(nenhum)'
 
 function fmtHours(minutes: number): string {
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  return tr('ai.hM', { p0: Math.floor(minutes / 60), p1: minutes % 60 })
 }
 
 const ACTIONS: QuickAction[] = [
   {
     key: 'prioritize',
-    label: 'Priorizar tarefas',
+    label: tr('ai.priorizarTarefas'),
     build: (c) =>
       `Você é meu assistente de produtividade. Priorize as tarefas abaixo (mais importante primeiro), explicando brevemente o porquê:\n\n${list(
         c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title)
@@ -44,7 +45,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: 'inbox',
-    label: 'Revisar inbox',
+    label: tr('ai.revisarInbox'),
     build: (c) =>
       `Revise minha inbox e sugira, para cada item, se vira tarefa, projeto, viagem ou financeiro, e a próxima ação:\n\n${list(
         c.todos.filter((t) => t.status === 'inbox').map((t) => t.title)
@@ -52,7 +53,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: 'week',
-    label: 'Planejar a semana',
+    label: tr('ai.planejarASemana'),
     memory: (c) =>
       window.api.memory.ctxWeekPlan(
         [...c.todos.filter((t) => t.status !== 'done' && t.status !== 'inbox').map((t) => t.title), ...c.habitNames].join(' ').slice(0, 1500)
@@ -69,7 +70,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: 'trip',
-    label: 'Roteiro de viagem',
+    label: tr('ai.roteiroDeViagem'),
     memory: (c) => window.api.memory.ctxTripItinerary(c.nextTrip?.destination ?? ''),
     build: (c, mem) =>
       withMemory(
@@ -81,7 +82,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: 'weekly',
-    label: 'Resumo semanal',
+    label: tr('ai.resumoSemanal'),
     build: (c) =>
       `Faça um resumo da minha semana e sugira ajustes para a próxima.\n\nHoras trabalhadas: ${c.weekHours}\n\nTarefas concluídas:\n${list(
         c.todos.filter((t) => t.status === 'done').map((t) => t.title)
@@ -91,7 +92,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: 'trip-checklist',
-    label: 'Checklist de viagem',
+    label: tr('ai.checklistDeViagem'),
     build: (c) =>
       c.nextTrip
         ? `Monte um checklist completo de preparação para a viagem a ${c.nextTrip.destination}${
@@ -240,9 +241,9 @@ export function JarvisPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🧞 Jarvis</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('ai.jarvis')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Assistente pessoal · usa o Claude Code CLI local (`claude -p`), nada vai a APIs pagas.
+            {tr('ai.assistentePessoalUsaOClaude')}
           </p>
         </div>
       </div>
@@ -252,7 +253,7 @@ export function JarvisPage(): React.ReactElement {
           <button
             key={a.key}
             className="btn btn-secondary btn-sm"
-            title="Preenche o prompt abaixo (não executa automaticamente)"
+            title={tr('ai.preencheOPromptAbaixoNao')}
             onClick={async () => {
               // memória é opcional: se falhar, o atalho funciona como antes
               const mem = a.memory ? await a.memory(ctx).then((m) => m.block, () => '') : ''
@@ -264,32 +265,32 @@ export function JarvisPage(): React.ReactElement {
         ))}
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-        Clique num atalho para preencher o prompt (pode trocar/editar) e depois em <strong>Executar</strong>.
+        {tr('ai.cliqueNumAtalhoParaPreencher')} <strong>{tr('ai.executar')}</strong>.
       </p>
 
       <textarea
         rows={4}
-        placeholder="Pergunte algo ou edite o prompt gerado…"
+        placeholder={tr('ai.pergunteAlgoOuEditeO')}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         style={{ width: '100%', resize: 'vertical' }}
       />
       <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
         {running ? (
-          <button className="btn btn-danger" onClick={cancel}>⏹ Cancelar</button>
+          <button className="btn btn-danger" onClick={cancel}>{tr('ai.cancelar2')}</button>
         ) : (
           <button className="btn btn-primary" disabled={!prompt.trim()} onClick={() => run(prompt)}>
-            Executar
+            {tr('ai.executar')}
           </button>
         )}
-        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Modelo:</label>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('ai.modelo2')}</label>
         <select value={model} onChange={(e) => changeModel(e.target.value)}>
-          <option value="">Padrão</option>
-          <option value="sonnet">Sonnet</option>
-          <option value="opus">Opus</option>
-          <option value="haiku">Haiku</option>
+          <option value="">{tr('ai.padrao')}</option>
+          <option value="sonnet">{tr('ai.sonnet')}</option>
+          <option value="opus">{tr('ai.opus')}</option>
+          <option value="haiku">{tr('ai.haiku')}</option>
         </select>
-        <label style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }} title="Só liberadas: usa apenas a allowlist. Executar tudo: o Claude roda ferramentas sozinho, como o Claude Code.">🛡️</label>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }} title={tr('ai.soLiberadasUsaApenasA')}>🛡️</label>
         <select
           value={permission}
           disabled={running}
@@ -299,8 +300,8 @@ export function JarvisPage(): React.ReactElement {
             localStorage.setItem('ai_permission', v)
           }}
         >
-          <option value="allowlist">Só liberadas</option>
-          <option value="execute">Executar tudo</option>
+          <option value="allowlist">{tr('ai.soLiberadas')}</option>
+          <option value="execute">{tr('ai.executarTudo')}</option>
         </select>
       </div>
 
@@ -312,7 +313,7 @@ export function JarvisPage(): React.ReactElement {
 
       {(output || running) && (
         <div className="chart-section" style={{ marginTop: 12 }}>
-          <div className="chart-title">Resposta{running ? ' — executando…' : ''}</div>
+          <div className="chart-title">{tr('ai.resposta')}{running ? tr('ai.executando') : ''}</div>
           <pre className="ai-output">{output || '…'}</pre>
         </div>
       )}

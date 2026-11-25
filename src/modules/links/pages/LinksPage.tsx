@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from '../../../types'
 import { useLinkStore, normalizeUrl, parseTags } from '../store/linkStore'
 import { timeAgo } from '../../../utils/dates'
+import { t as tr, getLocale } from '../../../i18n'
 
 /** Chip editor: click a chip to remove, type + Enter/comma to add. */
 function TagEditor({ tags, setTags }: { tags: string[]; setTags: (t: string[]) => void }): React.ReactElement {
@@ -19,7 +20,7 @@ function TagEditor({ tags, setTags }: { tags: string[]; setTags: (t: string[]) =
           className="project-chip"
           style={{ cursor: 'pointer' }}
           onClick={() => setTags(tags.filter((x) => x !== t))}
-          title="Remover tag"
+          title={tr('misc.removerTag')}
         >
           {t} ✕
         </span>
@@ -28,7 +29,7 @@ function TagEditor({ tags, setTags }: { tags: string[]; setTags: (t: string[]) =
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ',') && (e.preventDefault(), add())}
-        placeholder="tag + Enter"
+        placeholder={tr('misc.tagEnter')}
         style={{ flex: 1, minWidth: 100, border: 'none', background: 'transparent', padding: 4 }}
       />
     </div>
@@ -50,22 +51,22 @@ function LinkEditor({ link, onClose }: { link: Link; onClose: () => void }): Rea
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
-        <h2>Editar link</h2>
+        <h2>{tr('misc.editarLink')}</h2>
         <div className="editor-field">
-          <label>Título</label>
+          <label>{tr('misc.titulo')}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
         <div className="editor-field">
-          <label>URL</label>
+          <label>{tr('misc.url')}</label>
           <input value={url} onChange={(e) => setUrl(e.target.value)} />
         </div>
         <div className="editor-field">
-          <label>Tags</label>
+          <label>{tr('misc.tags')}</label>
           <TagEditor tags={tags} setTags={setTags} />
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('misc.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{tr('misc.salvar')}</button>
         </div>
       </div>
     </div>
@@ -119,20 +120,20 @@ export function LinksPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🔗 Links</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('misc.links')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {links.length} links · {checkedCount} marcados
+            {tr('misc.linksMarcados', { count: links.length, checkedCount })}
           </p>
         </div>
         <button className="btn btn-primary btn-sm" onClick={openAllChecked} disabled={checkedCount === 0}>
-          ↗ Abrir marcados ({checkedCount})
+          {tr('misc.abrirMarcados', { checkedCount })}
         </button>
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tag:</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('misc.tag')}</span>
         <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-          <option value="all">Todas</option>
+          <option value="all">{tr('misc.todas')}</option>
           {allTags.map((t) => (
             <option key={t} value={t}>
               {t}
@@ -143,16 +144,16 @@ export function LinksPage(): React.ReactElement {
           className="btn btn-secondary btn-sm"
           onClick={openByTag}
           disabled={tagFilter === 'all' || tagCount === 0}
-          title="Abrir todos os links desta tag"
+          title={tr('misc.abrirTodosOsLinksDesta')}
         >
-          ↗ Abrir por tag ({tagCount})
+          {tr('misc.abrirPorTag', { tagCount })}
         </button>
       </div>
 
       <div className="quick-add-row" style={{ flexWrap: 'wrap' }}>
         <input
           type="text"
-          placeholder="Título"
+          placeholder={tr('misc.titulo')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           style={{ flex: 1, minWidth: 140 }}
@@ -160,7 +161,7 @@ export function LinksPage(): React.ReactElement {
         />
         <input
           type="text"
-          placeholder="URL (ex: github.com)"
+          placeholder={tr('misc.urlExGithubCom')}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           style={{ flex: 1, minWidth: 140 }}
@@ -168,13 +169,13 @@ export function LinksPage(): React.ReactElement {
         />
         <TagEditor tags={newTags} setTags={setNewTags} />
         <button className="btn btn-primary" onClick={handleAdd}>
-          + Adicionar
+          {tr('misc.adicionar')}
         </button>
       </div>
 
       <div className="list-stack">
         {visible.length === 0 && (
-          <div className="empty-hint">{links.length === 0 ? 'Nenhum link. Adicione acima.' : 'Nenhum link com essa tag.'}</div>
+          <div className="empty-hint">{links.length === 0 ? tr('misc.nenhumLinkAdicioneAcima') : tr('misc.nenhumLinkComEssaTag')}</div>
         )}
         {visible.map((l) => {
           const tags = parseTags(l.tags)
@@ -184,9 +185,9 @@ export function LinksPage(): React.ReactElement {
                 type="checkbox"
                 checked={l.checked === 1}
                 onChange={(e) => setChecked(l.id, e.target.checked)}
-                title="Incluir em 'Abrir marcados'"
+                title={tr('misc.incluirEmAbrirMarcados')}
               />
-              <button className="link-title" onClick={() => open(l)} title={`Abrir ${l.url}`}>
+              <button className="link-title" onClick={() => open(l)} title={tr('misc.abrir', { url: l.url })}>
                 {l.title}
               </button>
               {tags.map((t) => (
@@ -195,18 +196,18 @@ export function LinksPage(): React.ReactElement {
                   className="project-chip"
                   style={{ cursor: 'pointer' }}
                   onClick={() => setTagFilter(t)}
-                  title={`Filtrar por ${t}`}
+                  title={tr('misc.filtrarPor', { t })}
                 >
                   {t}
                 </span>
               ))}
               <span className="link-url">{l.url}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }} title={l.lastOpenedAt ? `Aberto em ${new Date(l.lastOpenedAt).toLocaleString('pt-BR')}` : 'Nunca aberto por aqui'}>
-                {l.lastOpenedAt ? `aberto há ${timeAgo(l.lastOpenedAt)}` : 'nunca aberto'}
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }} title={l.lastOpenedAt ? tr('misc.abertoEm', { p0: new Date(l.lastOpenedAt).toLocaleString(getLocale()) }) : tr('misc.nuncaAbertoPorAqui')}>
+                {l.lastOpenedAt ? tr('misc.abertoHa', { p0: timeAgo(l.lastOpenedAt) }) : tr('misc.nuncaAberto')}
               </span>
               <div className="list-row-actions">
-                <button className="btn btn-secondary btn-sm" onClick={() => open(l)}>Abrir</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(l)}>Editar</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => open(l)}>{tr('misc.abrir2')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(l)}>{tr('misc.editar')}</button>
                 <button className="btn btn-danger btn-sm" onClick={() => remove(l.id)}>✕</button>
               </div>
             </div>

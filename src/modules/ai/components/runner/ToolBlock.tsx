@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import type { AiBlock, AiPromptResponse, AiQuestion } from '../../../../../shared/aiConversations'
 import { renderMarkdown } from '../../../estudos/markdown'
+import { t as tr } from '../../../../i18n'
 
 type ToolBlockData = Extract<AiBlock, { type: 'tool' }>
 
@@ -23,33 +24,33 @@ function summarize(b: ToolBlockData): { icon: string; label: string; detail?: st
   const i = b.input ?? {}
   switch (b.name) {
     case 'Bash':
-      return { icon: '⌨️', label: str(i.description) || 'Bash', detail: str(i.command) }
+      return { icon: '⌨️', label: str(i.description) || tr('ai.bash'), detail: str(i.command) }
     case 'Read':
-      return { icon: '📄', label: `Ler ${shortPath(str(i.file_path))}` }
+      return { icon: '📄', label: tr('ai.ler', { p0: shortPath(str(i.file_path)) }) }
     case 'Edit':
     case 'MultiEdit':
-      return { icon: '✏️', label: `Editar ${shortPath(str(i.file_path))}` }
+      return { icon: '✏️', label: tr('ai.editar2', { p0: shortPath(str(i.file_path)) }) }
     case 'Write':
-      return { icon: '📝', label: `Escrever ${shortPath(str(i.file_path))}` }
+      return { icon: '📝', label: tr('ai.escrever', { p0: shortPath(str(i.file_path)) }) }
     case 'NotebookEdit':
-      return { icon: '📓', label: `Notebook ${shortPath(str(i.notebook_path))}` }
+      return { icon: '📓', label: tr('ai.notebook', { p0: shortPath(str(i.notebook_path)) }) }
     case 'Grep':
-      return { icon: '🔍', label: `Buscar “${str(i.pattern)}”`, detail: i.path ? shortPath(str(i.path)) : undefined }
+      return { icon: '🔍', label: tr('ai.buscar2', { p0: str(i.pattern) }), detail: i.path ? shortPath(str(i.path)) : undefined }
     case 'Glob':
-      return { icon: '🗂️', label: `Arquivos ${str(i.pattern)}` }
+      return { icon: '🗂️', label: tr('ai.arquivos', { p0: str(i.pattern) }) }
     case 'WebFetch':
       return { icon: '🌐', label: str(i.url) }
     case 'WebSearch':
-      return { icon: '🌐', label: `Pesquisar “${str(i.query)}”` }
+      return { icon: '🌐', label: tr('ai.pesquisar', { p0: str(i.query) }) }
     case 'Task':
     case 'Agent':
-      return { icon: '🤖', label: str(i.description) || 'Subagente' }
+      return { icon: '🤖', label: str(i.description) || tr('ai.subagente') }
     case 'TodoWrite':
-      return { icon: '✅', label: 'Lista de tarefas' }
+      return { icon: '✅', label: tr('ai.listaDeTarefas') }
     case 'ToolSearch':
-      return { icon: '🧰', label: 'Carregar ferramentas' }
+      return { icon: '🧰', label: tr('ai.carregarFerramentas') }
     case 'Skill':
-      return { icon: '🧩', label: `Skill ${str(i.skill)}` }
+      return { icon: '🧩', label: tr('ai.skill2', { p0: str(i.skill) }) }
     default:
       return { icon: '🔧', label: b.name }
   }
@@ -138,7 +139,7 @@ function QuestionCard({ block: b, onRespond }: Props): React.ReactElement {
 
   return (
     <div className={`cv-card cv-question ${pending ? 'pending' : ''}`}>
-      <div className="cv-card-head">❓ {pending ? 'Claude tem uma pergunta' : 'Pergunta do Claude'}</div>
+      <div className="cv-card-head">❓ {pending ? tr('ai.claudeTemUmaPergunta') : tr('ai.perguntaDoClaude')}</div>
       {questions.map((q) => (
         <div key={q.question} className="cv-q">
           {q.header && <span className="cv-q-header">{q.header}</span>}
@@ -162,7 +163,7 @@ function QuestionCard({ block: b, onRespond }: Props): React.ReactElement {
               <input
                 type="text"
                 className="cv-q-other"
-                placeholder="Outra resposta…"
+                placeholder={tr('ai.outraResposta')}
                 value={other[q.question] ?? ''}
                 onChange={(e) => {
                   const v = e.target.value
@@ -182,23 +183,23 @@ function QuestionCard({ block: b, onRespond }: Props): React.ReactElement {
       {pending && (
         <div className="cv-actions">
           <button className="btn btn-primary btn-sm" disabled={!complete || busy} onClick={submit}>
-            Responder
+            {tr('ai.responder2')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             disabled={busy}
-            title="Recusa a pergunta e para: você escreve o que quiser discutir antes de escolher"
+            title={tr('ai.recusaAPerguntaEPara')}
             onClick={() => b.permission && onRespond(b.permission.requestId, { kind: 'chat' })}
           >
-            💬 Conversar sobre isso
+            {tr('ai.conversarSobreIsso')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             disabled={busy}
-            title="Deixa o Claude decidir sozinho"
+            title={tr('ai.deixaOClaudeDecidirSozinho')}
             onClick={() => b.permission && onRespond(b.permission.requestId, { kind: 'deny', message: 'Prefiro não responder agora; siga com o seu melhor julgamento.' })}
           >
-            Pular
+            {tr('ai.pular')}
           </button>
         </div>
       )}
@@ -223,22 +224,22 @@ function PlanCard({ block: b, onRespond }: Props): React.ReactElement {
   }
   return (
     <div className={`cv-card cv-plan ${pending ? 'pending' : ''}`}>
-      <div className="cv-card-head">📋 Plano {b.permission && !pending && <span className="cv-note">· {b.permission.note}</span>}</div>
+      <div className="cv-card-head">{tr('ai.plano')} {b.permission && !pending && <span className="cv-note">· {b.permission.note}</span>}</div>
       <div className="cv-plan-body">{renderMarkdown(str(b.input.plan))}</div>
       {pending && (
         <>
           <div className="cv-actions">
             <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run({ kind: 'approvePlan', mode: 'acceptEdits' })}>
-              ✅ Aprovar e aceitar edições
+              {tr('ai.aprovarEAceitarEdicoes')}
             </button>
             <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => run({ kind: 'approvePlan', mode: 'default' })}>
-              Aprovar (perguntar cada edição)
+              {tr('ai.aprovarPerguntarCadaEdicao')}
             </button>
           </div>
           <div className="cv-deny-row">
-            <input type="text" placeholder="Ajustes no plano…" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+            <input type="text" placeholder={tr('ai.ajustesNoPlano')} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
             <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => run({ kind: 'deny', message: feedback.trim() || 'Continue planejando.' })}>
-              Continuar planejando
+              {tr('ai.continuarPlanejando')}
             </button>
           </div>
         </>
@@ -294,25 +295,25 @@ export function ToolBlock({ block: b, onRespond }: Props): React.ReactElement | 
       {pending && (
         <div className="cv-perm">
           <div className="cv-perm-text">
-            🤚 Claude quer usar <strong>{b.name}</strong>
-            {b.permission?.blockedPath ? <> em <code className="md-code">{shortPath(b.permission.blockedPath)}</code></> : null}
+            {tr('ai.claudeQuerUsar')} <strong>{b.name}</strong>
+            {b.permission?.blockedPath ? <> {tr('ai.em')} <code className="md-code">{shortPath(b.permission.blockedPath)}</code></> : null}
           </div>
           <div className="cv-actions">
             <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => respond({ kind: 'allow' })}>
-              Permitir
+              {tr('ai.permitir')}
             </button>
             {canAlways && (
               <button
                 className="btn btn-secondary btn-sm"
                 disabled={busy}
-                title="Salva a regra sugerida pelo Claude (como o “sempre permitir” do terminal)"
+                title={tr('ai.salvaARegraSugeridaPelo')}
                 onClick={() => respond({ kind: 'allow', always: true })}
               >
-                Permitir sempre
+                {tr('ai.permitirSempre')}
               </button>
             )}
             <button className="btn btn-danger btn-sm" disabled={busy} onClick={() => (denying ? respond({ kind: 'deny', message: denyMsg }) : setDenying(true))}>
-              {denying ? 'Negar e enviar' : 'Negar'}
+              {denying ? tr('ai.negarEEnviar') : tr('ai.negar')}
             </button>
           </div>
           {denying && (
@@ -320,7 +321,7 @@ export function ToolBlock({ block: b, onRespond }: Props): React.ReactElement | 
               <input
                 type="text"
                 autoFocus
-                placeholder="O que ele deve fazer em vez disso? (opcional)"
+                placeholder={tr('ai.oQueEleDeveFazer')}
                 value={denyMsg}
                 onChange={(e) => setDenyMsg(e.target.value)}
                 onKeyDown={(e) => {

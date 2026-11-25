@@ -4,13 +4,14 @@ import { useUIStore } from '../../store/uiStore'
 import { localDateStr } from '../../utils/dates'
 import { openExternal } from '../../api/createApi'
 import './news.css'
+import { t as tr, getLocale } from '../../i18n'
 
 const fmtWhen = (iso: string): string =>
-  new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  new Date(iso).toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 const fmtDay = (ymd: string): string => {
   const [y, m, d] = ymd.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })
+  return new Date(y, m - 1, d).toLocaleDateString(getLocale(), { weekday: 'long', day: '2-digit', month: '2-digit' })
 }
 
 function yesterdayStr(): string {
@@ -42,20 +43,20 @@ export function NewsCard(): React.ReactElement {
   return (
     <>
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">📰 Resumo de Notícias</div>
+        <div className="chart-title">{tr('misc.resumoDeNoticias')}</div>
         <div className="news-card-row">
           <span className={`news-card-status ${done ? '' : 'pending'}`}>
             {done
-              ? `Atualizado em ${fmtWhen(digest!.generatedAt)}`
-              : 'Resumo de hoje ainda não gerado'}
+              ? tr('misc.atualizadoEm', { p0: fmtWhen(digest!.generatedAt) })
+              : tr('misc.resumoDeHojeAindaNao')}
             {!done && digest && (
               <span style={{ display: 'block', fontWeight: 400, fontSize: 12, color: 'var(--text-muted)' }}>
-                Último: {fmtWhen(digest.generatedAt)}
+                {tr('misc.ultimo', { p0: fmtWhen(digest.generatedAt) })}
               </span>
             )}
           </span>
           <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>
-            Abrir Resumo
+            {tr('misc.abrirResumo')}
           </button>
         </div>
       </div>
@@ -96,7 +97,7 @@ function NewsModal({
     setMemMsg(null)
     try {
       await window.api.memory.produceNews()
-      setMemMsg({ ok: true, text: '🧬 Enviado — sugestões no Inbox da Memória Pessoal' })
+      setMemMsg({ ok: true, text: tr('misc.enviadoSugestoesNoInboxDa') })
     } catch (e) {
       setMemMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
     }
@@ -176,16 +177,16 @@ function NewsModal({
   return (
     <div className="modal-overlay" onClick={() => !busy && onClose()}>
       <div className="modal news-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>📰 Resumo de Notícias</h2>
+        <h2>{tr('misc.resumoDeNoticias')}</h2>
         <div className="news-meta">
           {digest
-            ? `Notícias de ${fmtDay(digest.targetDate)} · gerado em ${fmtWhen(digest.generatedAt)} · ${digest.model}`
-            : 'Nenhum resumo gerado ainda.'}
+            ? tr('misc.noticiasDeGeradoEm', { p0: fmtDay(digest.targetDate), p1: fmtWhen(digest.generatedAt), model: digest.model })
+            : tr('misc.nenhumResumoGeradoAinda')}
         </div>
 
         <div className="news-pills">
           <button className={`news-pill ${selected === '__all' ? 'active' : ''}`} onClick={() => setSelected('__all')}>
-            Todas
+            {tr('misc.todas')}
           </button>
           {config.categories.map((c) => {
             const n = countOf(c)
@@ -200,7 +201,7 @@ function NewsModal({
                 {n != null && <span className="news-pill-count">{n}</span>}
                 <button
                   className="news-pill-x"
-                  title={`Remover categoria ${c}`}
+                  title={tr('misc.removerCategoria', { c })}
                   disabled={busy}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -222,52 +223,52 @@ function NewsModal({
         >
           <input
             type="text"
-            placeholder="Nova categoria (ex.: Games, IA, Esportes)"
+            placeholder={tr('misc.novaCategoriaExGamesIa')}
             value={newCat}
             maxLength={40}
             onChange={(e) => setNewCat(e.target.value)}
           />
           <button type="submit" className="btn btn-secondary btn-sm" disabled={!newCat.trim()}>
-            + Adicionar
+            {tr('misc.adicionar')}
           </button>
         </form>
 
         {(noKeyWarn || !config.hasGeminiKey) && (
           <div className="news-warning">
             <span style={{ flex: 1 }}>
-              ⚠️ Chave de API do Google Gemini não configurada. Cadastre-a em Configurações para buscar notícias.
+              {tr('misc.chaveDeApiDoGoogle')}
             </span>
             <button className="btn btn-secondary btn-sm" onClick={goToSettings}>
-              Ir para Configurações
+              {tr('misc.irParaConfiguracoes')}
             </button>
           </div>
         )}
 
         <div className="news-toolbar">
           <button className="btn btn-primary btn-sm" onClick={() => void generate()} disabled={busy || !config.categories.length}>
-            {fullBusy ? '⏳ Buscando e resumindo…' : '🔄 Buscar Notícias (Dia Anterior)'}
+            {fullBusy ? tr('misc.buscandoEResumindo') : tr('misc.buscarNoticiasDiaAnterior')}
           </button>
           {pending.length > 0 && (
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => void generate(pending)}
               disabled={busy}
-              title={`Refaz só: ${pending.join(', ')}. O resto do resumo salvo fica como está.`}
+              title={tr('misc.refazSoORestoDo', { p0: pending.join(', ') })}
             >
-              {retrying ? '⏳ Refazendo…' : `🔁 Refazer só as que falharam (${pending.length})`}
+              {retrying ? tr('misc.refazendo') : tr('misc.refazerSoAsQueFalharam', { count: pending.length })}
             </button>
           )}
           {digest && !busy && pending.length === 0 && (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Buscar de novo substitui o resumo salvo.</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('misc.buscarDeNovoSubstituiO')}</span>
           )}
           <button
             className="btn btn-secondary btn-sm"
             style={{ marginLeft: 'auto' }}
             onClick={() => void suggestMemories()}
             disabled={busy}
-            title="Produtor aprovado da Memória Pessoal: a IA (Claude local) sugere interesses a partir das notícias que você abriu e das suas categorias; nada é salvo sem sua aprovação no Inbox"
+            title={tr('misc.produtorAprovadoDaMemoriaPessoal')}
           >
-            🧬 Sugerir memórias{state.readsCount ? ` (${state.readsCount})` : ''}
+            {tr('misc.sugerirMemorias')}{state.readsCount ? ` (${state.readsCount})` : ''}
           </button>
         </div>
         {error && <div style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 8 }}>{error}</div>}
@@ -278,12 +279,12 @@ function NewsModal({
         <div className="news-body">
           {fullBusy && (
             <div className="empty-hint" style={{ padding: 24 }}>
-              Coletando o Google Notícias e resumindo com o Gemini… isso leva alguns segundos.
+              {tr('misc.coletandoOGoogleNoticiasE')}
             </div>
           )}
           {!fullBusy && !digest && (
             <div className="empty-hint" style={{ padding: 24 }}>
-              Clique em <strong>Buscar Notícias (Dia Anterior)</strong> para gerar o primeiro resumo.
+              {tr('misc.cliqueEm')} <strong>{tr('misc.buscarNoticiasDiaAnterior2')}</strong> {tr('misc.paraGerarOPrimeiroResumo')}
             </div>
           )}
           {!fullBusy &&
@@ -294,25 +295,25 @@ function NewsModal({
                   {g.memoryItems ? (
                     <span
                       className="news-group-mem"
-                      title="Memórias pessoais usadas para priorizar esta categoria (enviadas ao Gemini)"
+                      title={tr('misc.memoriasPessoaisUsadasParaPriorizar')}
                     >
-                      🧬 {g.memoryItems} {g.memoryItems === 1 ? 'memória' : 'memórias'}
+                      🧬 {g.memoryItems} {g.memoryItems === 1 ? tr('misc.memoria') : tr('misc.memorias')}
                     </span>
                   ) : null}
                 </div>
                 {g.error &&
                   (retrying?.includes(g.categoria) ? (
-                    <div className="empty-hint">⏳ Tentando de novo…</div>
+                    <div className="empty-hint">{tr('misc.tentandoDeNovo')}</div>
                   ) : (
                     <div className="news-group-error">
-                      Falhou: {g.error}{' '}
+                      {tr('misc.falhou')} {g.error}{' '}
                       <button className="news-readmore" onClick={() => void generate([g.categoria])} disabled={busy}>
-                        Tentar de novo
+                        {tr('misc.tentarDeNovo')}
                       </button>
                     </div>
                   ))}
                 {!g.error && g.topics.length === 0 && (
-                  <div className="empty-hint">Nenhuma notícia encontrada para o dia.</div>
+                  <div className="empty-hint">{tr('misc.nenhumaNoticiaEncontradaParaO')}</div>
                 )}
                 {g.topics.map((t, i) => (
                   <div key={i} className="news-topic">
@@ -320,7 +321,7 @@ function NewsModal({
                     <div className="news-topic-summary">{t.resumo_curto}</div>
                     <div className="news-topic-foot">
                       <button className="news-readmore" onClick={() => readMore(t.url_fonte)}>
-                        Ler mais ↗
+                        {tr('misc.lerMais')}
                       </button>
                       {t.fonte && <span>{t.fonte}</span>}
                     </div>
@@ -331,12 +332,12 @@ function NewsModal({
           {!fullBusy && digest && selected !== '__all' && groups.length === 0 && (
             <div className="empty-hint" style={{ padding: 24 }}>
               {retrying?.includes(selected) ? (
-                '⏳ Buscando esta categoria…'
+                tr('misc.buscandoEstaCategoria')
               ) : (
                 <>
-                  Categoria nova, ainda fora do resumo.{' '}
+                  {tr('misc.categoriaNovaAindaForaDo')}{' '}
                   <button className="news-readmore" onClick={() => void generate([selected])} disabled={busy}>
-                    Buscar só esta
+                    {tr('misc.buscarSoEsta')}
                   </button>
                 </>
               )}
@@ -346,7 +347,7 @@ function NewsModal({
 
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>
-            Fechar
+            {tr('misc.fechar')}
           </button>
         </div>
       </div>

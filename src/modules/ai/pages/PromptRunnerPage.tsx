@@ -22,6 +22,7 @@ import { ChangesPanel } from '../components/runner/ChangesPanel'
 import { UsageLimits } from '../components/runner/UsageLimits'
 import { imageFiles, prepareImage } from '../images'
 import '../runner.css'
+import { t as tr, getLocale } from '../../../i18n'
 
 /**
  * Prompt Runner: conversas com o Claude Code CLI local. Cada conversa é uma sessão do
@@ -40,10 +41,10 @@ const SLASH_RE = /^\/([\w:.-]*)$/
 
 const MODES: ConvPermissionMode[] = ['default', 'acceptEdits', 'plan', 'bypassPermissions']
 const MODE_HINT: Record<ConvPermissionMode, string> = {
-  default: 'Pergunta antes de rodar comandos ou editar arquivos (fora das ferramentas liberadas).',
-  acceptEdits: 'Edita arquivos sozinho; pergunta antes de comandos.',
-  plan: 'Só lê e planeja; você aprova o plano antes de qualquer mudança.',
-  bypassPermissions: 'Roda tudo sem perguntar (perguntas do Claude ainda aparecem).'
+  default: tr('ai.perguntaAntesDeRodarComandos'),
+  acceptEdits: tr('ai.editaArquivosSozinhoPerguntaAntes'),
+  plan: tr('ai.soLeEPlanejaVoce'),
+  bypassPermissions: tr('ai.rodaTudoSemPerguntarPerguntas')
 }
 
 interface DraftSettings {
@@ -425,12 +426,12 @@ export function PromptRunnerPage(): React.ReactElement {
     if (!conv) return
     setMenuOpen(false)
     const cmd = await window.api.conv.terminalCommand(conv.id)
-    if (!cmd) return flash('A conversa ainda não tem sessão.')
+    if (!cmd) return flash(tr('ai.aConversaAindaNaoTem'))
     try {
       await navigator.clipboard.writeText(cmd)
-      flash('Comando copiado: cole no terminal ✓')
+      flash(tr('ai.comandoCopiadoColeNoTerminal'))
     } catch {
-      window.prompt('Copie o comando:', cmd)
+      window.prompt(tr('ai.copieOComando'), cmd)
     }
   }
 
@@ -441,8 +442,8 @@ export function PromptRunnerPage(): React.ReactElement {
       const r = await window.api.conv.resync(conv.id)
       if (r.updated) {
         await store.loadTurns(conv.id)
-        flash('Atualizado com o terminal ✓')
-      } else flash('Nada novo no terminal.')
+        flash(tr('ai.atualizadoComOTerminal'))
+      } else flash(tr('ai.nadaNovoNoTerminal'))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
@@ -451,10 +452,10 @@ export function PromptRunnerPage(): React.ReactElement {
   async function remove(): Promise<void> {
     if (!conv) return
     setMenuOpen(false)
-    const msg = conv.running ? 'A conversa está executando. Excluir vai interromper. Continuar?' : 'Excluir esta conversa do rickOS? (A sessão do CLI continua no disco.)'
+    const msg = conv.running ? tr('ai.runner.deleteRunning') : tr('ai.runner.deleteConfirm')
     if (!window.confirm(msg)) return
     const dropWt =
-      conv.useWorktree && !!conv.worktreeBranch && window.confirm(`Apagar também o worktree e a branch ${conv.worktreeBranch}? (Cancelar mantém a pasta e a branch.)`)
+      conv.useWorktree && !!conv.worktreeBranch && window.confirm(tr('ai.apagarTambemOWorktreeE', { worktreeBranch: conv.worktreeBranch }))
     await store.remove(conv.id, dropWt)
     setPane('list')
   }
@@ -466,7 +467,7 @@ export function PromptRunnerPage(): React.ReactElement {
       const f = await window.api.conv.fork(conv.id)
       await store.refresh()
       await store.select(f.id)
-      flash('Conversa ramificada ✓')
+      flash(tr('ai.conversaRamificada'))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
@@ -475,11 +476,11 @@ export function PromptRunnerPage(): React.ReactElement {
   async function dropWorktree(): Promise<void> {
     if (!conv?.worktreeBranch) return
     setMenuOpen(false)
-    if (!window.confirm(`Apagar o worktree e a branch ${conv.worktreeBranch}? Mudanças não mescladas serão perdidas. A conversa vai para Arquivadas.`)) return
+    if (!window.confirm(tr('ai.apagarOWorktreeEA', { worktreeBranch: conv.worktreeBranch }))) return
     try {
       await window.api.conv.removeWorktree(conv.id)
       setShowChanges(false)
-      flash('Worktree removido ✓')
+      flash(tr('ai.worktreeRemovido'))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
@@ -488,7 +489,7 @@ export function PromptRunnerPage(): React.ReactElement {
   async function addImages(files: File[]): Promise<void> {
     if (!files.length) return
     const room = MAX_IMAGES_PER_MESSAGE - images.length
-    if (room <= 0) return flash(`Máximo de ${MAX_IMAGES_PER_MESSAGE} imagens por mensagem.`)
+    if (room <= 0) return flash(tr('ai.maximoDeImagensPorMensagem', { MAX_IMAGES_PER_MESSAGE }))
     try {
       const prepared = await Promise.all(files.slice(0, room).map(prepareImage))
       setImages((cur) => [...cur, ...prepared].slice(0, MAX_IMAGES_PER_MESSAGE))
@@ -572,18 +573,18 @@ export function PromptRunnerPage(): React.ReactElement {
         {/* ── Lista de conversas ── */}
         <aside className="cv-side">
           <div className="cv-side-head">
-            <h2>▶️ Prompt Runner</h2>
+            <h2>{tr('ai.promptRunner')}</h2>
             <div className="cv-side-actions">
               <button className="btn btn-primary btn-sm" onClick={newConversation}>
-                ＋ Nova
+                {tr('ai.nova')}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowTerminal(true)} title="Continuar uma sessão do Claude Code do terminal">
-                ⌨️ Terminal
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowTerminal(true)} title={tr('ai.continuarUmaSessaoDoClaude')}>
+                {tr('ai.terminal')}
               </button>
             </div>
           </div>
           <div className="cv-filters">
-            <input type="text" className="cv-search" placeholder="🔍 Buscar conversas…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input type="text" className="cv-search" placeholder={tr('ai.buscarConversas')} value={search} onChange={(e) => setSearch(e.target.value)} />
             <select
               className={`cv-project-filter ${projectFilter !== 'all' ? 'cv-on' : ''}`}
               value={projectFilter}
@@ -591,10 +592,10 @@ export function PromptRunnerPage(): React.ReactElement {
                 setProjectFilter(e.target.value)
                 writeStorage(PROJECT_FILTER_KEY, e.target.value === 'all' ? '' : e.target.value)
               }}
-              title="Filtrar por projeto"
+              title={tr('ai.filtrarPorProjeto')}
             >
-              <option value="all">📁 Todos os projetos</option>
-              {hasNoProject && <option value="none">Sem projeto</option>}
+              <option value="all">{tr('ai.todosOsProjetos')}</option>
+              {hasNoProject && <option value="none">{tr('ai.semProjeto')}</option>}
               {filterProjects.map((p) => (
                 <option key={p.id} value={String(p.id)}>
                   {p.name}
@@ -607,13 +608,13 @@ export function PromptRunnerPage(): React.ReactElement {
               <div className="empty-hint" style={{ fontSize: 12, padding: 16 }}>
                 {results
                   ? results.loading
-                    ? 'Buscando…'
-                    : 'Nenhuma conversa encontrada.'
+                    ? tr('ai.buscando')
+                    : tr('ai.nenhumaConversaEncontrada')
                   : showArchived
-                    ? 'Nenhuma conversa arquivada.'
+                    ? tr('ai.nenhumaConversaArquivada')
                     : store.loaded
-                      ? 'Nenhuma conversa ainda. Comece uma nova ou continue uma do terminal.'
-                      : 'Carregando…'}
+                      ? tr('ai.nenhumaConversaAindaComeceUma')
+                      : tr('ai.carregando')}
               </div>
             )}
             {filtered.map((c) => {
@@ -628,15 +629,15 @@ export function PromptRunnerPage(): React.ReactElement {
                   <div className="cv-item-title">
                     {c.running && <span className="active-task-dot" style={{ width: 7, height: 7, flexShrink: 0 }} />}
                     {fresh && <span className="cv-unseen-dot" />}
-                    <span className="cv-item-name">{c.title || 'Nova conversa'}</span>
-                    {!!c.pendingPrompts && <span className="cv-badge-attn" title="Esperando sua resposta">🤚 {c.pendingPrompts}</span>}
-                    {fresh && !c.pendingPrompts && <span className="cv-badge-new">nova resposta</span>}
+                    <span className="cv-item-name">{c.title || tr('ai.novaConversa')}</span>
+                    {!!c.pendingPrompts && <span className="cv-badge-attn" title={tr('ai.esperandoSuaResposta')}>🤚 {c.pendingPrompts}</span>}
+                    {fresh && !c.pendingPrompts && <span className="cv-badge-new">{tr('ai.novaResposta')}</span>}
                     {!showArchived && (
                       <span
                         role="button"
                         tabIndex={0}
                         className={`cv-pin ${c.pinned ? 'on' : ''}`}
-                        title={c.pinned ? 'Desafixar' : 'Fixar no topo'}
+                        title={c.pinned ? tr('ai.desafixar') : tr('ai.fixarNoTopo')}
                         onClick={(e) => {
                           e.stopPropagation()
                           store.update(c.id, { pinned: !c.pinned })
@@ -653,16 +654,16 @@ export function PromptRunnerPage(): React.ReactElement {
                     )}
                   </div>
                   <div className="cv-item-meta">
-                    {c.origin === 'terminal' && <span title="Veio do terminal">⌨️</span>}
+                    {c.origin === 'terminal' && <span title={tr('ai.veioDoTerminal')}>⌨️</span>}
                     {projectName(c.projectId) && <span>{projectName(c.projectId)}</span>}
                     <span>{timeAgo(c.updatedAt)}</span>
-                    {ctxPct > 0 && <span className={ctxPct >= 85 ? 'cv-hot' : ''}>{ctxPct}% ctx</span>}
-                    {!!c.queued?.length && <span>+{c.queued.length} na fila</span>}
+                    {ctxPct > 0 && <span className={ctxPct >= 85 ? 'cv-hot' : ''}>{ctxPct}{tr('ai.ctx')}</span>}
+                    {!!c.queued?.length && <span>{tr('ai.naFila', { count: c.queued.length })}</span>}
                     <span
                       role="button"
                       tabIndex={0}
                       className="cv-pin cv-archive"
-                      title={c.archived ? 'Desarquivar' : 'Arquivar'}
+                      title={c.archived ? tr('ai.desarquivar') : tr('ai.arquivar')}
                       onClick={(e) => {
                         e.stopPropagation()
                         store.update(c.id, { archived: !c.archived })
@@ -683,14 +684,14 @@ export function PromptRunnerPage(): React.ReactElement {
             {listCanLoadMore && (
               <div ref={listEndRef} className="cv-list-more">
                 <button className="cv-link" onClick={() => store.loadMore().catch(() => undefined)} disabled={store.loadingMore}>
-                  {store.loadingMore ? 'Carregando…' : 'Carregar mais'}
+                  {store.loadingMore ? tr('ai.carregando') : tr('ai.carregarMais')}
                 </button>
               </div>
             )}
           </div>
           <UsageLimits />
           <button className="cv-side-foot" onClick={() => store.setShowArchived(!showArchived)}>
-            {showArchived ? '← Voltar às conversas' : '🗄️ Arquivadas'}
+            {showArchived ? tr('ai.voltarAsConversas') : tr('ai.arquivadas')}
           </button>
         </aside>
 
@@ -716,55 +717,55 @@ export function PromptRunnerPage(): React.ReactElement {
                   }}
                 />
               ) : (
-                <h3 onDoubleClick={() => conv && setEditingTitle(conv.title)} title={conv ? 'Duplo clique para renomear' : undefined}>
-                  {conv ? conv.title || 'Nova conversa' : draft.title || 'Nova conversa'}
+                <h3 onDoubleClick={() => conv && setEditingTitle(conv.title)} title={conv ? tr('ai.duploCliqueParaRenomear') : undefined}>
+                  {conv ? conv.title || tr('ai.novaConversa') : draft.title || tr('ai.novaConversa')}
                 </h3>
               )}
             </div>
             {toast && <span className="cv-toast">{toast}</span>}
             {conv?.worktreeBranch && (
-              <span className="cv-chip cv-wt-chip" title={`Worktree isolado: ${conv.cwd ?? ''}`}>
+              <span className="cv-chip cv-wt-chip" title={tr('ai.worktreeIsolado', { p0: conv.cwd ?? '' })}>
                 🌿 {conv.worktreeBranch.replace(/^claude\//, '')}
               </span>
             )}
             {conv?.cwd && changeCount !== null && (
-              <button className={`btn btn-secondary btn-sm ${showChanges ? 'cv-on' : ''}`} onClick={() => setShowChanges((v) => !v)} title="Arquivos alterados, diff, commit e PR">
-                📝 {changeCount > 0 ? `${changeCount} mudança${changeCount > 1 ? 's' : ''}` : 'Mudanças'}
+              <button className={`btn btn-secondary btn-sm ${showChanges ? 'cv-on' : ''}`} onClick={() => setShowChanges((v) => !v)} title={tr('ai.arquivosAlteradosDiffCommitE')}>
+                📝 {changeCount > 0 ? tr('ai.mudanca', { count: changeCount }) : tr('ai.mudancas')}
               </button>
             )}
             {conv && (
               <div className="cv-head-stats">
                 <ContextMeter used={conv.contextTokens} window={contextWindow} onCompact={conv.running ? undefined : () => send('/compact')} />
-                <span className="cv-cost" title={`Entrada: ${conv.totalInputTokens.toLocaleString('pt-BR')} · Saída: ${conv.totalOutputTokens.toLocaleString('pt-BR')} tokens`}>
-                  {fmtCost(conv.totalCostUsd)} · {fmtTokens(conv.totalOutputTokens)} saída
+                <span className="cv-cost" title={tr('ai.entradaSaidaTokens', { p0: conv.totalInputTokens.toLocaleString(getLocale()), p1: conv.totalOutputTokens.toLocaleString(getLocale()) })}>
+                  {tr('ai.saida', { p0: fmtCost(conv.totalCostUsd), p1: fmtTokens(conv.totalOutputTokens) })}
                 </span>
               </div>
             )}
             {conv && (
               <div className="cv-menu-wrap">
-                <button className="btn btn-secondary btn-sm" onClick={() => setMenuOpen((v) => !v)} title="Mais ações">
+                <button className="btn btn-secondary btn-sm" onClick={() => setMenuOpen((v) => !v)} title={tr('ai.maisAcoes')}>
                   ⋯
                 </button>
                 {menuOpen && (
                   <div className="cv-menu" onMouseLeave={() => setMenuOpen(false)}>
                     <button onClick={copyTerminalCommand} disabled={!conv.sessionId}>
-                      ⌨️ Continuar no terminal (copiar comando)
+                      {tr('ai.continuarNoTerminalCopiarComando')}
                     </button>
                     <button onClick={resync} disabled={!conv.sessionId || conv.running}>
-                      🔄 Atualizar com o terminal
+                      {tr('ai.atualizarComOTerminal')}
                     </button>
-                    <button onClick={fork} disabled={!conv.sessionId || conv.running} title="Nova conversa com o mesmo histórico, que segue numa sessão separada">
-                      🌱 Ramificar conversa
+                    <button onClick={fork} disabled={!conv.sessionId || conv.running} title={tr('ai.novaConversaComOMesmo')}>
+                      {tr('ai.ramificarConversa')}
                     </button>
-                    <button onClick={() => { setEditingTitle(conv.title); setMenuOpen(false) }}>✏️ Renomear</button>
-                    <button onClick={() => { store.update(conv.id, { pinned: !conv.pinned }); setMenuOpen(false) }}>{conv.pinned ? '📌 Desafixar' : '📌 Fixar'}</button>
-                    <button onClick={() => { store.update(conv.id, { archived: !conv.archived }); setMenuOpen(false) }}>{conv.archived ? '📤 Desarquivar' : '🗄️ Arquivar'}</button>
+                    <button onClick={() => { setEditingTitle(conv.title); setMenuOpen(false) }}>{tr('ai.renomear')}</button>
+                    <button onClick={() => { store.update(conv.id, { pinned: !conv.pinned }); setMenuOpen(false) }}>{conv.pinned ? tr('ai.desafixar2') : tr('ai.fixar')}</button>
+                    <button onClick={() => { store.update(conv.id, { archived: !conv.archived }); setMenuOpen(false) }}>{conv.archived ? tr('ai.desarquivar2') : tr('ai.arquivar2')}</button>
                     {conv.worktreeBranch && (
                       <button className="danger" onClick={dropWorktree} disabled={conv.running}>
-                        🧹 Remover worktree e branch
+                        {tr('ai.removerWorktreeEBranch')}
                       </button>
                     )}
-                    <button className="danger" onClick={remove}>🗑️ Excluir</button>
+                    <button className="danger" onClick={remove}>{tr('ai.excluir')}</button>
                   </div>
                 )}
               </div>
@@ -773,10 +774,10 @@ export function PromptRunnerPage(): React.ReactElement {
 
           {/* configurações da conversa */}
           <div className="cv-settings">
-            <label title={projectLocked ? 'A sessão já roda na pasta deste projeto; para outro projeto, abra uma conversa nova.' : 'Roda o Claude dentro da pasta do projeto'}>
+            <label title={projectLocked ? tr('ai.aSessaoJaRodaNa') : tr('ai.rodaOClaudeDentroDa')}>
               📁
               <select value={settings.projectId ?? ''} disabled={projectLocked} onChange={(e) => patch({ projectId: e.target.value ? Number(e.target.value) : null })}>
-                <option value="">{conv?.cwd && !conv.projectId ? `Pasta: ${conv.cwd.split('/').filter(Boolean).pop()}` : 'Sem projeto'}</option>
+                <option value="">{conv?.cwd && !conv.projectId ? tr('ai.pasta', { p0: conv.cwd.split('/').filter(Boolean).pop() }) : tr('ai.semProjeto')}</option>
                 {projects.filter((p) => !p.archived || p.id === settings.projectId).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -785,15 +786,15 @@ export function PromptRunnerPage(): React.ReactElement {
               </select>
             </label>
             {!conv?.cwd && settings.projectId != null && (
-              <label title="Cria um git worktree (branch claude/rickos-…) só para esta conversa: abas em paralelo não pisam umas nas outras">
+              <label title={tr('ai.criaUmGitWorktreeBranch')}>
                 <input type="checkbox" checked={settings.useWorktree} onChange={(e) => patch({ useWorktree: e.target.checked })} />
-                🌿 Worktree isolado
+                {tr('ai.worktreeIsolado2')}
               </label>
             )}
-            <label title="Agente: prompt de sistema extra">
+            <label title={tr('ai.agentePromptDeSistemaExtra')}>
               🤖
               <select value={settings.agentId ?? ''} onChange={(e) => applyAgent(e.target.value || null)}>
-                <option value="">Sem agente</option>
+                <option value="">{tr('ai.semAgente')}</option>
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
@@ -803,18 +804,18 @@ export function PromptRunnerPage(): React.ReactElement {
             </label>
             <div className="cv-skills-wrap">
               <button className={`btn btn-secondary btn-sm ${settings.skillIds.length ? 'cv-on' : ''}`} onClick={() => setSkillsOpen((v) => !v)}>
-                🧩 Skills{settings.skillIds.length ? ` (${settings.skillIds.length})` : ''}
+                {tr('ai.skills')}{settings.skillIds.length ? ` (${settings.skillIds.length})` : ''}
               </button>
               {skillsOpen && (
                 <div className="cv-skills-pop">
-                  <input type="text" placeholder="🔍 Buscar skills…" value={skillSearch} onChange={(e) => setSkillSearch(e.target.value)} autoFocus />
+                  <input type="text" placeholder={tr('ai.buscarSkills')} value={skillSearch} onChange={(e) => setSkillSearch(e.target.value)} autoFocus />
                   <div className="cv-skills-actions">
-                    <button className="cv-link" onClick={() => patch({ skillIds: skills.filter((s) => s.isFavorite).map((s) => s.id) })}>★ Favoritas</button>
-                    <button className="cv-link" onClick={() => patch({ skillIds: [] })}>Limpar</button>
-                    <button className="cv-link" style={{ marginLeft: 'auto' }} onClick={() => setSkillsOpen(false)}>Fechar</button>
+                    <button className="cv-link" onClick={() => patch({ skillIds: skills.filter((s) => s.isFavorite).map((s) => s.id) })}>{tr('ai.favoritas')}</button>
+                    <button className="cv-link" onClick={() => patch({ skillIds: [] })}>{tr('ai.limpar')}</button>
+                    <button className="cv-link" style={{ marginLeft: 'auto' }} onClick={() => setSkillsOpen(false)}>{tr('ai.fechar')}</button>
                   </div>
                   <div className="cv-skills-list">
-                    {sortedPicker.length === 0 && <div className="empty-hint" style={{ fontSize: 12 }}>Nenhuma skill.</div>}
+                    {sortedPicker.length === 0 && <div className="empty-hint" style={{ fontSize: 12 }}>{tr('ai.nenhumaSkill')}</div>}
                     {sortedPicker.map((s) => (
                       <label key={s.id} className="skill-check-row">
                         <input
@@ -827,7 +828,7 @@ export function PromptRunnerPage(): React.ReactElement {
                         <span>
                           {s.isFavorite ? '★ ' : ''}
                           {s.name}
-                          {agentSkillIds.includes(s.id) ? ' · do agente' : ''}
+                          {agentSkillIds.includes(s.id) ? tr('ai.doAgente') : ''}
                         </span>
                       </label>
                     ))}
@@ -835,7 +836,7 @@ export function PromptRunnerPage(): React.ReactElement {
                 </div>
               )}
             </div>
-            <label title="Modelo">
+            <label title={tr('ai.modelo')}>
               🧠
               <select value={settings.model} onChange={(e) => patch({ model: e.target.value })}>
                 {CONV_MODELS.map((x) => (
@@ -846,21 +847,21 @@ export function PromptRunnerPage(): React.ReactElement {
                 {!CONV_MODELS.some((x) => x.v === settings.model) && <option value={settings.model}>{settings.model}</option>}
               </select>
             </label>
-            <label title="Esforço de raciocínio (--effort)">
+            <label title={tr('ai.esforcoDeRaciocinioEffort')}>
               ⚡
               <select value={settings.effort} onChange={(e) => patch({ effort: e.target.value as ConvEffort })}>
                 {CONV_EFFORTS.map((x) => (
                   <option key={x.v} value={x.v}>
-                    Esforço: {x.label}
+                    {tr('ai.esforco', { label: x.label })}
                   </option>
                 ))}
               </select>
             </label>
             {conv && (conv.agentId || conv.skillIds.length > 0) && (
               <span className="cv-settings-hint">
-                {agentName(conv.agentId) ? `agente ${agentName(conv.agentId)}` : ''}
+                {agentName(conv.agentId) ? tr('ai.agente', { p0: agentName(conv.agentId) }) : ''}
                 {conv.agentId && conv.skillIds.length ? ' + ' : ''}
-                {conv.skillIds.length ? `${conv.skillIds.length} skill(s)` : ''} no prompt de sistema
+                {conv.skillIds.length ? tr('ai.skillS', { count: conv.skillIds.length }) : ''} {tr('ai.noPromptDeSistema')}
               </span>
             )}
           </div>
@@ -879,15 +880,14 @@ export function PromptRunnerPage(): React.ReactElement {
               <div className="cv-empty">
                 <div style={{ fontSize: 30 }}>💬</div>
                 <p>
-                  {conv ? 'Conversa vazia.' : 'Nova conversa com o Claude Code local.'} As mensagens seguintes continuam a mesma sessão, com o contexto
-                  das anteriores.
+                  {conv ? tr('ai.conversaVazia') : tr('ai.novaConversaComOClaude')} {tr('ai.asMensagensSeguintesContinuamA')}
                 </p>
                 <ul>
-                  <li><kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha</li>
-                  <li><kbd>Shift</kbd>+<kbd>Tab</kbd> troca o modo de permissão · <kbd>Esc</kbd> interrompe</li>
-                  <li>Mensagens enviadas durante uma execução entram na fila.</li>
-                  <li>Digite <code className="md-code">/</code> para usar suas skills e comandos do Claude Code (pessoais, da conta de trabalho e do projeto).</li>
-                  <li>Cole, arraste ou anexe (📎) imagens: prints de tela, erros, layouts.</li>
+                  <li><kbd>Enter</kbd> {tr('ai.envia')} <kbd>Shift</kbd>+<kbd>Enter</kbd> {tr('ai.quebraLinha')}</li>
+                  <li><kbd>Shift</kbd>+<kbd>Tab</kbd> {tr('ai.trocaOModoDePermissao')} <kbd>Esc</kbd> {tr('ai.interrompe')}</li>
+                  <li>{tr('ai.mensagensEnviadasDuranteUmaExecucao')}</li>
+                  <li>{tr('ai.digite')} <code className="md-code">/</code> {tr('ai.paraUsarSuasSkillsE')}</li>
+                  <li>{tr('ai.coleArrasteOuAnexeImagens')}</li>
                 </ul>
               </div>
             )}
@@ -895,8 +895,8 @@ export function PromptRunnerPage(): React.ReactElement {
               <div className="cv-older">
                 <button className="btn btn-secondary btn-sm" onClick={loadOlder} disabled={loadingOlder}>
                   {loadingOlder
-                    ? 'Carregando…'
-                    : `↑ Mensagens anteriores${conv?.turnCount && conv.turnCount > convTurns.length ? ` (${conv.turnCount - convTurns.length})` : ''}`}
+                    ? tr('ai.carregando')
+                    : tr('ai.mensagensAnteriores', { p0: conv?.turnCount && conv.turnCount > convTurns.length ? ` (${conv.turnCount - convTurns.length})` : '' })}
                 </button>
               </div>
             )}
@@ -908,7 +908,7 @@ export function PromptRunnerPage(): React.ReactElement {
           {!conv && handoffNote && (
             <div className="cv-handoff">
               <span>{handoffNote}</span>
-              <button className="cv-link" onClick={() => setHandoffNote('')} title="Fechar">
+              <button className="cv-link" onClick={() => setHandoffNote('')} title={tr('ai.fechar')}>
                 ✕
               </button>
             </div>
@@ -917,7 +917,7 @@ export function PromptRunnerPage(): React.ReactElement {
           {/* fila + atenção */}
           {conv && !!conv.pendingPrompts && (
             <button className="cv-attn" onClick={scrollToPending}>
-              🤚 Claude está esperando sua resposta — ver ↑
+              {tr('ai.claudeEstaEsperandoSuaResposta')}
             </button>
           )}
           {conv && !!conv.queued?.length && (
@@ -925,7 +925,7 @@ export function PromptRunnerPage(): React.ReactElement {
               {conv.queued.map((q, i) => (
                 <div key={i} className="cv-queue-item">
                   <span>⏳ {q}</span>
-                  <button className="cv-link" onClick={() => window.api.conv.removeQueued(conv.id, i)} title="Tirar da fila">
+                  <button className="cv-link" onClick={() => window.api.conv.removeQueued(conv.id, i)} title={tr('ai.tirarDaFila')}>
                     ✕
                   </button>
                 </div>
@@ -957,7 +957,7 @@ export function PromptRunnerPage(): React.ReactElement {
                 {images.map((im, i) => (
                   <div key={i} className="cv-attach-item">
                     <img src={im.thumb} alt="" />
-                    <button onClick={() => setImages((cur) => cur.filter((_, k) => k !== i))} title="Remover">
+                    <button onClick={() => setImages((cur) => cur.filter((_, k) => k !== i))} title={tr('ai.remover')}>
                       ✕
                     </button>
                   </div>
@@ -999,7 +999,7 @@ export function PromptRunnerPage(): React.ReactElement {
               ref={textareaRef}
               rows={1}
               value={text}
-              placeholder={conv?.running ? 'Mensagem (entra na fila)…' : conv ? 'Responder…' : 'O que vamos fazer?'}
+              placeholder={conv?.running ? tr('ai.mensagemEntraNaFila') : conv ? tr('ai.responder') : tr('ai.oQueVamosFazer')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}
             />
@@ -1008,7 +1008,7 @@ export function PromptRunnerPage(): React.ReactElement {
                 className={`cv-mode cv-mode-${settings.permissionMode}`}
                 value={settings.permissionMode}
                 onChange={(e) => patch({ permissionMode: e.target.value as ConvPermissionMode })}
-                title={`${MODE_HINT[settings.permissionMode]} (Shift+Tab alterna)`}
+                title={tr('ai.shiftTabAlterna', { p0: MODE_HINT[settings.permissionMode] })}
               >
                 {MODES.map((m) => (
                   <option key={m} value={m}>
@@ -1016,18 +1016,18 @@ export function PromptRunnerPage(): React.ReactElement {
                   </option>
                 ))}
               </select>
-              <button className="btn btn-secondary btn-sm cv-clip" onClick={pickImages} title="Anexar imagens (também dá para colar ou arrastar)">
+              <button className="btn btn-secondary btn-sm cv-clip" onClick={pickImages} title={tr('ai.anexarImagensTambemDaPara')}>
                 📎
               </button>
               <span className="cv-composer-hint">{MODE_HINT[settings.permissionMode]}</span>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {conv?.running && (
-                  <button className="btn btn-danger btn-sm" onClick={() => store.cancel(conv.id)} title="Interromper (Esc)">
-                    ⏹ Parar
+                  <button className="btn btn-danger btn-sm" onClick={() => store.cancel(conv.id)} title={tr('ai.interromperEsc')}>
+                    {tr('ai.parar')}
                   </button>
                 )}
                 <button className="btn btn-primary btn-sm" onClick={() => send()} disabled={(!text.trim() && !images.length) || sending}>
-                  {conv?.running ? '⏳ Na fila' : '➤ Enviar'}
+                  {conv?.running ? tr('ai.naFila2') : tr('ai.enviar')}
                 </button>
               </div>
             </div>

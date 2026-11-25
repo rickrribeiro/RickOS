@@ -1,4 +1,5 @@
 import React from 'react'
+import { t } from '../../i18n'
 
 interface ModulePlaceholderProps {
   icon: string
@@ -29,10 +30,10 @@ export function ModulePlaceholder({
         </div>
       </div>
       <div className="chart-section">
-        <div className="chart-title">🚧 Em breve</div>
+        <div className="chart-title">{t('misc.emBreve')}</div>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
           {note ||
-            'Fundação criada — tabela no banco e navegação prontas. A lógica deste módulo entra numa próxima sessão.'}
+            t('misc.fundacaoCriadaTabelaNoBanco')}
         </p>
       </div>
     </div>

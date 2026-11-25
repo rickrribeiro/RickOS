@@ -1,5 +1,6 @@
 import type { AiImageInput } from '../../../shared/aiConversations'
 import { IMAGE_MEDIA_TYPES } from '../../../shared/aiConversations'
+import { t } from '../../i18n'
 
 /**
  * Prepara imagens para o Claude no navegador: reduz o lado maior para 1568px (o que o
@@ -24,7 +25,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error('Não consegui ler a imagem.'))
+    img.onerror = () => reject(new Error(t('ai.imageReadFail')))
     img.src = src
   })
 }

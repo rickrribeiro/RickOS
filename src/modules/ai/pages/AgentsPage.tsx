@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Agent } from '../../../types'
 import { useAgentStore } from '../store/agentStore'
 import { useSkillStore, parseTags } from '../store/skillStore'
+import { t as tr } from '../../../i18n'
 
 interface FormState {
   name: string
@@ -46,29 +47,29 @@ function AgentEditor({ agent, onClose }: { agent: Agent | null; onClose: () => v
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 460, maxWidth: 640 }}>
-        <h2>{agent ? 'Editar agente' : 'Novo agente'}</h2>
+        <h2>{agent ? tr('ai.editarAgente') : tr('ai.novoAgente')}</h2>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Nome</label>
+            <label>{tr('ai.nome')}</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
           </div>
           <div className="editor-field">
-            <label>Papel/função</label>
+            <label>{tr('ai.papelFuncao')}</label>
             <input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
           </div>
         </div>
         <div className="editor-field">
-          <label>Descrição</label>
+          <label>{tr('ai.descricao')}</label>
           <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
         <div className="editor-field">
-          <label>System Prompt <span style={{ color: 'var(--text-muted)' }}>({form.systemPrompt.length} chars)</span></label>
+          <label>{tr('ai.systemPrompt')} <span style={{ color: 'var(--text-muted)' }}>{tr('ai.chars', { count: form.systemPrompt.length })}</span></label>
           <textarea rows={6} value={form.systemPrompt} onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })} style={{ resize: 'vertical' }} />
         </div>
         <div className="editor-field">
-          <label>Skills padrão ({form.defaultSkillIds.length})</label>
+          <label>{tr('ai.skillsPadrao', { count: form.defaultSkillIds.length })}</label>
           <div className="skill-checklist" style={{ maxHeight: 160 }}>
-            {skills.length === 0 && <div className="empty-hint" style={{ padding: 8 }}>Nenhuma skill cadastrada.</div>}
+            {skills.length === 0 && <div className="empty-hint" style={{ padding: 8 }}>{tr('ai.nenhumaSkillCadastrada')}</div>}
             {skills.map((s) => (
               <label key={s.id} className="skill-check-row">
                 <input type="checkbox" checked={form.defaultSkillIds.includes(s.id)} onChange={() => toggleSkill(s.id)} />
@@ -78,17 +79,17 @@ function AgentEditor({ agent, onClose }: { agent: Agent | null; onClose: () => v
           </div>
         </div>
         <div className="editor-field">
-          <label>Tags</label>
+          <label>{tr('ai.tags')}</label>
           <div className="tag-input">
             {form.tags.map((t) => (
               <span key={t} className="project-chip" onClick={() => setForm({ ...form, tags: form.tags.filter((x) => x !== t) })} style={{ cursor: 'pointer' }}>{t} ✕</span>
             ))}
-            <input value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ',') && (e.preventDefault(), addTag())} placeholder="tag + Enter" style={{ flex: 1, minWidth: 100, border: 'none', background: 'transparent', padding: 4 }} />
+            <input value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ',') && (e.preventDefault(), addTag())} placeholder={tr('ai.tagEnter')} style={{ flex: 1, minWidth: 100, border: 'none', background: 'transparent', padding: 4 }} />
           </div>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('ai.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{tr('ai.salvar')}</button>
         </div>
       </div>
     </div>
@@ -120,38 +121,38 @@ export function AgentsPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🤝 Agentes</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{agents.length} agentes</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('ai.agentes')}</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{agents.length} {tr('ai.agentes2')}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={importOne}>📥 Importar</button>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditing(null); setShowForm(true) }}>+ Novo agente</button>
+          <button className="btn btn-secondary btn-sm" onClick={importOne}>{tr('ai.importar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => { setEditing(null); setShowForm(true) }}>{tr('ai.novoAgente2')}</button>
         </div>
       </div>
 
       <div className="todo-toolbar">
-        <input type="text" placeholder="🔍 Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+        <input type="text" placeholder={tr('ai.buscar')} value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
       </div>
 
       <div className="cards-grid">
-        {list.length === 0 && <div className="empty-hint">Nenhum agente.</div>}
+        {list.length === 0 && <div className="empty-hint">{tr('ai.nenhumAgente')}</div>}
         {list.map((a) => {
           const skillIds = parseTags(a.defaultSkillIds)
           return (
             <div key={a.id} className="stat-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                 <span className="stat-card-value" style={{ fontSize: 15 }}>
-                  <button className="star-btn" onClick={() => toggleFavorite(a.id)} title="Favoritar">{a.isFavorite ? '★' : '☆'}</button> {a.name}
+                  <button className="star-btn" onClick={() => toggleFavorite(a.id)} title={tr('ai.favoritar')}>{a.isFavorite ? '★' : '☆'}</button> {a.name}
                 </span>
                 {a.role && <span className="cat-chip">{a.role}</span>}
               </div>
               {a.description && <div className="stat-card-sub">{a.description}</div>}
-              <div className="stat-card-sub" style={{ marginTop: 6 }}>🧩 {skillIds.length} skills{skillIds.length > 0 ? `: ${skillIds.map(skillName).join(', ')}` : ''}</div>
+              <div className="stat-card-sub" style={{ marginTop: 6 }}>{tr('ai.skills2', { count: skillIds.length })}{skillIds.length > 0 ? `: ${skillIds.map(skillName).join(', ')}` : ''}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(a); setShowForm(true) }}>Editar</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => duplicate(a)}>Duplicar</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => exportOne(a.id)}>Exportar</button>
-                <button className="btn btn-danger btn-sm" onClick={() => confirm(`Excluir "${a.name}"?`) && remove(a.id)}>Excluir</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(a); setShowForm(true) }}>{tr('ai.editar')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => duplicate(a)}>{tr('ai.duplicar')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => exportOne(a.id)}>{tr('ai.exportar')}</button>
+                <button className="btn btn-danger btn-sm" onClick={() => confirm(tr('ai.excluir3', { name: a.name })) && remove(a.id)}>{tr('ai.excluir2')}</button>
               </div>
             </div>
           )

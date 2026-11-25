@@ -5,6 +5,7 @@ import { useAgentStore } from '../store/agentStore'
 import { parseTags } from '../store/skillStore'
 import { useUIStore } from '../../../store/uiStore'
 import { DRAFT_KEY } from './PromptRunnerPage'
+import { t } from '../../../i18n'
 
 function skillCount(e: PromptExecution): number {
   return parseTags(e.skillIds).length
@@ -41,41 +42,41 @@ export function HistoryPage(): React.ReactElement {
 
   async function duplicate(e: PromptExecution): Promise<void> {
     await save(e.agentId, parseTags(e.skillIds), e.userPrompt, e.finalPrompt, e.response)
-    flash('Execução duplicada ✓')
+    flash(t('ai.execucaoDuplicada'))
   }
 
   async function copyFinal(e: PromptExecution): Promise<void> {
     await navigator.clipboard.writeText(e.finalPrompt)
-    flash('Prompt copiado ✓')
+    flash(t('ai.promptCopiado'))
   }
 
   return (
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🕐 Histórico</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{executions.length} execuções salvas</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('ai.historico')}</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{executions.length} {t('ai.execucoesSalvas')}</p>
         </div>
         {toast && <span className="badge-hot" style={{ background: 'var(--accent-dim)', color: 'var(--accent-hover)' }}>{toast}</span>}
       </div>
 
       <div className="todo-toolbar">
-        <input type="text" placeholder="🔍 Buscar no histórico…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+        <input type="text" placeholder={t('ai.buscarNoHistorico')} value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
       </div>
 
       <div className="list-stack">
-        {list.length === 0 && <div className="empty-hint">Nenhuma execução salva.</div>}
+        {list.length === 0 && <div className="empty-hint">{t('ai.nenhumaExecucaoSalva')}</div>}
         {list.map((e) => (
           <div key={e.id} className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span className="due-badge due-future">{e.createdAt.slice(0, 16).replace('T', ' ')}</span>
               <span className="cat-chip">{agentName(e.agentId)}</span>
               <span className="project-chip">🧩 {skillCount(e)}</span>
-              {e.response && <span className="project-chip">✓ executado</span>}
+              {e.response && <span className="project-chip">{t('ai.executado')}</span>}
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                <button className="btn btn-primary btn-sm" onClick={() => reopen(e)}>Reabrir</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => copyFinal(e)}>Copiar</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => duplicate(e)}>Duplicar</button>
+                <button className="btn btn-primary btn-sm" onClick={() => reopen(e)}>{t('ai.reabrir')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => copyFinal(e)}>{t('ai.copiar')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => duplicate(e)}>{t('ai.duplicar')}</button>
                 <button className="btn btn-danger btn-sm" onClick={() => remove(e.id)}>✕</button>
               </div>
             </div>

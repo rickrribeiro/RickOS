@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { useConvStore, useRunnerAttention } from '../../store/convStore'
+import { t } from '../../../../i18n'
 
 /**
  * Mantém a lista de conversas do Prompt Runner atualizada no app inteiro (SSE), para
@@ -20,7 +21,7 @@ export function RunnerWatcher(): null {
 export function RunnerNavBadge({ compact = false }: { compact?: boolean }): React.ReactElement | null {
   const { unseen, pending } = useRunnerAttention()
   if (!unseen && !pending) return null
-  const title = [pending ? `${pending} esperando sua resposta` : '', unseen ? `${unseen} com resposta nova` : ''].filter(Boolean).join(' · ')
+  const title = [pending ? t('ai.attention.pending', { n: pending }) : '', unseen ? t('ai.attention.unseen', { n: unseen }) : ''].filter(Boolean).join(' · ')
   if (compact) return <span className={`runner-nav-dot ${pending ? 'attn' : ''}`} title={title} />
   return (
     <span className={`runner-nav-badge ${pending ? 'attn' : ''}`} title={title}>

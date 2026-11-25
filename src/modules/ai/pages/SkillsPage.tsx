@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Skill } from '../../../types'
 import { useSkillStore, parseTags } from '../store/skillStore'
 import { ClaudeSkillsView } from '../components/ClaudeSkillsView'
+import { t as tr } from '../../../i18n'
 
 const TAB_KEY = 'rickos:skillsTab'
 
@@ -40,23 +41,23 @@ function SkillEditor({ skill, onClose }: { skill: Skill | null; onClose: () => v
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 460, maxWidth: 640 }}>
-        <h2>{skill ? 'Editar skill' : 'Nova skill'}</h2>
+        <h2>{skill ? tr('ai.editarSkill') : tr('ai.novaSkill')}</h2>
         <div className="editor-field">
-          <label>Nome</label>
+          <label>{tr('ai.nome')}</label>
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Descrição</label>
+            <label>{tr('ai.descricao')}</label>
             <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
           <div className="editor-field">
-            <label>Categoria</label>
+            <label>{tr('ai.categoria')}</label>
             <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
           </div>
         </div>
         <div className="editor-field">
-          <label>Tags</label>
+          <label>{tr('ai.tags')}</label>
           <div className="tag-input">
             {form.tags.map((t) => (
               <span key={t} className="project-chip" onClick={() => setForm({ ...form, tags: form.tags.filter((x) => x !== t) })} style={{ cursor: 'pointer' }}>
@@ -67,18 +68,18 @@ function SkillEditor({ skill, onClose }: { skill: Skill | null; onClose: () => v
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ',') && (e.preventDefault(), addTag())}
-              placeholder="tag + Enter"
+              placeholder={tr('ai.tagEnter')}
               style={{ flex: 1, minWidth: 100, border: 'none', background: 'transparent', padding: 4 }}
             />
           </div>
         </div>
         <div className="editor-field">
-          <label>Conteúdo <span style={{ color: 'var(--text-muted)' }}>({form.content.length} chars)</span></label>
+          <label>{tr('ai.conteudo')} <span style={{ color: 'var(--text-muted)' }}>{tr('ai.chars', { count: form.content.length })}</span></label>
           <textarea rows={10} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} style={{ resize: 'vertical' }} />
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('ai.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{tr('ai.salvar')}</button>
         </div>
       </div>
     </div>
@@ -133,29 +134,29 @@ export function SkillsPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🧩 Skills</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('ai.skills')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {tab === 'rickos' ? `${skills.length} skills do rickOS` : 'Skills e comandos do Claude Code criados por você'}
+            {tab === 'rickos' ? tr('ai.skillsDoRickos', { count: skills.length }) : tr('ai.skillsEComandosDoClaude')}
           </p>
         </div>
         <div className="cc-skill-tabs" role="tablist">
           <button role="tab" aria-selected={tab === 'rickos'} className={tab === 'rickos' ? 'active' : ''} onClick={() => switchTab('rickos')}>
-            🧩 rickOS
+            {tr('ai.rickos')}
           </button>
           <button role="tab" aria-selected={tab === 'claude'} className={tab === 'claude' ? 'active' : ''} onClick={() => switchTab('claude')}>
-            ⌨️ Claude Code
+            {tr('ai.claudeCode')}
           </button>
         </div>
         <div style={{ display: tab === 'rickos' ? 'flex' : 'none', gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={importOne}>📥 Importar</button>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditing(null); setShowForm(true) }}>+ Nova skill</button>
+          <button className="btn btn-secondary btn-sm" onClick={importOne}>{tr('ai.importar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => { setEditing(null); setShowForm(true) }}>{tr('ai.novaSkill2')}</button>
         </div>
       </div>
 
       {tab === 'claude' && (
         <>
           <div className="todo-toolbar">
-            <input type="text" placeholder="🔍 Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+            <input type="text" placeholder={tr('ai.buscar')} value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
           </div>
           <ClaudeSkillsView search={search} />
         </>
@@ -164,30 +165,30 @@ export function SkillsPage(): React.ReactElement {
       {tab === 'rickos' && (
       <>
       <div className="todo-toolbar">
-        <input type="text" placeholder="🔍 Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+        <input type="text" placeholder={tr('ai.buscar')} value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-          <option value="all">Todas categorias</option>
+          <option value="all">{tr('ai.todasCategorias')}</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-          <option value="all">Todas tags</option>
+          <option value="all">{tr('ai.todasTags')}</option>
           {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value as 'updated' | 'name')}>
-          <option value="updated">Recentes</option>
-          <option value="name">Nome</option>
+          <option value="updated">{tr('ai.recentes')}</option>
+          <option value="name">{tr('ai.nome')}</option>
         </select>
       </div>
 
       <div className="cards-grid">
-        {list.length === 0 && <div className="empty-hint">Nenhuma skill.</div>}
+        {list.length === 0 && <div className="empty-hint">{tr('ai.nenhumaSkill')}</div>}
         {list.map((s) => (
           <div key={s.id} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
               <span className="stat-card-value" style={{ fontSize: 15 }}>
-                <button className="star-btn" onClick={() => toggleFavorite(s.id)} title="Favoritar">{s.isFavorite ? '★' : '☆'}</button> {s.name}
+                <button className="star-btn" onClick={() => toggleFavorite(s.id)} title={tr('ai.favoritar')}>{s.isFavorite ? '★' : '☆'}</button> {s.name}
               </span>
-              {s.usageCount > 0 && s.usageCount === maxUsage && <span className="badge-hot">🔥 Mais usada</span>}
+              {s.usageCount > 0 && s.usageCount === maxUsage && <span className="badge-hot">{tr('ai.maisUsada')}</span>}
             </div>
             {s.description && <div className="stat-card-sub">{s.description}</div>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
@@ -196,12 +197,12 @@ export function SkillsPage(): React.ReactElement {
                 <span key={t} className="project-chip" style={{ cursor: 'pointer' }} onClick={() => setTagFilter(t)}>{t}</span>
               ))}
             </div>
-            <div className="stat-card-sub" style={{ marginTop: 6 }}>usos: {s.usageCount} · {s.updatedAt.slice(0, 10)}</div>
+            <div className="stat-card-sub" style={{ marginTop: 6 }}>{tr('ai.usos', { usageCount: s.usageCount })} {s.updatedAt.slice(0, 10)}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(s); setShowForm(true) }}>Editar</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => duplicate(s)}>Duplicar</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => exportOne(s.id)}>Exportar</button>
-              <button className="btn btn-danger btn-sm" onClick={() => confirm(`Excluir "${s.name}"?`) && remove(s.id)}>Excluir</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(s); setShowForm(true) }}>{tr('ai.editar')}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => duplicate(s)}>{tr('ai.duplicar')}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => exportOne(s.id)}>{tr('ai.exportar')}</button>
+              <button className="btn btn-danger btn-sm" onClick={() => confirm(tr('ai.excluir3', { name: s.name })) && remove(s.id)}>{tr('ai.excluir2')}</button>
             </div>
           </div>
         ))}
