@@ -91,7 +91,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'IA',
     groupIcon: '🤖',
     items: [
-      { id: 'ai', label: 'Assistente', icon: '🤖' },
       { id: 'ai-skills', label: 'Skills', icon: '🧩' },
       { id: 'ai-agents', label: 'Agentes', icon: '🤝' },
       { id: 'ai-runner', label: 'Prompt Runner', icon: '▶️' },

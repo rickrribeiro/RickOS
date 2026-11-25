@@ -131,7 +131,7 @@ Fluxo: **Tópico → Roadmap → Anotações → Flashcards → Revisão → Pro
 
 ## 7. IA (Claude Code local)
 
-- **Assistente**: prompts pré-definidos (priorizar, revisar inbox, planejar semana, roteiro de viagem, resumo semanal…) que **preenchem** o campo (sobrescrevíveis) e executam via Claude local; roda em **background** (sobrevive à navegação), com cancelar.
+- **Jarvis** (antigo IA → Assistente): prompts pré-definidos (priorizar, revisar inbox, planejar semana, roteiro de viagem, resumo semanal…) que **preenchem** o campo (sobrescrevíveis) e executam via Claude local; roda em **background** (sobrevive à navegação), com cancelar.
 - **Skills** e **Agentes**: biblioteca CRUD com busca/filtros/favoritos, tags, export/import `.json` por entidade, "mais usada", seeds de exemplo. Agente tem system prompt + skills padrão.
 - **Prompt Runner**: **abas paralelas** (nomeáveis), compõe `agente + skills + prompt`, preview do prompt final, copiar/salvar/**executar aqui** (streaming ao vivo do texto/pensamento/ferramentas, **sem timeout**). Selecionar agente **filtra as skills dele** (com "ver todas"). Selecionar projeto injeta contexto do repo. **Cores de status nas abas** (running / concluída não vista). Cancelar execução.
 - **Histórico** de execuções (reabrir no runner, duplicar, excluir, copiar).

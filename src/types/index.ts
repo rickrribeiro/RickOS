@@ -811,7 +811,6 @@ export type Page =
   // Jarvis
   | 'jarvis'
   // IA
-  | 'ai'
   | 'ai-skills'
   | 'ai-agents'
   | 'ai-runner'

@@ -16,7 +16,7 @@ Toda IA do app passa por `runClaude()` (`server/services/claude.ts`), direto no 
 | Armazenamento | `settings.knowledge_base` (um Markdown livre) |
 | Edição | `src/modules/knowledge/pages/KnowledgePage.tsx` (textarea) |
 | Seed / parser | `src/modules/knowledge/constants.ts` (`DEFAULT_KNOWLEDGE`, `knowledgeBullets`: linhas `- `) |
-| Consumidor 1 | `AIPage.tsx` → atalho **Roteiro de viagem** monta `profile` = bullets do KB (texto preenchido no prompt, usuário vê e edita antes de executar) |
+| Consumidor 1 | `JarvisPage.tsx` → atalho **Roteiro de viagem** monta `profile` = bullets do KB (texto preenchido no prompt, usuário vê e edita antes de executar) |
 | Consumidor 2 | `travel/components/Recommendations.tsx` → catálogo estático por palavra-chave (sem LLM) |
 | Perfil paralelo | `settings.travel_profile` em `StayFinderPage.tsx` (não é o KB, mas é o mesmo tipo de dado) |
 
@@ -30,10 +30,10 @@ desabilitadas até aprovação).
 
 | # | Módulo / caso de uso | Código | Contexto usado hoje | Usa KB? | Recom. | Categorias relevantes | Justificativa / riscos |
 |---|---|---|---|---|---|---|---|
-| 1 | Assistente — Roteiro de viagem | `src/modules/ai/pages/AIPage.tsx` (`ACTIONS.trip`) | destino/datas da próxima viagem + bullets do KB | **sim** | CONSUMER | Viagens, Preferências, Interesses, Finanças (só faixa de orçamento, PRIVATE) | benefício direto e já existente; budget ~400 tokens; latência zero extra (recuperação local) |
+| 1 | Jarvis — Roteiro de viagem | `src/modules/jarvis/pages/JarvisPage.tsx` (`ACTIONS.trip`) | destino/datas da próxima viagem + bullets do KB | **sim** | CONSUMER | Viagens, Preferências, Interesses, Finanças (só faixa de orçamento, PRIVATE) | benefício direto e já existente; budget ~400 tokens; latência zero extra (recuperação local) |
 | 2 | Recomendações de viagem (catálogo) | `src/modules/travel/components/Recommendations.tsx` | bullets do KB (sem LLM) | **sim** | CONSUMER | Viagens, Interesses | determinístico; só precisa de memórias NORMAL de preferências |
 | 3 | Análise de hospedagens | `src/modules/travel-stays/pages/StayFinderPage.tsx` | `travel_profile` + resultados | não | CONSUMER | Viagens, Preferências (hospedagem) | substituiria o perfil de texto paralelo; budget ~250 tokens |
-| 4 | Assistente — prompt livre / Planejar semana / Resumo semanal / Priorizar | `AIPage.tsx` | todos, hábitos, eventos, horas | não | CONSUMER (só Planejar semana) · NONE (demais) | Produtividade, Hábitos e rotina, Objetivos | planejamento pessoal ganha com preferências de rotina; priorizar/inbox já têm o contexto necessário |
+| 4 | Jarvis — prompt livre / Planejar semana / Resumo semanal / Priorizar | `JarvisPage.tsx` | todos, hábitos, eventos, horas | não | CONSUMER (só Planejar semana) · NONE (demais) | Produtividade, Hábitos e rotina, Objetivos | planejamento pessoal ganha com preferências de rotina; priorizar/inbox já têm o contexto necessário |
 | 5 | Revisão semanal | `src/modules/home/components/WeeklyReview.tsx` | dados da semana | não | BOTH | Objetivos, Produtividade, Aprendizados | reflexão pessoal; produzir **só** do texto que o usuário escreveu, com botão explícito |
 | 6 | Briefing matinal | `src/modules/home/components/DailyStandup.tsx` | agenda/tarefas do dia | não | NONE | — | o contexto do dia é suficiente; reavaliar depois |
 | 7 | Brain dump | `src/modules/braindump/pages/BrainDumpPage.tsx` | texto do dump | não | PRODUCER | qualquer (filtrado pela política) | texto livre do próprio usuário; só com ação explícita "sugerir memórias" |

@@ -101,7 +101,7 @@ const ACTIONS: QuickAction[] = [
   }
 ]
 
-export function AIPage(): React.ReactElement {
+export function JarvisPage(): React.ReactElement {
   const { todos, refresh: rT } = useTodoStore()
   const { habits, refresh: rH } = useHabitStore()
   const { upcoming, refresh: rC } = useCalendarStore()
@@ -240,9 +240,9 @@ export function AIPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🤖 IA (Claude local)</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🧞 Jarvis</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Usa o Claude Code CLI local (`claude -p`). Nada é enviado a APIs pagas diretamente.
+            Assistente pessoal · usa o Claude Code CLI local (`claude -p`), nada vai a APIs pagas.
           </p>
         </div>
       </div>
