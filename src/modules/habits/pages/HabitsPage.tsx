@@ -15,8 +15,8 @@ function offsetDay(dateStr: string, days: number): string {
 
 function formatDayLabel(dateStr: string): string {
   const today = localDateStr(new Date())
-  if (dateStr === today) return 'Hoje'
-  if (dateStr === offsetDay(today, -1)) return 'Ontem'
+  if (dateStr === today) return t('habits.hoje')
+  if (dateStr === offsetDay(today, -1)) return t('habits.ontem')
   const d = new Date(dateStr + 'T12:00:00')
   return d.toLocaleDateString(getLocale(), { weekday: 'long', day: '2-digit', month: '2-digit' })
 }

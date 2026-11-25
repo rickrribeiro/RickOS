@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AiUsage } from '../../../types'
-import { t as tr } from '../../../i18n'
+import { t as tr, getLocale } from '../../../i18n'
 
 /** Rótulos dos módulos que disparam o Claude CLI (chave = `source` gravada no servidor). */
 const SOURCE_LABELS: Record<string, string> = {
@@ -53,7 +53,7 @@ const fmtTokens = (n: number): string =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n)
 const fmtUsd = (n: number): string => `US$ ${n.toFixed(n >= 10 ? 2 : 3)}`
 const fmtWhen = (iso: string): string =>
-  new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  new Date(iso).toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 const inTokens = (r: AiUsage): number => r.inputTokens + r.cacheCreationTokens
 const totalTokens = (r: AiUsage): number => r.inputTokens + r.cacheCreationTokens + r.cacheReadTokens + r.outputTokens

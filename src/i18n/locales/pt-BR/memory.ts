@@ -430,5 +430,9 @@ export const memory = {
   'memory.layer.restricted': 'Restrita',
   'memory.timeline.confirm': 'Confirmações',
   'memory.timeline.update': 'Mudanças',
-  'memory.timeline.status': 'Substituições/arquivos'
+  'memory.timeline.status': 'Substituições/arquivos',
+  'memory.consolidadas': 'Consolidadas',
+  'memory.conflitos': 'Conflitos',
+  'memory.tudo': 'Tudo',
+  'memory.registros': 'Registros'
 }

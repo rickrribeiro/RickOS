@@ -39,5 +39,6 @@ export const habits = {
   'habits.sug.meditate': 'Meditar',
   'habits.sug.sleep': 'Dormir antes de 00:00',
   'habits.sug.noAlcohol': 'Sem álcool',
-  'habits.sug.reviewTodo': 'Revisar TODO'
+  'habits.sug.reviewTodo': 'Revisar TODO',
+  'habits.ontem': 'Ontem'
 }

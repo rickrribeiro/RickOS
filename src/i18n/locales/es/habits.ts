@@ -39,5 +39,6 @@ export const habits = {
   'habits.sequencia': 'Racha',
   'habits.ultimos7Dias': 'Últimos 7 días',
   'habits.editar': 'Editar',
-  'habits.excluir': 'Eliminar'
+  'habits.excluir': 'Eliminar',
+  'habits.ontem': 'Ayer'
 }

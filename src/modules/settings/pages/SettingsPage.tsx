@@ -22,7 +22,7 @@ import {
 import { AiUsageModal } from '../components/AiUsageModal'
 import { firstBusinessDay } from '../../../../shared/finance'
 import { finishPluggySync } from '../../finance/pluggySync'
-import { t as tr } from '../../../i18n'
+import { t as tr, getLocale } from '../../../i18n'
 
 const FX_CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -48,7 +48,7 @@ function fmtLastSync(iso?: string): string {
   if (!iso) return 'nunca'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return 'nunca'
-  return d.toLocaleString('pt-BR', {
+  return d.toLocaleString(getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

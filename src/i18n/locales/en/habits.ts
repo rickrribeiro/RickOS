@@ -39,5 +39,6 @@ export const habits = {
   'habits.sequencia': 'Streak',
   'habits.ultimos7Dias': 'Last 7 days',
   'habits.editar': 'Edit',
-  'habits.excluir': 'Delete'
+  'habits.excluir': 'Delete',
+  'habits.ontem': 'Yesterday'
 }

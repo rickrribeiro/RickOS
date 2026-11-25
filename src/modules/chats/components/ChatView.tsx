@@ -36,8 +36,8 @@ function dayLabel(iso: string): string {
   const today = new Date()
   const y = new Date()
   y.setDate(y.getDate() - 1)
-  if (d.toDateString() === today.toDateString()) return 'Hoje'
-  if (d.toDateString() === y.toDateString()) return 'Ontem'
+  if (d.toDateString() === today.toDateString()) return tr('chats.hoje')
+  if (d.toDateString() === y.toDateString()) return tr('chats.ontem')
   return d.toLocaleDateString(getLocale(), { weekday: 'long', day: '2-digit', month: 'long', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
 }
 

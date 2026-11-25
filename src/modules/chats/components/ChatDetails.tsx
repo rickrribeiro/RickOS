@@ -138,7 +138,7 @@ export function ChatDetails({ chat }: { chat: ChatSummary }): React.ReactElement
             {person.context && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, whiteSpace: 'pre-wrap' }}>{person.context}</div>}
             {person.interests && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>💡 {person.interests}</div>}
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              {person.lastContactAt ? tr('chats.ultimaConversa', { p0: new Date(person.lastContactAt).toLocaleDateString('pt-BR') }) : tr('chats.semConversaRegistrada')}
+              {person.lastContactAt ? tr('chats.ultimaConversa', { p0: new Date(person.lastContactAt).toLocaleDateString(getLocale()) }) : tr('chats.semConversaRegistrada')}
             </div>
             {others.length > 0 && (
               <div className="chats-person-nets">

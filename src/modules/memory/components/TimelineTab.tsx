@@ -46,8 +46,8 @@ export function TimelineTab(): React.ReactElement {
         </select>
         <div className="mem-seg" role="group" aria-label={t('memory.tipoDeEvento')}>
           {[
-            ['', 'Tudo'],
-            ['create', 'Registros'],
+            ['', t('memory.tudo')],
+            ['create', t('memory.registros')],
             ['confirm', t('memory.timeline.confirm')],
             ['update', t('memory.timeline.update')],
             ['status', t('memory.timeline.status')]

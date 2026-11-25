@@ -379,5 +379,10 @@ export const chats = {
   'chats.provedorDesconectadoMostrandoDadosLocais': 'Proveedor desconectado: se muestran datos locales, que pueden estar desactualizados. ',
   'chats.erroNoProvedor': 'Error en el proveedor: ',
   'chats.escolhaUmaConversaAEsquerda': 'Elige una conversación a la izquierda.',
-  'chats.abrirUmaConversaNaoA': 'Abrir una conversación no la marca como leída.'
+  'chats.abrirUmaConversaNaoA': 'Abrir una conversación no la marca como leída.',
+  'chats.alta4': '▲ Alta',
+  'chats.normal': '● Normal',
+  'chats.baixa2': '▼ Baja',
+  'chats.hoje': 'Hoy',
+  'chats.ontem': 'Ayer'
 }

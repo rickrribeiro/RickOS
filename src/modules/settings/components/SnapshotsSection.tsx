@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { t } from '../../../i18n'
+import { t, getLocale } from '../../../i18n'
 
 interface Snap {
   name: string
@@ -15,7 +15,7 @@ function fmtSize(bytes: number): string {
 }
 function fmtDate(iso: string): string {
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? iso : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return isNaN(d.getTime()) ? iso : d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 /** Lista os snapshots automáticos diários do banco e permite restaurar. */

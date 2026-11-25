@@ -161,7 +161,7 @@ function InvestmentRow({
       {investment.externalId && (
         <span
           className="project-chip"
-          title={t('finance.sincronizadoDoOpenFinance', { p0: parseDetails(investment.details)?.syncedAt ? ' em ' + new Date(parseDetails(investment.details)!.syncedAt).toLocaleString('pt-BR') : '', p1: investment.externalName && investment.externalName !== investment.name ? ` · nome no banco: ${investment.externalName}` : '' })}
+          title={t('finance.sincronizadoDoOpenFinance', { p0: parseDetails(investment.details)?.syncedAt ? ' em ' + new Date(parseDetails(investment.details)!.syncedAt).toLocaleString(getLocale()) : '', p1: investment.externalName && investment.externalName !== investment.name ? ` · nome no banco: ${investment.externalName}` : '' })}
         >
           🏦
         </span>

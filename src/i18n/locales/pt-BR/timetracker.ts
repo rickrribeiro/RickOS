@@ -118,5 +118,7 @@ export const timetracker = {
   'timetracker.errorSavingTask': 'Erro ao salvar a tarefa: {error}',
   'timetracker.period.day': 'Dia',
   'timetracker.period.week': 'Semana',
-  'timetracker.period.month': 'Mês'
+  'timetracker.period.month': 'Mês',
+  'timetracker.today': 'Hoje',
+  'timetracker.yesterday': 'Ontem'
 }

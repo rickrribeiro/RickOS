@@ -4,7 +4,7 @@ import { MonthNav } from '../components/MonthNav'
 import { DailySpending } from '../components/DailySpending'
 import { PendingNotes } from '../components/PendingNotes'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
-import { t as tr } from '../../../i18n'
+import { t as tr, getLocale } from '../../../i18n'
 
 /**
  * Saldo separado da conta (o Open Finance do Nubank sinaliza que existe, mas manda a lista vazia):
@@ -213,7 +213,7 @@ export function FinanceDashboardPage(): React.ReactElement {
                   {(accounts.length > 1 || hasReserved) && balance != null && ` · ${hasReserved ? tr('finance.emConta') : ''}${formatMoney(balance, a.currency)}`}
                   {balance == null
                     ? tr('finance.semRegistroDeSaldoNeste')
-                    : syncedAt && tr('finance.atualizado', { p0: new Date(syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
+                    : syncedAt && tr('finance.atualizado', { p0: new Date(syncedAt).toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
                 </div>
                 <ReservedLine
                   amount={reserved.amount}

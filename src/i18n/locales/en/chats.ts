@@ -379,5 +379,10 @@ export const chats = {
   'chats.provedorDesconectadoMostrandoDadosLocais': 'Provider disconnected: showing local data, which may be outdated. ',
   'chats.erroNoProvedor': 'Provider error: ',
   'chats.escolhaUmaConversaAEsquerda': 'Choose a conversation on the left.',
-  'chats.abrirUmaConversaNaoA': 'Opening a conversation doesn\'t mark it as read.'
+  'chats.abrirUmaConversaNaoA': 'Opening a conversation doesn\'t mark it as read.',
+  'chats.alta4': '▲ High',
+  'chats.normal': '● Normal',
+  'chats.baixa2': '▼ Low',
+  'chats.hoje': 'Today',
+  'chats.ontem': 'Yesterday'
 }

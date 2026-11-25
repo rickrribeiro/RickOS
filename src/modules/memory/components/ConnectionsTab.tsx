@@ -134,9 +134,9 @@ export function ConnectionsTab(): React.ReactElement {
           </select>
           <div className="mem-seg">
             {[
-              ['', 'Todas'],
-              ['consolidated', 'Consolidadas'],
-              ['conflicts', 'Conflitos']
+              ['', t('memory.todas2')],
+              ['consolidated', t('memory.consolidadas')],
+              ['conflicts', t('memory.conflitos')]
             ].map(([k, l]) => (
               <button key={k} className={only === k ? 'active' : ''} onClick={() => setOnly(k as typeof only)}>
                 {l}

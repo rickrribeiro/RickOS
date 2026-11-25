@@ -97,9 +97,9 @@ export function StateMenu({ ids, label = 'Estado', className }: { ids: number[];
 
 export function PriorityMenu({ ids, label = 'Prioridade', className }: { ids: number[]; label?: string; className?: string }): React.ReactElement {
   const opts: [ChatPriority | null, string][] = [
-    ['alta', '▲ Alta'],
-    ['normal', '● Normal'],
-    ['baixa', '▼ Baixa'],
+    ['alta', t('chats.alta4')],
+    ['normal', t('chats.normal')],
+    ['baixa', t('chats.baixa2')],
     [null, t('chats.automaticaSugeridaOpcao')]
   ]
   return (

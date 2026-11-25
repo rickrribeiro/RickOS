@@ -23,8 +23,8 @@ function formatDuration(startIso: string, endIso: string | null): string {
 function formatDateHeader(dateStr: string): string {
   const today = localDateStr()
   const yesterday = localDateStr(new Date(new Date().setDate(new Date().getDate() - 1)))
-  if (dateStr === today) return 'Today'
-  if (dateStr === yesterday) return 'Yesterday'
+  if (dateStr === today) return tr('timetracker.today')
+  if (dateStr === yesterday) return tr('timetracker.yesterday')
   const d = new Date(dateStr + 'T12:00:00')
   return d.toLocaleDateString(getLocale(), { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
 }

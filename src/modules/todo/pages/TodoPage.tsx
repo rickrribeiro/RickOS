@@ -7,7 +7,7 @@ import { TodoBoard } from '../components/TodoBoard'
 import { AiPlanModal } from '../components/AiPlanModal'
 import { PRIORITIES, STATUSES, STATUS_LABELS, TodoStatus, TODO_TYPES, priorityDef, dueMeta, todoTypeDef } from '../constants'
 import { localDateStr, timeAgo } from '../../../utils/dates'
-import { t as tr } from '../../../i18n'
+import { t as tr, getLocale } from '../../../i18n'
 
 type StatusFilter = 'all' | 'todo' | 'doing' | 'done'
 
@@ -346,7 +346,7 @@ export function TodoPage(): React.ReactElement {
               {proj && <span className="project-chip">{proj}</span>}
               {t.recurrence && <span title={tr('todo.tarefaRecorrente')}>🔁</span>}
               {due && <span className={`due-badge ${due.cls}`}>{due.label}</span>}
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={tr('todo.criadaEm', { p0: new Date(t.createdAt).toLocaleString('pt-BR') })}>⏳ {timeAgo(t.createdAt)}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={tr('todo.criadaEm', { p0: new Date(t.createdAt).toLocaleString(getLocale()) })}>⏳ {timeAgo(t.createdAt)}</span>
               <select
                 value={t.status}
                 onChange={(e) => setStatus(t.id, e.target.value)}

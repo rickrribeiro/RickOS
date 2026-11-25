@@ -4,7 +4,7 @@ import { networkInfo, PROVIDERS_INFO } from '../../../../shared/chats'
 import type { AgentDetails } from '../../chats/api'
 import { StatusBadge } from '../../chats/components/StatusBadge'
 import '../../chats/chats.css'
-import { t as tr } from '../../../i18n'
+import { t as tr, getLocale } from '../../../i18n'
 
 const INTERVALS = [
   { v: 60, l: '1 min' },
@@ -211,7 +211,7 @@ export function ChatsSection(): React.ReactElement {
               <div className="chats-agent-box">
                 <div>
                   {tr('settings.agente')} {agent?.online ? <strong style={{ color: 'var(--success)' }}>{tr('settings.online')}</strong> : <strong style={{ color: 'var(--text-muted)' }}>{tr('settings.offline')}</strong>}
-                  {agent?.lastSeen && <span style={{ color: 'var(--text-muted)' }}> {tr('settings.visto')} {new Date(agent.lastSeen).toLocaleString('pt-BR')}</span>}
+                  {agent?.lastSeen && <span style={{ color: 'var(--text-muted)' }}> {tr('settings.visto')} {new Date(agent.lastSeen).toLocaleString(getLocale())}</span>}
                   {agent?.beeper && <span style={{ color: 'var(--text-muted)' }}> {tr('settings.beeper')} {agent.beeper}</span>}
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={() => void genAgentKey()}>{cfg.hasAgentKey ? tr('settings.gerarNovaChave') : tr('settings.gerarChaveDoAgente')}</button>
@@ -246,7 +246,7 @@ export function ChatsSection(): React.ReactElement {
 
       {status && cfg.enabled && (
         <div className="chats-status-line">
-          {status.lastSyncAt ? tr('settings.ultimaSincronizacao2', { p0: new Date(status.lastSyncAt).toLocaleString('pt-BR') }) : tr('settings.aindaNaoSincronizado')}
+          {status.lastSyncAt ? tr('settings.ultimaSincronizacao2', { p0: new Date(status.lastSyncAt).toLocaleString(getLocale()) }) : tr('settings.aindaNaoSincronizado')}
           {' · '}{tr('settings.tempoReal')} {status.realtime === 'on' ? tr('settings.ativo') : status.realtime === 'connecting' ? tr('settings.conectando') : status.realtime === 'unsupported' ? tr('settings.indisponivelPolling') : tr('settings.desligadoPolling')}
           {status.progress && tr('settings.conversasLidas', { done: status.progress.done })}
           {status.lastError && <div style={{ color: 'var(--danger)' }}>{tr('settings.erro')} {status.lastError}</div>}

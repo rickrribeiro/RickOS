@@ -14,8 +14,8 @@ function formatDateDisplay(dateStr: string): string {
   yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = localDateStr(yesterday)
 
-  if (dateStr === todayStr) return 'Today'
-  if (dateStr === yesterdayStr) return 'Yesterday'
+  if (dateStr === todayStr) return tr('timetracker.today')
+  if (dateStr === yesterdayStr) return tr('timetracker.yesterday')
   return d.toLocaleDateString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric' })
 }
 

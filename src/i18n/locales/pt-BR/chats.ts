@@ -379,5 +379,10 @@ export const chats = {
   'chats.mensagensSelecionadas': '{count} mensagem selecionada|{count} mensagens selecionadas',
   'chats.resumoDeMensagens': 'Resumo de {count} mensagem selecionada|Resumo de {count} mensagens selecionadas',
   'chats.nSelecionadas': '{count} selecionada|{count} selecionadas',
-  'chats.nConversas': '{count} conversa|{count} conversas'
+  'chats.nConversas': '{count} conversa|{count} conversas',
+  'chats.alta4': '▲ Alta',
+  'chats.normal': '● Normal',
+  'chats.baixa2': '▼ Baixa',
+  'chats.hoje': 'Hoje',
+  'chats.ontem': 'Ontem'
 }

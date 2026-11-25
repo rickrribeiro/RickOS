@@ -430,5 +430,9 @@ export const memory = {
   'memory.marcada': 'Marcada.',
   'memory.rejeitada': 'Rechazada.',
   'memory.desfeita': '↩︎ Deshecha.',
-  'memory.respostaEnviada': 'Respuesta enviada.'
+  'memory.respostaEnviada': 'Respuesta enviada.',
+  'memory.consolidadas': 'Consolidadas',
+  'memory.conflitos': 'Conflictos',
+  'memory.tudo': 'Todo',
+  'memory.registros': 'Registros'
 }

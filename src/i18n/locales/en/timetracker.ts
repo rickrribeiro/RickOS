@@ -118,5 +118,7 @@ export const timetracker = {
   'timetracker.active2': ' (active)',
   'timetracker.period.day': 'Day',
   'timetracker.period.week': 'Week',
-  'timetracker.period.month': 'Month'
+  'timetracker.period.month': 'Month',
+  'timetracker.today': 'Today',
+  'timetracker.yesterday': 'Yesterday'
 }
