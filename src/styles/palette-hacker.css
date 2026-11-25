@@ -1,0 +1,55 @@
+/*
+ * Paleta "Hacker" — terminal verde-fósforo sobre preto, fonte monoespaçada.
+ * Sucesso fica ciano para não se confundir com o verde do tema. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='hacker'] {
+  --pal-bg: #050a06;
+  --pal-sidebar: #020502;
+  --pal-surface: #0a140c;
+  --pal-elevated: #0f1d12;
+  --pal-user-bubble: #102414;
+  --pal-border: #1a3320;
+  --pal-border-strong: #2a4d31; /* derivado */
+  --pal-text: #b6f5c2;
+  --pal-text-2: #7fc48c;
+  --pal-text-3: #6faf7b;
+  --pal-accent: #39ff6a;
+  --pal-accent-hover: #7dff9c; /* derivado */
+  --pal-selection: #0e2e16;
+  --pal-primary: #39ff6a;
+  --pal-on-primary: #021006;
+  --pal-success: #7fe7f2;
+  --pal-success-bg: #0b2a2e;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(182, 245, 194, 0.06);
+  --pal-ring: rgba(57, 255, 106, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+
+  /* único tema que muda a fonte: tudo em monoespaçada, como num terminal */
+  --dl-font: var(--dl-mono);
+}
+
+:root[data-skin='devlytics'][data-palette='hacker'][data-theme='light'] {
+  --pal-bg: #f2f7f1;
+  --pal-sidebar: #e4ede2;
+  --pal-surface: #ffffff;
+  --pal-elevated: #eaf2e8;
+  --pal-user-bubble: #e1ebde;
+  --pal-border: #c9d9c6;
+  --pal-border-strong: #a9c2a5; /* derivado */
+  --pal-text: #0b2410;
+  --pal-text-2: #2f5537;
+  --pal-text-3: #3a6142;
+  --pal-accent: #0a7a2a;
+  --pal-accent-hover: #086222; /* derivado */
+  --pal-selection: #ddf2e0;
+  --pal-primary: #0b3d18;
+  --pal-on-primary: #7dff9c;
+  --pal-success: #0e5e6b;
+  --pal-success-bg: #ddf1f3;
+  --pal-shadow: #0b241014;
+  --pal-hover: rgba(11, 36, 16, 0.05);
+  --pal-ring: rgba(10, 122, 42, 0.25);
+  --pal-scrim: rgba(11, 36, 16, 0.3);
+  color-scheme: light;
+}
