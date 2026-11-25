@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavStyleStore } from '../../../store/navStyleStore'
-import { DEFAULT_SKIN, Skin, Theme, getSkin, getTheme, setSkin, setTheme } from '../../../styles/skin'
+import { DEFAULT_SKIN, SKIN_OPTIONS, Skin, Theme, getSkin, getTheme, setSkin, setTheme } from '../../../styles/skin'
 
 /** Visual (skin) and light/dark theme — saved per device (desktop and web independently). */
 export function AppearanceSection(): React.ReactElement {
@@ -24,18 +24,11 @@ export function AppearanceSection(): React.ReactElement {
       <div className="editor-field">
         <label>Visual ({platform === 'desktop' ? 'este computador' : 'este navegador'})</label>
         <div className="seg-toggle">
-          <button className={`seg-btn ${skin === 'devlytics' ? 'active' : ''}`} onClick={() => pickSkin('devlytics')}>
-            Novo
-          </button>
-          <button className={`seg-btn ${skin === 'grafite' ? 'active' : ''}`} onClick={() => pickSkin('grafite')}>
-            Grafite & Coral
-          </button>
-          <button className={`seg-btn ${skin === 'vampiro' ? 'active' : ''}`} onClick={() => pickSkin('vampiro')}>
-            Vampiro
-          </button>
-          <button className={`seg-btn ${skin === 'classic' ? 'active' : ''}`} onClick={() => pickSkin('classic')}>
-            Clássico
-          </button>
+          {SKIN_OPTIONS.map((o) => (
+            <button key={o.id} className={`seg-btn ${skin === o.id ? 'active' : ''}`} onClick={() => pickSkin(o.id)}>
+              {o.label}
+            </button>
+          ))}
         </div>
       </div>
       {skin !== 'classic' && (

@@ -1,9 +1,11 @@
 /**
  * Visual skins. `classic` = the original look (src/index.css untouched);
  * `devlytics` = Geist + zinc + green glass (src/styles/skin-devlytics.css);
- * `grafite` / `vampiro` = same structure as devlytics with another palette
- * (src/styles/palettes.css + palette-<name>.css), applied as
- * data-skin='devlytics' + data-palette='<name>'.
+ * the others = same structure as devlytics with another palette
+ * (src/styles/palettes.css + palette-<id>.css, loaded automatically), applied as
+ * data-skin='devlytics' + data-palette='<id>'.
+ *
+ * New palette: create src/styles/palette-<id>.css and add one entry to SKIN_OPTIONS.
  *
  * ↓ To bring the desktop back to the old look, set `desktop: 'classic'` here
  *   (or pick "Clássico" in Configurações → Aparência, which overrides per device).
@@ -13,12 +15,21 @@ export const DEFAULT_SKIN: Record<'desktop' | 'web', Skin> = {
   web: 'devlytics'
 }
 
-export type Skin = 'classic' | 'devlytics' | 'grafite' | 'vampiro'
 export type Theme = 'dark' | 'light'
 
-const SKINS: Skin[] = ['classic', 'devlytics', 'grafite', 'vampiro']
-/** Skins that are just a palette over devlytics. */
-const PALETTE_SKINS: Skin[] = ['grafite', 'vampiro']
+/** Every visual, in the order shown in Configurações → Aparência. `chrome` = theme-color meta (PWA status bar). */
+export const SKIN_OPTIONS = [
+  { id: 'devlytics', label: 'Novo', chrome: { dark: '#18181b', light: '#f4f4f5' } },
+  { id: 'grafite', label: 'Grafite & Coral', chrome: { dark: '#18191b', light: '#faf9f7' } },
+  { id: 'vampiro', label: 'Vampiro', chrome: { dark: '#170f12', light: '#faf6f6' } },
+  { id: 'classic', label: 'Clássico', chrome: { dark: '#0f172a', light: '#0f172a' } }
+] as const satisfies readonly { id: string; label: string; chrome: Record<Theme, string> }[]
+
+export type Skin = (typeof SKIN_OPTIONS)[number]['id']
+
+const SKINS: Skin[] = SKIN_OPTIONS.map((o) => o.id)
+/** Skins that have their own stylesheet; every other one is a palette over devlytics. */
+const isPaletteSkin = (s: Skin): boolean => s !== 'classic' && s !== 'devlytics'
 const THEMES: Theme[] = ['dark', 'light']
 
 function platform(): 'desktop' | 'web' {
@@ -71,23 +82,15 @@ export function setTheme(theme: Theme): void {
   applySkin()
 }
 
-/** Browser chrome color (PWA status bar / theme-color) per skin × theme. */
-const CHROME_COLOR: Record<Skin, Record<Theme, string>> = {
-  classic: { dark: '#0f172a', light: '#0f172a' },
-  devlytics: { dark: '#18181b', light: '#f4f4f5' },
-  grafite: { dark: '#18191b', light: '#faf9f7' },
-  vampiro: { dark: '#170f12', light: '#faf6f6' }
-}
-
 export function applySkin(): void {
   const d = document.documentElement
   const skin = getSkin()
   const theme = skin === 'classic' ? 'dark' : getTheme() // classic only has a dark palette
   // palette skins reuse the devlytics structure; only the colors change
-  const isPalette = PALETTE_SKINS.includes(skin)
+  const isPalette = isPaletteSkin(skin)
   d.dataset.skin = isPalette ? 'devlytics' : skin
   if (isPalette) d.dataset.palette = skin
   else delete d.dataset.palette
   d.dataset.theme = theme
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', CHROME_COLOR[skin][theme])
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', SKIN_OPTIONS.find((o) => o.id === skin)!.chrome[theme])
 }

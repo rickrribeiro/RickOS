@@ -11,8 +11,8 @@ import './index.css'
 import './styles/responsive.css'
 import './styles/skin-devlytics.css'
 import './styles/palettes.css'
-import './styles/palette-grafite.css'
-import './styles/palette-vampiro.css'
+// one file per palette (Grafite, Vampiro, …) — see SKIN_OPTIONS in src/styles/skin.ts
+import.meta.glob('./styles/palette-*.css', { eager: true })
 
 // Same API on desktop and web: everything goes to the rickOS server over HTTP.
 window.api = createApi() as unknown as Window['api']
