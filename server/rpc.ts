@@ -364,6 +364,37 @@ async function maybeMonthlyInvestmentSync(): Promise<void> {
   }
 }
 
+/**
+ * Finanças: lembrete de começo de mês para revisar o saldo separado (valor manual — o Open Finance
+ * não manda). Uma vez por mês, a partir das 9h; se o servidor estava desligado, avisa ao ligar.
+ * Só avisa se alguma conta tem saldo separado (≠ 0) herdado e ainda sem registro no mês.
+ */
+async function maybeMonthlyReservedReminder(): Promise<void> {
+  try {
+    const now = new Date()
+    if (now.getDate() === 1 && now.getHours() < 9) return
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    if ((await getSetting('finance_reserved_reminder_month')) === month) return
+    const latest = new Map<number, { month: string; amount: number }>()
+    for (const r of await getAccountReservedHistory()) {
+      if (r.month > month) continue
+      const cur = latest.get(r.accountId)
+      if (!cur || r.month > cur.month) latest.set(r.accountId, r)
+    }
+    const pending = [...latest.values()].filter((r) => r.month !== month && r.amount !== 0).length
+    await setSetting('finance_reserved_reminder_month', month)
+    if (!pending) return
+    await notify({
+      title: '🔒 Revisar saldo separado',
+      body: `Começo de mês: confira o saldo separado de ${pending === 1 ? '1 conta' : `${pending} contas`} no painel de Finanças.`,
+      source: 'automacao',
+      page: 'finance-dashboard'
+    })
+  } catch (e) {
+    console.error('[saldo separado] lembrete', e)
+  }
+}
+
 let schedulerStarted = false
 /** Background engines (rules, scheduled agents, Google sync) — run while the server is up. */
 export function startScheduler(): void {
@@ -385,6 +416,9 @@ export function startScheduler(): void {
   // Finanças: investimentos do Open Finance no 1º dia útil do mês (checa de hora em hora).
   setTimeout(() => void maybeMonthlyInvestmentSync(), 90_000)
   setInterval(() => void maybeMonthlyInvestmentSync(), 60 * 60 * 1000)
+  // Finanças: lembrete de revisar o saldo separado no começo do mês (checa de hora em hora).
+  setTimeout(() => void maybeMonthlyReservedReminder(), 100_000)
+  setInterval(() => void maybeMonthlyReservedReminder(), 60 * 60 * 1000)
   // Finanças: pareia estornos pendentes no boot (cobre dados já importados).
   setTimeout(() => void reconcileRefunds().catch((e) => console.error('[estornos]', e)), 4000)
   // Finanças: recorrência é derivada das transações — recalcula no boot (cobre a migração e regras novas).
