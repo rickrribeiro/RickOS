@@ -13,7 +13,9 @@ import {
   upsertExternalAccount,
   assignAccountToUnlinked,
   setSetting,
-  setTransactionInvestmentFlag
+  setTransactionInvestmentFlag,
+  upsertInvestmentMovements,
+  DbInvestmentMovement
 } from '../database/queries'
 import { decodeSecret } from './secrets'
 import {
@@ -392,10 +394,21 @@ interface PluggyInvestment {
   issuer?: string | null
 }
 
+interface PluggyInvestmentTx {
+  id: string
+  date: string
+  type?: string | null // BUY | SELL | INTEREST | TAX | TRANSFER | AMORTIZATION
+  movementType?: string | null
+  amount?: number | null
+  netAmount?: number | null
+  quantity?: number | null
+}
+
 export interface PluggyInvestmentSyncResult {
   created: number
   updated: number
   closed: number
+  movements: number // movimentações (aportes, resgates, proventos, impostos) gravadas
   /** vinculados e ativos no app, mas que o banco não devolveu mais — o usuário decide se encerra */
   vanished: { id: number; name: string }[]
 }
@@ -484,7 +497,32 @@ export async function syncPluggyInvestments(): Promise<PluggyInvestmentSyncResul
     const latest = await getInvestmentLatest(inv.id)
     if (latest && !latest.closed) vanished.push({ id: inv.id, name: inv.name })
   }
-  return { created, updated, closed, vanished }
+
+  // Movimentações de TODOS os investimentos devolvidos (inclusive os já resgatados: proventos e
+  // vendas do passado contam no histórico).
+  const movements: DbInvestmentMovement[] = []
+  for (const inv of remote) {
+    for (let page = 1; page <= 20; page++) {
+      const r = await get<{ results: PluggyInvestmentTx[]; totalPages?: number }>(`/investments/${inv.id}/transactions?pageSize=500&page=${page}`, key)
+      for (const t of r.results ?? []) {
+        movements.push({
+          externalId: t.id,
+          externalInvestmentId: inv.id,
+          investmentName: inv.code || inv.name,
+          investmentKind: pluggyInvestmentKind(inv.type, inv.subtype),
+          date: String(t.date).slice(0, 10),
+          type: String(t.type ?? 'OTHER'),
+          movementType: t.movementType ?? null,
+          amount: Math.round(Math.abs(t.amount ?? t.netAmount ?? 0) * 100) / 100,
+          netAmount: t.netAmount != null ? Math.round(Math.abs(t.netAmount) * 100) / 100 : null,
+          quantity: t.quantity ?? null
+        })
+      }
+      if (!r.totalPages || page >= r.totalPages) break
+    }
+  }
+  await upsertInvestmentMovements(movements)
+  return { created, updated, closed, movements: movements.length, vanished }
 }
 
 /**

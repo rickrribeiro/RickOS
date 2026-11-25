@@ -1339,6 +1339,35 @@ export async function upsertExternalAccount(externalId: string, name: string, cu
   record(id)
   return { id, created: true }
 }
+export interface DbInvestmentMovement {
+  externalId: string
+  externalInvestmentId: string
+  investmentName: string | null
+  investmentKind: string | null
+  date: string
+  type: string
+  movementType: string | null
+  amount: number
+  netAmount: number | null
+  quantity: number | null
+}
+export async function upsertInvestmentMovements(rows: DbInvestmentMovement[]): Promise<void> {
+  const db = await getDb()
+  for (const r of rows) {
+    run(
+      db,
+      `INSERT INTO investment_movements (externalId, externalInvestmentId, investmentName, investmentKind, date, type, movementType, amount, netAmount, quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(externalId) DO UPDATE SET investmentName = excluded.investmentName, investmentKind = excluded.investmentKind, date = excluded.date,
+         type = excluded.type, movementType = excluded.movementType, amount = excluded.amount, netAmount = excluded.netAmount, quantity = excluded.quantity`,
+      [r.externalId, r.externalInvestmentId, r.investmentName, r.investmentKind, r.date, r.type, r.movementType, r.amount, r.netAmount, r.quantity]
+    )
+  }
+}
+export async function getInvestmentMovements(): Promise<DbInvestmentMovement[]> {
+  const db = await getDb()
+  return getAll<DbInvestmentMovement>(db, 'SELECT * FROM investment_movements ORDER BY date')
+}
 export async function getAccountBalanceHistory(): Promise<{ accountId: number; month: string; balance: number; syncedAt: string }[]> {
   const db = await getDb()
   return getAll(db, 'SELECT accountId, month, balance, syncedAt FROM account_balance_history ORDER BY month')
@@ -1361,6 +1390,7 @@ export async function resetFinanceImportedData(): Promise<{ transactions: number
   const out = { transactions: count('transactions'), investments: count('investments'), accounts: count('accounts') }
   run(db, 'DELETE FROM transactions')
   run(db, 'DELETE FROM investment_history')
+  run(db, 'DELETE FROM investment_movements')
   run(db, 'DELETE FROM investments')
   run(db, 'DELETE FROM account_balance_history')
   run(db, 'DELETE FROM accounts')

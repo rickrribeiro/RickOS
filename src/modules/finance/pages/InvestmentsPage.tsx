@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Investment, InvestmentHistory } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
+import { InvestmentSummary } from '../components/InvestmentSummary'
 import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth } from '../util'
 import type { InvestmentDetails } from '../../../../shared/finance'
 
@@ -213,7 +214,7 @@ export function InvestmentsPage(): React.ReactElement {
         }
       }
       await refresh()
-      const parts = [`${r.created} novos`, `${r.updated} atualizados`, `${r.closed + closedGone} encerrados`]
+      const parts = [`${r.created} novos`, `${r.updated} atualizados`, `${r.closed + closedGone} encerrados`, `${r.movements ?? 0} movimentações`]
       setSyncMsg({ text: `Open Finance: ${parts.join(', ')}. Valores registrados no mês atual.`, ok: true })
     } catch (e) {
       setSyncMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
@@ -265,11 +266,6 @@ export function InvestmentsPage(): React.ReactElement {
     if (!confirm(`Excluir "${i.name}" de TODOS os meses? O histórico inteiro será apagado.`)) return
     removeInvestment(i.id)
   }
-  const prevMonth = shiftMonth(month, -1)
-  const prevTotals = sumByCurrency(
-    investments.map((i) => ({ currency: i.currency, amount: investmentValueAtMonth(investmentHistory, i.id, prevMonth) ?? 0 }))
-  )
-
   return (
     <div className="module-page">
       <div className="module-header">
@@ -281,16 +277,11 @@ export function InvestmentsPage(): React.ReactElement {
               .map(([c, v]) => formatMoney(v, c))
               .join(' · ') || formatMoney(0)}
           </p>
-          {Object.keys(totals).length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-              {Object.entries(totals).map(([c, v]) => (
-                <DeltaTag key={c} prev={prevTotals[c] ?? 0} curr={v} currency={c} />
-              ))}
-            </div>
-          )}
         </div>
         <MonthNav />
       </div>
+
+      <InvestmentSummary />
 
       <div className="chart-section" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

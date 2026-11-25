@@ -193,6 +193,21 @@ export const SCHEMA = `
     refundOf INTEGER                        -- estorno: id da compra estornada (-1 = usuário pediu para não parear)
   );
 
+  -- Movimentações dos investimentos (Open Finance): BUY = aporte, SELL = resgate/venda,
+  -- INTEREST = provento (dividendo, JCP, rendimento de FII, cupom), TAX = imposto (come-cotas)…
+  CREATE TABLE IF NOT EXISTS investment_movements (
+    externalId TEXT PRIMARY KEY,
+    externalInvestmentId TEXT NOT NULL,
+    investmentName TEXT,
+    investmentKind TEXT,
+    date TEXT NOT NULL,                     -- YYYY-MM-DD
+    type TEXT NOT NULL,                     -- BUY | SELL | INTEREST | TAX | TRANSFER | AMORTIZATION
+    movementType TEXT,                      -- CREDIT | DEBIT
+    amount REAL NOT NULL,
+    netAmount REAL,
+    quantity REAL
+  );
+
   -- Saldo das contas por mês (último saldo sincronizado do Open Finance em cada mês).
   CREATE TABLE IF NOT EXISTS account_balance_history (
     accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

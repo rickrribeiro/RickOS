@@ -431,7 +431,8 @@ export function createApi() {
       setValue: (investmentId: number, month: string, amount: number) => invoke('investments:setValue', investmentId, month, amount),
       delete: (id: number) => invoke('investments:delete', id),
       close: (id: number, month: string) => invoke('investments:close', id, month),
-      rename: (id: number, name: string) => invoke('investments:rename', id, name)
+      rename: (id: number, name: string) => invoke('investments:rename', id, name),
+      movements: () => invoke('investments:movements')
     },
     pluggy: {
       sync: (month?: string) => invoke('pluggy:sync', month),

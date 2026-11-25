@@ -93,6 +93,7 @@ import {
   setTransactionKind,
   resetFinanceImportedData,
   getAccountBalanceHistory,
+  getInvestmentMovements,
   setTransactionPaymentMethod,
   setRecurringOverride,
   getRecurringOverrides,
@@ -1050,6 +1051,7 @@ ipcMain.handle('investments:create', (_, name: string, type: string | null, amou
 ipcMain.handle('investments:setValue', (_, investmentId: number, month: string, amount: number) => setInvestmentValue(investmentId, month, amount))
 ipcMain.handle('investments:delete', (_, id: number) => deleteInvestment(id))
 ipcMain.handle('investments:close', (_, id: number, month: string) => closeInvestment(id, month))
+ipcMain.handle('investments:movements', () => getInvestmentMovements())
 ipcMain.handle('investments:rename', (_, id: number, name: string) => renameInvestment(id, name))
 
 // ── IPC: Open Finance (Pluggy) ────────────────────────────────────────────────

@@ -509,6 +509,26 @@ const MIGRATIONS: Migration[] = [
                 SELECT id, substr(syncedAt, 1, 7), balance, syncedAt FROM accounts WHERE externalId IS NOT NULL AND syncedAt IS NOT NULL;`)
       } catch { /* tabela ausente */ }
     }
+  },
+  {
+    version: 40,
+    label: 'Investimentos: movimentações do Open Finance (aportes, resgates, proventos, impostos)',
+    run: (db) => {
+      try {
+        db.run(`CREATE TABLE IF NOT EXISTS investment_movements (
+          externalId TEXT PRIMARY KEY,
+          externalInvestmentId TEXT NOT NULL,
+          investmentName TEXT,
+          investmentKind TEXT,
+          date TEXT NOT NULL,
+          type TEXT NOT NULL,
+          movementType TEXT,
+          amount REAL NOT NULL,
+          netAmount REAL,
+          quantity REAL
+        );`)
+      } catch { /* exists */ }
+    }
   }
 ]
 

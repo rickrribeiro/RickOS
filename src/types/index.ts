@@ -498,10 +498,24 @@ export interface Investment {
   details?: string | null // JSON InvestmentDetails
 }
 
+export interface InvestmentMovement {
+  externalId: string
+  externalInvestmentId: string
+  investmentName: string | null // ticker ou nome
+  investmentKind: string | null // Ação, FII, BDR, CDB…
+  date: string // YYYY-MM-DD
+  type: string // BUY | SELL | INTEREST | TAX | TRANSFER | AMORTIZATION
+  movementType: string | null
+  amount: number
+  netAmount: number | null
+  quantity: number | null
+}
+
 export interface PluggyInvestmentSyncResult {
   created: number
   updated: number
   closed: number
+  movements?: number
   vanished: { id: number; name: string }[]
 }
 export interface InvestmentHistory {
@@ -1130,6 +1144,7 @@ declare global {
         delete: (id: number) => Promise<void>
         close: (id: number, month: string) => Promise<void>
         rename: (id: number, name: string) => Promise<void>
+        movements: () => Promise<InvestmentMovement[]>
       }
       pluggy: {
         syncInvestments: () => Promise<PluggyInvestmentSyncResult>

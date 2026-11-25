@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Account, Category, Transaction, Budget, Investment, InvestmentHistory, RecurringSuggestion } from '../../../types'
+import { Account, Category, Transaction, Budget, Investment, InvestmentHistory, RecurringSuggestion, InvestmentMovement } from '../../../types'
 import { currentMonth, setMoneyHidden } from '../util'
 import { countsInTotals, type TransactionKind } from '../../../../shared/finance'
 
@@ -24,6 +24,7 @@ interface FinanceState {
   budgets: Budget[] // for `month`
   investments: Investment[]
   investmentHistory: InvestmentHistory[] // all-time monthly snapshots
+  investmentMovements: InvestmentMovement[] // aportes/resgates/proventos/impostos (Open Finance)
   base: string
   rates: Record<string, number>
   hidden: boolean // privacy mode: mask money values
@@ -74,6 +75,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   budgets: [],
   investments: [],
   investmentHistory: [],
+  investmentMovements: [],
   base: 'BRL',
   rates: {},
   hidden: initialHidden,
@@ -99,7 +101,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   refresh: async () => {
     const month = get().month
-    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw, recurringSuggestions, accountBalances] =
+    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw, recurringSuggestions, accountBalances, investmentMovements] =
       await Promise.all([
         window.api.accounts.getAll(),
         window.api.categories.getAll(),
@@ -113,7 +115,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         window.api.settings.get('finance_rates'),
         window.api.settings.get('finance_default_account'),
         window.api.transactions.recurringSuggestions ? window.api.transactions.recurringSuggestions().catch(() => []) : Promise.resolve([]),
-        window.api.accountsHistory ? window.api.accountsHistory.balances().catch(() => []) : Promise.resolve([])
+        window.api.accountsHistory ? window.api.accountsHistory.balances().catch(() => []) : Promise.resolve([]),
+        window.api.investments.movements ? window.api.investments.movements().catch(() => []) : Promise.resolve([])
       ])
     let rates: Record<string, number> = {}
     try {
@@ -136,6 +139,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       rates,
       recurringSuggestions,
       accountBalances,
+      investmentMovements,
       defaultAccountId: defaultAccountRaw && accounts.some((a) => a.id === Number(defaultAccountRaw)) ? Number(defaultAccountRaw) : null
     })
   },
