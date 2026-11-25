@@ -1,0 +1,50 @@
+/* Paleta "Abissal" — azul-petróleo profundo com destaque ciano. Só tokens; a aplicação está em palettes.css. */
+
+:root[data-skin='devlytics'][data-palette='abissal'] {
+  --pal-bg: #0d1619;
+  --pal-sidebar: #081013;
+  --pal-surface: #132126;
+  --pal-elevated: #1a2a30;
+  --pal-user-bubble: #1d3037;
+  --pal-border: #24363d;
+  --pal-border-strong: #33494f; /* derivado */
+  --pal-text: #e6f1f3;
+  --pal-text-2: #a6bcc1;
+  --pal-text-3: #93aab0;
+  --pal-accent: #4fd1d9;
+  --pal-accent-hover: #7fe0e6; /* derivado */
+  --pal-selection: #123a40;
+  --pal-primary: #3cc4ce;
+  --pal-on-primary: #04262a;
+  --pal-success: #9fd8b5;
+  --pal-success-bg: #173326;
+  --pal-shadow: #00000059;
+  --pal-hover: rgba(230, 241, 243, 0.06);
+  --pal-ring: rgba(79, 209, 217, 0.35);
+  --pal-scrim: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-skin='devlytics'][data-palette='abissal'][data-theme='light'] {
+  --pal-bg: #f4f8f9;
+  --pal-sidebar: #e5eef0;
+  --pal-surface: #ffffff;
+  --pal-elevated: #ecf3f5;
+  --pal-user-bubble: #e2edf0;
+  --pal-border: #cfdde1;
+  --pal-border-strong: #b3c6cb; /* derivado */
+  --pal-text: #10262c;
+  --pal-text-2: #4d646a;
+  --pal-text-3: #566d73;
+  --pal-accent: #0b6e78;
+  --pal-accent-hover: #085a62; /* derivado */
+  --pal-selection: #ddf0f2;
+  --pal-primary: #0b6e78;
+  --pal-on-primary: #ffffff;
+  --pal-success: #2e6b45;
+  --pal-success-bg: #e1f0e5;
+  --pal-shadow: #10262c14;
+  --pal-hover: rgba(16, 38, 44, 0.05);
+  --pal-ring: rgba(11, 110, 120, 0.25);
+  --pal-scrim: rgba(16, 38, 44, 0.3);
+  color-scheme: light;
+}
