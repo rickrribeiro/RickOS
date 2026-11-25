@@ -22,6 +22,7 @@ import {
 import { AiUsageModal } from '../components/AiUsageModal'
 import { firstBusinessDay } from '../../../../shared/finance'
 import { finishPluggySync } from '../../finance/pluggySync'
+import { t as tr } from '../../../i18n'
 
 const FX_CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -185,7 +186,7 @@ export function SettingsPage(): React.ReactElement {
     await set('pluggy_client_id', pClientId.trim())
     await set('pluggy_client_secret', pClientSecret.trim())
     await set('pluggy_item_id', pItemId.trim())
-    setPMsg({ text: 'Credenciais salvas (criptografadas) ✓', ok: true })
+    setPMsg({ text: tr('settings.credenciaisSalvasCriptografadas'), ok: true })
   }
 
   async function connectBank(): Promise<void> {
@@ -209,7 +210,7 @@ export function SettingsPage(): React.ReactElement {
     setPMsg(null)
     try {
       const r = await window.api.pluggy.sync()
-      const text = await finishPluggySync(r, 'Banco conectado! ')
+      const text = await finishPluggySync(r, tr('settings.bancoConectado') + ' ')
       await refreshFinance()
       setPMsg({ text, ok: true })
     } catch (e) {
@@ -246,7 +247,7 @@ export function SettingsPage(): React.ReactElement {
   async function saveGoogleCreds(): Promise<void> {
     await set('google_client_id', gClientId.trim())
     await set('google_client_secret', gClientSecret.trim())
-    setGMsg({ text: 'Credenciais salvas.', ok: true })
+    setGMsg({ text: tr('settings.credenciaisSalvas'), ok: true })
   }
 
   async function connectGoogle(): Promise<void> {
@@ -256,7 +257,7 @@ export function SettingsPage(): React.ReactElement {
     try {
       await window.api.google.connect()
       await refreshGoogle()
-      setGMsg({ text: 'Conta conectada! Clique em Sincronizar.', ok: true })
+      setGMsg({ text: tr('settings.contaConectadaCliqueEmSincronizar'), ok: true })
     } catch (e) {
       setGMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
     } finally {
@@ -271,7 +272,7 @@ export function SettingsPage(): React.ReactElement {
       const n = await window.api.google.sync()
       await refreshEvents()
       await refresh()
-      setGMsg({ text: `${n} eventos sincronizados.`, ok: true })
+      setGMsg({ text: tr('settings.eventosSincronizados', { n }), ok: true })
     } catch (e) {
       setGMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
     } finally {
@@ -282,22 +283,22 @@ export function SettingsPage(): React.ReactElement {
   async function disconnectGoogle(): Promise<void> {
     await window.api.google.disconnect()
     await refreshGoogle()
-    setGMsg({ text: 'Todas as contas desconectadas.', ok: true })
+    setGMsg({ text: tr('settings.todasAsContasDesconectadas'), ok: true })
   }
 
   async function disconnectGoogleAccount(email: string): Promise<void> {
     await window.api.google.disconnectAccount(email)
     await refreshGoogle()
-    setGMsg({ text: `Conta ${email} removida.`, ok: true })
+    setGMsg({ text: tr('settings.contaRemovida', { email }), ok: true })
   }
 
   return (
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>⚙️ Configurações</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('settings.configuracoes')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Integrações e preferências. Tokens ficam no banco do servidor rickOS (criptografados).
+            {tr('settings.integracoesEPreferenciasTokensFicam')}
           </p>
         </div>
       </div>
@@ -307,50 +308,48 @@ export function SettingsPage(): React.ReactElement {
       <ModulesSection />
 
       <div className="chart-section" style={{ maxWidth: 560 }}>
-        <div className="chart-title">🐙 GitHub</div>
+        <div className="chart-title">{tr('settings.github')}</div>
 
         <div className="editor-field">
-          <label>Autenticação</label>
+          <label>{tr('settings.autenticacao')}</label>
           <div className="seg-toggle">
             <button className={`seg-btn ${authMode === 'ssh' ? 'active' : ''}`} onClick={() => changeAuthMode('ssh')}>
-              Máquina (gh/SSH)
+              {tr('settings.maquinaGhSsh')}
             </button>
             <button className={`seg-btn ${authMode === 'token' ? 'active' : ''}`} onClick={() => changeAuthMode('token')}>
-              Token (PAT)
+              {tr('settings.tokenPat')}
             </button>
           </div>
         </div>
 
         {authMode === 'ssh' ? (
           <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 12px' }}>
-            Usa o <strong>GitHub CLI (<code>gh</code>)</strong> autenticado na sua máquina (mesma conta do
-            seu git/SSH) — sem precisar de token no app. Requer <code>gh</code> instalado e
-            <code>gh auth login</code> feito. (A REST API do GitHub não autentica por chave SSH; o
-            <code>gh</code> usa a credencial já configurada.)
+            {tr('settings.usaO')} <strong>{tr('settings.githubCli')}<code>gh</code>)</strong> {tr('settings.autenticadoNaSuaMaquinaMesma')} <code>gh</code> {tr('settings.instaladoE')}
+            <code>gh auth login</code> {tr('settings.feitoARestApiDo')}
+            <code>gh</code> {tr('settings.usaACredencialJaConfigurada')}
           </p>
         ) : (
           <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 12px' }}>
-            Crie um <strong>Personal Access Token</strong> (classic) com escopo <code>repo</code> em
-            github.com → Settings → Developer settings. Usado só localmente para ler suas issues.
+            {tr('settings.crieUm')} <strong>{tr('settings.personalAccessToken')}</strong> {tr('settings.classicComEscopo')} <code>repo</code> {tr('settings.emGithubComSettingsDeveloper')}
           </p>
         )}
 
         {authMode === 'token' && (
           <>
             <div className="editor-field">
-              <label>Personal Access Token</label>
+              <label>{tr('settings.personalAccessToken')}</label>
               <input
                 type="password"
-                placeholder="ghp_…"
+                placeholder={tr('settings.ghp')}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
               />
             </div>
             <div className="editor-field">
-              <label>Username (opcional)</label>
+              <label>{tr('settings.usernameOpcional')}</label>
               <input
                 type="text"
-                placeholder="seu-usuario"
+                placeholder={tr('settings.seuUsuario')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -361,7 +360,7 @@ export function SettingsPage(): React.ReactElement {
         <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
           {authMode === 'token' && (
             <button className="btn btn-primary btn-sm" onClick={handleSave}>
-              {saved ? '✓ Salvo' : 'Salvar'}
+              {saved ? tr('settings.salvo') : tr('settings.salvar')}
             </button>
           )}
           <button
@@ -372,10 +371,10 @@ export function SettingsPage(): React.ReactElement {
             }}
             disabled={syncing || (authMode === 'token' && !token.trim())}
           >
-            {syncing ? 'Sincronizando…' : '🔄 Testar / Sincronizar Issues'}
+            {syncing ? tr('settings.sincronizando') : tr('settings.testarSincronizarIssues')}
           </button>
           {lastCount !== null && !error && (
-            <span style={{ fontSize: 12, color: 'var(--success)' }}>{lastCount} issues sincronizadas</span>
+            <span style={{ fontSize: 12, color: 'var(--success)' }}>{lastCount} {tr('settings.issuesSincronizadas')}</span>
           )}
         </div>
         {error && (
@@ -383,17 +382,15 @@ export function SettingsPage(): React.ReactElement {
         )}
         {values['github_last_sync'] && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-            Última sincronização: <strong>{fmtLastSync(values['github_last_sync'])}</strong>
+            {tr('settings.ultimaSincronizacao')} <strong>{fmtLastSync(values['github_last_sync'])}</strong>
           </div>
         )}
       </div>
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">📅 Google Calendar {gAccounts.length > 0 && <span style={{ color: 'var(--success)', fontSize: 12 }}>● {gAccounts.length} conta{gAccounts.length === 1 ? '' : 's'}</span>}</div>
+        <div className="chart-title">{tr('settings.googleCalendar')} {gAccounts.length > 0 && <span style={{ color: 'var(--success)', fontSize: 12 }}>{tr('settings.conta', { count: gAccounts.length })}</span>}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Crie credenciais OAuth <strong>Desktop app</strong> no Google Cloud Console (API Google
-          Calendar) e cole abaixo. Você pode conectar <strong>várias contas</strong> — os eventos de
-          todas aparecem juntos. Leitura apenas (escopo <code>calendar.readonly</code>).
+          {tr('settings.crieCredenciaisOauth')} <strong>{tr('settings.desktopApp')}</strong> {tr('settings.noGoogleCloudConsoleApi')} <strong>{tr('settings.variasContas')}</strong> {tr('settings.osEventosDeTodasAparecem')} <code>calendar.readonly</code>).
         </p>
 
         {gAccounts.length > 0 && (
@@ -406,7 +403,7 @@ export function SettingsPage(): React.ReactElement {
                   style={{ marginLeft: 'auto' }}
                   onClick={() => disconnectGoogleAccount(email)}
                   disabled={gBusy !== null}
-                  title="Remover esta conta"
+                  title={tr('settings.removerEstaConta')}
                 >
                   ✕
                 </button>
@@ -416,24 +413,24 @@ export function SettingsPage(): React.ReactElement {
         )}
 
         <div className="editor-field">
-          <label>Client ID</label>
-          <input type="text" placeholder="...apps.googleusercontent.com" value={gClientId} onChange={(e) => setGClientId(e.target.value)} />
+          <label>{tr('settings.clientId')}</label>
+          <input type="text" placeholder={tr('settings.appsGoogleusercontentCom')} value={gClientId} onChange={(e) => setGClientId(e.target.value)} />
         </div>
         <div className="editor-field">
-          <label>Client Secret</label>
-          <input type="password" placeholder="GOCSPX-…" value={gClientSecret} onChange={(e) => setGClientSecret(e.target.value)} />
+          <label>{tr('settings.clientSecret')}</label>
+          <input type="password" placeholder={tr('settings.gocspx')} value={gClientSecret} onChange={(e) => setGClientSecret(e.target.value)} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn btn-primary btn-sm" onClick={connectGoogle} disabled={gBusy !== null || !gClientId.trim() || !gClientSecret.trim()}>
-            {gBusy === 'connect' ? 'Aguardando browser…' : gConnected ? '+ Conectar outra conta' : 'Conectar conta'}
+            {gBusy === 'connect' ? tr('settings.aguardandoBrowser') : gConnected ? tr('settings.conectarOutraConta') : tr('settings.conectarConta')}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={syncGoogle} disabled={gBusy !== null || !gConnected}>
-            {gBusy === 'sync' ? 'Sincronizando…' : '🔄 Sincronizar (7 dias)'}
+            {gBusy === 'sync' ? tr('settings.sincronizando') : tr('settings.sincronizar7Dias')}
           </button>
           {gConnected && gAccounts.length > 1 && (
             <button className="btn btn-danger btn-sm" onClick={disconnectGoogle} disabled={gBusy !== null}>
-              Desconectar todas
+              {tr('settings.desconectarTodas')}
             </button>
           )}
         </div>
@@ -442,8 +439,8 @@ export function SettingsPage(): React.ReactElement {
         )}
         {gConnected && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-            ⏱️ Sincroniza automaticamente todos os dias às 7h (se o servidor estiver desligado nesse horário, sincroniza assim que ligar, no mesmo dia).
-            <br />Última sincronização: <strong>{fmtLastSync(values['google_last_sync'])}</strong>
+            {tr('settings.sincronizaAutomaticamenteTodosOsDias')}
+            <br />{tr('settings.ultimaSincronizacao')} <strong>{fmtLastSync(values['google_last_sync'])}</strong>
           </div>
         )}
         {gConnected && values['google_last_sync_error'] && (() => {
@@ -453,20 +450,19 @@ export function SettingsPage(): React.ReactElement {
           const msg = sep > 0 ? raw.slice(sep + 1) : raw
           return (
             <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>
-              ⚠️ Falhou em {fmtLastSync(at)}: {msg}
+              {tr('settings.falhouEm', { p0: fmtLastSync(at), msg })}
             </div>
           )
         })()}
       </div>
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">💱 Finanças — câmbio</div>
+        <div className="chart-title">{tr('settings.financasCambio')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Moeda base e taxas manuais (valor de <strong>1 unidade</strong> da moeda na base). Usado para
-          consolidar totais no Dashboard de Finanças.
+          {tr('settings.moedaBaseETaxasManuais')} <strong>{tr('settings.1Unidade')}</strong> {tr('settings.daMoedaNaBaseUsado')}
         </p>
         <div className="editor-field">
-          <label>Moeda base</label>
+          <label>{tr('settings.moedaBase')}</label>
           <select value={fxBase} onChange={(e) => setFxBase(e.target.value)}>
             {FX_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -477,7 +473,7 @@ export function SettingsPage(): React.ReactElement {
               <label>1 {c} = ? {fxBase}</label>
               <input
                 type="number"
-                placeholder="ex: 5.20"
+                placeholder={tr('settings.ex520')}
                 value={fxRates[c] ?? ''}
                 onChange={(e) => setFxRates((r) => ({ ...r, [c]: e.target.value }))}
               />
@@ -485,28 +481,25 @@ export function SettingsPage(): React.ReactElement {
           ))}
         </div>
         <div style={{ marginTop: 12 }}>
-          <button className="btn btn-primary btn-sm" onClick={saveFx}>{fxSaved ? '✓ Salvo' : 'Salvar câmbio'}</button>
+          <button className="btn btn-primary btn-sm" onClick={saveFx}>{fxSaved ? tr('settings.salvo') : tr('settings.salvarCambio')}</button>
         </div>
       </div>
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">🏦 Open Finance (Pluggy)</div>
+        <div className="chart-title">{tr('settings.openFinancePluggy')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Conecte seu banco via <strong>Pluggy Connect</strong> (agregador de Open Finance). Cole o
-          Client ID/Secret da sua conta Pluggy e o <strong>Item ID</strong> do banco já conectado. As
-          transações são importadas (deduplicadas por data+valor+descrição). As credenciais são
-          guardadas <strong>criptografadas</strong> no banco local (keychain do sistema).
+          {tr('settings.conecteSeuBancoVia')} <strong>{tr('settings.pluggyConnect')}</strong> {tr('settings.agregadorDeOpenFinanceCole')} <strong>{tr('settings.itemId')}</strong> {tr('settings.doBancoJaConectadoAs')} <strong>{tr('settings.criptografadas')}</strong> {tr('settings.noBancoLocalKeychainDo')}
         </p>
         <div className="editor-field">
-          <label>Client ID</label>
+          <label>{tr('settings.clientId')}</label>
           <input type="password" value={pClientId} onChange={(e) => setPClientId(e.target.value)} />
         </div>
         <div className="editor-field">
-          <label>Client Secret</label>
+          <label>{tr('settings.clientSecret')}</label>
           <input type="password" value={pClientSecret} onChange={(e) => setPClientSecret(e.target.value)} />
         </div>
         <div className="editor-field">
-          <label>Item ID (banco conectado)</label>
+          <label>{tr('settings.itemIdBancoConectado')}</label>
           <input type="text" value={pItemId} onChange={(e) => setPItemId(e.target.value)} />
         </div>
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -515,32 +508,31 @@ export function SettingsPage(): React.ReactElement {
             onClick={connectBank}
             disabled={pBusy || !pClientId.trim() || !pClientSecret.trim()}
           >
-            🏦 Conectar banco
+            {tr('settings.conectarBanco')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             onClick={savePluggy}
             disabled={pBusy || !pClientId.trim() || !pClientSecret.trim()}
           >
-            💾 Salvar credenciais
+            {tr('settings.salvarCredenciais')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             onClick={syncPluggy}
             disabled={pBusy || !pClientId.trim() || !pClientSecret.trim() || !pItemId.trim()}
           >
-            {pBusy ? 'Importando…' : '🔄 Importar transações'}
+            {pBusy ? tr('settings.importando') : tr('settings.importarTransacoes')}
           </button>
         </div>
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-          <strong>Conectar banco</strong> abre o Pluggy Connect para vincular sua conta (gera o Item
-          automaticamente). Depois, o Item ID fica salvo e o import roda sozinho.
+          <strong>{tr('settings.conectarBanco2')}</strong> {tr('settings.abreOPluggyConnectPara')}
         </p>
         {pMsg && (
           <div style={{ fontSize: 12, color: pMsg.ok ? 'var(--success)' : 'var(--danger)', marginTop: 8 }}>{pMsg.text}</div>
         )}
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-          Última sincronização: <strong>{fmtLastSync(values['pluggy_last_sync'])}</strong>
+          {tr('settings.ultimaSincronizacao')} <strong>{fmtLastSync(values['pluggy_last_sync'])}</strong>
         </div>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, marginTop: 12, cursor: 'pointer' }}>
           <input
@@ -550,11 +542,10 @@ export function SettingsPage(): React.ReactElement {
             style={{ marginTop: 3 }}
           />
           <span>
-            Atualizar investimentos automaticamente no 1º dia útil do mês
+            {tr('settings.atualizarInvestimentosAutomaticamenteNo1')}
             <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>
-              Próxima: <strong>{nextInvestmentSync()}</strong> · última atualização de investimentos:{' '}
-              <strong>{fmtLastSync(values['pluggy_investments_last_sync'])}</strong>. Se o app estiver desligado no dia, roda assim que ligar
-              (no mesmo mês). Avisa no sino.
+              {tr('settings.proxima')} <strong>{nextInvestmentSync()}</strong> {tr('settings.ultimaAtualizacaoDeInvestimentos')}{' '}
+              <strong>{fmtLastSync(values['pluggy_investments_last_sync'])}</strong>{tr('settings.seOAppEstiverDesligado')}
             </span>
           </span>
         </label>
@@ -567,20 +558,19 @@ export function SettingsPage(): React.ReactElement {
           onSuccess={(data) => onBankConnected(data.item.id)}
           onError={(err) => {
             setConnectToken(null)
-            setPMsg({ text: `Pluggy Connect: ${err?.message || 'falha na conexão'}`, ok: false })
+            setPMsg({ text: tr('settings.pluggyConnect2', { p0: err?.message || 'falha na conexão' }), ok: false })
           }}
           onClose={() => setConnectToken(null)}
         />
       )}
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">🤖 IA (Claude CLI)</div>
+        <div className="chart-title">{tr('settings.iaClaudeCli')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Comando usado para rodar o Claude Code local. Padrão <code>claude</code>. Use outro se tiver
-          mais de uma assinatura (ex.: <code>claude-trabalho</code>).
+          {tr('settings.comandoUsadoParaRodarO')} <code>claude</code>{tr('settings.useOutroSeTiverMais')} <code>claude-trabalho</code>).
         </p>
         <div className="editor-field">
-          <label>Comando</label>
+          <label>{tr('settings.comando')}</label>
           <input
             type="text"
             placeholder="claude"
@@ -589,30 +579,28 @@ export function SettingsPage(): React.ReactElement {
           />
         </div>
         <div style={{ marginTop: 12 }}>
-          <button className="btn btn-primary btn-sm" onClick={saveClaudeCmd}>{claudeSaved ? '✓ Salvo' : 'Salvar comando'}</button>
+          <button className="btn btn-primary btn-sm" onClick={saveClaudeCmd}>{claudeSaved ? tr('settings.salvo') : tr('settings.salvarComando')}</button>
         </div>
 
         <div className="editor-field" style={{ marginTop: 16 }}>
-          <label>Ferramentas permitidas</label>
+          <label>{tr('settings.ferramentasPermitidas')}</label>
           <input
             type="text"
-            placeholder="Bash(gh:*) Bash(git:*) Read Write Edit Glob Grep"
+            placeholder={tr('settings.bashGhBashGitRead')}
             value={allowedTools}
             onChange={(e) => setAllowedTools(e.target.value)}
           />
         </div>
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-          O que o Claude pode executar sem pedir aprovação no Prompt Runner/Assistente. Vazio = usa o
-          padrão (<code>gh</code>, <code>git</code> e arquivos). Use <code>Bash</code> para liberar
-          qualquer comando, ou deixe só <code>Read Grep</code> para modo leitura.
+          {tr('settings.oQueOClaudePode')}<code>gh</code>, <code>git</code> {tr('settings.eArquivosUse')} <code>Bash</code> {tr('settings.paraLiberarQualquerComandoOu')} <code>Read Grep</code> {tr('settings.paraModoLeitura')}
         </p>
         <div style={{ marginTop: 8 }}>
-          <button className="btn btn-primary btn-sm" onClick={saveAllowedTools}>{toolsSaved ? '✓ Salvo' : 'Salvar ferramentas'}</button>
+          <button className="btn btn-primary btn-sm" onClick={saveAllowedTools}>{toolsSaved ? tr('settings.salvo') : tr('settings.salvarFerramentas')}</button>
         </div>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
           <div className="editor-field" style={{ flex: '1 1 160px' }}>
-            <label>Modelo padrão do Prompt Runner</label>
+            <label>{tr('settings.modeloPadraoDoPromptRunner')}</label>
             <select value={runnerModel} onChange={(e) => setRunnerModel(e.target.value)}>
               {CONV_MODELS.map((x) => (
                 <option key={x.v} value={x.v}>
@@ -622,7 +610,7 @@ export function SettingsPage(): React.ReactElement {
             </select>
           </div>
           <div className="editor-field" style={{ flex: '1 1 160px' }}>
-            <label>Esforço padrão</label>
+            <label>{tr('settings.esforcoPadrao')}</label>
             <select value={runnerEffort} onChange={(e) => setRunnerEffort(e.target.value)}>
               {CONV_EFFORTS.map((x) => (
                 <option key={x.v} value={x.v}>
@@ -633,22 +621,20 @@ export function SettingsPage(): React.ReactElement {
           </div>
         </div>
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-          Já vem selecionado em toda conversa nova; dá para trocar por conversa. Conversas antigas sem
-          modelo/esforço definidos também passam a usar este padrão.
+          {tr('settings.jaVemSelecionadoEmToda')}
         </p>
         <div style={{ marginTop: 8 }}>
-          <button className="btn btn-primary btn-sm" onClick={saveRunnerDefaults}>{runnerSaved ? '✓ Salvo' : 'Salvar padrão'}</button>
+          <button className="btn btn-primary btn-sm" onClick={saveRunnerDefaults}>{runnerSaved ? tr('settings.salvo') : tr('settings.salvarPadrao')}</button>
         </div>
       </div>
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">✈️ Passagens</div>
+        <div className="chart-title">{tr('settings.passagens')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          As fontes de preços (Aviasales Data API, Duffel, importação e busca assistida) agora ficam em
-          Viagens → Passagens → <strong>Fontes e execução</strong>. A integração antiga via RapidAPI foi removida.
+          {tr('settings.asFontesDePrecosAviasales')} <strong>{tr('settings.fontesEExecucao')}</strong>{tr('settings.aIntegracaoAntigaViaRapidapi')}
         </p>
         <button className="btn btn-secondary btn-sm" onClick={() => useUIStore.getState().setPage('trip-monitoring')}>
-          Abrir Passagens
+          {tr('settings.abrirPassagens')}
         </button>
       </div>
 
@@ -659,11 +645,11 @@ export function SettingsPage(): React.ReactElement {
       <SnapshotsSection />
 
       <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-        <div className="chart-title">📊 Uso de tokens da IA</div>
+        <div className="chart-title">{tr('settings.usoDeTokensDaIa')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Quanto cada módulo e projeto gastou de tokens nas execuções do Claude CLI.
+          {tr('settings.quantoCadaModuloEProjeto')}
         </p>
-        <button className="btn btn-secondary btn-sm" onClick={() => setShowAiUsage(true)}>Ver consumo de tokens</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowAiUsage(true)}>{tr('settings.verConsumoDeTokens')}</button>
       </div>
 
       {showAiUsage && <AiUsageModal onClose={() => setShowAiUsage(false)} />}

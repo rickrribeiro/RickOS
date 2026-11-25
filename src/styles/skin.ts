@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 /**
  * Visual skins. `classic` = the original look (src/index.css untouched);
  * `devlytics` = Geist + zinc + green glass (src/styles/skin-devlytics.css);
@@ -20,22 +21,22 @@ export type Theme = 'dark' | 'light'
 /** Every visual, in the order shown in Configurações → Aparência. `chrome` = theme-color meta (PWA status bar). */
 export const SKIN_OPTIONS = [
   { id: 'devlytics', label: 'Devlytics', chrome: { dark: '#18181b', light: '#f4f4f5' } },
-  { id: 'grafite', label: 'Grafite & Coral', chrome: { dark: '#18191b', light: '#faf9f7' } },
-  { id: 'vampiro', label: 'Vampiro', chrome: { dark: '#170f12', light: '#faf6f6' } },
-  { id: 'floresta', label: 'Floresta', chrome: { dark: '#121a16', light: '#f6f7f2' } },
-  { id: 'abissal', label: 'Abissal', chrome: { dark: '#0d1619', light: '#f4f8f9' } },
-  { id: 'sepia', label: 'Sépia', chrome: { dark: '#1e1812', light: '#f4ecdd' } },
-  { id: 'artico', label: 'Ártico', chrome: { dark: '#1f242d', light: '#f3f5f8' } },
-  { id: 'synthwave', label: 'Sintetizador', chrome: { dark: '#140f1f', light: '#faf7fd' } },
-  { id: 'alto-contraste', label: 'Alto contraste', chrome: { dark: '#000000', light: '#ffffff' } },
+  { id: 'grafite', label: t('skin.grafite'), chrome: { dark: '#18191b', light: '#faf9f7' } },
+  { id: 'vampiro', label: t('skin.vampiro'), chrome: { dark: '#170f12', light: '#faf6f6' } },
+  { id: 'floresta', label: t('skin.floresta'), chrome: { dark: '#121a16', light: '#f6f7f2' } },
+  { id: 'abissal', label: t('skin.abissal'), chrome: { dark: '#0d1619', light: '#f4f8f9' } },
+  { id: 'sepia', label: t('skin.sepia'), chrome: { dark: '#1e1812', light: '#f4ecdd' } },
+  { id: 'artico', label: t('skin.artico'), chrome: { dark: '#1f242d', light: '#f3f5f8' } },
+  { id: 'synthwave', label: t('skin.synthwave'), chrome: { dark: '#140f1f', light: '#faf7fd' } },
+  { id: 'alto-contraste', label: t('skin.alto-contraste'), chrome: { dark: '#000000', light: '#ffffff' } },
   { id: 'matcha', label: 'Matcha', chrome: { dark: '#171c15', light: '#f5f7f1' } },
-  { id: 'meia-noite', label: 'Meia-noite dourada', chrome: { dark: '#0e1322', light: '#f7f6f1' } },
+  { id: 'meia-noite', label: t('skin.meia-noite'), chrome: { dark: '#0e1322', light: '#f7f6f1' } },
   { id: 'hacker', label: 'Hacker', chrome: { dark: '#050a06', light: '#f2f7f1' } },
   { id: 'vscode', label: 'VS Code', chrome: { dark: '#121314', light: '#ffffff' } },
   { id: 'dracula', label: 'Dracula', chrome: { dark: '#282a36', light: '#fffbeb' } },
-  { id: 'plataforma', label: 'Plataforma', chrome: { dark: '#16204a', light: '#8fd3ff' } },
+  { id: 'plataforma', label: t('skin.plataforma'), chrome: { dark: '#16204a', light: '#8fd3ff' } },
   { id: 'xp', label: 'Windows XP', chrome: { dark: '#1b1d22', light: '#ece9d8' } },
-  { id: 'classic', label: 'Clássico', chrome: { dark: '#0f172a', light: '#0f172a' } }
+  { id: 'classic', label: t('skin.classic'), chrome: { dark: '#0f172a', light: '#0f172a' } }
 ] as const satisfies readonly { id: string; label: string; chrome: Record<Theme, string> }[]
 
 export type Skin = (typeof SKIN_OPTIONS)[number]['id']

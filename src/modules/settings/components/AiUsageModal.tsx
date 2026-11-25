@@ -1,31 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AiUsage } from '../../../types'
+import { t as tr } from '../../../i18n'
 
 /** Rótulos dos módulos que disparam o Claude CLI (chave = `source` gravada no servidor). */
 const SOURCE_LABELS: Record<string, string> = {
-  assistente: '🤖 Assistente',
-  'prompt-runner': '🧪 Prompt Runner',
-  estudos: '📚 Estudos',
-  home: '🏠 Home (standup)',
-  projetos: '📁 Projetos',
-  github: '🐙 GitHub (issues)',
-  braindump: '🧠 Brain Dump',
-  crm: '👥 CRM',
-  viagens: '🏨 Viagens',
-  revisao: '🗓️ Revisão semanal',
-  agendador: '⏰ Agendador',
-  inbox: '📥 Inbox (OCR)',
-  outro: '• Outro'
+  assistente: tr('settings.assistente'),
+  'prompt-runner': tr('settings.promptRunner'),
+  estudos: tr('settings.estudos'),
+  home: tr('settings.homeStandup'),
+  projetos: tr('settings.projetos'),
+  github: tr('settings.githubIssues'),
+  braindump: tr('settings.brainDump'),
+  crm: tr('settings.crm'),
+  viagens: tr('settings.viagens'),
+  revisao: tr('settings.revisaoSemanal'),
+  agendador: tr('settings.agendador'),
+  inbox: tr('settings.inboxOcr'),
+  outro: tr('settings.outro')
 }
 const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s
 
 type Preset = 'today' | '7d' | 'month' | 'lastMonth' | 'custom'
 const PRESETS: { key: Preset; label: string }[] = [
-  { key: 'today', label: 'Hoje' },
-  { key: '7d', label: '7 dias' },
-  { key: 'month', label: 'Este mês' },
-  { key: 'lastMonth', label: 'Mês passado' },
-  { key: 'custom', label: 'Período' }
+  { key: 'today', label: tr('settings.hoje') },
+  { key: '7d', label: tr('settings.7Dias') },
+  { key: 'month', label: tr('settings.esteMes') },
+  { key: 'lastMonth', label: tr('settings.mesPassado') },
+  { key: 'custom', label: tr('settings.periodo') }
 ]
 
 const pad = (n: number): string => String(n).padStart(2, '0')
@@ -118,7 +119,7 @@ export function AiUsageModal({ onClose }: { onClose: () => void }): React.ReactE
   const sources = useMemo(() => [...new Set(rows.map((r) => r.source))].sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b))), [rows])
   const projects = useMemo(() => {
     const m = new Map<string, string>()
-    for (const r of rows) m.set(projectKey(r), r.projectName ?? (r.projectId == null ? 'Sem projeto' : `#${r.projectId}`))
+    for (const r of rows) m.set(projectKey(r), r.projectName ?? (r.projectId == null ? tr('settings.semProjeto') : `#${r.projectId}`))
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [rows])
 
@@ -174,13 +175,11 @@ export function AiUsageModal({ onClose }: { onClose: () => void }): React.ReactE
         style={{ width: 'min(980px, calc(100vw - 24px))', maxWidth: 'none', maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <h2 style={{ margin: 0 }}>📊 Uso de tokens da IA</h2>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Fechar</button>
+          <h2 style={{ margin: 0 }}>{tr('settings.usoDeTokensDaIa')}</h2>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{tr('settings.fechar')}</button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Execuções do Claude CLI disparadas pelo rickOS, com os tokens reportados pelo próprio CLI. O custo é uma
-          estimativa em preço de API (equivalente API): com login de assinatura (Pro/Max) não há cobrança à parte —
-          conta no limite de uso do plano; só é cobrado de fato se o CLI usar uma chave de API.
+          {tr('settings.execucoesDoClaudeCliDisparadas')}
         </p>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
@@ -193,26 +192,26 @@ export function AiUsageModal({ onClose }: { onClose: () => void }): React.ReactE
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
           <div className="editor-field" style={{ flex: '1 1 120px', margin: 0 }}>
-            <label>De</label>
+            <label>{tr('settings.de')}</label>
             <input type="date" value={from} max={to} onChange={(e) => { setPreset('custom'); setFrom(e.target.value) }} />
           </div>
           <div className="editor-field" style={{ flex: '1 1 120px', margin: 0 }}>
-            <label>Até</label>
+            <label>{tr('settings.ate')}</label>
             <input type="date" value={to} min={from} onChange={(e) => { setPreset('custom'); setTo(e.target.value) }} />
           </div>
           <div className="editor-field" style={{ flex: '1 1 160px', margin: 0 }}>
-            <label>Módulo</label>
+            <label>{tr('settings.modulo')}</label>
             <select value={source} onChange={(e) => setSource(e.target.value)}>
-              <option value="">Todos</option>
+              <option value="">{tr('settings.todos')}</option>
               {sources.map((s) => (
                 <option key={s} value={s}>{sourceLabel(s)}</option>
               ))}
             </select>
           </div>
           <div className="editor-field" style={{ flex: '1 1 160px', margin: 0 }}>
-            <label>Projeto</label>
+            <label>{tr('settings.projeto')}</label>
             <select value={project} onChange={(e) => setProject(e.target.value)}>
-              <option value="">Todos</option>
+              <option value="">{tr('settings.todos')}</option>
               {projects.map(([k, name]) => (
                 <option key={k} value={k}>{name}</option>
               ))}
@@ -222,10 +221,10 @@ export function AiUsageModal({ onClose }: { onClose: () => void }): React.ReactE
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {[
-            { label: 'Execuções', value: String(totals.runs) },
-            { label: 'Tokens (total)', value: fmtTokens(totals.tokens) },
-            { label: 'Tokens de saída', value: fmtTokens(totals.output) },
-            { label: 'Custo estimado (equivalente API)', value: fmtUsd(totals.cost) }
+            { label: tr('settings.execucoes'), value: String(totals.runs) },
+            { label: tr('settings.tokensTotal'), value: fmtTokens(totals.tokens) },
+            { label: tr('settings.tokensDeSaida'), value: fmtTokens(totals.output) },
+            { label: tr('settings.custoEstimadoEquivalenteApi'), value: fmtUsd(totals.cost) }
           ].map((t) => (
             <div key={t.label} style={{ flex: '1 1 120px', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', background: 'var(--bg-tertiary)' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.label}</div>
@@ -235,29 +234,29 @@ export function AiUsageModal({ onClose }: { onClose: () => void }): React.ReactE
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-          <button className={`btn btn-sm ${view === 'grouped' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setView('grouped')}>Por módulo/projeto</button>
-          <button className={`btn btn-sm ${view === 'runs' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setView('runs')}>Execuções</button>
+          <button className={`btn btn-sm ${view === 'grouped' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setView('grouped')}>{tr('settings.porModuloProjeto')}</button>
+          <button className={`btn btn-sm ${view === 'runs' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setView('runs')}>{tr('settings.execucoes')}</button>
         </div>
 
         {error && <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
         {loading && rows.length === 0 ? (
-          <div className="empty-hint">Carregando…</div>
+          <div className="empty-hint">{tr('settings.carregando')}</div>
         ) : filtered.length === 0 ? (
-          <div className="empty-hint">Nenhuma execução registrada nesse período.</div>
+          <div className="empty-hint">{tr('settings.nenhumaExecucaoRegistradaNessePeriodo')}</div>
         ) : (
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {view === 'grouped' ? (
               <table className="report-table">
                 <thead>
                   <tr>
-                    <th>Módulo</th>
-                    <th>Projeto</th>
-                    <th style={num}>Execuções</th>
-                    <th style={num}>Entrada</th>
-                    <th style={num}>Cache lido</th>
-                    <th style={num}>Saída</th>
-                    <th style={num}>Total</th>
-                    <th style={num} title="Estimativa do CLI em preço de API; numa assinatura não é cobrado à parte">Custo est. (equiv. API)</th>
+                    <th>{tr('settings.modulo')}</th>
+                    <th>{tr('settings.projeto')}</th>
+                    <th style={num}>{tr('settings.execucoes')}</th>
+                    <th style={num}>{tr('settings.entrada')}</th>
+                    <th style={num}>{tr('settings.cacheLido')}</th>
+                    <th style={num}>{tr('settings.saida2')}</th>
+                    <th style={num}>{tr('settings.total')}</th>
+                    <th style={num} title={tr('settings.estimativaDoCliEmPreco')}>{tr('settings.custoEstEquivApi')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -279,14 +278,14 @@ export function AiUsageModal({ onClose }: { onClose: () => void }): React.ReactE
               <table className="report-table">
                 <thead>
                   <tr>
-                    <th>Quando</th>
-                    <th>Módulo</th>
-                    <th>Projeto</th>
-                    <th>Modelo</th>
-                    <th style={num}>Entrada</th>
-                    <th style={num}>Cache lido</th>
-                    <th style={num}>Saída</th>
-                    <th style={num} title="Estimativa do CLI em preço de API; numa assinatura não é cobrado à parte">Custo est. (equiv. API)</th>
+                    <th>{tr('settings.quando')}</th>
+                    <th>{tr('settings.modulo')}</th>
+                    <th>{tr('settings.projeto')}</th>
+                    <th>{tr('settings.modelo')}</th>
+                    <th style={num}>{tr('settings.entrada')}</th>
+                    <th style={num}>{tr('settings.cacheLido')}</th>
+                    <th style={num}>{tr('settings.saida2')}</th>
+                    <th style={num} title={tr('settings.estimativaDoCliEmPreco')}>{tr('settings.custoEstEquivApi')}</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -1,4 +1,5 @@
 import { DEFAULT_ICONS, IconKey } from './packs/default'
+import { t } from '../i18n'
 
 export type { IconKey }
 
@@ -25,7 +26,7 @@ export interface IconPack {
  *   2. adicionar aqui na lista
  * Não precisa cobrir todas as chaves: o que faltar cai no padrão.
  */
-export const ICON_PACKS: IconPack[] = [{ id: 'default', label: 'Padrão (emoji)', icons: DEFAULT_ICONS }]
+export const ICON_PACKS: IconPack[] = [{ id: 'default', label: t('skin.iconPack.default'), icons: DEFAULT_ICONS }]
 
 export const DEFAULT_ICON_PACK = 'default'
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { t } from '../../../i18n'
 
 interface Snap {
   name: string
@@ -26,25 +27,24 @@ export function SnapshotsSection(): React.ReactElement {
   }, [])
 
   async function restore(s: Snap): Promise<void> {
-    if (!window.confirm(`Restaurar o backup de ${fmtDate(s.date)}? Os dados atuais serão substituídos (o app vai recarregar).`)) return
+    if (!window.confirm(t('settings.restaurarOBackupDeOs', { p0: fmtDate(s.date) }))) return
     await window.api.app.restoreSnapshot(s.path)
     // main reloads the window after restoring
   }
 
   return (
     <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
-      <div className="chart-title">🗄️ Snapshots automáticos (diários)</div>
+      <div className="chart-title">{t('settings.snapshotsAutomaticosDiarios')}</div>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-        O banco é copiado automaticamente 1×/dia na abertura do app (mantém os últimos 3). Restaurar
-        substitui os dados atuais e recarrega o app.
+        {t('settings.oBancoECopiadoAutomaticamente')}
       </p>
       <div className="list-stack">
-        {snaps.length === 0 && <div className="empty-hint">Nenhum snapshot ainda.</div>}
+        {snaps.length === 0 && <div className="empty-hint">{t('settings.nenhumSnapshotAinda')}</div>}
         {snaps.map((s) => (
           <div key={s.name} className="list-row">
             <span className="list-row-title">{fmtDate(s.date)}</span>
             <span className="project-chip">{fmtSize(s.size)}</span>
-            <button className="btn btn-secondary btn-sm" onClick={() => restore(s)}>Restaurar</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => restore(s)}>{t('settings.restaurar')}</button>
           </div>
         ))}
       </div>

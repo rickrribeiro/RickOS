@@ -4,6 +4,7 @@ import { networkInfo, PROVIDERS_INFO } from '../../../../shared/chats'
 import type { AgentDetails } from '../../chats/api'
 import { StatusBadge } from '../../chats/components/StatusBadge'
 import '../../chats/chats.css'
+import { t as tr } from '../../../i18n'
 
 const INTERVALS = [
   { v: 60, l: '1 min' },
@@ -14,14 +15,14 @@ const INTERVALS = [
 ]
 
 const ALERTS: { id: string; label: string }[] = [
-  { id: 'vip_waiting', label: 'Pessoas importantes esperando resposta' },
-  { id: 'mentions', label: 'Menções em grupos' },
-  { id: 'reminder_due', label: 'Lembretes vencidos' },
-  { id: 'professional', label: 'Pendências profissionais' },
-  { id: 'forgotten', label: 'Conversas esquecidas (+7 dias)' },
-  { id: 'old_unread', label: 'Não lidas antigas' },
-  { id: 'no_contact', label: 'Pessoas importantes sem contato recente' },
-  { id: 'reopened', label: 'Adiadas com mensagem nova' }
+  { id: 'vip_waiting', label: tr('settings.pessoasImportantesEsperandoResposta') },
+  { id: 'mentions', label: tr('settings.mencoesEmGrupos') },
+  { id: 'reminder_due', label: tr('settings.lembretesVencidos') },
+  { id: 'professional', label: tr('settings.pendenciasProfissionais') },
+  { id: 'forgotten', label: tr('settings.conversasEsquecidas7Dias') },
+  { id: 'old_unread', label: tr('settings.naoLidasAntigas') },
+  { id: 'no_contact', label: tr('settings.pessoasImportantesSemContatoRecente') },
+  { id: 'reopened', label: tr('settings.adiadasComMensagemNova') }
 ]
 
 /** Configurações → Integrações → Mensagens (Central de Mensagens). */
@@ -110,27 +111,27 @@ export function ChatsSection(): React.ReactElement {
   }
 
   async function genAgentKey(): Promise<void> {
-    if (cfg?.hasAgentKey && !window.confirm('Gerar uma chave nova invalida a anterior (o agente atual para de funcionar). Continuar?')) return
+    if (cfg?.hasAgentKey && !window.confirm(tr('settings.gerarUmaChaveNovaInvalida'))) return
     const r = await window.api.chats.agentKey()
     setAgentKey(r.key)
     await load()
   }
 
   async function clearCache(): Promise<void> {
-    if (!window.confirm('Limpar o cache local de conversas? Pessoas, tags, lembretes e demais organização são preservados.')) return
+    if (!window.confirm(tr('settings.limparOCacheLocalDe'))) return
     const r = await window.api.chats.clearCache()
-    setMsg({ ok: true, text: `Cache limpo: ${r.removed} conversa(s) removida(s), ${r.kept} mantida(s) por terem organização.` })
+    setMsg({ ok: true, text: tr('settings.cacheLimpoConversaSRemovida', { removed: r.removed, kept: r.kept }) })
     setAccounts(await window.api.chats.accounts())
   }
 
   async function disconnect(): Promise<void> {
-    if (!window.confirm('Desconectar? O token é apagado e a sincronização para. Pessoas, tags, lembretes e notas continuam salvos.')) return
+    if (!window.confirm(tr('settings.desconectarOTokenEApagado'))) return
     setStatus(await window.api.chats.disconnect())
     setToken('')
     await load()
   }
 
-  if (!cfg) return <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}><div className="chart-title">💬 Mensagens</div></div>
+  if (!cfg) return <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}><div className="chart-title">{tr('settings.mensagens')}</div></div>
 
   const isBeeper = cfg.providerId === 'beeper'
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
@@ -138,21 +139,20 @@ export function ChatsSection(): React.ReactElement {
   return (
     <div className="chart-section" style={{ maxWidth: 560, marginTop: 16 }}>
       <div className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <span>💬 Mensagens (Central de Mensagens)</span>
+        <span>{tr('settings.mensagensCentralDeMensagens')}</span>
         {status && <StatusBadge status={status} />}
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 10px' }}>
-        Junta WhatsApp, Instagram, LinkedIn e outras redes num só lugar para triagem, lembretes e respostas com IA. O
-        conteúdo das mensagens não é gravado no banco: só metadados e uma prévia curta (opcional).
+        {tr('settings.juntaWhatsappInstagramLinkedinE')}
       </p>
 
       <label className="chats-switch">
         <input type="checkbox" checked={cfg.enabled} disabled={busy} onChange={(e) => void save({ enabled: e.target.checked })} />
-        <span>Ativar a Central de Mensagens</span>
+        <span>{tr('settings.ativarACentralDeMensagens')}</span>
       </label>
 
       <div className="editor-field">
-        <label>Provedor</label>
+        <label>{tr('settings.provedor')}</label>
         <select value={cfg.providerId} onChange={(e) => void save({ providerId: e.target.value })} disabled={busy}>
           {PROVIDERS_INFO.map((p) => (
             <option key={p.id} value={p.id}>{p.label}</option>
@@ -161,20 +161,20 @@ export function ChatsSection(): React.ReactElement {
       </div>
       {cfg.providerId === 'mock' && (
         <div className="chats-demo-banner" style={{ marginTop: 8 }}>
-          ⚠️ Modo demonstração: conversas e pessoas são <strong>fictícias</strong>, só para conhecer a interface. Nada é enviado de verdade.
+          {tr('settings.modoDemonstracaoConversasEPessoas')} <strong>{tr('settings.ficticias')}</strong>{tr('settings.soParaConhecerAInterface')}
         </div>
       )}
 
       {isBeeper && (
         <>
           <div className="editor-field">
-            <label>Conexão com o Beeper</label>
+            <label>{tr('settings.conexaoComOBeeper')}</label>
             <div className="seg-toggle">
               <button className={`seg-btn ${cfg.beeperMode === 'direct' ? 'active' : ''}`} onClick={() => void save({ beeperMode: 'direct' })}>
-                Direta (mesma máquina/rede)
+                {tr('settings.diretaMesmaMaquinaRede')}
               </button>
               <button className={`seg-btn ${cfg.beeperMode === 'agent' ? 'active' : ''}`} onClick={() => void save({ beeperMode: 'agent' })}>
-                Agente local (rickOS remoto)
+                {tr('settings.agenteLocalRickosRemoto')}
               </button>
             </div>
           </div>
@@ -182,47 +182,43 @@ export function ChatsSection(): React.ReactElement {
           {cfg.beeperMode === 'direct' ? (
             <>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 0' }}>
-                No Beeper Desktop: <strong>Settings → Integrations</strong>, ative a Desktop API e crie um token em
-                “Approved connections” (+). Use quando o servidor do rickOS roda na mesma máquina do Beeper, ou numa rede
-                privada/Tailscale que alcance o Mac.
+                {tr('settings.noBeeperDesktop')} <strong>{tr('settings.settingsIntegrations')}</strong>{tr('settings.ativeADesktopApiE')}
               </p>
               <div className="editor-field">
-                <label>Endpoint da Desktop API</label>
-                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:23373" />
+                <label>{tr('settings.endpointDaDesktopApi')}</label>
+                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={tr('settings.http127001')} />
               </div>
               <div className="editor-field">
-                <label>Token {cfg.hasBeeperToken && <span style={{ color: 'var(--success)', textTransform: 'none' }}>· salvo</span>}</label>
-                <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={cfg.hasBeeperToken ? '•••••• (deixe em branco para manter)' : 'cole o token do Beeper'} autoComplete="off" />
+                <label>{tr('settings.token')} {cfg.hasBeeperToken && <span style={{ color: 'var(--success)', textTransform: 'none' }}>{tr('settings.salvo2')}</span>}</label>
+                <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={cfg.hasBeeperToken ? tr('settings.deixeEmBrancoParaManter') : tr('settings.coleOTokenDoBeeper')} autoComplete="off" />
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-primary btn-sm"
                   disabled={busy}
-                  onClick={() => void save({ beeperUrl: url, ...(token ? { beeperToken: token } : {}) }, 'Configuração salva.').then(() => setToken(''))}
+                  onClick={() => void save({ beeperUrl: url, ...(token ? { beeperToken: token } : {}) }, tr('settings.configuracaoSalva')).then(() => setToken(''))}
                 >
-                  Salvar
+                  {tr('settings.salvar')}
                 </button>
-                <button className="btn btn-secondary btn-sm" disabled={busy || !cfg.enabled} onClick={() => void test()}>Testar conexão</button>
+                <button className="btn btn-secondary btn-sm" disabled={busy || !cfg.enabled} onClick={() => void test()}>{tr('settings.testarConexao')}</button>
               </div>
             </>
           ) : (
             <>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 0' }}>
-                Para quando o rickOS roda num servidor e o Beeper no seu Mac. O agente roda no Mac, conversa com o Beeper
-                localmente e abre só uma conexão de <strong>saída</strong> autenticada até o rickOS. A API do Beeper não fica
-                exposta e o token dele nunca sai do Mac.
+                {tr('settings.paraQuandoORickosRoda')} <strong>{tr('settings.saida')}</strong> {tr('settings.autenticadaAteORickosA')}
               </p>
               <div className="chats-agent-box">
                 <div>
-                  Agente: {agent?.online ? <strong style={{ color: 'var(--success)' }}>● online</strong> : <strong style={{ color: 'var(--text-muted)' }}>○ offline</strong>}
-                  {agent?.lastSeen && <span style={{ color: 'var(--text-muted)' }}> · visto {new Date(agent.lastSeen).toLocaleString('pt-BR')}</span>}
-                  {agent?.beeper && <span style={{ color: 'var(--text-muted)' }}> · Beeper {agent.beeper}</span>}
+                  {tr('settings.agente')} {agent?.online ? <strong style={{ color: 'var(--success)' }}>{tr('settings.online')}</strong> : <strong style={{ color: 'var(--text-muted)' }}>{tr('settings.offline')}</strong>}
+                  {agent?.lastSeen && <span style={{ color: 'var(--text-muted)' }}> {tr('settings.visto')} {new Date(agent.lastSeen).toLocaleString('pt-BR')}</span>}
+                  {agent?.beeper && <span style={{ color: 'var(--text-muted)' }}> {tr('settings.beeper')} {agent.beeper}</span>}
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => void genAgentKey()}>{cfg.hasAgentKey ? 'Gerar nova chave' : 'Gerar chave do agente'}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => void genAgentKey()}>{cfg.hasAgentKey ? tr('settings.gerarNovaChave') : tr('settings.gerarChaveDoAgente')}</button>
               </div>
               {agentKey && (
                 <div className="chats-code">
-                  <div style={{ fontSize: 11, color: 'var(--warning)', marginBottom: 4 }}>Copie agora: a chave não será mostrada de novo.</div>
+                  <div style={{ fontSize: 11, color: 'var(--warning)', marginBottom: 4 }}>{tr('settings.copieAgoraAChaveNao')}</div>
                   <code>
                     RICKOS_URL={origin} \<br />
                     RICKOS_TOKEN=&lt;token do rickOS, se houver&gt; \<br />
@@ -230,11 +226,11 @@ export function ChatsSection(): React.ReactElement {
                     BEEPER_TOKEN=&lt;token do Beeper&gt; \<br />
                     node bin/rickos-chat-agent.mjs
                   </code>
-                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => navigator.clipboard?.writeText(agentKey)}>Copiar chave</button>
+                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => navigator.clipboard?.writeText(agentKey)}>{tr('settings.copiarChave')}</button>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <button className="btn btn-secondary btn-sm" disabled={busy || !cfg.enabled} onClick={() => void test()}>Testar conexão</button>
+                <button className="btn btn-secondary btn-sm" disabled={busy || !cfg.enabled} onClick={() => void test()}>{tr('settings.testarConexao')}</button>
               </div>
             </>
           )}
@@ -242,7 +238,7 @@ export function ChatsSection(): React.ReactElement {
       )}
       {cfg.providerId === 'mock' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button className="btn btn-secondary btn-sm" disabled={busy || !cfg.enabled} onClick={() => void test()}>Testar conexão</button>
+          <button className="btn btn-secondary btn-sm" disabled={busy || !cfg.enabled} onClick={() => void test()}>{tr('settings.testarConexao')}</button>
         </div>
       )}
 
@@ -250,24 +246,24 @@ export function ChatsSection(): React.ReactElement {
 
       {status && cfg.enabled && (
         <div className="chats-status-line">
-          {status.lastSyncAt ? `Última sincronização: ${new Date(status.lastSyncAt).toLocaleString('pt-BR')}` : 'Ainda não sincronizado'}
-          {' · '}Tempo real: {status.realtime === 'on' ? 'ativo' : status.realtime === 'connecting' ? 'conectando…' : status.realtime === 'unsupported' ? 'indisponível (polling)' : 'desligado (polling)'}
-          {status.progress && ` · ${status.progress.done} conversas lidas…`}
-          {status.lastError && <div style={{ color: 'var(--danger)' }}>Erro: {status.lastError}</div>}
+          {status.lastSyncAt ? tr('settings.ultimaSincronizacao2', { p0: new Date(status.lastSyncAt).toLocaleString('pt-BR') }) : tr('settings.aindaNaoSincronizado')}
+          {' · '}{tr('settings.tempoReal')} {status.realtime === 'on' ? tr('settings.ativo') : status.realtime === 'connecting' ? tr('settings.conectando') : status.realtime === 'unsupported' ? tr('settings.indisponivelPolling') : tr('settings.desligadoPolling')}
+          {status.progress && tr('settings.conversasLidas', { done: status.progress.done })}
+          {status.lastError && <div style={{ color: 'var(--danger)' }}>{tr('settings.erro')} {status.lastError}</div>}
           {status.message && !status.lastError && <div>{status.message}</div>}
         </div>
       )}
 
       {cfg.enabled && accounts.length > 0 && (
         <div className="editor-field">
-          <label>Contas a sincronizar</label>
+          <label>{tr('settings.contasASincronizar')}</label>
           <div className="chats-accounts">
             {accounts.map((a) => (
               <label key={a.key} className="chats-account">
                 <input type="checkbox" checked={a.syncEnabled} onChange={() => void toggleAccount(a)} />
                 <span>{networkInfo(a.network).icon}</span>
                 <span className="chats-account-name">{a.displayName}</span>
-                <span className="chats-account-meta">{a.chatCount} conversas · {a.status === 'removed' ? 'removida do provedor (conversas inativas)' : a.status}</span>
+                <span className="chats-account-meta">{a.chatCount} {tr('settings.conversas')} {a.status === 'removed' ? tr('settings.removidaDoProvedorConversasInativas') : a.status}</span>
               </label>
             ))}
           </div>
@@ -276,24 +272,24 @@ export function ChatsSection(): React.ReactElement {
 
       {cfg.enabled && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void sync(false)}>↻ Sincronizar agora</button>
-          <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void sync(true)} title="Relê todas as conversas até o limite inicial">Sincronização completa</button>
+          <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void sync(false)}>{tr('settings.sincronizarAgora')}</button>
+          <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void sync(true)} title={tr('settings.releTodasAsConversasAte')}>{tr('settings.sincronizacaoCompleta')}</button>
         </div>
       )}
 
       <details className="chats-details">
-        <summary>Sincronização e armazenamento</summary>
+        <summary>{tr('settings.sincronizacaoEArmazenamento')}</summary>
         <label className="chats-switch">
           <input type="checkbox" checked={cfg.syncAuto} onChange={(e) => void save({ syncAuto: e.target.checked })} />
-          <span>Sincronizar automaticamente</span>
+          <span>{tr('settings.sincronizarAutomaticamente')}</span>
         </label>
         <label className="chats-switch">
           <input type="checkbox" checked={cfg.realtime} onChange={(e) => void save({ realtime: e.target.checked })} />
-          <span>Eventos em tempo real (WebSocket experimental do Beeper; polling como reserva)</span>
+          <span>{tr('settings.eventosEmTempoRealWebsocket')}</span>
         </label>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Polling a cada</label>
+            <label>{tr('settings.pollingACada')}</label>
             <select value={cfg.syncIntervalSec} onChange={(e) => void save({ syncIntervalSec: Number(e.target.value) })}>
               {INTERVALS.map((i) => (
                 <option key={i.v} value={i.v}>{i.l}</option>
@@ -301,62 +297,61 @@ export function ChatsSection(): React.ReactElement {
             </select>
           </div>
           <div className="editor-field">
-            <label>Máx. conversas na 1ª carga</label>
+            <label>{tr('settings.maxConversasNa1Carga')}</label>
             <input type="number" min={50} max={20000} defaultValue={cfg.initialLimit} onBlur={(e) => void save({ initialLimit: Number(e.target.value) })} />
           </div>
         </div>
         <label className="chats-switch">
           <input type="checkbox" checked={cfg.storePreviews} onChange={(e) => void save({ storePreviews: e.target.checked })} />
-          <span>Guardar prévia curta da última mensagem (para a lista funcionar offline)</span>
+          <span>{tr('settings.guardarPreviaCurtaDaUltima')}</span>
         </label>
         <label className="chats-switch">
           <input type="checkbox" checked={cfg.markReadOnOpen} onChange={(e) => void save({ markReadOnOpen: e.target.checked })} />
-          <span>Marcar como lida ao abrir a conversa (desligado = só pelo botão)</span>
+          <span>{tr('settings.marcarComoLidaAoAbrir')}</span>
         </label>
         <label className="chats-switch">
           <input type="checkbox" checked={cfg.markReadOnReply} onChange={(e) => void save({ markReadOnReply: e.target.checked })} />
-          <span>Marcar como lida ao responder pelo rickOS (no app também deixa de aparecer como não lida)</span>
+          <span>{tr('settings.marcarComoLidaAoResponder')}</span>
         </label>
         <div className="editor-field">
-          <label>Retenção do cache (dias sem atividade; 0 = sem limite)</label>
+          <label>{tr('settings.retencaoDoCacheDiasSem')}</label>
           <input type="number" min={0} max={3650} defaultValue={cfg.retentionDays} onBlur={(e) => void save({ retentionDays: Number(e.target.value) })} />
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => void clearCache()}>Limpar cache local</button>
-          {isBeeper && cfg.hasBeeperToken && <button className="btn btn-danger btn-sm" onClick={() => void disconnect()}>Desconectar provedor</button>}
+          <button className="btn btn-secondary btn-sm" onClick={() => void clearCache()}>{tr('settings.limparCacheLocal')}</button>
+          {isBeeper && cfg.hasBeeperToken && <button className="btn btn-danger btn-sm" onClick={() => void disconnect()}>{tr('settings.desconectarProvedor')}</button>}
         </div>
       </details>
 
       <details className="chats-details">
-        <summary>IA (sugestões e resumos)</summary>
+        <summary>{tr('settings.iaSugestoesEResumos')}</summary>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0' }}>
-          Só as mensagens que você selecionar são enviadas ao Claude, que roda sem ferramentas. Nenhuma resposta é enviada
-          sem a sua confirmação.
+          {tr('settings.soAsMensagensQueVoce')}
         </p>
         <div className="editor-field">
-          <label>Modelo (vazio = padrão do CLI)</label>
-          <input defaultValue={cfg.aiModel} placeholder="sonnet" onBlur={(e) => void save({ aiModel: e.target.value })} />
+          <label>{tr('settings.modeloVazioPadraoDoCli')}</label>
+          <input defaultValue={cfg.aiModel} placeholder={tr('settings.sonnet')} onBlur={(e) => void save({ aiModel: e.target.value })} />
         </div>
         <div className="editor-field">
-          <label>Como você escreve (instruções gerais de estilo)</label>
+          <label>{tr('settings.comoVoceEscreveInstrucoesGerais')}</label>
           <textarea
             rows={3}
             defaultValue={cfg.aiStyleInstructions}
-            placeholder="Ex.: escrevo curto, sem ponto final, uso 'vc' e 'tb' com amigos; com recrutadores sou cordial e objetivo."
+            placeholder={tr('settings.exEscrevoCurtoSemPonto')}
             onBlur={(e) => void save({ aiStyleInstructions: e.target.value })}
           />
         </div>
-        <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setTemplatesOpen(true)}>⚡ Respostas rápidas</button>
+        <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setTemplatesOpen(true)}>{tr('settings.respostasRapidas')}</button>
       </details>
 
       <details className="chats-details">
-        <summary>Radar, Home e notificações</summary>
+        <summary>{tr('settings.radarHomeENotificacoes')}</summary>
         <label className="chats-switch">
           <input type="checkbox" checked={cfg.homeWidget} onChange={(e) => void save({ homeWidget: e.target.checked })} />
-          <span>Mostrar o widget “Central de Mensagens” na Home</span>
+          <span>{tr('settings.mostrarOWidgetCentralDe')}</span>
         </label>
         <div className="editor-field">
-          <label>Alertas que aparecem na Home</label>
+          <label>{tr('settings.alertasQueAparecemNaHome')}</label>
           <div className="chats-accounts">
             {ALERTS.map((a) => (
               <label key={a.id} className="chats-account">
@@ -371,36 +366,36 @@ export function ChatsSection(): React.ReactElement {
           </div>
         </div>
         <div className="editor-field">
-          <label>Notificações</label>
+          <label>{tr('settings.notificacoes')}</label>
           <label className="chats-switch">
             <input type="checkbox" checked={cfg.notifyReminders} onChange={(e) => void save({ notifyReminders: e.target.checked })} />
-            <span>Lembretes de responder</span>
+            <span>{tr('settings.lembretesDeResponder')}</span>
           </label>
           <label className="chats-switch">
             <input type="checkbox" checked={cfg.notifyVipWaiting} onChange={(e) => void save({ notifyVipWaiting: e.target.checked })} />
-            <span>Mensagem de pessoa importante (VIP / prioridade alta)</span>
+            <span>{tr('settings.mensagemDePessoaImportanteVip')}</span>
           </label>
           <label className="chats-switch">
             <input type="checkbox" checked={cfg.notifyMentions} onChange={(e) => void save({ notifyMentions: e.target.checked })} />
-            <span>Menções em grupos</span>
+            <span>{tr('settings.mencoesEmGrupos')}</span>
           </label>
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Revisão diária (conversas)</label>
+            <label>{tr('settings.revisaoDiariaConversas')}</label>
             <input type="number" min={1} max={50} defaultValue={cfg.dailyReviewSize} onBlur={(e) => void save({ dailyReviewSize: Number(e.target.value) })} />
           </div>
           <div className="editor-field">
-            <label>“Sem contato” após (dias)</label>
+            <label>{tr('settings.semContatoAposDias')}</label>
             <input type="number" min={7} max={365} defaultValue={cfg.noContactDays} onBlur={(e) => void save({ noContactDays: Number(e.target.value) })} />
           </div>
         </div>
         <div className="editor-field">
-          <label>Tags profissionais (priorizam e entram no radar)</label>
+          <label>{tr('settings.tagsProfissionaisPriorizamEEntram')}</label>
           <input defaultValue={cfg.professionalLabels.join(', ')} onBlur={(e) => void save({ professionalLabels: e.target.value.split(',') })} />
         </div>
         <div className="editor-field">
-          <label>Pesos da prioridade</label>
+          <label>{tr('settings.pesosDaPrioridade')}</label>
           <div className="chats-weights">
             {(Object.keys(cfg.priorityWeights) as (keyof ChatsConfig['priorityWeights'])[]).map((k) => (
               <label key={k}>
@@ -418,16 +413,16 @@ export function ChatsSection(): React.ReactElement {
 }
 
 const WEIGHT_LABELS: Record<keyof ChatsConfig['priorityWeights'], string> = {
-  mention: 'Menção a mim',
-  vip: 'Pessoa VIP/alta',
-  manualHigh: 'Conversa prioridade alta',
-  manualLow: 'Conversa prioridade baixa',
-  question: 'Pergunta pendente',
-  professional: 'Tag profissional',
-  recency: 'Recência',
-  agePerDay: 'Por dia esperando',
-  bigGroupPenalty: 'Grupo grande (penalidade)',
-  mutedPenalty: 'Silenciada (penalidade)'
+  mention: tr('settings.mencaoAMim'),
+  vip: tr('settings.pessoaVipAlta'),
+  manualHigh: tr('settings.conversaPrioridadeAlta'),
+  manualLow: tr('settings.conversaPrioridadeBaixa'),
+  question: tr('settings.perguntaPendente'),
+  professional: tr('settings.tagProfissional'),
+  recency: tr('settings.recencia'),
+  agePerDay: tr('settings.porDiaEsperando'),
+  bigGroupPenalty: tr('settings.grupoGrandePenalidade'),
+  mutedPenalty: tr('settings.silenciadaPenalidade')
 }
 
 export function TemplatesModal({ onClose }: { onClose: () => void }): React.ReactElement {
@@ -444,27 +439,27 @@ export function TemplatesModal({ onClose }: { onClose: () => void }): React.Reac
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%' }}>
-        <h2>⚡ Respostas rápidas</h2>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Modelos seus para inserir na conversa. A IA pode adaptá-los ao contexto.</p>
+        <h2>{tr('settings.respostasRapidas')}</h2>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('settings.modelosSeusParaInserirNa')}</p>
         {editing ? (
           <>
             <div className="editor-field">
-              <label>Título</label>
-              <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="Ex.: Recusar vaga com educação" />
+              <label>{tr('settings.titulo')}</label>
+              <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder={tr('settings.exRecusarVagaComEducacao')} />
             </div>
             <div className="editor-field">
-              <label>Texto</label>
+              <label>{tr('settings.texto')}</label>
               <textarea rows={5} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(null)}>Cancelar</button>
-              <button className="btn btn-primary btn-sm" onClick={() => void save()}>Salvar</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(null)}>{tr('settings.cancelar')}</button>
+              <button className="btn btn-primary btn-sm" onClick={() => void save()}>{tr('settings.salvar')}</button>
             </div>
           </>
         ) : (
           <>
             <div className="list-stack" style={{ maxHeight: 320, overflow: 'auto' }}>
-              {list.length === 0 && <div className="empty-hint">Nenhum modelo ainda.</div>}
+              {list.length === 0 && <div className="empty-hint">{tr('settings.nenhumModeloAinda')}</div>}
               {list.map((t) => (
                 <div key={t.id} className="list-row">
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -472,15 +467,15 @@ export function TemplatesModal({ onClose }: { onClose: () => void }): React.Reac
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.body}</div>
                   </div>
                   <div className="list-row-actions">
-                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ id: t.id, title: t.title, body: t.body })}>Editar</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => window.confirm('Excluir modelo?') && void window.api.chats.deleteTemplate(t.id).then(load)}>✕</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ id: t.id, title: t.title, body: t.body })}>{tr('settings.editar')}</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => window.confirm(tr('settings.excluirModelo')) && void window.api.chats.deleteTemplate(t.id).then(load)}>✕</button>
                   </div>
                 </div>
               ))}
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ id: null, title: '', body: '' })}>＋ Novo modelo</button>
-              <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ id: null, title: '', body: '' })}>{tr('settings.novoModelo')}</button>
+              <button className="btn btn-primary btn-sm" onClick={onClose}>{tr('settings.fechar')}</button>
             </div>
           </>
         )}

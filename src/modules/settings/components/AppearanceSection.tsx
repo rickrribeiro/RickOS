@@ -14,6 +14,7 @@ import {
   setSkin,
   setTheme
 } from '../../../styles/skin'
+import { t as tr } from '../../../i18n'
 
 /** Visual (skin) and light/dark theme — saved per device (desktop and web independently). */
 export function AppearanceSection(): React.ReactElement {
@@ -45,9 +46,9 @@ export function AppearanceSection(): React.ReactElement {
 
   return (
     <div className="chart-section" style={{ maxWidth: 560 }}>
-      <div className="chart-title">🎨 Aparência</div>
+      <div className="chart-title">{tr('settings.aparencia')}</div>
       <div className="editor-field">
-        <label>Visual ({platform === 'desktop' ? 'este computador' : 'este navegador'})</label>
+        <label>{tr('settings.visual')}{platform === 'desktop' ? tr('settings.esteComputador') : tr('settings.esteNavegador')})</label>
         <div className="skin-picker">
           {visible.map((o) => {
             const fav = favorites.includes(o.id)
@@ -60,8 +61,8 @@ export function AppearanceSection(): React.ReactElement {
                   className={`skin-chip-star ${fav ? 'on' : ''}`}
                   onClick={() => toggleFavorite(o.id)}
                   aria-pressed={fav}
-                  aria-label={fav ? `Tirar ${o.label} dos favoritos` : `Favoritar ${o.label}`}
-                  title={fav ? 'Tirar dos favoritos' : 'Favoritar'}
+                  aria-label={fav ? tr('settings.tirarDosFavoritos', { label: o.label }) : tr('settings.favoritar', { label: o.label })}
+                  title={fav ? tr('settings.tirarDosFavoritos2') : tr('settings.favoritar2')}
                 >
                   {fav ? '★' : '☆'}
                 </button>
@@ -70,26 +71,26 @@ export function AppearanceSection(): React.ReactElement {
           })}
           {(hiddenCount > 0 || showAll) && (
             <button className="skin-picker-more" onClick={() => setShowAll(!showAll)}>
-              {showAll ? 'Ver menos' : `Ver mais (${hiddenCount})`}
+              {showAll ? tr('settings.verMenos') : tr('settings.verMais', { hiddenCount })}
             </button>
           )}
         </div>
       </div>
       {skin !== 'classic' && (
         <div className="editor-field">
-          <label>Tema</label>
+          <label>{tr('settings.tema')}</label>
           <div className="seg-toggle">
             <button className={`seg-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => pickTheme('dark')}>
-              Escuro
+              {tr('settings.escuro')}
             </button>
             <button className={`seg-btn ${theme === 'light' ? 'active' : ''}`} onClick={() => pickTheme('light')}>
-              Claro
+              {tr('settings.claro')}
             </button>
           </div>
         </div>
       )}
       <div className="editor-field">
-        <label>Ícones</label>
+        <label>{tr('settings.icones')}</label>
         <div className="seg-toggle">
           {ICON_PACKS.map((p) => (
             <button key={p.id} className={`seg-btn ${iconPack === p.id ? 'active' : ''}`} onClick={() => setIconPack(p.id)}>
@@ -99,13 +100,13 @@ export function AppearanceSection(): React.ReactElement {
         </div>
       </div>
       <div className="editor-field">
-        <label>Navegação dos módulos</label>
+        <label>{tr('settings.navegacaoDosModulos')}</label>
         <div className="seg-toggle">
           <button className={`seg-btn ${navStyle === 'tabs' ? 'active' : ''}`} onClick={() => setNavStyle('tabs')}>
-            Abas no topo
+            {tr('settings.abasNoTopo')}
           </button>
           <button className={`seg-btn ${navStyle === 'sidebar' ? 'active' : ''}`} onClick={() => setNavStyle('sidebar')}>
-            Submenu lateral
+            {tr('settings.submenuLateral')}
           </button>
         </div>
       </div>
