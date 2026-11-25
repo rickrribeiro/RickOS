@@ -418,6 +418,8 @@ export interface Account {
   name: string
   currency: string
   balance: number
+  externalId?: string | null // conta do Open Finance (Pluggy)
+  syncedAt?: string | null // última atualização do saldo pelo Open Finance
 }
 
 export interface Category {

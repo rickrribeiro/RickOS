@@ -98,6 +98,15 @@ export function FinanceDashboardPage(): React.ReactElement {
         <div className="stat-card">
           <div className="stat-card-label">Saldo total (contas)</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{money(balByCur)}</div>
+          {accounts.map((a) => (
+            <div key={a.id} className="stat-card-sub">
+              {a.externalId ? '🏦 ' : ''}
+              {a.name}
+              {accounts.length > 1 && ` · ${formatMoney(a.balance, a.currency)}`}
+              {a.syncedAt && ` · atualizado ${new Date(a.syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+            </div>
+          ))}
+          {accounts.length === 0 && <div className="stat-card-sub">importe do Open Finance para trazer o saldo da conta</div>}
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Receitas do mês</div>

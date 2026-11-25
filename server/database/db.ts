@@ -477,6 +477,14 @@ const MIGRATIONS: Migration[] = [
       try { db.run('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER;') } catch { /* exists */ }
       try { db.run('ALTER TABLE transactions ADD COLUMN installmentTotal INTEGER;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 37,
+    label: 'Contas: vínculo com a conta do Open Finance (id externo e última sincronização)',
+    run: (db) => {
+      try { db.run('ALTER TABLE accounts ADD COLUMN externalId TEXT;') } catch { /* exists */ }
+      try { db.run('ALTER TABLE accounts ADD COLUMN syncedAt TEXT;') } catch { /* exists */ }
+    }
   }
 ]
 

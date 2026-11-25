@@ -158,7 +158,9 @@ export const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     currency TEXT NOT NULL DEFAULT 'BRL',
-    balance REAL NOT NULL DEFAULT 0
+    balance REAL NOT NULL DEFAULT 0,
+    externalId TEXT,                        -- id da conta no Pluggy (Open Finance)
+    syncedAt TEXT                           -- última atualização do saldo pelo Open Finance
   );
 
   CREATE TABLE IF NOT EXISTS categories (

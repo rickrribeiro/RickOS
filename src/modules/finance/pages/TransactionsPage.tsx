@@ -24,7 +24,8 @@ export function TransactionsPage(): React.ReactElement {
     setTransactionKind,
     setRecurring,
     importTransactions,
-    categoryName
+    categoryName,
+    defaultAccountId
   } = useFinanceStore()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -33,6 +34,9 @@ export function TransactionsPage(): React.ReactElement {
   const [currency, setCurrency] = useState('BRL')
   const [categoryId, setCategoryId] = useState<number | ''>('')
   const [accountId, setAccountId] = useState<number | ''>('')
+  useEffect(() => {
+    if (defaultAccountId != null) setAccountId((cur) => (cur === '' ? defaultAccountId : cur))
+  }, [defaultAccountId])
   const [description, setDescription] = useState('')
   const [date, setDate] = useState(localDateStr(new Date()))
   const [editing, setEditing] = useState<Transaction | null>(null)

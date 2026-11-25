@@ -27,6 +27,7 @@ interface FinanceState {
   base: string
   rates: Record<string, number>
   hidden: boolean // privacy mode: mask money values
+  defaultAccountId: number | null // conta padrão (a do Open Finance), pré-selecionada em transações novas
 
   setMonth: (m: string) => void
   toggleHidden: () => void
@@ -73,6 +74,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   base: 'BRL',
   rates: {},
   hidden: initialHidden,
+  defaultAccountId: null,
 
   setMonth: (m) => {
     set({ month: m })
@@ -92,7 +94,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   refresh: async () => {
     const month = get().month
-    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw] =
+    const [accounts, categories, transactions, allTransactions, budgets, investments, investmentHistory, base, ratesRaw, defaultAccountRaw] =
       await Promise.all([
         window.api.accounts.getAll(),
         window.api.categories.getAll(),
@@ -103,7 +105,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         // guard: a stale preload (dev not fully restarted) may lack `history`
         window.api.investments.history ? window.api.investments.history() : Promise.resolve([]),
         window.api.settings.get('finance_base'),
-        window.api.settings.get('finance_rates')
+        window.api.settings.get('finance_rates'),
+        window.api.settings.get('finance_default_account')
       ])
     let rates: Record<string, number> = {}
     try {
@@ -123,7 +126,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       investments,
       investmentHistory,
       base: base || 'BRL',
-      rates
+      rates,
+      defaultAccountId: defaultAccountRaw && accounts.some((a) => a.id === Number(defaultAccountRaw)) ? Number(defaultAccountRaw) : null
     })
   },
 

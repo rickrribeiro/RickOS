@@ -1174,6 +1174,8 @@ export interface DbAccount {
   name: string
   currency: string
   balance: number
+  externalId?: string | null
+  syncedAt?: string | null
 }
 export interface DbCategory {
   id: number
@@ -1308,6 +1310,29 @@ export async function moveFinanceRule(id: number, dir: -1 | 1): Promise<void> {
 export async function setTransactionsCategory(changes: { id: number; categoryId: number }[]): Promise<void> {
   const db = await getDb()
   for (const c of changes) run(db, 'UPDATE transactions SET categoryId = ? WHERE id = ?', [c.categoryId, c.id])
+}
+
+/**
+ * Cria ou atualiza a conta vinda do Open Finance (pelo id do Pluggy) com o saldo atual.
+ * O nome só é definido na criação (o usuário pode renomear depois).
+ */
+export async function upsertExternalAccount(externalId: string, name: string, currency: string, balance: number): Promise<{ id: number; created: boolean }> {
+  const db = await getDb()
+  const now = new Date().toISOString()
+  const cur = getOne<DbAccount>(db, 'SELECT * FROM accounts WHERE externalId = ?', [externalId])
+  if (cur) {
+    run(db, 'UPDATE accounts SET balance = ?, currency = ?, syncedAt = ? WHERE id = ?', [balance, currency, now, cur.id])
+    return { id: cur.id, created: false }
+  }
+  run(db, 'INSERT INTO accounts (name, currency, balance, externalId, syncedAt) VALUES (?, ?, ?, ?, ?)', [name, currency, balance, externalId, now])
+  return { id: lastInsertId(db), created: true }
+}
+/** Liga à conta as transações que ainda não têm conta. Retorna quantas. */
+export async function assignAccountToUnlinked(accountId: number): Promise<number> {
+  const db = await getDb()
+  const n = getOne<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM transactions WHERE accountId IS NULL')?.n ?? 0
+  if (n) run(db, 'UPDATE transactions SET accountId = ? WHERE accountId IS NULL', [accountId])
+  return n
 }
 
 // ── Transactions ──

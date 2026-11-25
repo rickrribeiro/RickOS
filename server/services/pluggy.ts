@@ -9,7 +9,10 @@ import {
   setInvestmentValue,
   closeInvestment,
   setInvestmentExternal,
-  getInvestmentLatest
+  getInvestmentLatest,
+  upsertExternalAccount,
+  assignAccountToUnlinked,
+  setSetting
 } from '../database/queries'
 import { decodeSecret } from './secrets'
 import {
@@ -28,7 +31,28 @@ const OUTROS_CATEGORY_ID = 6 // seeded "Outros"
 interface PluggyAccount {
   id: string
   type?: string // BANK | CREDIT
+  subtype?: string | null // CHECKING_ACCOUNT | SAVINGS_ACCOUNT | CREDIT_CARD
+  name?: string | null
+  marketingName?: string | null
+  number?: string | null
+  balance?: number | null
   currencyCode?: string
+}
+
+/**
+ * Conta corrente do Open Finance → conta do app (saldo atualizado a cada sync). A primeira vira a
+ * conta padrão (`finance_default_account`): transações importadas e novas entram ligadas a ela, e as
+ * antigas sem conta são ligadas uma única vez, quando ela é criada.
+ */
+async function syncBankAccount(accounts: PluggyAccount[]): Promise<number | null> {
+  const bank = accounts.find((a) => a.type === 'BANK' && a.subtype !== 'SAVINGS_ACCOUNT') ?? accounts.find((a) => a.type === 'BANK')
+  if (!bank) return null
+  const label = (bank.marketingName || bank.name || 'Conta corrente').trim()
+  const name = bank.number ? `${label} · ${bank.number}` : label
+  const { id, created } = await upsertExternalAccount(bank.id, name, (bank.currencyCode || 'BRL').toUpperCase(), Math.round((bank.balance ?? 0) * 100) / 100)
+  if (!(await getSetting('finance_default_account'))) await setSetting('finance_default_account', String(id))
+  if (created) await assignAccountToUnlinked(id)
+  return id
 }
 interface PluggyTransaction {
   id: string
@@ -230,6 +254,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
     throw new Error('Nenhuma conta encontrada para esse Item ID. Verifique se o Item está conectado e pronto no Pluggy (e se o Item ID está correto).')
   }
 
+  const defaultAccountId = await syncBankAccount(accounts)
   const fx = await loadFx()
   const incoming: Incoming[] = []
   const seenIds = new Set<string>() // tudo que o Pluggy devolveu, sem filtro de mês
@@ -241,7 +266,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
       // não é confiável ali (compra parcelada pode vir CREDIT). Conta corrente: DEBIT/negativo = saída.
       const isExpense = acc.type === 'CREDIT' ? t.amount > 0 : t.type === 'DEBIT' || t.amount < 0
       const row = {
-        accountId: null,
+        accountId: defaultAccountId,
         categoryId: OUTROS_CATEGORY_ID,
         amount: Math.round(toBrl(t, acc, fx) * 100) / 100, // padroniza tudo em BRL
         currency: 'BRL',
