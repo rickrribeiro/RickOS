@@ -51,6 +51,8 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `src/App.tsx` | `PAGES` (registry); rota = `#/<page>` |
 | `src/navigation.ts` | `NAV_GROUPS` (sidebar); grupos podem ser ocultados em Configurações → Módulos (`hidden_modules`) |
 | `src/icons/` | pacotes de ícones (Aparência → Ícones): `<Icon name>` resolve no pacote escolhido e cai no padrão (`packs/default.ts`, emojis) quando falta. Chave nova de ícone nasce em `default.ts`; pacote novo = arquivo em `packs/` + entrada em `ICON_PACKS` |
+| `src/i18n/` | i18n do front (pt-BR, en, es): `t('modulo.chave', params)`, dicionários por módulo em `locales/<idioma>/<módulo>.ts`, idioma em `settings.language` (Configurações → Idioma) |
+| `server/i18n/` | i18n dos textos que o servidor manda para a UI (erros, notificações, alertas): `tt('chave', params)` |
 | `src/types/index.ts` | interfaces, union `Page`, tipos de `window.api` e `window.desktop` |
 | `src/modules/<módulo>/` | `pages/`, `components/`, `store/` de cada área |
 | `src/store/` | stores globais (`uiStore`, `notificationStore`) |
@@ -79,6 +81,18 @@ Molde simples para copiar: `todos` / `habits`.
 * **Nova IA não consome nem produz Memória Pessoal por padrão.** Nunca injete memória em `runClaude`, `ai:*` ou `buildProjectContext`. Integração = política em `server/memory/policy.ts` + aprovação do usuário + canal dedicado em `server/memory/integrations.ts` chamando `getMemoryContext` (ver `docs/memoria/README.md` e `docs/memoria/integracoes.md`).
 * **Sempre que adicionar ou alterar uma funcionalidade de IA, PERGUNTE ao usuário se ele quer integrá-la à Memória Pessoal** (consumir contexto pessoal, produzir sugestões, ambos ou nenhum), explicando o benefício e o custo em tokens. Sem resposta afirmativa, não integre.
 * Credenciais: chaves em `SENSITIVE_KEYS` (`server/services/secrets.ts`) são criptografadas com AES-GCM ao salvar. Nunca logue nem commite segredos.
+
+### i18n (pt-BR, en, es)
+
+* **Texto novo de interface nunca vai cru no JSX**: chave em `src/i18n/locales/pt-BR/<módulo>.ts` e `t('<módulo>.<chave>')`. `en` e `es` têm o mesmo tipo do pt-BR, então chave faltando quebra o `tsc` — preencha os três.
+* Interpolação `{nome}`; plural com `|` e `count`: `'{count} conta|{count} contas'` + `t(k, { count })`. Nada de `'conta' + (n > 1 ? 's' : '')`.
+* Se o arquivo já tem uma variável `t` (ex.: `(t) => …`), importe `t as tr`.
+* Datas e números: `getLocale()` (ou `fmtDate`/`fmtNumber`/`fmtCurrency`, `weekdayNames`, `monthNames` de `src/i18n`), nunca `'pt-BR'` fixo. A moeda continua a da conta.
+* Trocar o idioma recarrega a página, então `t()` vale também em constantes de módulo.
+* Rótulos em `shared/` usam `labels()`/`labeled()`/`st()` de `shared/i18n.ts` (pt ao lado do mapa; en/es em `src/i18n/sharedLabels.ts`). No servidor eles ficam sempre em pt.
+* Servidor: mensagem que aparece na UI (`throw new Error`, `notify`, `{ ok, error }`) usa `tt()` de `server/i18n`. Rótulo em constante de módulo vira getter (`get label() { return tt(…) }`), porque o idioma só é lido depois do boot.
+* **Prompts e contexto de IA continuam em pt** (front e servidor), assim como dados gravados no banco (nomes, motivos, chaves de checklist) e texto comparado por código.
+
 
 ## UI
 
