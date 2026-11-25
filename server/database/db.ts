@@ -402,6 +402,13 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE transactions ADD COLUMN investment INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 30,
+    label: 'Transações: transferência entre contas próprias fora de receitas/gastos',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN transfer INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+    }
   }
 ]
 

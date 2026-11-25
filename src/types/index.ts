@@ -1,7 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
-import type { FinanceRule } from '../../shared/finance'
+import type { FinanceRule, TransactionKind } from '../../shared/finance'
 export type { FinanceRule } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
@@ -440,6 +440,7 @@ export interface Transaction {
   externalId?: string | null // id no Pluggy (importada do Open Finance)
   pending?: number // 1 = pendente no banco; valor/descrição ainda podem mudar
   investment?: number // 1 = aplicação (saída) / resgate (entrada) de investimento: fora de receitas/gastos
+  transfer?: number // 1 = transferência entre contas próprias: fora de receitas/gastos
 }
 
 export interface RulePreviewItem {
@@ -1078,7 +1079,7 @@ declare global {
         update: (id: number, accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) => Promise<void>
         delete: (id: number) => Promise<void>
         setIgnored: (id: number, reason: string | null) => Promise<void>
-        setInvestment: (id: number, investment: boolean) => Promise<void>
+        setKind: (id: number, kind: TransactionKind) => Promise<void>
         bulk: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
       }
       budgets: {

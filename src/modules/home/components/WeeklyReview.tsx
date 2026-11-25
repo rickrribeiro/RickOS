@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { countsInTotals } from '../../../../shared/finance'
 import { renderMarkdown } from '../../estudos/markdown'
 import { localDateStr, localDayStartISO, localDayEndISO } from '../../../utils/dates'
 import { projectsDigest } from '../../projects/components/ProjectsReviewPanel'
@@ -55,7 +56,7 @@ async function buildPrompt(): Promise<string> {
       return `- ${h.name}: ${n}/7`
     })
 
-  const counted = txs.filter((t) => !t.ignoredReason && !t.investment)
+  const counted = txs.filter(countsInTotals)
   const expense = counted.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const income = counted.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const budget = budgets.reduce((s, b) => s + b.amount, 0)

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { Account, Category, Transaction, Budget, Investment, InvestmentHistory } from '../../../types'
 import { currentMonth, setMoneyHidden } from '../util'
+import { countsInTotals, type TransactionKind } from '../../../../shared/finance'
 
 const HIDDEN_KEY = 'rickos:financeHidden'
 const initialHidden = ((): boolean => {
@@ -16,7 +17,7 @@ interface FinanceState {
   month: string
   accounts: Account[]
   categories: Category[]
-  transactions: Transaction[] // for `month`, só receitas/gastos reais (sem ignoradas nem investimento) — base de todo cálculo
+  transactions: Transaction[] // for `month`, só receitas/gastos reais (sem ignoradas, investimento nem transferência) — base de todo cálculo
   allTransactions: Transaction[] // for reports / evolution, mesmo critério
   investmentMoves: Transaction[] // for `month`, aplicações/resgates (não ignorados) — mostrados à parte
   monthListing: Transaction[] // for `month`, inclusive ignoradas — só para a lista da tela de Transações
@@ -41,7 +42,7 @@ interface FinanceState {
   updateTransaction: (t: Transaction) => Promise<void>
   removeTransaction: (id: number) => Promise<void>
   markTransactionValid: (id: number) => Promise<void>
-  setTransactionInvestment: (id: number, investment: boolean) => Promise<void>
+  setTransactionKind: (id: number, kind: TransactionKind) => Promise<void>
   importTransactions: (rows: Omit<Transaction, 'id'>[]) => Promise<number>
   setBudget: (categoryId: number, amount: number) => Promise<void>
   addInvestment: (name: string, type: string | null, amount: number, currency: string) => Promise<void>
@@ -105,7 +106,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     } catch {
       rates = {}
     }
-    const counts = (t: Transaction): boolean => !t.ignoredReason && !t.investment
+    const counts = countsInTotals
     set({
       accounts,
       categories,
@@ -159,8 +160,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await window.api.transactions.delete(id)
     await get().refresh()
   },
-  setTransactionInvestment: async (id, investment) => {
-    await window.api.transactions.setInvestment(id, investment)
+  setTransactionKind: async (id, kind) => {
+    await window.api.transactions.setKind(id, kind)
     await get().refresh()
   },
   markTransactionValid: async (id) => {

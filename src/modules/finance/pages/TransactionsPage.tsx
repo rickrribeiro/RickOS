@@ -6,7 +6,7 @@ import { TransactionEditor } from '../components/TransactionEditor'
 import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
-import { detectInvestmentMove } from '../../../../shared/finance'
+import { detectInvestmentMove, detectOwnTransfer, countsInTotals } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -21,7 +21,7 @@ export function TransactionsPage(): React.ReactElement {
     addTransaction,
     removeTransaction,
     markTransactionValid,
-    setTransactionInvestment,
+    setTransactionKind,
     importTransactions,
     categoryName
   } = useFinanceStore()
@@ -39,12 +39,13 @@ export function TransactionsPage(): React.ReactElement {
   const [pluggyBusy, setPluggyBusy] = useState(false)
   const [pluggyMsg, setPluggyMsg] = useState<{ text: string; ok: boolean } | null>(null)
   // filtros da lista
-  const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment'>('')
+  const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment' | 'transfer'>('')
   const [fCategory, setFCategory] = useState<'' | 'none' | number>('')
 
   const filtered = monthListing.filter(
     (t) =>
-      (fType === '' || (fType === 'investment' ? !!t.investment : t.type === fType)) &&
+      (fType === '' ||
+        (fType === 'investment' ? !!t.investment : fType === 'transfer' ? !!t.transfer : t.type === fType)) &&
       (fCategory === '' || (fCategory === 'none' ? t.categoryId == null : t.categoryId === fCategory))
   )
   const filtering = fType !== '' || fCategory !== ''
@@ -52,7 +53,7 @@ export function TransactionsPage(): React.ReactElement {
     Object.entries(sumByCurrency(items))
       .map(([c, v]) => formatMoney(v, c))
       .join(' · ') || formatMoney(0)
-  const counted = filtered.filter((t) => !t.ignoredReason && !t.investment)
+  const counted = filtered.filter(countsInTotals)
   const inTotal = fmtTotals(counted.filter((t) => t.type === 'income'))
   const outTotal = fmtTotals(counted.filter((t) => t.type === 'expense'))
 
@@ -116,7 +117,8 @@ export function TransactionsPage(): React.ReactElement {
         type: r.type,
         description: r.description || null,
         date: r.date,
-        investment: detectInvestmentMove(r.description) ? 1 : 0
+        investment: detectInvestmentMove(r.description) ? 1 : 0,
+        transfer: !detectInvestmentMove(r.description) && detectOwnTransfer(r.description) ? 1 : 0
       }))
     )
     if (fileRef.current) fileRef.current.value = ''
@@ -201,16 +203,17 @@ export function TransactionsPage(): React.ReactElement {
         <select
           value={fType}
           onChange={(e) => {
-            const v = e.target.value as '' | 'income' | 'expense' | 'investment'
+            const v = e.target.value as '' | 'income' | 'expense' | 'investment' | 'transfer'
             setFType(v)
             // categoria escolhida é do outro tipo → some do select; limpa para não esconder tudo
-            if (v && v !== 'investment' && typeof fCategory === 'number' && categories.find((c) => c.id === fCategory)?.type !== v) setFCategory('')
+            if ((v === 'income' || v === 'expense') && typeof fCategory === 'number' && categories.find((c) => c.id === fCategory)?.type !== v) setFCategory('')
           }}
         >
           <option value="">Entradas e saídas</option>
           <option value="income">Só entradas</option>
           <option value="expense">Só saídas</option>
           <option value="investment">Só investimentos (aplicação/resgate)</option>
+          <option value="transfer">Só transferências entre contas</option>
         </select>
         <select
           value={fCategory === '' ? '' : String(fCategory)}
@@ -222,7 +225,7 @@ export function TransactionsPage(): React.ReactElement {
           <option value="">Todas as categorias</option>
           <option value="none">Sem categoria</option>
           {categories
-            .filter((c) => fType === '' || fType === 'investment' || c.type === fType)
+            .filter((c) => fType !== 'income' && fType !== 'expense' ? true : c.type === fType)
             .map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -267,10 +270,23 @@ export function TransactionsPage(): React.ReactElement {
                 title="Movimentação de investimento: fora de receitas/gastos. Clique para desmarcar."
                 onClick={() => {
                   if (confirm('Desmarcar como investimento? Ela volta a contar como ' + (t.type === 'income' ? 'receita.' : 'gasto.')))
-                    setTransactionInvestment(t.id, false)
+                    setTransactionKind(t.id, 'normal')
                 }}
               >
                 📈 {t.type === 'income' ? 'resgate' : 'aplicação'}
+              </button>
+            ) : null}
+            {t.transfer ? (
+              <button
+                className="project-chip"
+                style={{ color: 'var(--accent)', cursor: 'pointer', border: 'none' }}
+                title="Transferência entre suas contas: fora de receitas/gastos. Clique para desmarcar."
+                onClick={() => {
+                  if (confirm('Desmarcar como transferência? Ela volta a contar como ' + (t.type === 'income' ? 'receita.' : 'gasto.')))
+                    setTransactionKind(t.id, 'normal')
+                }}
+              >
+                🔁 transferência
               </button>
             ) : null}
             {t.pending ? (

@@ -78,3 +78,25 @@ export function matchFinanceRule<R extends FinanceRule>(
   }
   return null
 }
+
+// ── Natureza da transação ──────────────────────────────────────────────────────
+
+/** normal = receita/gasto real; investment = aplicação/resgate; transfer = entre contas próprias. */
+export type TransactionKind = 'normal' | 'investment' | 'transfer'
+
+export function transactionKind(t: { investment?: number | null; transfer?: number | null }): TransactionKind {
+  if (t.investment) return 'investment'
+  if (t.transfer) return 'transfer'
+  return 'normal'
+}
+
+/** Entra nos totais de receita/gasto (orçamento, dashboard, relatórios…)? */
+export function countsInTotals(t: { ignoredReason?: string | null; investment?: number | null; transfer?: number | null }): boolean {
+  return !t.ignoredReason && !t.investment && !t.transfer
+}
+
+/** Transferência entre contas do próprio usuário (categoria "Same person transfer" do Pluggy ou descrição explícita). */
+export function detectOwnTransfer(description: string | null | undefined, category?: string | null): boolean {
+  if (category && normalizeText(category).startsWith('same person transfer')) return true
+  return /\b(transfer[eê]ncia entre contas|entre contas pr[oó]prias|mesma titularidade)\b/i.test(description ?? '')
+}

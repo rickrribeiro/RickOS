@@ -181,7 +181,8 @@ export const SCHEMA = `
     externalId TEXT,                        -- id da transação no Pluggy (importação Open Finance)
     externalSig TEXT,                       -- valor|descrição|data|tipo|status como o banco mandou na última importação
     pending INTEGER NOT NULL DEFAULT 0,     -- 1 = pendente no banco (valor/descrição ainda podem mudar)
-    investment INTEGER NOT NULL DEFAULT 0   -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
+    investment INTEGER NOT NULL DEFAULT 0,  -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
+    transfer INTEGER NOT NULL DEFAULT 0     -- 1 = transferência entre contas próprias (fora de receitas/gastos)
   );
 
   -- Regras de categorização automática de transações (Finanças → Regras).

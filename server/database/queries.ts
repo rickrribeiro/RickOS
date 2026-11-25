@@ -1,5 +1,5 @@
 import { Database } from 'sql.js'
-import type { FinanceRule } from '../../shared/finance'
+import type { FinanceRule, TransactionKind } from '../../shared/finance'
 import { randomUUID } from 'crypto'
 import { getDb, saveDb } from './db'
 
@@ -1195,6 +1195,7 @@ export interface DbTransaction {
   externalSig?: string | null // como o banco mandou na última importação (detecta mudança do banco)
   pending?: number // 1 = pendente no banco
   investment?: number // 1 = aplicação/resgate de investimento (fora de receitas/gastos)
+  transfer?: number // 1 = transferência entre contas próprias (fora de receitas/gastos)
 }
 export interface DbBudget {
   id: number
@@ -1365,10 +1366,10 @@ export async function applyExternalTransactionUpdate(
   }
   run(db, `UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, [...vals, id])
 }
-/** Marca/desmarca a transação como aplicação/resgate de investimento. */
-export async function setTransactionInvestment(id: number, investment: boolean): Promise<void> {
+/** Define a natureza: normal, aplicação/resgate de investimento ou transferência entre contas (exclusivas). */
+export async function setTransactionKind(id: number, kind: TransactionKind): Promise<void> {
   const db = await getDb()
-  run(db, 'UPDATE transactions SET investment = ? WHERE id = ?', [investment ? 1 : 0, id])
+  run(db, 'UPDATE transactions SET investment = ?, transfer = ? WHERE id = ?', [kind === 'investment' ? 1 : 0, kind === 'transfer' ? 1 : 0, id])
 }
 /** Marca (motivo) ou desmarca (null) a transação como ignorada nos cálculos. */
 export async function setTransactionIgnored(id: number, reason: string | null): Promise<void> {
@@ -1384,8 +1385,8 @@ export async function bulkInsertTransactions(rows: Omit<DbTransaction, 'id'>[]):
   for (const r of rows) {
     run(
       db,
-      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending, investment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0, r.investment ?? 0]
+      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending, investment, transfer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0, r.investment ?? 0, r.transfer ?? 0]
     )
   }
   return rows.length

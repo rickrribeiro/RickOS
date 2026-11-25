@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
 import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
+import { transactionKind, type TransactionKind } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
 export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: () => void }): React.ReactElement {
-  const { categories, accounts, updateTransaction, setTransactionInvestment } = useFinanceStore()
+  const { categories, accounts, updateTransaction, setTransactionKind } = useFinanceStore()
   const [type, setType] = useState(tx.type)
   const [amount, setAmount] = useState(String(tx.amount))
   const [currency, setCurrency] = useState(tx.currency)
@@ -13,7 +14,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
   const [accountId, setAccountId] = useState<number | ''>(tx.accountId ?? '')
   const [description, setDescription] = useState(tx.description ?? '')
   const [date, setDate] = useState(tx.date)
-  const [investment, setInvestment] = useState(!!tx.investment)
+  const [kind, setKind] = useState<TransactionKind>(transactionKind(tx))
 
   async function save(): Promise<void> {
     const v = parseFloat(amount)
@@ -28,7 +29,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
       description: description.trim() || null,
       date
     })
-    if (investment !== !!tx.investment) await setTransactionInvestment(tx.id, investment)
+    if (kind !== transactionKind(tx)) await setTransactionKind(tx.id, kind)
     onClose()
   }
 
@@ -81,15 +82,20 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
           <label>Descrição</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginTop: 8, cursor: 'pointer' }}>
-          <input type="checkbox" checked={investment} onChange={(e) => setInvestment(e.target.checked)} />
-          <span>
-            Movimentação de investimento ({type === 'income' ? 'resgate' : 'aplicação'})
-            <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>
-              Não conta como {type === 'income' ? 'receita' : 'gasto'}; aparece à parte no Dashboard.
+        <div className="editor-field">
+          <label>Natureza</label>
+          <select value={kind} onChange={(e) => setKind(e.target.value as TransactionKind)}>
+            <option value="normal">{type === 'income' ? 'Receita' : 'Gasto'} normal</option>
+            <option value="investment">Investimento ({type === 'income' ? 'resgate' : 'aplicação'})</option>
+            <option value="transfer">Transferência entre minhas contas</option>
+          </select>
+          {kind !== 'normal' && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Não conta como {type === 'income' ? 'receita' : 'gasto'}
+              {kind === 'investment' ? '; aparece à parte no Dashboard.' : ' — o dinheiro só mudou de conta.'}
             </span>
-          </span>
-        </label>
+          )}
+        </div>
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>

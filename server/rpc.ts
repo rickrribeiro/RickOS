@@ -89,7 +89,7 @@ import {
   deleteCategory,
   getTransactions,
   setTransactionIgnored,
-  setTransactionInvestment,
+  setTransactionKind,
   getFinanceRules,
   createFinanceRule,
   updateFinanceRule,
@@ -205,6 +205,7 @@ import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
 import { syncPluggy, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
+import { countsInTotals, type TransactionKind } from '../shared/finance'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
 import { registerMemoryRpc } from './memory/rpc'
@@ -618,7 +619,7 @@ async function evaluateRules(): Promise<void> {
           if (!budgets.length) continue
           const txs = await getTransactions(month)
           const spent: Record<number, number> = {}
-          for (const t of txs) if (t.type === 'expense' && t.categoryId != null && !t.ignoredReason && !t.investment) spent[t.categoryId] = (spent[t.categoryId] ?? 0) + t.amount
+          for (const t of txs) if (t.type === 'expense' && t.categoryId != null && countsInTotals(t)) spent[t.categoryId] = (spent[t.categoryId] ?? 0) + t.amount
           const crossed = budgets.filter((b) => b.categoryId != null && b.amount > 0 && ((spent[b.categoryId] ?? 0) / b.amount) * 100 > percent)
           if (crossed.length) {
             const cats = await getCategories()
@@ -945,7 +946,7 @@ ipcMain.handle('transactions:update', (_, id: number, accountId: number | null, 
 )
 ipcMain.handle('transactions:delete', (_, id: number) => deleteTransaction(id))
 ipcMain.handle('transactions:setIgnored', (_, id: number, reason: string | null) => setTransactionIgnored(id, reason))
-ipcMain.handle('transactions:setInvestment', (_, id: number, investment: boolean) => setTransactionInvestment(id, investment))
+ipcMain.handle('transactions:setKind', (_, id: number, kind: TransactionKind) => setTransactionKind(id, kind))
 ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[]) => bulkInsertTransactions(await categorizeNew(rows)))
 
 ipcMain.handle('financeRules:getAll', () => getFinanceRules())
