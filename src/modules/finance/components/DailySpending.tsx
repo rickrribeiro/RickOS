@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useFinanceStore } from '../store/financeStore'
-import { convertToBase, currentMonth, formatMoney, formatMoneyCompact, monthLabel, shiftMonth, splitIncome } from '../util'
+import { convertToBase, currentMonth, formatMoney, formatMoneyCompact, monthLabel, shiftMonth, splitIncome, startingBillInBase, isStartingBillItem } from '../util'
 
 const PLOT_H = 120
 
@@ -30,11 +30,15 @@ export function DailySpending(): React.ReactElement {
       salary = fixedOf(allTransactions.filter((t) => t.date.slice(0, 7) === prev))
       estimated = salary > 0
     }
-    const allowance = salary / daysInMonth
+    // cota = (salário − fatura inicial) / dias: as parcelas de compras antigas já estão comprometidas
+    const startingBill = startingBillInBase(transactions, base, rates).total
+    const available = Math.max(0, salary - startingBill)
+    const allowance = available / daysInMonth
 
     const spent = new Array<number>(daysInMonth + 1).fill(0)
     for (const t of transactions) {
-      if (t.type !== 'expense') continue
+      // parcelas da fatura inicial já saíram da cota — não contam de novo como gasto do dia
+      if (t.type !== 'expense' || isStartingBillItem(t)) continue
       const d = Number(t.date.slice(8, 10))
       if (d >= 1 && d <= daysInMonth) spent[d] += toBase(t)
     }
@@ -50,12 +54,14 @@ export function DailySpending(): React.ReactElement {
       daysInMonth,
       refDay,
       salary,
+      startingBill,
+      available,
       estimated,
       allowance,
       days,
       today,
       avgPerDay: today && refDay > 0 ? today.cum / refDay : 0,
-      perDayLeft: remainingDays > 0 && today ? (salary - today.cum) / remainingDays : null
+      perDayLeft: remainingDays > 0 && today ? (available - today.cum) / remainingDays : null
     }
   }, [transactions, allTransactions, categories, month, base, rates])
 
@@ -163,7 +169,11 @@ export function DailySpending(): React.ReactElement {
           `cota ${formatMoney(data.today?.quota ?? 0, base)} − gasto ${formatMoney(data.today?.cum ?? 0, base)}`,
           (data.today?.balance ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)'
         )}
-        {tile('Cota diária', formatMoney(data.allowance, base), `${formatMoney(data.salary, base)} ÷ ${data.daysInMonth} dias${data.estimated ? ' · estimado pelo mês anterior' : ''}`)}
+        {tile(
+          'Cota diária',
+          formatMoney(data.allowance, base),
+          `(${formatMoney(data.salary, base)} salário − ${formatMoney(data.startingBill, base)} fatura inicial) ÷ ${data.daysInMonth} dias${data.estimated ? ' · salário estimado pelo mês anterior' : ''}`
+        )}
         {tile('Média gasta por dia', formatMoney(data.avgPerDay, base), `${data.refDay} ${data.refDay === 1 ? 'dia' : 'dias'}`)}
         {data.perDayLeft != null &&
           tile(
@@ -204,7 +214,7 @@ export function DailySpending(): React.ReactElement {
       ) : (
         <div style={{ position: 'relative' }}>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <span>Gasto por dia</span>
+            <span>Gasto por dia{data.startingBill > 0 ? ' (sem as parcelas da fatura inicial)' : ''}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }}>
               <span style={{ width: 12, height: 1, background: 'var(--accent)' }} /> cota diária {formatMoneyCompact(data.allowance)}
             </span>

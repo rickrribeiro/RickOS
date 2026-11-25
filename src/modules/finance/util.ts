@@ -125,6 +125,13 @@ export function installmentOfTx(t: { description: string | null; installmentNumb
   return installmentOf(t.description)
 }
 
+/** Faz parte da fatura inicial: despesa que é parcela 2ª em diante (compra de mês anterior), sem encargos. */
+export function isStartingBillItem(t: { type: string; description: string | null; installmentNumber?: number | null; installmentTotal?: number | null }): boolean {
+  if (t.type !== 'expense' || chargeKind(t)) return false
+  const inst = installmentOfTx(t)
+  return !!inst && inst.n >= 2
+}
+
 /**
  * Fatura inicial do mês: parcelas (2ª em diante) de compras feitas em meses anteriores que caem
  * neste mês — o quanto a fatura já começa antes de qualquer compra nova. Encargos (ex.: IOF de
@@ -138,9 +145,7 @@ export function startingBillInBase(
   let total = 0
   let count = 0
   for (const t of items) {
-    if (t.type !== 'expense' || chargeKind(t)) continue
-    const inst = installmentOfTx(t)
-    if (!inst || inst.n < 2) continue
+    if (!isStartingBillItem(t)) continue
     total += convertToBase(t.amount, t.currency, base, rates)
     count++
   }
