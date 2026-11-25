@@ -35,6 +35,7 @@ const path$1 = require("node:path");
 const child_process = require("child_process");
 const http = require("http");
 const url = require("url");
+const genai = require("@google/genai");
 function defaultDataDir() {
   const home = os.homedir();
   if (process.platform === "darwin") return path.join(home, "Library", "Application Support", "time-tracker");
@@ -222,14 +223,17 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     currency TEXT NOT NULL DEFAULT 'BRL',
-    balance REAL NOT NULL DEFAULT 0
+    balance REAL NOT NULL DEFAULT 0,
+    externalId TEXT,                        -- id da conta no Pluggy (Open Finance)
+    syncedAt TEXT                           -- última atualização do saldo pelo Open Finance
   );
 
   CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'expense',   -- income | expense
-    color TEXT NOT NULL DEFAULT '#6366f1'
+    color TEXT NOT NULL DEFAULT '#6366f1',
+    fixedIncome INTEGER NOT NULL DEFAULT 0  -- receita: 1 = fixa (salário); 0 = extra
   );
 
   CREATE TABLE IF NOT EXISTS transactions (
@@ -240,7 +244,58 @@ const SCHEMA = `
     currency TEXT NOT NULL DEFAULT 'BRL',
     type TEXT NOT NULL DEFAULT 'expense',   -- income | expense
     description TEXT,
-    date TEXT NOT NULL
+    date TEXT NOT NULL,
+    ignoredReason TEXT,                     -- não nulo = fora de todos os cálculos (ex.: pagamento de fatura)
+    externalId TEXT,                        -- id da transação no Pluggy (importação Open Finance)
+    externalSig TEXT,                       -- valor|descrição|data|tipo|status como o banco mandou na última importação
+    pending INTEGER NOT NULL DEFAULT 0,     -- 1 = pendente no banco (valor/descrição ainda podem mudar)
+    investment INTEGER NOT NULL DEFAULT 0,  -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
+    transfer INTEGER NOT NULL DEFAULT 0,    -- 1 = transferência entre contas próprias (fora de receitas/gastos)
+    paymentMethod TEXT,                     -- credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
+    recurring INTEGER NOT NULL DEFAULT 0,   -- 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
+    installmentNumber INTEGER,              -- parcela n (creditCardMetadata do Pluggy); null = à vista/desconhecido
+    installmentTotal INTEGER,               -- de N parcelas
+    refundOf INTEGER                        -- estorno: id da compra estornada (-1 = usuário pediu para não parear)
+  );
+
+  -- Movimentações dos investimentos (Open Finance): BUY = aporte, SELL = resgate/venda,
+  -- INTEREST = provento (dividendo, JCP, rendimento de FII, cupom), TAX = imposto (come-cotas)…
+  CREATE TABLE IF NOT EXISTS investment_movements (
+    externalId TEXT PRIMARY KEY,
+    externalInvestmentId TEXT NOT NULL,
+    investmentName TEXT,
+    investmentKind TEXT,
+    date TEXT NOT NULL,                     -- YYYY-MM-DD
+    type TEXT NOT NULL,                     -- BUY | SELL | INTEREST | TAX | TRANSFER | AMORTIZATION
+    movementType TEXT,                      -- CREDIT | DEBIT
+    amount REAL NOT NULL,
+    netAmount REAL,
+    quantity REAL
+  );
+
+  -- Saldo das contas por mês (último saldo sincronizado do Open Finance em cada mês).
+  CREATE TABLE IF NOT EXISTS account_balance_history (
+    accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    month TEXT NOT NULL,                    -- YYYY-MM
+    balance REAL NOT NULL,
+    syncedAt TEXT NOT NULL,
+    PRIMARY KEY (accountId, month)
+  );
+
+  -- Exceções de recorrência por estabelecimento (chave = recurringKey): o usuário corrige a detecção.
+  CREATE TABLE IF NOT EXISTS recurring_overrides (
+    key TEXT PRIMARY KEY,
+    recurring INTEGER NOT NULL              -- 1 = sempre recorrente, 0 = nunca
+  );
+
+  -- Regras de categorização automática de transações (Finanças → Regras).
+  CREATE TABLE IF NOT EXISTS finance_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoryId INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    keywords TEXT NOT NULL,                 -- separadas por vírgula; casam por "contém" na descrição
+    active INTEGER NOT NULL DEFAULT 1,
+    position INTEGER NOT NULL DEFAULT 0,    -- menor = mais prioritária
+    createdAt TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS budgets (
@@ -255,7 +310,10 @@ const SCHEMA = `
     name TEXT NOT NULL,
     type TEXT,
     amount REAL NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'BRL'
+    currency TEXT NOT NULL DEFAULT 'BRL',
+    externalId TEXT,                        -- id do investimento no Pluggy (Open Finance)
+    externalName TEXT,                      -- nome como o banco mandou (renomear no app não é sobrescrito)
+    details TEXT                            -- JSON InvestmentDetails (tipo, taxa, vencimento, bruto, IR/IOF…)
   );
 
   -- Monthly value snapshot per investment (YYYY-MM). One row per (investmentId, month).
@@ -263,7 +321,8 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     investmentId INTEGER NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
     month TEXT NOT NULL,
-    amount REAL NOT NULL DEFAULT 0
+    amount REAL NOT NULL DEFAULT 0,
+    closed INTEGER NOT NULL DEFAULT 0 -- 1 = encerrado a partir deste mês (carry-forward para aqui)
   );
 
   INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (1, 'Salário', 'income', '#22c55e');
@@ -1208,6 +1267,260 @@ function seedAiLibrary(db2) {
     }
   }
 }
+const PLUGGY_INVESTMENT_CATEGORIES = new Set(
+  [
+    "investments",
+    "investment",
+    "automatic investment",
+    "fixed income",
+    "fixed income investment",
+    "mutual funds",
+    "variable income",
+    "margin",
+    "margin withdrawn",
+    "pension"
+  ].map((s2) => s2.toLowerCase())
+);
+const REAL_INCOME = /\b(rendimento|rendimentos|juros|dividendo|dividendos|proventos?|jcp)\b/i;
+const MOVE_START = /^\s*(resgate|aplica[cç][aã]o|aplic\.?|investimento|dinheiro guardado|dinheiro resgatado)\b|\bvalor (transferido para|recebido de) investimentos?\b/i;
+const PRODUCTS = /\b(rdb|cdb|lci|lca|cra|cri|tesouro direto|tesouro selic|cofrinho|caixinha)\b/i;
+const PAYMENT_OPERATIONS = /* @__PURE__ */ new Set(["PIX", "TED", "DOC", "BOLETO", "CONVENIO_ARRECADACAO", "CARTAO", "TRANSFERENCIA_MESMA_INSTITUICAO", "SAQUE"]);
+function detectInvestmentMove(description, category, operationType) {
+  const d = description ?? "";
+  const op = (operationType ?? "").toUpperCase();
+  if (op === "RENDIMENTO_APLIC_FINANCEIRA") return false;
+  if (REAL_INCOME.test(d)) return false;
+  if (op === "RESGATE_APLIC_FINANCEIRA") return true;
+  if (MOVE_START.test(d) || PRODUCTS.test(d)) return true;
+  return !!category && PLUGGY_INVESTMENT_CATEGORIES.has(category.toLowerCase()) && !PAYMENT_OPERATIONS.has(op);
+}
+function normalizeText(s2) {
+  return s2.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function parseKeywords(keywords) {
+  return keywords.split(",").map((k) => normalizeText(k)).filter(Boolean);
+}
+function matchFinanceRule(rules, categories, description, type) {
+  const d = normalizeText(description ?? "");
+  if (!d) return null;
+  const typeOf = new Map(categories.map((c) => [c.id, c.type]));
+  const ordered = [...rules].sort((a, b2) => a.position - b2.position || a.id - b2.id);
+  for (const r of ordered) {
+    if (!r.active || typeOf.get(r.categoryId) !== type) continue;
+    if (parseKeywords(r.keywords).some((k) => d.includes(k))) return r;
+  }
+  return null;
+}
+function countsInTotals(t) {
+  return !t.ignoredReason && !t.investment && !t.transfer;
+}
+function detectOwnTransfer(description, category) {
+  if (category && normalizeText(category).startsWith("same person transfer")) return true;
+  return /\b(transfer[eê]ncia entre contas|entre contas pr[oó]prias|mesma titularidade)\b/i.test(description ?? "");
+}
+const OPERATION_TYPE_MAP = {
+  PIX: "pix",
+  TED: "ted",
+  DOC: "ted",
+  BOLETO: "boleto",
+  CONVENIO_ARRECADACAO: "boleto",
+  CARTAO: "debito",
+  TRANSFERENCIA_MESMA_INSTITUICAO: "transferencia",
+  SAQUE: "saque",
+  DEPOSITO: "deposito"
+};
+function detectPaymentMethod(description, hints = {}) {
+  if (hints.accountType === "CREDIT") return "credito";
+  const pm = (hints.paymentMethod ?? "").toUpperCase();
+  if (pm && OPERATION_TYPE_MAP[pm]) return OPERATION_TYPE_MAP[pm];
+  const op = (hints.operationType ?? "").toUpperCase();
+  if (op && OPERATION_TYPE_MAP[op]) return OPERATION_TYPE_MAP[op];
+  const d = normalizeText(description ?? "");
+  if (!d) return null;
+  if (/\bpix\b/.test(d)) return "pix";
+  if (/\bboleto\b/.test(d)) return "boleto";
+  if (/\b(ted|doc)\b/.test(d)) return "ted";
+  if (/\b(compra no debito|debito visa|debito master|cartao de debito|compra debito)\b/.test(d)) return "debito";
+  if (/\bsaque\b/.test(d)) return "saque";
+  if (/\bdeposito (recebido|em conta|em dinheiro|bancario|via|por envelope|identificado)\b/.test(d)) return "deposito";
+  if (/^transferencia (enviada|recebida)\b/.test(d)) return "transferencia";
+  if (/(?<![\d/])\d{1,2}\s*\/\s*\d{1,2}(?![\d/])/.test(d)) {
+    const m = /(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/.exec(d);
+    const n = Number(m[1]);
+    const tot = Number(m[2]);
+    if (n >= 1 && tot >= 2 && n <= tot) return "credito";
+  }
+  if (/\b(cartao de credito|credito de ")/.test(d)) return "credito";
+  return null;
+}
+const PLUGGY_KIND = {
+  CDB: "CDB",
+  LCI: "LCI",
+  LCA: "LCA",
+  LC: "LC",
+  CRI: "CRI",
+  CRA: "CRA",
+  LIG: "LIG",
+  LF: "LF",
+  DEBENTURES: "Debênture",
+  TREASURY: "Tesouro",
+  RETIREMENT: "Previdência",
+  PGBL: "PGBL",
+  VGBL: "VGBL",
+  INVESTMENT_FUND: "Fundo",
+  STOCK_FUND: "Fundo de ações",
+  MULTIMARKET_FUND: "Fundo multimercado",
+  EXCHANGE_FUND: "Fundo cambial",
+  FIXED_INCOME_FUND: "Fundo de renda fixa",
+  FIP_FUND: "FIP",
+  OFFSHORE_FUND: "Fundo offshore",
+  ETF_FUND: "Fundo de ETF",
+  STOCK: "Ação",
+  BDR: "BDR",
+  REAL_ESTATE_FUND: "FII",
+  DERIVATIVES: "Derivativo",
+  OPTION: "Opção",
+  ETF: "ETF",
+  STRUCTURED_NOTE: "COE"
+};
+function pluggyInvestmentKind(type, subtype) {
+  return PLUGGY_KIND[subtype ?? ""] ?? PLUGGY_KIND[type ?? ""] ?? (type === "FIXED_INCOME" ? "Renda fixa" : "Investimento");
+}
+function pluggyRateText(rate, rateType, fixedAnnualRate) {
+  const fmt = (n) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  if (rateType && rate != null) {
+    if (rateType === "IPCA" || rateType === "IGPM") return `${rateType}${fixedAnnualRate ? ` + ${fmt(fixedAnnualRate)}% a.a.` : ""}`;
+    return `${fmt(rate)}% ${rateType}`;
+  }
+  if (fixedAnnualRate != null) return `${fmt(fixedAnnualRate)}% a.a.`;
+  return null;
+}
+function recurringKey(description, type) {
+  let d = normalizeText(description ?? "");
+  d = d.replace(/\*\s*\S*\d\S*/g, " ");
+  d = d.replace(/[0-9]+/g, " ").replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+  return d ? `${type}:${d}` : "";
+}
+const INSTALLMENT_RE = /(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/;
+const CHARGE_RE = /\b(iof|juros|multa|encargos?)\b/i;
+const dayDiff = (a, b2) => (Date.parse(b2) - Date.parse(a)) / 864e5;
+function detectRecurringIds(txs) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const t of txs) {
+    if (t.ignoredReason || t.investment || t.transfer) continue;
+    if (t.installmentTotal && t.installmentTotal >= 2) continue;
+    const d = t.description ?? "";
+    if (CHARGE_RE.test(d)) continue;
+    const inst = INSTALLMENT_RE.exec(d);
+    if (inst && Number(inst[2]) >= 2 && Number(inst[1]) <= Number(inst[2])) continue;
+    const k = recurringKey(d, t.type);
+    if (!k) continue;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  }
+  const out = /* @__PURE__ */ new Set();
+  for (const list of groups.values()) {
+    if (list.length < 3) continue;
+    list.sort((a, b2) => a.date.localeCompare(b2.date));
+    for (let i = 0; i < list.length; i++) {
+      const chain = [list[i]];
+      let cur = list[i];
+      for (let j = i + 1; j < list.length; j++) {
+        const gap = dayDiff(cur.date, list[j].date);
+        if (gap < 25) continue;
+        if (gap > 35) break;
+        if (Math.abs(list[j].amount - cur.amount) <= 0.1 * Math.max(cur.amount, list[j].amount)) {
+          chain.push(list[j]);
+          cur = list[j];
+        }
+      }
+      if (chain.length >= 3) for (const c of chain) out.add(c.id);
+    }
+  }
+  return out;
+}
+function easter(year) {
+  const a = year % 19;
+  const b2 = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b2 / 4);
+  const e = b2 % 4;
+  const f = Math.floor((b2 + 8) / 25);
+  const g = Math.floor((b2 - f + 1) / 3);
+  const h = (19 * a + b2 - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = (h + l - 7 * m + 114) % 31 + 1;
+  return new Date(year, month - 1, day);
+}
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function brazilHolidays(year) {
+  const fixed = ["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "11-20", "12-25"].map((md) => `${year}-${md}`);
+  const e = easter(year);
+  const shift = (days2) => ymd(new Date(e.getFullYear(), e.getMonth(), e.getDate() + days2));
+  return /* @__PURE__ */ new Set([...fixed, shift(-48), shift(-47), shift(-2), shift(60)]);
+}
+function firstBusinessDay(year, month) {
+  const holidays = brazilHolidays(year);
+  for (let day = 1; day <= 31; day++) {
+    const d = new Date(year, month - 1, day);
+    if (d.getMonth() !== month - 1) break;
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6 && !holidays.has(ymd(d))) return ymd(d);
+  }
+  return ymd(new Date(year, month - 1, 1));
+}
+const REFUND_REASON = "Estorno de compra";
+const REFUNDED_REASON = "Compra estornada";
+function isRefund(t) {
+  if (t.type !== "income" || t.investment) return false;
+  const d = normalizeText(t.description ?? "");
+  if (/^pagamento recebido\b|\bfatura\b/.test(d)) return false;
+  return /^(estorno|credito de ")|\bestorno\b/.test(d);
+}
+function refundMerchant(description) {
+  const m = /cr[eé]dito de "([^"]+)"/i.exec(description ?? "");
+  return m ? normalizeText(m[1]) : null;
+}
+function pairRefunds(txs) {
+  const purchases = txs.filter((t) => t.type === "expense" && !t.ignoredReason).sort((a, b2) => b2.date.localeCompare(a.date));
+  const taken = /* @__PURE__ */ new Set();
+  const out = [];
+  const refunds = txs.filter((t) => t.refundOf == null && !t.ignoredReason && isRefund(t)).sort((a, b2) => a.date.localeCompare(b2.date));
+  for (const r of refunds) {
+    const merchant = refundMerchant(r.description);
+    const isIofRefund = /\biof\b/i.test(r.description ?? "");
+    const rd = Date.parse(r.date);
+    const tolerant = !!merchant || isIofRefund;
+    const candidates = purchases.filter((p) => {
+      if (taken.has(p.id)) return false;
+      const diff = Math.abs(p.amount - r.amount);
+      if (tolerant ? diff > Math.max(0.011, 0.05 * p.amount) : diff > 0.011) return false;
+      const days2 = (rd - Date.parse(p.date)) / 864e5;
+      if (days2 < 0 || days2 > 90) return false;
+      const pd = normalizeText(p.description ?? "");
+      if (isIofRefund !== /\biof\b/.test(pd)) return false;
+      return !merchant || pd.startsWith(merchant.slice(0, 12));
+    });
+    const match = candidates.sort((a, b2) => Math.abs(a.amount - r.amount) - Math.abs(b2.amount - r.amount) || b2.date.localeCompare(a.date))[0];
+    if (match) {
+      taken.add(match.id);
+      out.push([r.id, match.id]);
+    }
+  }
+  return out;
+}
+const INVESTMENT_GROUPS = [
+  { id: "renda-fixa", label: "Renda fixa", icon: "🏦" },
+  { id: "bolsa", label: "Bolsa de valores", icon: "📊" },
+  { id: "fundos", label: "Fundos de investimento", icon: "🧺" },
+  { id: "crypto", label: "Crypto", icon: "🪙" },
+  { id: "tesouro", label: "Tesouro direto", icon: "🇧🇷" },
+  { id: "outros", label: "Outros", icon: "📦" }
+];
 let db = null;
 let dbPath;
 const MIGRATIONS = [
@@ -1613,6 +1926,268 @@ const MIGRATIONS = [
       } catch {
       }
     }
+  },
+  {
+    version: 26,
+    label: "Investimentos: encerrar a partir de um mês (snapshot closed)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE investment_history ADD COLUMN closed INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 27,
+    label: "Transações: ignorar lançamento nos cálculos (ex.: pagamento de fatura)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN ignoredReason TEXT;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 28,
+    label: "Transações: id externo (Pluggy), assinatura do banco e status pendente",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN externalId TEXT;");
+      } catch {
+      }
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN externalSig TEXT;");
+      } catch {
+      }
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN pending INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+      }
+      try {
+        db2.run("CREATE INDEX IF NOT EXISTS idx_transactions_external ON transactions(externalId);");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 29,
+    label: "Transações: movimentação de investimento (aplicação/resgate) fora de receitas/gastos",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN investment INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 30,
+    label: "Transações: transferência entre contas próprias fora de receitas/gastos",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN transfer INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 31,
+    label: "Transações: forma de pagamento (preenche as existentes pela descrição)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN paymentMethod TEXT;");
+      } catch {
+      }
+      try {
+        const sel = db2.prepare("SELECT id, description FROM transactions WHERE paymentMethod IS NULL");
+        const rows = [];
+        while (sel.step()) rows.push(sel.getAsObject());
+        sel.free();
+        const upd = db2.prepare("UPDATE transactions SET paymentMethod = ? WHERE id = ?");
+        for (const r of rows) {
+          const pm = detectPaymentMethod(r.description);
+          if (pm) upd.run([pm, r.id]);
+        }
+        upd.free();
+      } catch {
+      }
+    }
+  },
+  {
+    version: 32,
+    label: 'Transações: desfaz "depósito" detectado em nome de loja (regra mais estrita)',
+    run: (db2) => {
+      try {
+        const sel = db2.prepare("SELECT id, description FROM transactions WHERE paymentMethod = 'deposito' AND externalId IS NULL");
+        const ids2 = [];
+        while (sel.step()) {
+          const r = sel.getAsObject();
+          if (detectPaymentMethod(r.description) !== "deposito") ids2.push(r.id);
+        }
+        sel.free();
+        for (const id of ids2) db2.run("UPDATE transactions SET paymentMethod = NULL WHERE id = ?", [id]);
+      } catch {
+      }
+    }
+  },
+  {
+    version: 33,
+    label: "Investimentos: vínculo com o Open Finance (id externo, nome original e detalhes)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE investments ADD COLUMN externalId TEXT;");
+      } catch {
+      }
+      try {
+        db2.run("ALTER TABLE investments ADD COLUMN externalName TEXT;");
+      } catch {
+      }
+      try {
+        db2.run("ALTER TABLE investments ADD COLUMN details TEXT;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 34,
+    label: 'Categorias: receita fixa (salário) × extra; "Salário" já marcada',
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE categories ADD COLUMN fixedIncome INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+      }
+      try {
+        db2.run("UPDATE categories SET fixedIncome = 1 WHERE id = 1 AND type = 'income';");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 35,
+    label: "Transações: recorrente (detecção automática + exceções por estabelecimento)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN recurring INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 36,
+    label: "Transações: número da parcela (n de N) vindo do Open Finance",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER;");
+      } catch {
+      }
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN installmentTotal INTEGER;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 37,
+    label: "Contas: vínculo com a conta do Open Finance (id externo e última sincronização)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE accounts ADD COLUMN externalId TEXT;");
+      } catch {
+      }
+      try {
+        db2.run("ALTER TABLE accounts ADD COLUMN syncedAt TEXT;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 38,
+    label: "Transações: estorno pareado com a compra (refundOf; -1 = não parear)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE transactions ADD COLUMN refundOf INTEGER;");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 39,
+    label: "Contas: saldo por mês (histórico) — registra o saldo atual das contas do Open Finance no mês da última sync",
+    run: (db2) => {
+      try {
+        db2.run(`CREATE TABLE IF NOT EXISTS account_balance_history (
+          accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+          month TEXT NOT NULL,
+          balance REAL NOT NULL,
+          syncedAt TEXT NOT NULL,
+          PRIMARY KEY (accountId, month)
+        );`);
+        db2.run(`INSERT OR IGNORE INTO account_balance_history (accountId, month, balance, syncedAt)
+                SELECT id, substr(syncedAt, 1, 7), balance, syncedAt FROM accounts WHERE externalId IS NOT NULL AND syncedAt IS NOT NULL;`);
+      } catch {
+      }
+    }
+  },
+  {
+    version: 40,
+    label: "Investimentos: movimentações do Open Finance (aportes, resgates, proventos, impostos)",
+    run: (db2) => {
+      try {
+        db2.run(`CREATE TABLE IF NOT EXISTS investment_movements (
+          externalId TEXT PRIMARY KEY,
+          externalInvestmentId TEXT NOT NULL,
+          investmentName TEXT,
+          investmentKind TEXT,
+          date TEXT NOT NULL,
+          type TEXT NOT NULL,
+          movementType TEXT,
+          amount REAL NOT NULL,
+          netAmount REAL,
+          quantity REAL
+        );`);
+      } catch {
+      }
+    }
+  },
+  {
+    version: 41,
+    label: "Investimentos: grupos dinâmicos (padrão + criados pelo usuário) e grupo escolhido por investimento",
+    run: (db2) => {
+      try {
+        db2.run(`CREATE TABLE IF NOT EXISTS investment_groups (
+          key TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          icon TEXT NOT NULL DEFAULT '📦',
+          sortOrder INTEGER NOT NULL DEFAULT 0,
+          builtin INTEGER NOT NULL DEFAULT 0
+        );`);
+      } catch {
+      }
+      INVESTMENT_GROUPS.forEach((g, i) => {
+        const stmt = db2.prepare("INSERT OR IGNORE INTO investment_groups (key, label, icon, sortOrder, builtin) VALUES (?, ?, ?, ?, 1)");
+        stmt.run([g.id, g.label, g.icon, g.id === "outros" ? 1e3 : (i + 1) * 10]);
+        stmt.free();
+      });
+      try {
+        db2.run("ALTER TABLE investments ADD COLUMN groupKey TEXT");
+      } catch {
+      }
+    }
+  },
+  {
+    version: 42,
+    label: "Contas: saldo separado (manual, por mês) — o Open Finance do Nubank não manda",
+    run: (db2) => {
+      try {
+        db2.run(`CREATE TABLE IF NOT EXISTS account_reserved_history (
+          accountId INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+          month TEXT NOT NULL,
+          amount REAL NOT NULL,
+          updatedAt TEXT NOT NULL,
+          PRIMARY KEY (accountId, month)
+        );`);
+      } catch {
+      }
+    }
   }
 ];
 function getUserVersion(database) {
@@ -1678,6 +2253,16 @@ function closeDb() {
     db.close();
     db = null;
   }
+}
+function backupDbFile(prefix) {
+  if (!dbPath) return null;
+  saveDb();
+  const now = /* @__PURE__ */ new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const stamp2 = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const target = path.join(dataDir(), `${prefix}-${stamp2}.db`);
+  fs.copyFileSync(dbPath, target);
+  return target;
 }
 const SNAP_KEEP = 3;
 function snapshotsDir() {
@@ -2563,9 +3148,128 @@ async function createCategory$1(name, type, color) {
   run$2(db2, "INSERT INTO categories (name, type, color) VALUES (?, ?, ?)", [name, type, color]);
   return getOne(db2, "SELECT * FROM categories WHERE id = ?", [lastInsertId(db2)]);
 }
+async function updateCategory$1(id, name, color) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE categories SET name = ?, color = ? WHERE id = ?", [name, color, id]);
+}
+async function setCategoryFixedIncome(id, fixed) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE categories SET fixedIncome = ? WHERE id = ?", [fixed ? 1 : 0, id]);
+}
 async function deleteCategory(id) {
   const db2 = await getDb();
+  run$2(db2, "DELETE FROM finance_rules WHERE categoryId = ?", [id]);
+  run$2(db2, "UPDATE transactions SET categoryId = NULL WHERE categoryId = ?", [id]);
+  run$2(db2, "DELETE FROM budgets WHERE categoryId = ?", [id]);
   run$2(db2, "DELETE FROM categories WHERE id = ?", [id]);
+}
+async function getFinanceRules() {
+  const db2 = await getDb();
+  return getAll(db2, "SELECT id, categoryId, keywords, active, position FROM finance_rules ORDER BY position, id");
+}
+async function createFinanceRule(categoryId, keywords) {
+  const db2 = await getDb();
+  const max = getOne(db2, "SELECT MAX(position) AS m FROM finance_rules");
+  run$2(db2, "INSERT INTO finance_rules (categoryId, keywords, active, position, createdAt) VALUES (?, ?, 1, ?, ?)", [
+    categoryId,
+    keywords,
+    (max?.m ?? -1) + 1,
+    (/* @__PURE__ */ new Date()).toISOString()
+  ]);
+}
+async function updateFinanceRule(id, categoryId, keywords, active) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE finance_rules SET categoryId = ?, keywords = ?, active = ? WHERE id = ?", [categoryId, keywords, active ? 1 : 0, id]);
+}
+async function deleteFinanceRule(id) {
+  const db2 = await getDb();
+  run$2(db2, "DELETE FROM finance_rules WHERE id = ?", [id]);
+}
+async function moveFinanceRule(id, dir) {
+  const db2 = await getDb();
+  const rules = getAll(db2, "SELECT id, categoryId, keywords, active, position FROM finance_rules ORDER BY position, id");
+  const i = rules.findIndex((r) => r.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= rules.length) return;
+  [rules[i], rules[j]] = [rules[j], rules[i]];
+  rules.forEach((r, pos) => run$2(db2, "UPDATE finance_rules SET position = ? WHERE id = ?", [pos, r.id]));
+}
+async function setTransactionsCategory(changes) {
+  const db2 = await getDb();
+  for (const c of changes) run$2(db2, "UPDATE transactions SET categoryId = ?, transfer = 0 WHERE id = ?", [c.categoryId, c.id]);
+}
+async function upsertExternalAccount(externalId, name, currency2, balance) {
+  const db2 = await getDb();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const cur = getOne(db2, "SELECT * FROM accounts WHERE externalId = ?", [externalId]);
+  const month = `${(/* @__PURE__ */ new Date()).getFullYear()}-${String((/* @__PURE__ */ new Date()).getMonth() + 1).padStart(2, "0")}`;
+  const record = (id2) => run$2(
+    db2,
+    "INSERT INTO account_balance_history (accountId, month, balance, syncedAt) VALUES (?, ?, ?, ?) ON CONFLICT(accountId, month) DO UPDATE SET balance = excluded.balance, syncedAt = excluded.syncedAt",
+    [id2, month, balance, now]
+  );
+  if (cur) {
+    run$2(db2, "UPDATE accounts SET balance = ?, currency = ?, syncedAt = ? WHERE id = ?", [balance, currency2, now, cur.id]);
+    record(cur.id);
+    return { id: cur.id, created: false };
+  }
+  run$2(db2, "INSERT INTO accounts (name, currency, balance, externalId, syncedAt) VALUES (?, ?, ?, ?, ?)", [name, currency2, balance, externalId, now]);
+  const id = lastInsertId(db2);
+  record(id);
+  return { id, created: true };
+}
+async function upsertInvestmentMovements(rows) {
+  const db2 = await getDb();
+  for (const r of rows) {
+    run$2(
+      db2,
+      `INSERT INTO investment_movements (externalId, externalInvestmentId, investmentName, investmentKind, date, type, movementType, amount, netAmount, quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(externalId) DO UPDATE SET investmentName = excluded.investmentName, investmentKind = excluded.investmentKind, date = excluded.date,
+         type = excluded.type, movementType = excluded.movementType, amount = excluded.amount, netAmount = excluded.netAmount, quantity = excluded.quantity`,
+      [r.externalId, r.externalInvestmentId, r.investmentName, r.investmentKind, r.date, r.type, r.movementType, r.amount, r.netAmount, r.quantity]
+    );
+  }
+}
+async function getInvestmentMovements() {
+  const db2 = await getDb();
+  return getAll(db2, "SELECT * FROM investment_movements ORDER BY date");
+}
+async function getAccountReservedHistory() {
+  const db2 = await getDb();
+  return getAll(db2, "SELECT accountId, month, amount, updatedAt FROM account_reserved_history ORDER BY month");
+}
+async function setAccountReserved(accountId, month, amount) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`);
+  const db2 = await getDb();
+  run$2(
+    db2,
+    "INSERT INTO account_reserved_history (accountId, month, amount, updatedAt) VALUES (?, ?, ?, ?) ON CONFLICT(accountId, month) DO UPDATE SET amount = excluded.amount, updatedAt = excluded.updatedAt",
+    [accountId, month, amount, (/* @__PURE__ */ new Date()).toISOString()]
+  );
+}
+async function getAccountBalanceHistory() {
+  const db2 = await getDb();
+  return getAll(db2, "SELECT accountId, month, balance, syncedAt FROM account_balance_history ORDER BY month");
+}
+async function assignAccountToUnlinked(accountId) {
+  const db2 = await getDb();
+  const n = getOne(db2, "SELECT COUNT(*) AS n FROM transactions WHERE accountId IS NULL")?.n ?? 0;
+  if (n) run$2(db2, "UPDATE transactions SET accountId = ? WHERE accountId IS NULL", [accountId]);
+  return n;
+}
+async function resetFinanceImportedData() {
+  const db2 = await getDb();
+  const count2 = (t) => getOne(db2, `SELECT COUNT(*) AS n FROM ${t}`)?.n ?? 0;
+  const out = { transactions: count2("transactions"), investments: count2("investments"), accounts: count2("accounts") };
+  run$2(db2, "DELETE FROM transactions");
+  run$2(db2, "DELETE FROM investment_history");
+  run$2(db2, "DELETE FROM investment_movements");
+  run$2(db2, "DELETE FROM investments");
+  run$2(db2, "DELETE FROM account_balance_history");
+  run$2(db2, "DELETE FROM accounts");
+  run$2(db2, "DELETE FROM settings WHERE key = 'finance_default_account'");
+  return out;
 }
 async function getTransactions(month) {
   const db2 = await getDb();
@@ -2595,6 +3299,74 @@ async function updateTransaction(id, accountId, categoryId, amount, currency2, t
     [accountId, categoryId, amount, currency2, type, description, date, id]
   );
 }
+async function applyExternalTransactionUpdate(id, fields, externalId, externalSig, pending2) {
+  const db2 = await getDb();
+  const sets = ["externalId = ?", "externalSig = ?", "pending = ?"];
+  const vals = [externalId, externalSig, pending2];
+  for (const k of ["amount", "description", "date", "type", "paymentMethod", "installmentNumber", "installmentTotal"]) {
+    if (k in fields) {
+      sets.push(`${k} = ?`);
+      vals.push(fields[k] ?? null);
+    }
+  }
+  run$2(db2, `UPDATE transactions SET ${sets.join(", ")} WHERE id = ?`, [...vals, id]);
+}
+async function getRecurringOverrides() {
+  const db2 = await getDb();
+  return getAll(db2, "SELECT key, recurring FROM recurring_overrides");
+}
+async function setRecurringOverride(key, recurring) {
+  const db2 = await getDb();
+  if (recurring == null) run$2(db2, "DELETE FROM recurring_overrides WHERE key = ?", [key]);
+  else run$2(db2, "INSERT INTO recurring_overrides (key, recurring) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET recurring = excluded.recurring", [key, recurring ? 1 : 0]);
+}
+async function setTransactionsRecurring(recurringIds) {
+  const db2 = await getDb();
+  const rows = getAll(db2, "SELECT id, recurring FROM transactions");
+  let changed2 = 0;
+  for (const r of rows) {
+    const want = recurringIds.has(r.id) ? 1 : 0;
+    if (r.recurring !== want) {
+      run$2(db2, "UPDATE transactions SET recurring = ? WHERE id = ?", [want, r.id]);
+      changed2++;
+    }
+  }
+  return changed2;
+}
+async function setTransactionPaymentMethod(id, method) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE transactions SET paymentMethod = ? WHERE id = ?", [method, id]);
+}
+async function setTransactionInvestmentFlag(id, investment) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE transactions SET investment = ? WHERE id = ?", [investment ? 1 : 0, id]);
+}
+async function setTransactionKind(id, kind) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE transactions SET investment = ?, transfer = ? WHERE id = ?", [kind === "investment" ? 1 : 0, kind === "transfer" ? 1 : 0, id]);
+}
+async function setTransactionIgnored(id, reason) {
+  const db2 = await getDb();
+  if (reason == null) {
+    const t = getOne(db2, "SELECT id, refundOf FROM transactions WHERE id = ?", [id]);
+    const refund = t?.refundOf && t.refundOf > 0 ? t : getOne(db2, "SELECT id, refundOf FROM transactions WHERE refundOf = ?", [id]);
+    if (refund && refund.refundOf && refund.refundOf > 0) {
+      run$2(db2, "UPDATE transactions SET ignoredReason = NULL WHERE id IN (?, ?)", [refund.id, refund.refundOf]);
+      run$2(db2, "UPDATE transactions SET refundOf = -1 WHERE id = ?", [refund.id]);
+      return;
+    }
+  } else if (reason) {
+    run$2(db2, "UPDATE transactions SET refundOf = COALESCE(refundOf, -1) WHERE id = ? AND type = ?", [id, "income"]);
+  }
+  run$2(db2, "UPDATE transactions SET ignoredReason = ? WHERE id = ?", [reason, id]);
+}
+async function applyRefundPairs(pairs, refundReason, refundedReason) {
+  const db2 = await getDb();
+  for (const [refundId, purchaseId] of pairs) {
+    run$2(db2, "UPDATE transactions SET refundOf = ?, ignoredReason = ? WHERE id = ?", [purchaseId, refundReason, refundId]);
+    run$2(db2, "UPDATE transactions SET ignoredReason = ? WHERE id = ?", [refundedReason, purchaseId]);
+  }
+}
 async function deleteTransaction(id) {
   const db2 = await getDb();
   run$2(db2, "DELETE FROM transactions WHERE id = ?", [id]);
@@ -2604,8 +3376,8 @@ async function bulkInsertTransactions(rows) {
   for (const r of rows) {
     run$2(
       db2,
-      "INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date]
+      "INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending, investment, transfer, paymentMethod, installmentNumber, installmentTotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0, r.investment ?? 0, r.transfer ?? 0, r.paymentMethod ?? null, r.installmentNumber ?? null, r.installmentTotal ?? null]
     );
   }
   return rows.length;
@@ -2633,7 +3405,7 @@ function syncInvestmentLatest(db2, investmentId) {
     "SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1",
     [investmentId]
   );
-  if (latest) run$2(db2, "UPDATE investments SET amount = ? WHERE id = ?", [latest.amount, investmentId]);
+  if (latest) run$2(db2, "UPDATE investments SET amount = ? WHERE id = ?", [latest.closed ? 0 : latest.amount, investmentId]);
 }
 async function getInvestments() {
   const db2 = await getDb();
@@ -2643,11 +3415,11 @@ async function getInvestmentHistory() {
   const db2 = await getDb();
   return getAll(db2, "SELECT * FROM investment_history ORDER BY month");
 }
-async function createInvestment(name, type, amount, currency2) {
+async function createInvestment(name, type, amount, currency2, month, groupKey) {
   const db2 = await getDb();
-  run$2(db2, "INSERT INTO investments (name, type, amount, currency) VALUES (?, ?, ?, ?)", [name, type, amount, currency2]);
+  run$2(db2, "INSERT INTO investments (name, type, amount, currency, groupKey) VALUES (?, ?, ?, ?, ?)", [name, type, amount, currency2, groupKey ?? null]);
   const id = lastInsertId(db2);
-  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id, currentMonthKey(), amount]);
+  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id, month || currentMonthKey(), amount]);
   return getOne(db2, "SELECT * FROM investments WHERE id = ?", [id]);
 }
 async function setInvestmentValue(investmentId, month, amount) {
@@ -2658,11 +3430,76 @@ async function setInvestmentValue(investmentId, month, amount) {
     [investmentId, month]
   );
   if (existing) {
-    run$2(db2, "UPDATE investment_history SET amount = ? WHERE id = ?", [amount, existing.id]);
+    run$2(db2, "UPDATE investment_history SET amount = ?, closed = 0 WHERE id = ?", [amount, existing.id]);
   } else {
     run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [investmentId, month, amount]);
   }
   syncInvestmentLatest(db2, investmentId);
+}
+async function closeInvestment(id, month) {
+  const db2 = await getDb();
+  run$2(db2, "DELETE FROM investment_history WHERE investmentId = ? AND month >= ?", [id, month]);
+  const before = getOne(db2, "SELECT COUNT(*) AS n FROM investment_history WHERE investmentId = ?", [id]);
+  if (!before?.n) {
+    run$2(db2, "DELETE FROM investments WHERE id = ?", [id]);
+    return;
+  }
+  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount, closed) VALUES (?, ?, 0, 1)", [id, month]);
+  syncInvestmentLatest(db2, id);
+}
+async function renameInvestment(id, name) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id]);
+}
+async function setInvestmentGroup(id, groupKey) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE investments SET groupKey = ? WHERE id = ?", [groupKey, id]);
+}
+async function getInvestmentGroups() {
+  const db2 = await getDb();
+  return getAll(db2, "SELECT * FROM investment_groups ORDER BY sortOrder, label");
+}
+async function createInvestmentGroup(label, icon) {
+  const db2 = await getDb();
+  const last = getOne(db2, "SELECT * FROM investment_groups ORDER BY sortOrder DESC, label DESC LIMIT 1");
+  let order = (last?.sortOrder ?? 0) + 10;
+  if (last?.key === "outros") {
+    order = last.sortOrder;
+    run$2(db2, "UPDATE investment_groups SET sortOrder = ? WHERE key = ?", [last.sortOrder + 10, "outros"]);
+  }
+  const key = `g${Date.now().toString(36)}`;
+  run$2(db2, "INSERT INTO investment_groups (key, label, icon, sortOrder, builtin) VALUES (?, ?, ?, ?, 0)", [key, label, icon || "📦", order]);
+  return getOne(db2, "SELECT * FROM investment_groups WHERE key = ?", [key]);
+}
+async function updateInvestmentGroup(key, label, icon) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE investment_groups SET label = ?, icon = ? WHERE key = ?", [label, icon || "📦", key]);
+}
+async function deleteInvestmentGroup(key) {
+  const db2 = await getDb();
+  const g = getOne(db2, "SELECT * FROM investment_groups WHERE key = ?", [key]);
+  if (!g || g.builtin) return;
+  run$2(db2, "UPDATE investments SET groupKey = NULL WHERE groupKey = ?", [key]);
+  run$2(db2, "DELETE FROM investment_groups WHERE key = ?", [key]);
+}
+async function moveInvestmentGroup(key, dir) {
+  const db2 = await getDb();
+  const all2 = getAll(db2, "SELECT * FROM investment_groups ORDER BY sortOrder, label");
+  const i = all2.findIndex((g) => g.key === key);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= all2.length) return;
+  const order = all2.map((g) => g.key);
+  [order[i], order[j]] = [order[j], order[i]];
+  order.forEach((k, idx) => run$2(db2, "UPDATE investment_groups SET sortOrder = ? WHERE key = ?", [(idx + 1) * 10, k]));
+}
+async function setInvestmentExternal(id, externalId, externalName, details, type, name) {
+  const db2 = await getDb();
+  if (name) run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id]);
+  run$2(db2, "UPDATE investments SET externalId = ?, externalName = ?, details = ?, type = ? WHERE id = ?", [externalId, externalName, details, type, id]);
+}
+async function getInvestmentLatest(id) {
+  const db2 = await getDb();
+  return getOne(db2, "SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1", [id]) ?? null;
 }
 async function deleteInvestment(id) {
   const db2 = await getDb();
@@ -71748,7 +72585,7 @@ async function coverage$1(m) {
   const u = buildUniverse(m.config, todayLocal());
   return coverageOf(u, await listTasks(m.id));
 }
-async function summarize$3(m, fx) {
+async function summarize$4(m, fx) {
   const today2 = todayLocal();
   const [{ scored, rows }, run2, cov, lastAssisted] = await Promise.all([scoredOffers(m, fx), activeRun(m.id), coverage$1(m), lastAssistedRun(m.id)]);
   const live2 = scored.filter((s2) => rows.get(s2.offer).available);
@@ -72762,6 +73599,29 @@ async function commitContext(dir) {
     (diff ?? "").slice(0, 14e3)
   ].join("\n");
 }
+const CONV_EFFORTS = [
+  { v: "low", label: "Baixo" },
+  { v: "medium", label: "Médio" },
+  { v: "high", label: "Alto" },
+  { v: "xhigh", label: "Muito alto" },
+  { v: "max", label: "Máximo" }
+];
+const CONV_DEFAULT_MODEL_KEY = "prompt_runner_model";
+const CONV_DEFAULT_EFFORT_KEY = "prompt_runner_effort";
+const CONV_FALLBACK_MODEL = "opus";
+const CONV_FALLBACK_EFFORT = "medium";
+function convDefaultModel(saved) {
+  const v = (saved ?? "").trim();
+  return v || CONV_FALLBACK_MODEL;
+}
+function convDefaultEffort(saved) {
+  const v = (saved ?? "").trim();
+  return CONV_EFFORTS.some((e) => e.v === v) ? v : CONV_FALLBACK_EFFORT;
+}
+const CONV_PAGE_SIZE = 40;
+const CONV_TURNS_PAGE_SIZE = 20;
+const IMAGE_MEDIA_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const MAX_IMAGES_PER_MESSAGE = 8;
 function all$2(db2, sql, params = []) {
   const st = db2.prepare(sql);
   if (params.length) st.bind(params);
@@ -72838,9 +73698,39 @@ function toTurn(r) {
   };
 }
 const CONV_SELECT = `SELECT c.*, (SELECT COUNT(*) FROM ai_conv_turns t WHERE t.conversationId = c.id) AS turnCount FROM ai_conversations c`;
-async function listConversations(opts = {}) {
+async function listConversations(query = {}) {
   const db2 = await getDb();
-  return all$2(db2, `${CONV_SELECT} WHERE c.archived = ? ORDER BY c.pinned DESC, c.updatedAt DESC LIMIT 300`, [opts.archived ? 1 : 0]).map(toConv);
+  const limit = Math.max(1, Math.min(200, Math.floor(query.limit ?? CONV_PAGE_SIZE)));
+  const where = ["c.archived = ?"];
+  const params = [query.archived ? 1 : 0];
+  const q2 = (query.q ?? "").trim().toLowerCase();
+  if (q2) {
+    const like = `%${q2.replace(/[\\%_]/g, (m) => "\\" + m)}%`;
+    where.push(`(LOWER(c.title) LIKE ? ESCAPE '\\' OR c.projectId IN (SELECT id FROM projects WHERE LOWER(name) LIKE ? ESCAPE '\\'))`);
+    params.push(like, like);
+  }
+  if (query.projectId === "none") where.push("c.projectId IS NULL");
+  else if (typeof query.projectId === "number") {
+    where.push("c.projectId = ?");
+    params.push(query.projectId);
+  }
+  const base = where.join(" AND ");
+  const first = !query.after;
+  const pinned = first ? all$2(db2, `${CONV_SELECT} WHERE ${base} AND c.pinned = 1 ORDER BY c.updatedAt DESC, c.id DESC`, params) : [];
+  const restWhere = [base, "c.pinned = 0"];
+  const restParams = [...params];
+  if (query.after) {
+    restWhere.push("(c.updatedAt < ? OR (c.updatedAt = ? AND c.id < ?))");
+    restParams.push(query.after.updatedAt, query.after.updatedAt, query.after.id);
+  }
+  const rest = all$2(db2, `${CONV_SELECT} WHERE ${restWhere.join(" AND ")} ORDER BY c.updatedAt DESC, c.id DESC LIMIT ?`, [...restParams, limit + 1]);
+  const hasMore = rest.length > limit;
+  const page = { items: [...pinned, ...rest.slice(0, limit)].map(toConv), hasMore };
+  if (first) {
+    page.projectIds = all$2(db2, "SELECT DISTINCT projectId FROM ai_conversations WHERE projectId IS NOT NULL").map((r) => Number(r.projectId));
+    page.hasNoProject = !!one$2(db2, "SELECT 1 AS x FROM ai_conversations WHERE projectId IS NULL LIMIT 1");
+  }
+  return page;
 }
 async function getConversation(id) {
   const db2 = await getDb();
@@ -72985,6 +73875,21 @@ async function deleteConversation(id) {
 async function listTurns(conversationId) {
   const db2 = await getDb();
   return all$2(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id", [conversationId]).map(toTurn);
+}
+async function listTurnsPage(conversationId, opts) {
+  const db2 = await getDb();
+  const limit = Math.max(1, Math.min(500, Math.floor(opts.limit)));
+  let rows;
+  if (opts.sinceId != null) {
+    rows = all$2(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? AND id >= ? ORDER BY id", [conversationId, opts.sinceId]);
+  } else {
+    const before = opts.beforeId != null ? " AND id < ?" : "";
+    const params = opts.beforeId != null ? [conversationId, opts.beforeId, limit] : [conversationId, limit];
+    rows = all$2(db2, `SELECT * FROM ai_conv_turns WHERE conversationId = ?${before} ORDER BY id DESC LIMIT ?`, params).reverse();
+  }
+  const oldest = rows[0]?.id;
+  const hasMore = oldest != null ? !!one$2(db2, "SELECT 1 AS x FROM ai_conv_turns WHERE conversationId = ? AND id < ? LIMIT 1", [conversationId, oldest]) : false;
+  return { turns: rows.map(toTurn), hasMore };
 }
 async function createTurn(conversationId, prompt, attachments = []) {
   const db2 = await getDb();
@@ -73595,9 +74500,10 @@ const SENSITIVE_KEYS = /* @__PURE__ */ new Set([
   "flights_travelpayouts_token",
   "flights_duffel_token",
   "chats_beeper_token",
-  "chats_agent_key"
+  "chats_agent_key",
+  "gemini_api_key"
 ]);
-const SERVER_ONLY_KEYS = /* @__PURE__ */ new Set(["chats_beeper_token", "chats_agent_key"]);
+const SERVER_ONLY_KEYS = /* @__PURE__ */ new Set(["chats_beeper_token", "chats_agent_key", "gemini_api_key"]);
 const AES_PREFIX = "aes:";
 const LEGACY_PREFIX = "enc:";
 let cachedKey = null;
@@ -74254,8 +75160,49 @@ async function deleteRecurringBlock(eventId, email) {
     throw scopeError(res.status, t) ?? new Error(`Falha ao remover o evento (${res.status}).`);
   }
 }
+const FALLBACK_CATEGORY_ID = 6;
+const uncategorized = (t) => t.categoryId == null || t.categoryId === FALLBACK_CATEGORY_ID;
+async function categorizeNew(rows) {
+  const rules = await getFinanceRules();
+  if (!rules.some((r) => r.active)) return rows;
+  const categories = await getCategories();
+  return rows.map((r) => {
+    if (!uncategorized(r)) return r;
+    const rule = matchFinanceRule(rules, categories, r.description, r.type);
+    return rule ? { ...r, categoryId: rule.categoryId, transfer: 0 } : r;
+  });
+}
+async function previewFinanceRules(month) {
+  const [rules, categories, txs] = await Promise.all([getFinanceRules(), getCategories(), getTransactions(month)]);
+  const out = [];
+  for (const t of txs) {
+    if (!uncategorized(t) || t.ignoredReason) continue;
+    const rule = matchFinanceRule(rules, categories, t.description, t.type);
+    if (rule && rule.categoryId !== t.categoryId) {
+      out.push({ id: t.id, date: t.date, description: t.description, amount: t.amount, currency: t.currency, type: t.type, toCategoryId: rule.categoryId, ruleId: rule.id });
+    }
+  }
+  return out;
+}
 const PLUGGY_API = "https://api.pluggy.ai";
 const OUTROS_CATEGORY_ID = 6;
+async function syncBankAccount(accounts) {
+  const bank = accounts.find((a) => a.type === "BANK" && a.subtype !== "SAVINGS_ACCOUNT") ?? accounts.find((a) => a.type === "BANK");
+  if (!bank) return null;
+  const label = (bank.marketingName || bank.name || "Conta corrente").trim();
+  const name = bank.number ? `${label} · ${bank.number}` : label;
+  const { id, created } = await upsertExternalAccount(bank.id, name, (bank.currencyCode || "BRL").toUpperCase(), Math.round((bank.balance ?? 0) * 100) / 100);
+  if (!await getSetting("finance_default_account")) await setSetting("finance_default_account", String(id));
+  if (created) await assignAccountToUnlinked(id);
+  return id;
+}
+function isCardBillPayment(t, acc) {
+  if (t.operationType === "PAGAMENTO_FATURA") return true;
+  if ((t.category ?? "").toLowerCase() === "credit card payment") return true;
+  const d = (t.description ?? "").toLowerCase();
+  if (/\b(pagamento|pagto|pgto|pag)\.? (de |da )?fatura\b/.test(d)) return true;
+  return acc.type === "CREDIT" && /^pagamento recebido\b/.test(d);
+}
 async function loadFx() {
   const base = await getSetting("finance_base") || "BRL";
   let rates = {};
@@ -74356,7 +75303,9 @@ async function fetchAllTransactions(accountId, key) {
   }
   return out;
 }
-async function syncPluggy() {
+const legacyKey = (t) => `${t.date}|${t.amount}|${t.description ?? ""}`;
+async function syncPluggy(month) {
+  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error(`Mês inválido: ${month}`);
   const itemId = await getSetting("pluggy_item_id") ?? "";
   if (!itemId) throw new Error("Configure o Item ID do Pluggy (banco conectado) em Configurações.");
   const key = await apiKey();
@@ -74364,32 +75313,259 @@ async function syncPluggy() {
   if (!accounts || accounts.length === 0) {
     throw new Error("Nenhuma conta encontrada para esse Item ID. Verifique se o Item está conectado e pronto no Pluggy (e se o Item ID está correto).");
   }
+  const defaultAccountId = await syncBankAccount(accounts);
   const fx = await loadFx();
   const incoming = [];
+  const seenIds = /* @__PURE__ */ new Set();
   for (const acc of accounts) {
     const txs = await fetchAllTransactions(acc.id, key);
     for (const t of txs) {
-      const isExpense = t.type === "DEBIT" || t.amount < 0;
-      incoming.push({
-        accountId: null,
+      seenIds.add(t.id);
+      const isExpense = acc.type === "CREDIT" ? t.amount > 0 : t.type === "DEBIT" || t.amount < 0;
+      const row = {
+        accountId: defaultAccountId,
         categoryId: OUTROS_CATEGORY_ID,
         amount: Math.round(toBrl(t, acc, fx) * 100) / 100,
         // padroniza tudo em BRL
         currency: "BRL",
         type: isExpense ? "expense" : "income",
         description: t.description ?? null,
-        date: t.date.slice(0, 10)
-      });
+        date: t.date.slice(0, 10),
+        ignoredReason: isCardBillPayment(t, acc) ? "Pagamento de fatura do cartão" : null,
+        investment: detectInvestmentMove(t.description, t.category, t.operationType) ? 1 : 0,
+        installmentNumber: t.creditCardMetadata?.totalInstallments ? t.creditCardMetadata.installmentNumber ?? null : null,
+        installmentTotal: t.creditCardMetadata?.totalInstallments ?? null,
+        paymentMethod: detectPaymentMethod(t.description, {
+          accountType: acc.type,
+          paymentMethod: t.paymentData?.paymentMethod,
+          operationType: t.operationType
+        }),
+        transfer: !detectInvestmentMove(t.description, t.category, t.operationType) && detectOwnTransfer(t.description, t.category) ? 1 : 0,
+        externalId: t.id,
+        pending: t.status === "PENDING" ? 1 : 0
+      };
+      incoming.push({ ...row, externalSig: JSON.stringify([row.amount, row.description, row.date, row.type, row.pending]) });
     }
   }
   const existing = await getTransactions();
-  const seen2 = new Set(existing.map((t) => `${t.date}|${t.amount}|${t.description ?? ""}`));
-  const fresh = incoming.filter((t) => !seen2.has(`${t.date}|${t.amount}|${t.description ?? ""}`));
-  if (fresh.length) await bulkInsertTransactions(fresh);
-  return { imported: fresh.length, skipped: incoming.length - fresh.length };
+  const byExternal = /* @__PURE__ */ new Map();
+  const legacy = /* @__PURE__ */ new Map();
+  for (const t of existing) {
+    if (t.externalId) byExternal.set(t.externalId, t);
+    else {
+      const k = legacyKey(t);
+      legacy.set(k, [...legacy.get(k) ?? [], t]);
+    }
+  }
+  const fresh = [];
+  let updated = 0;
+  let skipped = 0;
+  for (const inc of incoming) {
+    const cur = byExternal.get(inc.externalId);
+    if (cur) {
+      const fillPayment = {
+        ...!cur.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {},
+        ...cur.installmentTotal == null && inc.installmentTotal ? { installmentNumber: inc.installmentNumber, installmentTotal: inc.installmentTotal } : {}
+      };
+      if (cur.externalSig === inc.externalSig) {
+        if (Object.keys(fillPayment).length) await applyExternalTransactionUpdate(cur.id, fillPayment, inc.externalId, inc.externalSig, inc.pending);
+        if (!month || inc.date.startsWith(month)) skipped++;
+        continue;
+      }
+      let prev = null;
+      try {
+        prev = cur.externalSig ? JSON.parse(cur.externalSig) : null;
+      } catch {
+        prev = null;
+      }
+      const fields = { ...fillPayment };
+      const next = [inc.amount, inc.description, inc.date, inc.type];
+      ["amount", "description", "date", "type"].forEach((k, i) => {
+        const bankChanged = !prev || prev[i] !== next[i];
+        if (bankChanged && cur[k] !== next[i]) Object.assign(fields, { [k]: next[i] });
+      });
+      await applyExternalTransactionUpdate(cur.id, fields, inc.externalId, inc.externalSig, inc.pending);
+      updated++;
+      continue;
+    }
+    if (month && !inc.date.startsWith(month)) continue;
+    const old = legacy.get(legacyKey(inc))?.shift();
+    if (old) {
+      await applyExternalTransactionUpdate(
+        old.id,
+        {
+          ...!old.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {},
+          ...old.installmentTotal == null && inc.installmentTotal ? { installmentNumber: inc.installmentNumber, installmentTotal: inc.installmentTotal } : {}
+        },
+        inc.externalId,
+        inc.externalSig,
+        inc.pending
+      );
+      skipped++;
+      continue;
+    }
+    fresh.push(inc);
+  }
+  if (fresh.length) await bulkInsertTransactions(await categorizeNew(fresh));
+  const vanishedPending = existing.filter((t) => t.externalId && t.pending && !seenIds.has(t.externalId) && (!month || t.date.startsWith(month))).map((t) => ({ id: t.id, date: t.date, description: t.description, amount: t.amount, currency: t.currency }));
+  return { imported: fresh.length, updated, skipped, vanishedPending };
 }
 async function pluggyConfigured() {
   return !!await getSetting("pluggy_client_id") && !!await getSetting("pluggy_item_id");
+}
+const monthKey = (d = /* @__PURE__ */ new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+async function syncPluggyInvestments() {
+  const itemId = await getSetting("pluggy_item_id") ?? "";
+  if (!itemId) throw new Error("Configure o Item ID do Pluggy (banco conectado) em Configurações.");
+  const key = await apiKey();
+  const remote = [];
+  for (let page = 1; page <= 50; page++) {
+    const r = await get(
+      `/investments?itemId=${encodeURIComponent(itemId)}&pageSize=500&page=${page}`,
+      key
+    );
+    remote.push(...r.results ?? []);
+    if (!r.totalPages || page >= r.totalPages) break;
+  }
+  const month = monthKey();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const local = await getInvestments();
+  const byExternal = new Map(local.filter((i) => i.externalId).map((i) => [i.externalId, i]));
+  const seen2 = /* @__PURE__ */ new Set();
+  let created = 0;
+  let updated = 0;
+  let closed = 0;
+  for (const inv of remote) {
+    seen2.add(inv.id);
+    const kind = pluggyInvestmentKind(inv.type, inv.subtype);
+    const details = {
+      source: "pluggy",
+      kind,
+      rateText: pluggyRateText(inv.rate, inv.rateType, inv.fixedAnnualRate),
+      dueDate: inv.dueDate ? inv.dueDate.slice(0, 10) : null,
+      issuer: inv.issuer ?? null,
+      gross: inv.amount ?? null,
+      incomeTax: inv.taxes ?? null,
+      iof: inv.taxes2 ?? null,
+      withdrawable: inv.amountWithdrawal ?? null,
+      quantity: inv.quantity ?? null,
+      code: inv.code ?? null,
+      syncedAt: now
+    };
+    const value = Math.round((inv.balance ?? 0) * 100) / 100;
+    const withdrawn = inv.status === "TOTAL_WITHDRAWAL";
+    const cur = byExternal.get(inv.id);
+    if (!cur) {
+      if (withdrawn || value <= 0) continue;
+      const createdInv = await createInvestment(inv.name, kind, value, (inv.currencyCode || "BRL").toUpperCase(), month);
+      await setInvestmentExternal(createdInv.id, inv.id, inv.name, JSON.stringify(details), kind);
+      created++;
+      continue;
+    }
+    const renamed = cur.externalName != null && cur.name !== cur.externalName;
+    await setInvestmentExternal(cur.id, inv.id, inv.name, JSON.stringify(details), kind, renamed ? void 0 : inv.name);
+    const latest = await getInvestmentLatest(cur.id);
+    if (withdrawn || value <= 0) {
+      if (latest && !latest.closed) {
+        await closeInvestment(cur.id, month);
+        closed++;
+      }
+      continue;
+    }
+    if (!latest || latest.closed || latest.month !== month || Math.abs(latest.amount - value) > 4e-3) {
+      await setInvestmentValue(cur.id, month, value);
+      updated++;
+    }
+  }
+  const vanished = [];
+  for (const inv of local) {
+    if (!inv.externalId || seen2.has(inv.externalId)) continue;
+    const latest = await getInvestmentLatest(inv.id);
+    if (latest && !latest.closed) vanished.push({ id: inv.id, name: inv.name });
+  }
+  const movements = [];
+  for (const inv of remote) {
+    for (let page = 1; page <= 20; page++) {
+      const r = await get(`/investments/${inv.id}/transactions?pageSize=500&page=${page}`, key);
+      for (const t of r.results ?? []) {
+        movements.push({
+          externalId: t.id,
+          externalInvestmentId: inv.id,
+          investmentName: inv.code || inv.name,
+          investmentKind: pluggyInvestmentKind(inv.type, inv.subtype),
+          date: String(t.date).slice(0, 10),
+          type: String(t.type ?? "OTHER"),
+          movementType: t.movementType ?? null,
+          amount: Math.round(Math.abs(t.amount ?? t.netAmount ?? 0) * 100) / 100,
+          netAmount: t.netAmount != null ? Math.round(Math.abs(t.netAmount) * 100) / 100 : null,
+          quantity: t.quantity ?? null
+        });
+      }
+      if (!r.totalPages || page >= r.totalPages) break;
+    }
+  }
+  await upsertInvestmentMovements(movements);
+  return { created, updated, closed, movements: movements.length, vanished };
+}
+async function reclassifyInvestmentFlags() {
+  const itemId = await getSetting("pluggy_item_id") ?? "";
+  if (!itemId) throw new Error("Configure o Item ID do Pluggy em Configurações.");
+  const key = await apiKey();
+  const accounts = (await get(`/accounts?itemId=${encodeURIComponent(itemId)}`, key)).results ?? [];
+  const derived = /* @__PURE__ */ new Map();
+  for (const acc of accounts) {
+    for (const t of await fetchAllTransactions(acc.id, key)) derived.set(t.id, detectInvestmentMove(t.description, t.category, t.operationType));
+  }
+  const existing = await getTransactions();
+  const toInvestment = [];
+  const fromInvestment = [];
+  let checked = 0;
+  for (const t of existing) {
+    if (!t.externalId || !derived.has(t.externalId)) continue;
+    checked++;
+    const want = derived.get(t.externalId);
+    if (!!t.investment === want) continue;
+    await setTransactionInvestmentFlag(t.id, want);
+    (want ? toInvestment : fromInvestment).push(`${t.date} ${t.type === "income" ? "+" : "-"}${t.amount} ${t.description ?? ""}`);
+  }
+  return { checked, toInvestment, fromInvestment };
+}
+async function recomputeRecurring() {
+  const [txs, overrides] = await Promise.all([getTransactions(), getRecurringOverrides()]);
+  const confirmed = new Set(overrides.filter((o) => o.recurring === 1).map((o) => o.key));
+  const ids2 = /* @__PURE__ */ new Set();
+  for (const t of txs) if (confirmed.has(recurringKey(t.description, t.type))) ids2.add(t.id);
+  return setTransactionsRecurring(ids2);
+}
+async function recurringSuggestions() {
+  const [txs, overrides] = await Promise.all([getTransactions(), getRecurringOverrides()]);
+  const decided = new Set(overrides.map((o) => o.key));
+  const auto = detectRecurringIds(txs);
+  const byKey = /* @__PURE__ */ new Map();
+  for (const t of txs) {
+    if (!auto.has(t.id)) continue;
+    const k = recurringKey(t.description, t.type);
+    if (!k || decided.has(k)) continue;
+    if (!byKey.has(k)) byKey.set(k, { list: [] });
+    byKey.get(k).list.push(t);
+  }
+  return [...byKey.entries()].map(([key, { list }]) => {
+    const last = list.reduce((a, b2) => b2.date > a.date ? b2 : a);
+    return {
+      key,
+      label: last.description ?? key,
+      type: last.type,
+      count: list.length,
+      avgAmount: Math.round(list.reduce((s2, t) => s2 + t.amount, 0) / list.length * 100) / 100,
+      currency: last.currency,
+      lastDate: last.date
+    };
+  }).sort((a, b2) => b2.lastDate.localeCompare(a.lastDate) || b2.count - a.count);
+}
+async function reconcileRefunds() {
+  const pairs = pairRefunds(await getTransactions());
+  if (pairs.length) await applyRefundPairs(pairs, REFUND_REASON, REFUNDED_REASON);
+  return pairs.length;
 }
 const OSRM_DEFAULT = "https://router.project-osrm.org";
 let lastOsrmCall = 0;
@@ -74611,20 +75787,20 @@ const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash
 function decode(s2) {
   return s2.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ").replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d))).replace(/&([a-z]+);/gi, (m, n) => ENT[n.toLowerCase()] ?? m).replace(/\s+/g, " ").trim();
 }
-const tag = (xml, name) => decode(xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] ?? "");
-function parseRss(xml, fallbackSource) {
-  const channel = tag(xml.split(/<item[\s>]/i)[0] ?? "", "title") || fallbackSource;
+const tag$1 = (xml, name) => decode(xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] ?? "");
+function parseRss$1(xml, fallbackSource) {
+  const channel = tag$1(xml.split(/<item[\s>]/i)[0] ?? "", "title") || fallbackSource;
   const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? [];
   return blocks.slice(0, 60).map((b2) => {
     const atomLink = b2.match(/<link[^>]+href="([^"]+)"/i)?.[1];
-    const date = tag(b2, "pubDate") || tag(b2, "published") || tag(b2, "updated");
+    const date = tag$1(b2, "pubDate") || tag$1(b2, "published") || tag$1(b2, "updated");
     const t = Date.parse(date);
     return {
-      title: tag(b2, "title"),
-      link: (tag(b2, "link") || atomLink || "").trim(),
+      title: tag$1(b2, "title"),
+      link: (tag$1(b2, "link") || atomLink || "").trim(),
       source: channel,
       publishedAt: Number.isNaN(t) ? null : new Date(t).toISOString(),
-      summary: (tag(b2, "description") || tag(b2, "summary")).slice(0, 600)
+      summary: (tag$1(b2, "description") || tag$1(b2, "summary")).slice(0, 600)
     };
   }).filter((i) => i.title && /^https?:\/\//.test(i.link));
 }
@@ -74655,7 +75831,7 @@ async function fetchFeed(url2, force = false) {
       return get2();
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const items = parseRss(await res.text(), new URL(url2).hostname);
+    const items = parseRss$1(await res.text(), new URL(url2).hostname);
     out = { items, fetchedAt: (/* @__PURE__ */ new Date()).toISOString(), error: items.length ? null : "Feed sem itens (formato não reconhecido?)" };
   } catch (e) {
     out = { items: [], fetchedAt: (/* @__PURE__ */ new Date()).toISOString(), error: e instanceof Error ? e.message : String(e) };
@@ -74750,7 +75926,7 @@ const promos = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProper
   feedUrls,
   keywordsFor,
   matchPosts,
-  parseRss,
+  parseRss: parseRss$1,
   promosFor
 }, Symbol.toStringTag, { value: "Module" }));
 const URL_REQ = "https://api.duffel.com/air/offer_requests?return_offers=true&supplier_timeout=20000";
@@ -75469,9 +76645,9 @@ function prepare$1(input) {
 function registerFlightRpc(handle) {
   handle("flightMon:list", async () => {
     const fx = await loadFx$1();
-    return Promise.all((await listMonitors()).map((m) => summarize$3(m, fx)));
+    return Promise.all((await listMonitors()).map((m) => summarize$4(m, fx)));
   });
-  handle("flightMon:get", async (_, id) => summarize$3(await mustGet(id), await loadFx$1()));
+  handle("flightMon:get", async (_, id) => summarize$4(await mustGet(id), await loadFx$1()));
   handle("flightMon:validate", async (_, config2) => {
     const dropped = [];
     const cfg = normalizeConfig(config2, dropped);
@@ -77490,7 +78666,7 @@ async function summaryCtx(cfg) {
     professional: new Set(c.professionalLabels.map((x) => x.toLowerCase()))
   };
 }
-function summarize$2(r, ctx) {
+function summarize$3(r, ctx) {
   const labels = ctx.chatLabels.get(r.id) ?? [];
   const personLabels = r.contactId ? ctx.contactLabels.get(r.contactId) ?? [] : [];
   const reviewed = r.mentionsReviewedCount != null && (r.unreadMentions ?? 0) <= r.mentionsReviewedCount;
@@ -77659,7 +78835,7 @@ async function allSummaries(ctx) {
   const rows = await allFullRows();
   const out = [];
   for (const r of rows) {
-    const s2 = summarize$2(r, c);
+    const s2 = summarize$3(r, c);
     if (visible(s2, r, c)) out.push(s2);
   }
   return out;
@@ -77711,7 +78887,7 @@ async function counts() {
 }
 async function getSummary(id) {
   const r = await fullRow(id);
-  return r ? summarize$2(r, await summaryCtx()) : null;
+  return r ? summarize$3(r, await summaryCtx()) : null;
 }
 const msgCache = /* @__PURE__ */ new Map();
 const CACHE_MAX = 40;
@@ -77996,7 +79172,7 @@ async function searchMessages(query, chatId) {
     const full = row ? await fullRow(row.id) : null;
     const self = row ? await selfInfo(row.accountKey) : { ids: /* @__PURE__ */ new Set(), names: [] };
     out.push({
-      chat: full ? summarize$2(full, ctx) : null,
+      chat: full ? summarize$3(full, ctx) : null,
       chatKey: chatKey(provider.id, m.chatId),
       message: toChatMessage(row?.id ?? 0, m, self, row?.type === "group", false)
     });
@@ -78273,7 +79449,7 @@ async function suggestBatch(reqs, onResult) {
   await Promise.all(Array.from({ length: Math.min(2, list.length) }, worker));
   return results;
 }
-async function summarize$1(chatId, messageIds, includeNotes) {
+async function summarize$2(chatId, messageIds, includeNotes) {
   const cfg = await loadConfig();
   const p = await prepare(chatId, messageIds, includeNotes);
   const prompt = [
@@ -78322,7 +79498,7 @@ const status = {
   capabilities: NO_CAPABILITIES,
   progress: null
 };
-let running$1 = null;
+let running$2 = null;
 let rerun = false;
 let timer = null;
 let failures = 0;
@@ -78398,18 +79574,18 @@ async function loop() {
   schedule(failures ? backoff : interval);
 }
 function syncNow(opts = {}) {
-  if (running$1) {
+  if (running$2) {
     rerun = true;
-    return running$1;
+    return running$2;
   }
-  running$1 = doSync(!!opts.full).finally(() => {
-    running$1 = null;
+  running$2 = doSync(!!opts.full).finally(() => {
+    running$2 = null;
     if (rerun) {
       rerun = false;
       void syncNow();
     }
   });
-  return running$1;
+  return running$2;
 }
 async function doSync(full) {
   const cfg = await loadConfig();
@@ -78840,7 +80016,7 @@ Abrir: #/chats?c=${chat.id}`;
     const out = await suggestBatch(Array.isArray(reqs) ? reqs : [], (r) => broadcast("chats:ai", r));
     return out;
   });
-  handle("chats:aiSummarize", (_e, id, messageIds, includeNotes) => summarize$1(Number(id), Array.isArray(messageIds) ? messageIds.map(String) : [], !!includeNotes));
+  handle("chats:aiSummarize", (_e, id, messageIds, includeNotes) => summarize$2(Number(id), Array.isArray(messageIds) ? messageIds.map(String) : [], !!includeNotes));
 }
 const MEMORY_TYPES = ["FACT", "PREFERENCE", "GOAL", "CONSTRAINT", "HABIT", "INSTRUCTION", "EXPERIENCE", "LEARNING", "INFERENCE"];
 const MEMORY_LAYERS = ["semantic", "episodic", "procedural", "temporal", "reflective"];
@@ -79081,6 +80257,17 @@ const MEMORY_POLICIES = deepFreeze([
     approved: true,
     consume: false,
     produce: { categories: ALL, maxSensitivity: "PRIVATE", maxSuggestionsPerRun: 8 }
+  },
+  {
+    // Aprovado em 2026-11-25 (consumir + produzir). O consumo SAI do app: vai ao Gemini (Google).
+    useCase: "news.digest",
+    label: "Resumo de Notícias",
+    module: "home",
+    purpose: "Priorizar as notícias do dia pelos interesses (contexto enviado ao Gemini) e sugerir interesses a partir das notícias lidas.",
+    internal: false,
+    approved: true,
+    consume: { categories: ["interesses", "objetivos", "profissional"], maxSensitivity: "NORMAL", maxTokens: 300, maxItems: 10, instructions: false },
+    produce: { categories: ["interesses", "objetivos", "profissional", "aprendizados"], maxSensitivity: "NORMAL", maxSuggestionsPerRun: 5 }
   },
   {
     useCase: "jarvis.assistant",
@@ -81114,17 +82301,17 @@ async function pruneTraces() {
   if (n) saveDb();
   return n;
 }
-const running = /* @__PURE__ */ new Set();
+const running$1 = /* @__PURE__ */ new Set();
 async function runJob(kind, periodKey, fn, params = {}) {
   const owner2 = currentOwner();
   const db2 = await getDb();
   const key = `${kind}:${periodKey}`;
-  if (running.has(key)) return { ran: false, id: 0 };
+  if (running$1.has(key)) return { ran: false, id: 0 };
   exec(db2, "INSERT OR IGNORE INTO memory_jobs (ownerId, kind, dedupeKey, params, runAfter, createdAt) VALUES (?,?,?,?,?,?)", [owner2, kind, key, JSON.stringify(params), nowIso(), nowIso()]);
   const job = one(db2, "SELECT id, status, attempts, maxAttempts, runAfter FROM memory_jobs WHERE ownerId = ? AND dedupeKey = ?", [owner2, key]);
   const retryable = job.status === "failed" && job.attempts < job.maxAttempts && job.runAfter <= nowIso();
   if (job.status !== "queued" && !retryable) return { ran: false, id: job.id };
-  running.add(key);
+  running$1.add(key);
   exec(db2, "UPDATE memory_jobs SET status='running', attempts=attempts+1, startedAt=?, error=NULL WHERE id=?", [nowIso(), job.id]);
   saveDb();
   broadcast("memory:job", { id: job.id, kind, status: "running" });
@@ -81152,7 +82339,7 @@ async function runJob(kind, periodKey, fn, params = {}) {
     broadcast("memory:job", { id: job.id, kind, status: "failed", error: msg });
     return { ran: true, id: job.id, error: msg };
   } finally {
-    running.delete(key);
+    running$1.delete(key);
   }
 }
 async function startManualJob(kind, fn, params = {}) {
@@ -81520,6 +82707,286 @@ async function migrateLegacy(opts) {
   await tx((d) => registerImport(d, owner2, kind, hash2, { created: result.created, suggested: result.suggested, skipped: result.skipped, reasons: result.reasons }));
   return result;
 }
+const NEWS_DEFAULT_CATEGORIES = ["Brasil", "Mundo", "Tech", "Finance"];
+const GEMINI_KEY_SETTING = "gemini_api_key";
+const CATEGORIES_SETTING = "news_categories";
+const DIGEST_SETTING = "news_digest";
+const READS_SETTING = "news_reads";
+const MAX_READS = 60;
+const MODEL = "gemini-2.5-flash";
+const MAX_ITEMS_PER_CATEGORY = 20;
+const MAX_TOPICS_PER_CATEGORY = 6;
+const TOPIC_BY_CATEGORY = {
+  brasil: "NATION",
+  mundo: "WORLD",
+  tech: "TECHNOLOGY",
+  finance: "BUSINESS"
+};
+async function geminiKey() {
+  return decodeSecret(await getSetting(GEMINI_KEY_SETTING))?.trim() || null;
+}
+async function getNewsCategories() {
+  const raw = await getSetting(CATEGORIES_SETTING);
+  if (!raw) return [...NEWS_DEFAULT_CATEGORIES];
+  try {
+    const list = JSON.parse(raw);
+    if (Array.isArray(list)) return list.filter((c) => typeof c === "string" && !!c.trim());
+  } catch {
+  }
+  return [...NEWS_DEFAULT_CATEGORIES];
+}
+async function setNewsCategories(list) {
+  const seen2 = /* @__PURE__ */ new Set();
+  const clean = [];
+  for (const c of list) {
+    const name = String(c ?? "").trim().slice(0, 40);
+    if (!name || seen2.has(name.toLowerCase())) continue;
+    seen2.add(name.toLowerCase());
+    clean.push(name);
+  }
+  await setSetting(CATEGORIES_SETTING, JSON.stringify(clean));
+  broadcast("news:updated", { kind: "categories" });
+  return clean;
+}
+async function getNewsConfig() {
+  return { hasGeminiKey: !!await geminiKey(), categories: await getNewsCategories() };
+}
+async function getNewsDigest() {
+  const raw = await getSetting(DIGEST_SETTING);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+async function getNewsState() {
+  return { config: await getNewsConfig(), digest: await getNewsDigest(), readsCount: (await getReads()).length };
+}
+async function getReads() {
+  try {
+    const list = JSON.parse(await getSetting(READS_SETTING) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+async function markNewsRead(url2) {
+  const digest = await getNewsDigest();
+  const topic = digest?.categories.flatMap((c) => c.topics).find((t) => t.url_fonte === url2);
+  const reads = await getReads();
+  if (!topic || reads.some((r) => r.url === url2)) return reads.length;
+  reads.unshift({ at: (/* @__PURE__ */ new Date()).toISOString(), categoria: topic.categoria, titulo: topic.titulo_resumido, resumo: topic.resumo_curto, url: url2 });
+  await setSetting(READS_SETTING, JSON.stringify(reads.slice(0, MAX_READS)));
+  broadcast("news:updated", { kind: "reads" });
+  return Math.min(reads.length, MAX_READS);
+}
+async function newsReadingEvidence() {
+  const custom = (await getNewsCategories()).filter((c) => !NEWS_DEFAULT_CATEGORIES.includes(c));
+  const reads = await getReads();
+  if (!reads.length && !custom.length) {
+    throw new Error('Abra algumas notícias em "Ler mais" (ou cadastre categorias próprias) antes de sugerir memórias.');
+  }
+  const lines = [
+    "Evidência de interesses vinda do meu Resumo Diário de Notícias (comportamento, não afirmações explícitas).",
+    custom.length ? `Categorias de notícias que cadastrei para acompanhar: ${custom.join(", ")}.` : "",
+    reads.length ? "Notícias que escolhi abrir para ler mais:" : "",
+    ...reads.map((r) => `- [${r.at.slice(0, 10)} · ${r.categoria}] ${r.titulo} — ${r.resumo}`)
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+function decodeXml(s2) {
+  return s2.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n.toLowerCase()] ?? m).trim();
+}
+function tag(block, name) {
+  const m = block.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`, "i"));
+  return m ? decodeXml(m[1]) : "";
+}
+function parseRss(xml) {
+  const items = [];
+  for (const m of xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
+    const block = m[1];
+    const source = tag(block, "source");
+    let title = tag(block, "title");
+    if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3));
+    const link = tag(block, "link");
+    if (title && link) items.push({ title, link, pubDate: tag(block, "pubDate"), source });
+  }
+  return items;
+}
+const FEED_LOCALE = "hl=pt-BR&gl=BR&ceid=BR:pt-419";
+function feedUrl(category) {
+  const topic = TOPIC_BY_CATEGORY[category.toLowerCase()];
+  if (topic) return `https://news.google.com/rss/headlines/section/topic/${topic}?${FEED_LOCALE}`;
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(`${category} when:2d`)}&${FEED_LOCALE}`;
+}
+function localDay(date, tzOffsetMin2) {
+  return new Date(date.getTime() - tzOffsetMin2 * 6e4).toISOString().slice(0, 10);
+}
+async function collect(category, targetDate, tzOffsetMin2) {
+  const res = await fetch(feedUrl(category), {
+    headers: { "User-Agent": "Mozilla/5.0 (rickOS news digest)" },
+    signal: AbortSignal.timeout(2e4)
+  });
+  if (!res.ok) throw new Error(`Google News respondeu ${res.status}`);
+  const items = parseRss(await res.text());
+  const seen2 = /* @__PURE__ */ new Set();
+  return items.filter((it) => {
+    const d = new Date(it.pubDate);
+    if (isNaN(d.getTime()) || localDay(d, tzOffsetMin2) !== targetDate) return false;
+    const k = it.title.toLowerCase();
+    if (seen2.has(k)) return false;
+    seen2.add(k);
+    return true;
+  }).slice(0, MAX_ITEMS_PER_CATEGORY);
+}
+const TOPICS_SCHEMA = {
+  type: genai.Type.ARRAY,
+  items: {
+    type: genai.Type.OBJECT,
+    properties: {
+      indice: { type: genai.Type.INTEGER, description: "Número [n] da notícia de origem na lista enviada" },
+      categoria: { type: genai.Type.STRING },
+      titulo_resumido: { type: genai.Type.STRING, description: "Título curto e objetivo, em pt-BR" },
+      resumo_curto: { type: genai.Type.STRING, description: "Uma ou duas frases objetivas, em pt-BR" },
+      url_fonte: { type: genai.Type.STRING, description: "URL exata da notícia de origem, copiada da lista" }
+    },
+    required: ["indice", "categoria", "titulo_resumido", "resumo_curto", "url_fonte"],
+    propertyOrdering: ["indice", "categoria", "titulo_resumido", "resumo_curto", "url_fonte"]
+  }
+};
+async function memoryFor(category, items) {
+  try {
+    const c = await newsDigestContext(category, items.map((it) => it.title));
+    return c.allowed && c.block ? { block: c.block, count: c.items.length } : { block: "", count: 0 };
+  } catch {
+    return { block: "", count: 0 };
+  }
+}
+async function summarize$1(ai, category, targetDate, items, memory) {
+  const list = items.map((it, i) => `[${i + 1}] ${it.title}${it.source ? ` (${it.source})` : ""}
+URL: ${it.link}`).join("\n");
+  const prompt = [
+    `Você é um editor de notícias. Abaixo estão manchetes do Google Notícias publicadas em ${targetDate}, categoria "${category}".`,
+    `Selecione as até ${MAX_TOPICS_PER_CATEGORY} notícias mais relevantes (junte manchetes sobre o mesmo fato num só tópico) e resuma cada uma em pt-BR, de forma objetiva e factual, sem opinião.`,
+    "Use só a informação das manchetes; não invente detalhes. Para cada tópico, informe o número [n] e a URL exata da notícia de origem.",
+    `Use "${category}" no campo categoria.`,
+    ...memory ? [
+      "",
+      "Contexto pessoal do leitor, use SÓ para desempatar a seleção a favor do que interessa a ele (sem deixar de fora fatos de grande relevância geral). Não mencione esse contexto no resumo:",
+      memory
+    ] : [],
+    "",
+    list
+  ].join("\n");
+  const res = await ai.models.generateContent({
+    model: MODEL,
+    contents: prompt,
+    config: { responseMimeType: "application/json", responseSchema: TOPICS_SCHEMA, temperature: 0.3 }
+  });
+  const parsed = JSON.parse(res.text ?? "[]");
+  const out = [];
+  const used = /* @__PURE__ */ new Set();
+  for (const t of Array.isArray(parsed) ? parsed : []) {
+    let idx = typeof t.indice === "number" ? t.indice - 1 : -1;
+    if (!items[idx]) idx = items.findIndex((it) => it.link === t.url_fonte);
+    const src = items[idx];
+    if (!src || used.has(idx) || !t.titulo_resumido) continue;
+    used.add(idx);
+    out.push({
+      categoria: category,
+      titulo_resumido: String(t.titulo_resumido),
+      resumo_curto: String(t.resumo_curto ?? ""),
+      url_fonte: src.link,
+      fonte: src.source || void 0
+    });
+  }
+  return out.slice(0, MAX_TOPICS_PER_CATEGORY);
+}
+let running = null;
+const GEMINI_CONCURRENCY = 2;
+const MAX_RETRIES = 2;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function withRetry(fn) {
+  for (let attempt2 = 0; ; attempt2++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const rateLimited = /429|RESOURCE_EXHAUSTED/i.test(msg) && !/PerDay/i.test(msg);
+      if (!rateLimited || attempt2 >= MAX_RETRIES) throw e;
+      const suggested = Number(msg.match(/retryDelay"?\s*:\s*"?(\d+(?:\.\d+)?)s/)?.[1]);
+      await sleep(Math.min(Number.isFinite(suggested) && suggested > 0 ? suggested * 1e3 + 500 : 15e3 * (attempt2 + 1), 3e4));
+    }
+  }
+}
+function limiter(limit) {
+  let active = 0;
+  const queue2 = [];
+  return async (fn) => {
+    if (active >= limit) await new Promise((r) => queue2.push(r));
+    active++;
+    try {
+      return await fn();
+    } finally {
+      active--;
+      queue2.shift()?.();
+    }
+  };
+}
+function generateNewsDigest(targetDate, tzOffsetMin2, only) {
+  if (running) return running;
+  running = (async () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) throw new Error("Data inválida.");
+    const key = await geminiKey();
+    if (!key) throw new Error("Configure a chave de API do Google Gemini em Configurações → Resumo de Notícias.");
+    const categories = await getNewsCategories();
+    if (!categories.length) throw new Error("Cadastre ao menos uma categoria.");
+    const previous = await getNewsDigest();
+    const partial = Array.isArray(only) && only.length > 0;
+    if (partial && previous?.targetDate !== targetDate) throw new Error("O resumo salvo é de outro dia: busque todas as categorias de novo.");
+    const targets = partial ? categories.filter((c) => only.includes(c)) : categories;
+    if (!targets.length) throw new Error("Nenhuma das categorias pedidas está cadastrada.");
+    const ai = new genai.GoogleGenAI({ apiKey: key, apiVersion: "v1beta" });
+    const offset = Number.isFinite(tzOffsetMin2) ? tzOffsetMin2 : 0;
+    const gemini = limiter(GEMINI_CONCURRENCY);
+    const fresh = await Promise.all(
+      targets.map(async (categoria) => {
+        let items = [];
+        try {
+          items = await collect(categoria, targetDate, offset);
+          if (!items.length) return { categoria, topics: [], collected: 0 };
+          const mem = await memoryFor(categoria, items);
+          const topics = await gemini(() => withRetry(() => summarize$1(ai, categoria, targetDate, items, mem.block)));
+          return { categoria, topics, collected: items.length, memoryItems: mem.count || void 0 };
+        } catch (e) {
+          return { categoria, topics: [], collected: items.length, error: friendlyError(e) };
+        }
+      })
+    );
+    if (!partial && fresh.every((r) => r.error)) throw new Error(fresh[0].error);
+    const byName = /* @__PURE__ */ new Map();
+    if (partial) for (const c of previous.categories) byName.set(c.categoria, c);
+    for (const c of fresh) byName.set(c.categoria, c);
+    const merged = categories.map((c) => byName.get(c)).filter((c) => !!c);
+    const digest = { generatedAt: (/* @__PURE__ */ new Date()).toISOString(), targetDate, model: MODEL, categories: merged };
+    await setSetting(DIGEST_SETTING, JSON.stringify(digest));
+    broadcast("news:updated", { kind: "digest" });
+    return digest;
+  })().finally(() => {
+    running = null;
+  });
+  return running;
+}
+function friendlyError(e) {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg)) return "Chave do Gemini inválida ou sem permissão.";
+  if (/PerDay/i.test(msg)) return "Cota diária do Gemini esgotada. Tente amanhã ou use uma chave com faturamento.";
+  if (/429|RESOURCE_EXHAUSTED|quota/i.test(msg)) return "Limite de uso do Gemini atingido. Tente de novo em instantes.";
+  if (/timeout|aborted/i.test(msg)) return "Tempo esgotado ao buscar notícias.";
+  return msg.slice(0, 300);
+}
 const q = (v, max = 1500) => String(v ?? "").slice(0, max);
 function toBlock(c) {
   return {
@@ -81537,6 +83004,9 @@ async function produce(useCase, text, sourceRef) {
   if (t.length > 2e4) throw new MemoryError("Texto longo demais (máx. 20 mil caracteres).");
   return startManualJob("produce", () => extractFromText({ useCase, text: t, sourceKind: "producer", sourceRef, op: "agente" }));
 }
+function newsDigestContext(category, headlines) {
+  return consume("news.digest", q(`notícias interesses ${category} ${headlines.join(" ")}`), "priorizar as notícias do dia pelos interesses do usuário");
+}
 function registerMemoryIntegrations(handle) {
   handle(
     "memory:ctxTripItinerary",
@@ -81547,6 +83017,7 @@ function registerMemoryIntegrations(handle) {
   handle("memory:ctxWeekPlan", (_e, query) => consume("assistant.week_plan", `rotina semana trabalho ${q(query)}`, "planejar a semana"));
   handle("memory:ctxWeeklyReview", (_e, query) => consume("home.weekly_review", `objetivos semana aprendizados produtividade ${q(query)}`, "revisão semanal"));
   handle("memory:produceWeeklyReview", (_e, text) => produce("home.weekly_review", text, `revisao-semanal#${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`));
+  handle("memory:produceNews", async () => produce("news.digest", await newsReadingEvidence(), `noticias#${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`));
   handle("memory:produceBraindump", (_e, text) => produce("braindump.extract", text, `braindump#${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`));
 }
 const owner = () => currentOwner();
@@ -81845,27 +83316,6 @@ function registerMemoryRpc(handle) {
   handle("memory:settings", () => readSettings$1());
   handle("memory:saveSettings", (_e, patch) => saveSettings(patch));
 }
-const CONV_EFFORTS = [
-  { v: "low", label: "Baixo" },
-  { v: "medium", label: "Médio" },
-  { v: "high", label: "Alto" },
-  { v: "xhigh", label: "Muito alto" },
-  { v: "max", label: "Máximo" }
-];
-const CONV_DEFAULT_MODEL_KEY = "prompt_runner_model";
-const CONV_DEFAULT_EFFORT_KEY = "prompt_runner_effort";
-const CONV_FALLBACK_MODEL = "opus";
-const CONV_FALLBACK_EFFORT = "medium";
-function convDefaultModel(saved) {
-  const v = (saved ?? "").trim();
-  return v || CONV_FALLBACK_MODEL;
-}
-function convDefaultEffort(saved) {
-  const v = (saved ?? "").trim();
-  return CONV_EFFORTS.some((e) => e.v === v) ? v : CONV_FALLBACK_EFFORT;
-}
-const IMAGE_MEDIA_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-const MAX_IMAGES_PER_MESSAGE = 8;
 const HEAD_BYTES = 96 * 1024;
 const TAIL_BYTES = 64 * 1024;
 const TOOL_RESULT_MAX = 8e3;
@@ -82567,19 +84017,27 @@ function registerAiConvRpc(handle, deps2) {
     const c = await getConversation(id);
     if (c) broadcast("conv:update", { conversationId: id, conversation: withLive(c) });
   };
-  handle("conv:list", async (_e, archived) => (await listConversations({ archived: !!archived })).map(withLive));
-  handle("conv:get", async (_e, id) => {
+  handle("conv:list", async (_e, query) => {
+    const page = await listConversations(query ?? {});
+    return { ...page, items: page.items.map(withLive) };
+  });
+  handle("conv:get", async (_e, id, opts) => {
     const c = await getConversation(id);
     if (!c) return null;
-    const turns = await listTurns(id);
+    const page = await listTurnsPage(id, { limit: opts?.limit ?? CONV_TURNS_PAGE_SIZE, sinceId: opts?.sinceId ?? null });
+    const turns = page.turns;
     const lt = liveTurn(id);
     if (lt) {
       const i = turns.findIndex((t) => t.id === lt.id);
       if (i >= 0) turns[i] = lt;
-      else turns.push(lt);
+      else if (!turns.length || lt.id > turns[turns.length - 1].id) turns.push(lt);
     }
-    return { conversation: withLive(c), turns };
+    return { conversation: withLive(c), turns, hasMoreTurns: page.hasMore };
   });
+  handle(
+    "conv:olderTurns",
+    async (_e, id, beforeId, limit) => listTurnsPage(id, { limit: limit ?? CONV_TURNS_PAGE_SIZE, beforeId })
+  );
   handle("conv:create", async (_e, params = {}) => {
     const p = sanitizePatch(params);
     const c = await createConversation({
@@ -84335,6 +85793,67 @@ async function maybeDailyGoogleSync() {
     });
   }
 }
+async function maybeMonthlyInvestmentSync() {
+  try {
+    if (await getSetting("pluggy_investments_autosync") === "0") return;
+    if (!await getSetting("pluggy_item_id")) return;
+    const now = /* @__PURE__ */ new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const lastMonth = await getSetting("pluggy_investments_autosync_month");
+    if (lastMonth === month) return;
+    if (lastMonth == null || lastMonth === "") {
+      await setSetting("pluggy_investments_autosync_month", month);
+      return;
+    }
+    if (now.toLocaleDateString("sv-SE") < firstBusinessDay(now.getFullYear(), now.getMonth() + 1)) return;
+    const lastErr = await getSetting("pluggy_investments_autosync_error_at");
+    if (lastErr && Date.now() - Date.parse(lastErr) < 6 * 3600 * 1e3) return;
+    const r = await syncPluggyInvestments();
+    await setSetting("pluggy_investments_autosync_month", month);
+    await setSetting("pluggy_investments_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+    await setSetting("pluggy_investments_autosync_error_at", "");
+    const extra = r.vanished.length ? ` · ${r.vanished.length} não aparecem mais no banco (abra Investimentos para decidir)` : "";
+    await notify({
+      title: "📈 Investimentos atualizados",
+      body: `Open Finance: ${r.created} novos, ${r.updated} atualizados, ${r.closed} encerrados${extra}.`,
+      source: "automacao",
+      page: "investments"
+    });
+  } catch (e) {
+    await setSetting("pluggy_investments_autosync_error_at", (/* @__PURE__ */ new Date()).toISOString());
+    await notify({
+      title: "📈 Falha ao atualizar investimentos",
+      body: e instanceof Error ? e.message : String(e),
+      source: "automacao",
+      page: "settings"
+    });
+  }
+}
+async function maybeMonthlyReservedReminder() {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    if (now.getDate() === 1 && now.getHours() < 9) return;
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    if (await getSetting("finance_reserved_reminder_month") === month) return;
+    const latest = /* @__PURE__ */ new Map();
+    for (const r of await getAccountReservedHistory()) {
+      if (r.month > month) continue;
+      const cur = latest.get(r.accountId);
+      if (!cur || r.month > cur.month) latest.set(r.accountId, r);
+    }
+    const pending2 = [...latest.values()].filter((r) => r.month !== month && r.amount !== 0).length;
+    await setSetting("finance_reserved_reminder_month", month);
+    if (!pending2) return;
+    await notify({
+      title: "🔒 Revisar saldo separado",
+      body: `Começo de mês: confira o saldo separado de ${pending2 === 1 ? "1 conta" : `${pending2} contas`} no painel de Finanças.`,
+      source: "automacao",
+      page: "finance-dashboard"
+    });
+  } catch (e) {
+    console.error("[saldo separado] lembrete", e);
+  }
+}
 let schedulerStarted = false;
 function startScheduler() {
   if (schedulerStarted) return;
@@ -84348,6 +85867,12 @@ function startScheduler() {
   setTimeout(() => void checkProjectRadar().catch(() => void 0), 6e4);
   void recoverDelegations().catch(() => void 0);
   void recoverConversations().catch((e) => console.error("[prompt-runner] recuperação", e));
+  setTimeout(() => void maybeMonthlyInvestmentSync(), 9e4);
+  setInterval(() => void maybeMonthlyInvestmentSync(), 60 * 60 * 1e3);
+  setTimeout(() => void maybeMonthlyReservedReminder(), 1e5);
+  setInterval(() => void maybeMonthlyReservedReminder(), 60 * 60 * 1e3);
+  setTimeout(() => void reconcileRefunds().catch((e) => console.error("[estornos]", e)), 4e3);
+  setTimeout(() => void recomputeRecurring().catch((e) => console.error("[recorrência]", e)), 5e3);
   setInterval(() => void checkProjectRadar().catch(() => void 0), 60 * 60 * 1e3);
   void bootFlights().catch((e) => console.error("[flights] boot", e));
   setTimeout(() => void schedulerTick().catch(() => void 0), 45e3);
@@ -84572,7 +86097,7 @@ async function evaluateRules() {
           if (!budgets.length) continue;
           const txs = await getTransactions(month);
           const spent = {};
-          for (const t of txs) if (t.type === "expense" && t.categoryId != null) spent[t.categoryId] = (spent[t.categoryId] ?? 0) + t.amount;
+          for (const t of txs) if (t.type === "expense" && t.categoryId != null && countsInTotals(t)) spent[t.categoryId] = (spent[t.categoryId] ?? 0) + t.amount;
           const crossed = budgets.filter((b2) => b2.categoryId != null && b2.amount > 0 && (spent[b2.categoryId] ?? 0) / b2.amount * 100 > percent);
           if (crossed.length) {
             const cats = await getCategories();
@@ -84772,6 +86297,18 @@ ipcMain.handle("settings:getAll", async () => {
   }
   return all2;
 });
+ipcMain.handle("news:state", () => getNewsState());
+ipcMain.handle("news:setCategories", (_, list) => setNewsCategories(Array.isArray(list) ? list : []));
+ipcMain.handle("news:setGeminiKey", async (_, value) => {
+  await setSetting(GEMINI_KEY_SETTING, encodeSecret(GEMINI_KEY_SETTING, String(value ?? "").trim()));
+  broadcast("news:updated", { kind: "config" });
+  return getNewsConfig();
+});
+ipcMain.handle("news:markRead", (_, url2) => markNewsRead(String(url2 ?? "")));
+ipcMain.handle(
+  "news:generate",
+  (_, targetDate, tzOffsetMin2, only) => generateNewsDigest(targetDate, Number(tzOffsetMin2), Array.isArray(only) ? only.map(String) : void 0)
+);
 ipcMain.handle("github:getIssues", () => getGithubIssues());
 ipcMain.handle("github:sync", () => syncGithubIssues(true));
 ipcMain.handle(
@@ -84814,31 +86351,85 @@ ipcMain.handle("accounts:update", (_, id, name, currency2, balance) => updateAcc
 ipcMain.handle("accounts:delete", (_, id) => deleteAccount(id));
 ipcMain.handle("categories:getAll", () => getCategories());
 ipcMain.handle("categories:create", (_, name, type, color) => createCategory$1(name, type, color));
+ipcMain.handle("categories:update", (_, id, name, color) => updateCategory$1(id, name, color));
+ipcMain.handle("categories:setFixedIncome", (_, id, fixed) => setCategoryFixedIncome(id, fixed));
 ipcMain.handle("categories:delete", (_, id) => deleteCategory(id));
 ipcMain.handle("transactions:getAll", (_, month) => getTransactions(month));
+async function afterTxChange(r) {
+  await reconcileRefunds().catch((e) => console.error("[estornos]", e));
+  await recomputeRecurring().catch((e) => console.error("[recorrência]", e));
+  return r;
+}
 ipcMain.handle(
   "transactions:create",
-  (_, accountId, categoryId, amount, currency2, type, description, date) => createTransaction(accountId, categoryId, amount, currency2, type, description, date)
+  async (_, accountId, categoryId, amount, currency2, type, description, date) => afterTxChange(await createTransaction(accountId, categoryId, amount, currency2, type, description, date))
 );
 ipcMain.handle(
   "transactions:update",
-  (_, id, accountId, categoryId, amount, currency2, type, description, date) => updateTransaction(id, accountId, categoryId, amount, currency2, type, description, date)
+  async (_, id, accountId, categoryId, amount, currency2, type, description, date) => afterTxChange(await updateTransaction(id, accountId, categoryId, amount, currency2, type, description, date))
 );
-ipcMain.handle("transactions:delete", (_, id) => deleteTransaction(id));
-ipcMain.handle("transactions:bulk", (_, rows) => bulkInsertTransactions(rows));
+ipcMain.handle("transactions:delete", async (_, id) => afterTxChange(await deleteTransaction(id)));
+ipcMain.handle("transactions:recurringOverrides", () => getRecurringOverrides());
+ipcMain.handle("transactions:recurringSuggestions", () => recurringSuggestions());
+ipcMain.handle("transactions:setRecurring", async (_, key, recurring) => {
+  await setRecurringOverride(key, recurring);
+  return recomputeRecurring();
+});
+ipcMain.handle("transactions:setIgnored", async (_, id, reason) => afterTxChange(await setTransactionIgnored(id, reason)));
+ipcMain.handle("transactions:setPaymentMethod", (_, id, method) => setTransactionPaymentMethod(id, method));
+ipcMain.handle("transactions:setKind", async (_, id, kind) => afterTxChange(await setTransactionKind(id, kind)));
+ipcMain.handle("transactions:bulk", async (_, rows) => afterTxChange(await bulkInsertTransactions(await categorizeNew(rows))));
+ipcMain.handle("finance:resetImportedData", async () => {
+  const backup = backupDbFile("timetracker.backup-pre-reset-financas");
+  if (!backup) throw new Error("Banco não carregado; nada foi apagado.");
+  const removed = await resetFinanceImportedData();
+  saveDb();
+  return { backup, removed };
+});
+ipcMain.handle("financeRules:getAll", () => getFinanceRules());
+ipcMain.handle("financeRules:create", (_, categoryId, keywords) => createFinanceRule(categoryId, keywords));
+ipcMain.handle(
+  "financeRules:update",
+  (_, id, categoryId, keywords, active) => updateFinanceRule(id, categoryId, keywords, active)
+);
+ipcMain.handle("financeRules:delete", (_, id) => deleteFinanceRule(id));
+ipcMain.handle("financeRules:move", (_, id, dir) => moveFinanceRule(id, dir));
+ipcMain.handle("financeRules:preview", (_, month) => previewFinanceRules(month));
+ipcMain.handle("financeRules:apply", (_, changes) => setTransactionsCategory(changes));
 ipcMain.handle("budgets:getForMonth", (_, month) => getBudgets(month));
 ipcMain.handle("budgets:set", (_, categoryId, month, amount) => setBudget(categoryId, month, amount));
 ipcMain.handle("investments:getAll", () => getInvestments());
 ipcMain.handle("investments:history", () => getInvestmentHistory());
-ipcMain.handle("investments:create", (_, name, type, amount, currency2) => createInvestment(name, type, amount, currency2));
+ipcMain.handle(
+  "investments:create",
+  (_, name, type, amount, currency2, month, groupKey) => createInvestment(name, type, amount, currency2, month, groupKey)
+);
+ipcMain.handle("investments:setGroup", (_, id, groupKey) => setInvestmentGroup(id, groupKey));
+ipcMain.handle("investmentGroups:getAll", () => getInvestmentGroups());
+ipcMain.handle("investmentGroups:create", (_, label, icon) => createInvestmentGroup(label, icon));
+ipcMain.handle("investmentGroups:update", (_, key, label, icon) => updateInvestmentGroup(key, label, icon));
+ipcMain.handle("investmentGroups:delete", (_, key) => deleteInvestmentGroup(key));
+ipcMain.handle("investmentGroups:move", (_, key, dir) => moveInvestmentGroup(key, dir));
 ipcMain.handle("investments:setValue", (_, investmentId, month, amount) => setInvestmentValue(investmentId, month, amount));
 ipcMain.handle("investments:delete", (_, id) => deleteInvestment(id));
-ipcMain.handle("pluggy:sync", async () => {
-  const r = await syncPluggy();
+ipcMain.handle("investments:close", (_, id, month) => closeInvestment(id, month));
+ipcMain.handle("investments:movements", () => getInvestmentMovements());
+ipcMain.handle("investments:rename", (_, id, name) => renameInvestment(id, name));
+ipcMain.handle("pluggy:sync", async (_, month) => {
+  const r = await syncPluggy(month);
   await setSetting("pluggy_last_sync", (/* @__PURE__ */ new Date()).toISOString());
-  return r;
+  return afterTxChange(r);
 });
 ipcMain.handle("pluggy:status", () => pluggyConfigured());
+ipcMain.handle("accounts:balanceHistory", () => getAccountBalanceHistory());
+ipcMain.handle("accounts:reservedHistory", () => getAccountReservedHistory());
+ipcMain.handle("accounts:setReserved", (_, accountId, month, amount) => setAccountReserved(accountId, month, amount));
+ipcMain.handle("pluggy:reclassifyInvestments", async () => afterTxChange(await reclassifyInvestmentFlags()));
+ipcMain.handle("pluggy:syncInvestments", async () => {
+  const r = await syncPluggyInvestments();
+  await setSetting("pluggy_investments_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+  return r;
+});
 ipcMain.handle("pluggy:connectToken", () => createConnectToken());
 ipcMain.handle("trips:getAll", () => getTrips());
 ipcMain.handle(
