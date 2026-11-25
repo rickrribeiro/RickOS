@@ -47,7 +47,6 @@ export function FlashcardPanel(): React.ReactElement {
   const [flipped, setFlipped] = useState<Set<number>>(new Set())
 
   // AI generation
-  const [model, setModel] = useState('')
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
   const [generated, setGenerated] = useState<GenCard[] | null>(null)
@@ -56,7 +55,6 @@ export function FlashcardPanel(): React.ReactElement {
   const outputRef = useRef('')
 
   useEffect(() => {
-    window.api.settings.get('claude_model').then((m) => setModel(m ?? ''))
     const offChunk = window.api.ai.onChunk((rid) => {
       if (rid && rid === runIdRef.current) outputRef.current = ''
     })
@@ -99,7 +97,7 @@ export function FlashcardPanel(): React.ReactElement {
     setGenerating(true)
     const prompt = promptFlashcards({ anotacao: content })
     try {
-      const rid = await window.api.ai.start({ prompt, model, save: false, source: 'estudos' })
+      const rid = await window.api.ai.start({ prompt, chamada: 'estudos.flashcards', save: false, source: 'estudos' })
       runIdRef.current = rid
     } catch (e) {
       setGenerating(false)

@@ -7,6 +7,7 @@ import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import { t } from '../i18n'
+import type { IdChamadaIa } from '../../shared/prompts/catalogo'
 
 /** `window.api.chats`: cada método vira o canal `chats:<método>` + assinaturas de eventos SSE. */
 function chatsApi(): ChatsApi & {
@@ -633,6 +634,7 @@ export function createApi() {
         userPrompt?: string
         permission?: 'allowlist' | 'execute'
         source?: string
+        chamada?: IdChamadaIa
       }) => invoke('ai:start', params),
       getRun: (runId: string) => invoke('ai:getRun', runId),
       cancel: (runId: string) => invoke('ai:cancel', runId),

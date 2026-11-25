@@ -258,6 +258,8 @@ import { CONV_DEFAULT_EFFORT_KEY, CONV_DEFAULT_MODEL_KEY, convDefaultEffort, con
 import { promptOcrImagem } from '../shared/prompts/inbox/ocrImagem'
 import { promptContextoProjeto } from '../shared/prompts/projetos/contextoProjeto'
 import { promptSistemaConversa } from '../shared/prompts/promptRunner/sistemaConversa'
+import type { IdChamadaIa } from '../shared/prompts/catalogo'
+import { executarChamada } from './ia/gateway'
 
 /**
  * RPC registry: every `<ns>:<action>` channel the clients can call. The handlers
@@ -1425,6 +1427,8 @@ interface AiStartParams {
   save?: boolean // persist an execution in the AI history (default true)
   permission?: 'allowlist' | 'execute' // 'execute' = agentic (roda ferramentas)
   source?: string // módulo de origem, para a contabilidade de tokens
+  /** Chamada do catálogo: motor/modelo/effort vêm do gateway (ignora `model`). */
+  chamada?: IdChamadaIa
 }
 
 // Start a run in the background: returns runId immediately. Output accumulates in main,
@@ -1448,22 +1452,38 @@ ipcMain.handle('ai:start', async (_, params: AiStartParams) => {
   const agentic = params.permission === 'execute'
   const extraArgs = agentic ? [] : await resolveAllowedToolsArgs()
 
-  runClaude(context + params.prompt, command, {
-    model,
-    extraArgs, // libera gh/git/arquivos para o Claude executar (ex.: criar issue)
-    cwd, // roda dentro do diretório do projeto, quando configurado
-    timeoutMs: 0, // sem timeout: tarefas podem demorar
-    streamJson: !agentic, // texto/pensamento ao vivo (modo seguro)
-    agentic, // 'executar': roda ferramentas de verdade (bidirecional)
-    usage: { source: params.source || 'outro', projectId: params.projectId ?? null },
-    onChunk: (text) => {
-      run.output += text
-      broadcast('ai:chunk', { runId, text })
-    },
-    registerChild: (kill) => {
-      run.kill = kill
-    }
-  })
+  const onChunk = (text: string): void => {
+    run.output += text
+    broadcast('ai:chunk', { runId, text })
+  }
+  const registerChild = (kill: () => void): void => {
+    run.kill = kill
+  }
+  const usage = { source: params.source || 'outro', projectId: params.projectId ?? null }
+  const execucao = params.chamada
+    ? executarChamada(params.chamada, {
+        prompt: context + params.prompt,
+        claudeCommand: command,
+        claudeArgs: extraArgs,
+        cwd,
+        timeoutMs: 0,
+        ferramentas: agentic ? 'agentic' : 'padrao',
+        usage,
+        onChunk,
+        registerChild
+      })
+    : runClaude(context + params.prompt, command, {
+        model,
+        extraArgs, // libera gh/git/arquivos para o Claude executar (ex.: criar issue)
+        cwd, // roda dentro do diretório do projeto, quando configurado
+        timeoutMs: 0, // sem timeout: tarefas podem demorar
+        streamJson: !agentic, // texto/pensamento ao vivo (modo seguro)
+        agentic, // 'executar': roda ferramentas de verdade (bidirecional)
+        usage,
+        onChunk,
+        registerChild
+      })
+  execucao
     .then(async (result) => {
       run.status = 'done'
       run.output = result

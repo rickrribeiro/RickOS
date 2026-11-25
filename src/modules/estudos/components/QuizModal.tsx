@@ -36,7 +36,6 @@ type Phase = 'setup' | 'generating' | 'taking' | 'result'
 
 export function QuizModal({ topic, onClose }: { topic: StudyTopic; onClose: () => void }): React.ReactElement {
   const [phase, setPhase] = useState<Phase>('setup')
-  const [model, setModel] = useState('')
   const [error, setError] = useState('')
   const [questions, setQuestions] = useState<Question[]>([])
   const [current, setCurrent] = useState(0)
@@ -46,7 +45,6 @@ export function QuizModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
   const startedAt = useRef<number>(0)
 
   useEffect(() => {
-    window.api.settings.get('claude_model').then((m) => setModel(m ?? ''))
     window.api.study.quizAttempts(topic.id).then(setAttempts)
     const offDone = window.api.ai.onDone(({ runId: rid, ok, output, error: err }) => {
       if (rid !== runId.current) return
@@ -86,7 +84,7 @@ export function QuizModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
     setPhase('generating')
     const prompt = promptQuiz({ topico: topic.name, material: material.slice(0, 12000) })
     try {
-      const rid = await window.api.ai.start({ prompt, model, save: false, source: 'estudos' })
+      const rid = await window.api.ai.start({ prompt, chamada: 'estudos.quiz', save: false, source: 'estudos' })
       runId.current = rid
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

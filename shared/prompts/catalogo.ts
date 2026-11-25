@@ -140,6 +140,8 @@ const m = (s: string): string => `«${s}»`
 const sistema = (sys: string, prompt: string): string => `━━ SYSTEM PROMPT ━━\n${sys}\n\n━━ PROMPT ━━\n${prompt}`
 
 const CLAUDE_MODEL: ConfigIa = { setting: 'claude_model', padrao: '' }
+/** Codex: '' = o modelo e o effort do ~/.codex/config.toml. */
+const CODEX_MODEL: ConfigIa = { padrao: '' }
 const RUNNER_MODEL: ConfigIa = { setting: 'prompt_runner_model', padrao: 'opus' }
 const RUNNER_EFFORT: ConfigIa = { setting: 'prompt_runner_effort', padrao: 'medium' }
 const MEM_FAST: ConfigIa = { setting: 'memory_ai_model_fast', padrao: 'haiku' }
@@ -195,12 +197,12 @@ export const CATALOGO_IA: ChamadaIa[] = [
 
   // ── Estudos ──
   {
-    id: 'estudos.tutor', modulo: 'estudos', motor: 'claude-code', modelo: CLAUDE_MODEL, effort: null, arquivo: 'estudos/tutor.ts', usadoEm: 'src/modules/estudos/components/NoteEditor.tsx',
+    id: 'estudos.tutor', modulo: 'estudos', motor: 'codex', modelo: CODEX_MODEL, effort: null, arquivo: 'estudos/tutor.ts', usadoEm: 'src/modules/estudos/components/NoteEditor.tsx',
     prompt: () => Object.entries(INSTRUCOES_TUTOR).map(([k, v]) => `━━ ${k} ━━\n${promptTutor({ instrucao: v, conteudo: m('anotação') })}`).join('\n\n')
   },
-  { id: 'estudos.flashcards', modulo: 'estudos', motor: 'claude-code', modelo: CLAUDE_MODEL, effort: null, arquivo: 'estudos/flashcards.ts', usadoEm: 'src/modules/estudos/components/FlashcardPanel.tsx', prompt: () => promptFlashcards({ anotacao: m('anotação') }) },
-  { id: 'estudos.lacunas', modulo: 'estudos', motor: 'claude-code', modelo: CLAUDE_MODEL, effort: null, arquivo: 'estudos/lacunasRoadmap.ts', usadoEm: 'src/modules/estudos/components/GapsModal.tsx', prompt: () => promptLacunasRoadmap({ topico: m('tópico'), roadmap: m('roadmap em tópicos') }) },
-  { id: 'estudos.quiz', modulo: 'estudos', motor: 'claude-code', modelo: CLAUDE_MODEL, effort: null, arquivo: 'estudos/quiz.ts', usadoEm: 'src/modules/estudos/components/QuizModal.tsx', prompt: () => promptQuiz({ topico: m('tópico'), material: m('anotações do tópico') }) },
+  { id: 'estudos.flashcards', modulo: 'estudos', motor: 'codex', modelo: CODEX_MODEL, effort: null, arquivo: 'estudos/flashcards.ts', usadoEm: 'src/modules/estudos/components/FlashcardPanel.tsx', prompt: () => promptFlashcards({ anotacao: m('anotação') }) },
+  { id: 'estudos.lacunas', modulo: 'estudos', motor: 'codex', modelo: CODEX_MODEL, effort: null, arquivo: 'estudos/lacunasRoadmap.ts', usadoEm: 'src/modules/estudos/components/GapsModal.tsx', prompt: () => promptLacunasRoadmap({ topico: m('tópico'), roadmap: m('roadmap em tópicos') }) },
+  { id: 'estudos.quiz', modulo: 'estudos', motor: 'codex', modelo: CODEX_MODEL, effort: null, arquivo: 'estudos/quiz.ts', usadoEm: 'src/modules/estudos/components/QuizModal.tsx', prompt: () => promptQuiz({ topico: m('tópico'), material: m('anotações do tópico') }) },
 
   // ── Projetos ──
   { id: 'projetos.plano', modulo: 'projetos', motor: 'claude-code', modelo: CLAUDE_MODEL, effort: null, arquivo: 'projetos/plano.ts', usadoEm: 'src/modules/projects/pages/ProjectDetailPage.tsx', prompt: () => json(promptPlanoProjeto({ hoje: m('hoje'), contexto: EX_PROJETO })) },

@@ -67,10 +67,9 @@ export function GapsModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
       setGaps(g)
     })
     ;(async () => {
-      const m = (await window.api.settings.get('claude_model')) ?? ''
       const prompt = promptLacunasRoadmap({ topico: topic.name, roadmap: outline(nodes) })
       try {
-        runId.current = await window.api.ai.start({ prompt, model: m, save: false, source: 'estudos' })
+        runId.current = await window.api.ai.start({ prompt, chamada: 'estudos.lacunas', save: false, source: 'estudos' })
       } catch (e) {
         setBusy(false)
         setError(e instanceof Error ? e.message : String(e))

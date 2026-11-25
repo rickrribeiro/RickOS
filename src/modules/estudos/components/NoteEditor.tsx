@@ -27,14 +27,12 @@ export function NoteEditor(): React.ReactElement {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // IA tutor
-  const [model, setModel] = useState('')
   const [tutorRunning, setTutorRunning] = useState(false)
   const [tutorOut, setTutorOut] = useState('')
   const [tutorLabel, setTutorLabel] = useState('')
   const tutorRunId = useRef<string | null>(null)
 
   useEffect(() => {
-    window.api.settings.get('claude_model').then((m) => setModel(m ?? ''))
     const offChunk = window.api.ai.onChunk((rid, text) => {
       if (rid && rid === tutorRunId.current) setTutorOut((o) => o + text)
     })
@@ -58,7 +56,7 @@ export function NoteEditor(): React.ReactElement {
     setTutorRunning(true)
     const prompt = promptTutor({ instrucao: instruction, conteudo: content })
     try {
-      const rid = await window.api.ai.start({ prompt, model, save: false, source: 'estudos' })
+      const rid = await window.api.ai.start({ prompt, chamada: 'estudos.tutor', save: false, source: 'estudos' })
       tutorRunId.current = rid
     } catch (e) {
       setTutorRunning(false)

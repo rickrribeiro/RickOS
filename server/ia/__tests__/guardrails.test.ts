@@ -29,6 +29,8 @@ const PRIMITIVAS: RegExp[] = [
 /** Camada de transporte: executa IA para os outros, não é uma chamada em si. */
 const TRANSPORTE = new Set([
   'server/services/claude.ts', // runClaude
+  'server/ia/motores/claudeCode.ts', // motor Claude Code (factory em server/ia/motores)
+  'server/ia/motores/codex.ts', // motor Codex
   'src/modules/projects/lib/ai.ts', // runJson / runText
   'server/aiconv/usageLimits.ts' // abre o Codex/Claude só para LER limites de uso; não envia prompt
 ])

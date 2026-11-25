@@ -44,6 +44,7 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `server/aiconv/` | Prompt Runner: conversas com o Claude CLI (`--resume`, ramificação com `--fork-session`), permissões/perguntas via `--permission-prompt-tool stdio`, fila, imagens, worktree por conversa e mudanças/commit/PR (`git.ts`), importação de sessões do terminal (`~/.claude*/projects`), skills/comandos do Claude Code do usuário e dos projetos (`claudeSkills.ts`) |
 | `server/memory/` | **Memória Pessoal**: memórias atômicas, Inbox de sugestões, Memory Agent, `getMemoryContext` (única saída de memória para IA) e política deny-by-default em `policy.ts` (ver `docs/memoria/README.md`) |
 | `shared/` | tipos/helpers puros compartilhados entre servidor e front (incluído nos dois tsconfigs) |
+| `server/ia/` | **gateway de IA**: `executarChamada(id, …)` resolve motor/modelo/effort da chamada do catálogo e executa pelo motor certo (`motores/`: factory `criarMotor` com Claude Code e Codex) |
 | `shared/prompts/` | **todos os prompts de IA**, um arquivo por prompt, agrupados por módulo; índice em `shared/prompts/README.md` |
 | `server/events.ts` | `broadcast(canal, payload)` → SSE |
 | `server/config.ts` | variáveis `RICKOS_*` (data dir, porta, host, token, URL pública) |

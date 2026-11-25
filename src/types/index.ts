@@ -1,6 +1,7 @@
 import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
+import type { IdChamadaIa } from '../../shared/prompts/catalogo'
 import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
 export type { FinanceRule, InvestmentGroupDef } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
@@ -1211,6 +1212,8 @@ declare global {
           permission?: 'allowlist' | 'execute'
           /** Módulo de origem (contabilidade de tokens). */
           source?: string
+          /** Chamada do catálogo de IA: o servidor escolhe motor/modelo/effort. */
+          chamada?: IdChamadaIa
         }) => Promise<string>
         getRun: (runId: string) => Promise<{ status: 'running' | 'done' | 'error' | 'cancelled'; output: string; error: string | null } | null>
         cancel: (runId: string) => Promise<boolean>
