@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { convertToBase, currentMonth, formatMoney, formatMoneyCompact, monthLabel, shiftMonth, splitIncome, startingBillInBase, isStartingBillItem } from '../util'
+import { t as tr } from '../../../i18n'
 
 const PLOT_H = 120
 
@@ -74,8 +75,8 @@ export function DailySpending(): React.ReactElement {
   if (data.refDay === 0) {
     return (
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Dia a dia</div>
-        <div className="empty-hint">{monthLabel(month)} ainda não começou.</div>
+        <div className="chart-title">{tr('finance.diaADia')}</div>
+        <div className="empty-hint">{monthLabel(month)} {tr('finance.aindaNaoComecou')}</div>
       </div>
     )
   }
@@ -93,7 +94,7 @@ export function DailySpending(): React.ReactElement {
       {kind === 'spent' && data.allowance > 0 && (
         <div
           style={{ position: 'absolute', left: 0, right: 0, bottom: (data.allowance / spentMax) * PLOT_H, height: 1, background: 'var(--accent)', opacity: 0.8 }}
-          title={`Cota diária ${formatMoney(data.allowance, base)}`}
+          title={tr('finance.cotaDiaria', { p0: formatMoney(data.allowance, base) })}
         />
       )}
       {kind === 'balance' && <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, background: 'var(--border)' }} />}
@@ -112,7 +113,7 @@ export function DailySpending(): React.ReactElement {
           if (kind === 'spent') {
             const over = data.allowance > 0 && x.spent > data.allowance
             return (
-              <div key={x.d} style={{ ...common, alignItems: 'flex-end' }} onMouseEnter={() => setHover(x.d)} tabIndex={0} onFocus={() => setHover(x.d)} aria-label={`${dayLabel(x.d)}: gasto ${formatMoney(x.spent, base)}`}>
+              <div key={x.d} style={{ ...common, alignItems: 'flex-end' }} onMouseEnter={() => setHover(x.d)} tabIndex={0} onFocus={() => setHover(x.d)} aria-label={tr('finance.gasto3', { p0: dayLabel(x.d), p1: formatMoney(x.spent, base) })}>
                 {!x.future && x.spent > 0 && (
                   <div style={{ width: '70%', maxWidth: 14, height: Math.max(2, (x.spent / spentMax) * PLOT_H), background: over ? 'var(--danger)' : 'var(--text-secondary)', borderRadius: '3px 3px 0 0' }} />
                 )}
@@ -121,7 +122,7 @@ export function DailySpending(): React.ReactElement {
           }
           const h = (Math.abs(x.balance) / balMax) * ((PLOT_H * 1.4) / 2 - 2)
           return (
-            <div key={x.d} style={{ ...common, flexDirection: 'column', alignItems: 'center' }} onMouseEnter={() => setHover(x.d)} tabIndex={0} onFocus={() => setHover(x.d)} aria-label={`${dayLabel(x.d)}: saldo ${formatMoney(x.balance, base)}`}>
+            <div key={x.d} style={{ ...common, flexDirection: 'column', alignItems: 'center' }} onMouseEnter={() => setHover(x.d)} tabIndex={0} onFocus={() => setHover(x.d)} aria-label={tr('finance.saldo', { p0: dayLabel(x.d), p1: formatMoney(x.balance, base) })}>
               <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', width: '70%', maxWidth: 14 }}>
                 {!x.future && x.balance > 0 && <div style={{ width: '100%', height: h, background: 'var(--success)', borderRadius: '3px 3px 0 0' }} />}
               </div>
@@ -149,37 +150,37 @@ export function DailySpending(): React.ReactElement {
     <div className="chart-section" style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div className="chart-title" style={{ marginRight: 'auto' }}>
-          Dia a dia · até {dayLabel(data.refDay)}
+          {tr('finance.diaADiaAte', { p0: dayLabel(data.refDay) })}
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowTable((v) => !v)}>
-          {showTable ? 'Ver gráfico' : 'Ver tabela'}
+          {showTable ? tr('finance.verGrafico') : tr('finance.verTabela')}
         </button>
       </div>
 
       {data.salary <= 0 && (
         <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 8 }}>
-          Sem salário fixo neste mês nem no anterior: marque a categoria do salário como &quot;fixa&quot; em Categorias (e categorize as entradas) para ter a cota diária.
+          {tr('finance.semSalarioFixoNesteMes')}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '12px 0' }}>
         {tile(
-          'Saldo até hoje',
+          tr('finance.daily.saldoAteHoje'),
           formatMoney(data.today?.balance ?? 0, base),
           `cota ${formatMoney(data.today?.quota ?? 0, base)} − gasto ${formatMoney(data.today?.cum ?? 0, base)}`,
           (data.today?.balance ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)'
         )}
         {tile(
-          'Cota diária',
+          tr('finance.daily.cotaDiaria'),
           formatMoney(data.allowance, base),
-          `(${formatMoney(data.salary, base)} salário − ${formatMoney(data.startingBill, base)} fatura inicial) ÷ ${data.daysInMonth} dias${data.estimated ? ' · salário estimado pelo mês anterior' : ''}`
+          tr('finance.daily.cotaFormula', { salary: formatMoney(data.salary, base), bill: formatMoney(data.startingBill, base), days: data.daysInMonth }) + (data.estimated ? tr('finance.daily.salarioEstimado') : '')
         )}
-        {tile('Média gasta por dia', formatMoney(data.avgPerDay, base), `${data.refDay} ${data.refDay === 1 ? 'dia' : 'dias'}`)}
+        {tile(tr('finance.daily.mediaPorDia'), formatMoney(data.avgPerDay, base), tr('finance.daily.nDias', { count: data.refDay }))}
         {data.perDayLeft != null &&
           tile(
-            'Dá para gastar por dia',
+            tr('finance.daily.daParaGastar'),
             formatMoney(Math.max(0, data.perDayLeft), base),
-            `nos ${data.daysInMonth - data.refDay} dias que faltam`,
+            tr('finance.daily.diasQueFaltam', { n: data.daysInMonth - data.refDay }),
             data.perDayLeft >= 0 ? undefined : 'var(--danger)'
           )}
       </div>
@@ -189,11 +190,11 @@ export function DailySpending(): React.ReactElement {
           <table className="report-table">
             <thead>
               <tr>
-                <th>Dia</th>
-                <th style={{ textAlign: 'right' }}>Gasto do dia</th>
-                <th style={{ textAlign: 'right' }}>Gasto acumulado</th>
-                <th style={{ textAlign: 'right' }}>Cota acumulada</th>
-                <th style={{ textAlign: 'right' }}>Saldo</th>
+                <th>{tr('finance.dia')}</th>
+                <th style={{ textAlign: 'right' }}>{tr('finance.gastoDoDia')}</th>
+                <th style={{ textAlign: 'right' }}>{tr('finance.gastoAcumulado')}</th>
+                <th style={{ textAlign: 'right' }}>{tr('finance.cotaAcumulada')}</th>
+                <th style={{ textAlign: 'right' }}>{tr('finance.saldo2')}</th>
               </tr>
             </thead>
             <tbody>
@@ -214,17 +215,17 @@ export function DailySpending(): React.ReactElement {
       ) : (
         <div style={{ position: 'relative' }}>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <span>Gasto por dia{data.startingBill > 0 ? ' (sem as parcelas da fatura inicial)' : ''}</span>
+            <span>{tr('finance.gastoPorDia')}{data.startingBill > 0 ? tr('finance.semAsParcelasDaFatura') : ''}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }}>
-              <span style={{ width: 12, height: 1, background: 'var(--accent)' }} /> cota diária {formatMoneyCompact(data.allowance)}
+              <span style={{ width: 12, height: 1, background: 'var(--accent)' }} /> {tr('finance.cotaDiaria2', { p0: formatMoneyCompact(data.allowance) })}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--danger)' }} /> acima da cota
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--danger)' }} /> {tr('finance.acimaDaCota')}
             </span>
           </div>
           {columns('spent')}
           {dayAxis}
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '14px 0 4px' }}>Saldo acumulado (cota − gasto)</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '14px 0 4px' }}>{tr('finance.saldoAcumuladoCotaGasto')}</div>
           {columns('balance')}
           {dayAxis}
 
@@ -246,11 +247,11 @@ export function DailySpending(): React.ReactElement {
                 zIndex: 2
               }}
             >
-              <div style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>Dia {dayLabel(hovered.d)}</div>
+              <div style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>{tr('finance.dia')} {dayLabel(hovered.d)}</div>
               {[
-                ['Gasto do dia', hovered.spent],
-                ['Gasto acumulado', hovered.cum],
-                ['Cota acumulada', hovered.quota]
+                [tr('finance.daily.gastoDoDia'), hovered.spent],
+                [tr('finance.daily.gastoAcumulado'), hovered.cum],
+                [tr('finance.daily.cotaAcumulada'), hovered.quota]
               ].map(([l, v]) => (
                 <div key={l as string} style={{ display: 'flex', gap: 8 }}>
                   <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{l}</span>
@@ -258,7 +259,7 @@ export function DailySpending(): React.ReactElement {
                 </div>
               ))}
               <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 4 }}>
-                <span style={{ flex: 1, color: 'var(--text-secondary)' }}>Saldo</span>
+                <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{tr('finance.saldo2')}</span>
                 <strong style={{ fontVariantNumeric: 'tabular-nums', color: hovered.balance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                   {formatMoney(hovered.balance, base)}
                 </strong>

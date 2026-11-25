@@ -5,6 +5,7 @@ import { MonthNav } from '../components/MonthNav'
 import { InvestmentSummary } from '../components/InvestmentSummary'
 import { formatMoney, sumByCurrency, monthLabel, investmentValueAtMonth, shiftMonth, comparableInvestmentDelta } from '../util'
 import { investmentGroup, resolveInvestmentGroup, type InvestmentDetails } from '../../../../shared/finance'
+import { t, getLocale } from '../../../i18n'
 
 function parseDetails(raw: string | null | undefined): InvestmentDetails | null {
   if (!raw) return null
@@ -23,7 +24,7 @@ function detailsLine(inv: Investment): string | null {
   if (d.code && d.code !== inv.name) parts.push(d.code)
   if (d.rateText) parts.push(d.rateText)
   if (d.dueDate) parts.push(`vence ${d.dueDate.slice(5, 7)}/${d.dueDate.slice(0, 4)}`)
-  if (d.quantity != null && !['CDB', 'LCI', 'LCA', 'Tesouro'].includes(d.kind)) parts.push(`${d.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} cotas`)
+  if (d.quantity != null && !['CDB', 'LCI', 'LCA', 'Tesouro'].includes(d.kind)) parts.push(`${d.quantity.toLocaleString(getLocale(), { maximumFractionDigits: 6 })} cotas`)
   if (d.gross != null && d.incomeTax) parts.push(`bruto ${formatMoney(d.gross, inv.currency)} · IR ${formatMoney(d.incomeTax, inv.currency)}`)
   if (d.iof) parts.push(`IOF ${formatMoney(d.iof, inv.currency)}`)
   return parts.join(' · ') || null
@@ -40,10 +41,10 @@ function DeltaTag({ prev, curr, currency }: { prev: number | null; curr: number 
   const pct = prev !== 0 ? (diff / Math.abs(prev)) * 100 : null
   const pctText =
     pct != null
-      ? ` · ${up ? '+' : '−'}${Math.abs(pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+      ? ` · ${up ? '+' : '−'}${Math.abs(pct).toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
       : ''
   return (
-    <span className={`delta-tag ${up ? 'up' : 'down'}`} title="Variação em relação ao mês anterior">
+    <span className={`delta-tag ${up ? 'up' : 'down'}`} title={t('finance.variacaoEmRelacaoAoMes')}>
       {up ? '▲' : '▼'} {formatMoney(Math.abs(diff), currency)}
       {pctText}
     </span>
@@ -117,8 +118,8 @@ function InvestmentRow({
                   setEditingName(false)
                 }
               }}
-              placeholder={investment.externalName ?? 'Nome do investimento'}
-              title="Enter salva · Esc cancela (vazio volta ao nome do banco, se houver)"
+              placeholder={investment.externalName ?? t('finance.nomeDoInvestimento')}
+              title={t('finance.enterSalvaEscCancelaVazio')}
               style={{ flex: 1, minWidth: 0, fontSize: 14, padding: '2px 6px' }}
             />
           ) : (
@@ -126,7 +127,7 @@ function InvestmentRow({
               <span
                 className="list-row-title"
                 style={{ flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}
-                title={`${investment.externalName ?? investment.name} — clique duas vezes para renomear`}
+                title={t('finance.cliqueDuasVezesParaRenomear', { p0: investment.externalName ?? investment.name })}
                 onDoubleClick={() => setEditingName(true)}
               >
                 {investment.name}
@@ -134,7 +135,7 @@ function InvestmentRow({
               <button
                 className="btn btn-secondary btn-sm"
                 style={{ padding: '0 6px', flexShrink: 0, alignSelf: 'center', lineHeight: 1.4 }}
-                title="Renomear (ex.: nome da caixinha)"
+                title={t('finance.renomearExNomeDaCaixinha')}
                 onClick={() => setEditingName(true)}
               >
                 ✎
@@ -148,7 +149,7 @@ function InvestmentRow({
       <select
         value={groupKey}
         onChange={(e) => onGroupChange(e.target.value)}
-        title="Mover para outro grupo"
+        title={t('finance.moverParaOutroGrupo')}
         style={{ fontSize: 11, padding: '1px 4px', maxWidth: 150 }}
       >
         {groups.map((g) => (
@@ -160,13 +161,13 @@ function InvestmentRow({
       {investment.externalId && (
         <span
           className="project-chip"
-          title={`Sincronizado do Open Finance${parseDetails(investment.details)?.syncedAt ? ' em ' + new Date(parseDetails(investment.details)!.syncedAt).toLocaleString('pt-BR') : ''}${investment.externalName && investment.externalName !== investment.name ? ` · nome no banco: ${investment.externalName}` : ''}`}
+          title={t('finance.sincronizadoDoOpenFinance', { p0: parseDetails(investment.details)?.syncedAt ? ' em ' + new Date(parseDetails(investment.details)!.syncedAt).toLocaleString('pt-BR') : '', p1: investment.externalName && investment.externalName !== investment.name ? ` · nome no banco: ${investment.externalName}` : '' })}
         >
           🏦
         </span>
       )}
       <span style={{ fontSize: 11, color: isExplicit ? 'var(--success)' : 'var(--text-muted)' }}>
-        {isExplicit ? '● registrado' : value != null ? 'mantido' : 'sem valor'}
+        {isExplicit ? t('finance.registrado') : value != null ? t('finance.mantido') : t('finance.semValor')}
       </span>
       <DeltaTag prev={prevValue} curr={value} currency={investment.currency} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
@@ -177,12 +178,12 @@ function InvestmentRow({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && commit()}
           style={{ width: 110, textAlign: 'right' }}
-          placeholder="valor"
+          placeholder={t('finance.valor2')}
         />
         <button className="btn btn-primary btn-sm" onClick={commit} disabled={!dirty}>
-          Salvar
+          {t('finance.salvar')}
         </button>
-        <button className="btn btn-danger btn-sm" onClick={onRemove} title="Encerrar a partir deste mês (meses anteriores ficam como estão)">
+        <button className="btn btn-danger btn-sm" onClick={onRemove} title={t('finance.encerrarAPartirDesteMes')}>
           ✕
         </button>
       </div>
@@ -218,7 +219,7 @@ function ClosedRow({
     <div className="list-row" style={{ opacity: 0.75 }}>
       <span className="list-row-title">{investment.name}</span>
       {investment.type && <span className="project-chip">{investment.type}</span>}
-      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>encerrado desde {monthLabel(closedSince)}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('finance.encerradoDesde')} {monthLabel(closedSince)}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{investment.currency}</span>
         <input
@@ -227,12 +228,12 @@ function ClosedRow({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && ok && onReopen(parsed)}
           style={{ width: 110, textAlign: 'right' }}
-          placeholder="valor"
+          placeholder={t('finance.valor2')}
         />
-        <button className="btn btn-secondary btn-sm" onClick={() => onReopen(parsed)} disabled={!ok} title="Reabrir com este valor neste mês">
-          Reabrir
+        <button className="btn btn-secondary btn-sm" onClick={() => onReopen(parsed)} disabled={!ok} title={t('finance.reabrirComEsteValorNeste')}>
+          {t('finance.reabrir')}
         </button>
-        <button className="btn btn-danger btn-sm" onClick={onDeleteAll} title="Excluir de todos os meses">
+        <button className="btn btn-danger btn-sm" onClick={onDeleteAll} title={t('finance.excluirDeTodosOsMeses')}>
           🗑
         </button>
       </div>
@@ -270,8 +271,8 @@ function GroupsModal({ groups, counts, onChanged, onClose }: {
   }
   async function remove(g: InvestmentGroupDef): Promise<void> {
     const n = counts[g.key] ?? 0
-    const extra = n ? ` Os ${n} investimento(s) dele voltam ao grupo do tipo (ou "Outros").` : ''
-    if (!confirm(`Excluir o grupo "${g.label}"?${extra}`)) return
+    const extra = n ? ' ' + t('finance.investimentosVoltamAoGrupo', { n }) : ''
+    if (!confirm(t('finance.excluirOGrupo', { label: g.label, extra }))) return
     await window.api.investmentGroups.delete(g.key)
     await onChanged()
   }
@@ -279,23 +280,22 @@ function GroupsModal({ groups, counts, onChanged, onClose }: {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 320, maxWidth: 520 }}>
-        <h2>Grupos de investimento</h2>
+        <h2>{t('finance.gruposDeInvestimento')}</h2>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-          Os padrão recebem os investimentos automaticamente pelo tipo; os que você cria recebem os que você mover para eles
-          (pelo seletor de grupo de cada investimento, ou ao adicionar um manual).
+          {t('finance.osPadraoRecebemOsInvestimentos')}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
           {groups.map((g, i) => (
             <div key={`${g.key}|${g.label}|${g.icon}`} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: 10, lineHeight: 1 }}>
-                <button className="btn btn-secondary btn-sm" style={{ padding: '1px 5px', minHeight: 0, lineHeight: 1 }} disabled={i === 0} onClick={() => move(g, -1)} title="Subir">▲</button>
-                <button className="btn btn-secondary btn-sm" style={{ padding: '1px 5px', minHeight: 0, lineHeight: 1 }} disabled={i === groups.length - 1} onClick={() => move(g, 1)} title="Descer">▼</button>
+                <button className="btn btn-secondary btn-sm" style={{ padding: '1px 5px', minHeight: 0, lineHeight: 1 }} disabled={i === 0} onClick={() => move(g, -1)} title={t('finance.subir')}>▲</button>
+                <button className="btn btn-secondary btn-sm" style={{ padding: '1px 5px', minHeight: 0, lineHeight: 1 }} disabled={i === groups.length - 1} onClick={() => move(g, 1)} title={t('finance.descer')}>▼</button>
               </div>
               <input
                 defaultValue={g.icon}
                 onBlur={(e) => save(g, g.label, e.target.value)}
                 style={{ width: 40, flexShrink: 0, textAlign: 'center', padding: '4px 2px' }}
-                title="Ícone (emoji)"
+                title={t('finance.iconeEmoji')}
               />
               <input
                 defaultValue={g.label}
@@ -305,30 +305,30 @@ function GroupsModal({ groups, counts, onChanged, onClose }: {
               />
               <span
                 style={{ fontSize: 11, color: 'var(--text-muted)', width: 40, flexShrink: 0, textAlign: 'right', lineHeight: 1.2 }}
-                title={g.builtin ? 'Grupo padrão (não pode ser excluído)' : undefined}
+                title={g.builtin ? t('finance.grupoPadraoNaoPodeSer') : undefined}
               >
-                {counts[g.key] ?? 0} {(counts[g.key] ?? 0) === 1 ? 'item' : 'itens'}
-                {!!g.builtin && <><br />padrão</>}
+                {counts[g.key] ?? 0} {(counts[g.key] ?? 0) === 1 ? t('finance.item') : t('finance.itens')}
+                {!!g.builtin && <><br />{t('finance.padrao')}</>}
               </span>
               {!g.builtin && (
-                <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => remove(g)} title="Excluir grupo">✕</button>
+                <button className="btn btn-danger btn-sm" style={{ flexShrink: 0 }} onClick={() => remove(g)} title={t('finance.excluirGrupo')}>✕</button>
               )}
             </div>
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-          <input placeholder="🪙" value={newIcon} onChange={(e) => setNewIcon(e.target.value)} style={{ width: 44, textAlign: 'center' }} title="Ícone (emoji)" />
+          <input placeholder="🪙" value={newIcon} onChange={(e) => setNewIcon(e.target.value)} style={{ width: 44, textAlign: 'center' }} title={t('finance.iconeEmoji')} />
           <input
-            placeholder="Novo grupo (ex.: Previdência)"
+            placeholder={t('finance.novoGrupoExPrevidencia')}
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && create()}
             style={{ flex: 1, minWidth: 0 }}
           />
-          <button className="btn btn-primary btn-sm" onClick={create} disabled={!newLabel.trim()}>+ Criar</button>
+          <button className="btn btn-primary btn-sm" onClick={create} disabled={!newLabel.trim()}>{t('finance.criar')}</button>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Fechar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('finance.fechar')}</button>
         </div>
       </div>
     </div>
@@ -377,7 +377,7 @@ export function InvestmentsPage(): React.ReactElement {
       if (r.vanished.length) {
         const list = r.vanished.slice(0, 10).map((v) => `• ${v.name}`).join('\n')
         const more = r.vanished.length > 10 ? `\n… e mais ${r.vanished.length - 10}` : ''
-        if (confirm(`${r.vanished.length} investimento(s) não aparecem mais no banco:\n\n${list}${more}\n\nEncerrar a partir deste mês?`)) {
+        if (confirm(t('finance.investimentoSNaoAparecemMais', { count: r.vanished.length, list, more }))) {
           const cur = new Date()
           const m = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`
           for (const v of r.vanished) await window.api.investments.close(v.id, m)
@@ -385,8 +385,8 @@ export function InvestmentsPage(): React.ReactElement {
         }
       }
       await refresh()
-      const parts = [`${r.created} novos`, `${r.updated} atualizados`, `${r.closed + closedGone} encerrados`, `${r.movements ?? 0} movimentações`]
-      setSyncMsg({ text: `Open Finance: ${parts.join(', ')}. Valores registrados no mês atual.`, ok: true })
+      const parts = [t('finance.inv.novos', { n: r.created }), t('finance.inv.atualizados', { n: r.updated }), t('finance.inv.encerrados', { n: r.closed + closedGone }), t('finance.inv.movimentacoes', { n: r.movements ?? 0 })]
+      setSyncMsg({ text: t('finance.openFinanceValoresRegistradosNo', { p0: parts.join(', ') }), ok: true })
     } catch (e) {
       setSyncMsg({ text: e instanceof Error ? e.message : String(e), ok: false })
     } finally {
@@ -430,21 +430,21 @@ export function InvestmentsPage(): React.ReactElement {
   }
 
   function handleClose(i: Investment): void {
-    if (!confirm(`Encerrar "${i.name}" a partir de ${monthLabel(month)}? Os meses anteriores ficam como estão.`)) return
+    if (!confirm(t('finance.encerrarAPartirDeOs', { name: i.name, p1: monthLabel(month) }))) return
     closeInvestment(i.id, month)
   }
 
   function handleDeleteAll(i: Investment): void {
-    if (!confirm(`Excluir "${i.name}" de TODOS os meses? O histórico inteiro será apagado.`)) return
+    if (!confirm(t('finance.excluirDeTodosOsMeses2', { name: i.name }))) return
     removeInvestment(i.id)
   }
   return (
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>📈 Investimentos</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('finance.investimentos')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {monthLabel(month)} · Total:{' '}
+            {t('finance.total3', { p0: monthLabel(month) })}{' '}
             {Object.entries(totals)
               .map(([c, v]) => formatMoney(v, c))
               .join(' · ') || formatMoney(0)}
@@ -457,16 +457,16 @@ export function InvestmentsPage(): React.ReactElement {
 
       <div className="chart-section" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
-          <select value={group} onChange={(e) => setGroup(e.target.value)} title="Grupo do investimento">
-            <option value="">Grupo…</option>
+          <input placeholder={t('finance.nome')} value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+          <select value={group} onChange={(e) => setGroup(e.target.value)} title={t('finance.grupoDoInvestimento')}>
+            <option value="">{t('finance.grupo')}</option>
             {investmentGroups.map((g) => (
               <option key={g.key} value={g.key}>
                 {g.icon} {g.label}
               </option>
             ))}
           </select>
-          <input type="number" placeholder="Valor inicial" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 120 }} />
+          <input type="number" placeholder={t('finance.valorInicial')} value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 120 }} />
           <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -475,29 +475,27 @@ export function InvestmentsPage(): React.ReactElement {
             ))}
           </select>
           <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={!name.trim() || !group || isNaN(parseFloat(amount))}>
-            + Adicionar
+            {t('finance.adicionar')}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setGroupsOpen(true)} title="Criar, renomear e reordenar grupos">
-            ⚙️ Grupos
+          <button className="btn btn-secondary btn-sm" onClick={() => setGroupsOpen(true)} title={t('finance.criarRenomearEReordenarGrupos')}>
+            {t('finance.grupos')}
           </button>
         </div>
         {pluggyReady && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
-            <button className="btn btn-secondary btn-sm" onClick={syncFromBank} disabled={syncBusy} title="Busca seus investimentos no banco (Pluggy) e registra o saldo líquido no mês atual">
-              {syncBusy ? 'Atualizando…' : '🏦 Atualizar do Open Finance'}
+            <button className="btn btn-secondary btn-sm" onClick={syncFromBank} disabled={syncBusy} title={t('finance.buscaSeusInvestimentosNoBanco')}>
+              {syncBusy ? t('finance.atualizando') : t('finance.atualizarDoOpenFinance')}
             </button>
             {syncMsg && <span style={{ fontSize: 12, color: syncMsg.ok ? 'var(--success)' : 'var(--danger)' }}>{syncMsg.text}</span>}
           </div>
         )}
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-          Registre o valor de cada investimento mês a mês (navegue pelos meses acima). Meses sem
-          registro mantêm o último valor conhecido. ✕ encerra o investimento a partir do mês exibido;
-          os meses anteriores não mudam.
+          {t('finance.registreOValorDeCada')}
         </p>
       </div>
 
       <div className="list-stack">
-        {active.length === 0 && <div className="empty-hint">Nenhum investimento neste mês.</div>}
+        {active.length === 0 && <div className="empty-hint">{t('finance.nenhumInvestimentoNesteMes')}</div>}
         {investmentGroups.map((g) => {
           const items = active.filter((i) => groupOf(i) === g.key)
           if (!items.length && g.key === 'outros') return null
@@ -519,16 +517,16 @@ export function InvestmentsPage(): React.ReactElement {
                 style={{ cursor: items.length ? 'pointer' : 'default', textAlign: 'left', width: '100%', opacity: items.length ? 1 : 0.55, font: 'inherit', color: 'inherit' }}
                 onClick={() => items.length && toggleGroup(g.key)}
                 disabled={!items.length}
-                title={items.length ? (open ? 'Fechar detalhes' : 'Ver cada investimento') : 'Nenhum investimento neste grupo'}
+                title={items.length ? (open ? t('finance.fecharDetalhes') : t('finance.verCadaInvestimento')) : t('finance.nenhumInvestimentoNesteGrupo')}
               >
                 <span style={{ fontSize: 18 }}>{g.icon}</span>
                 <span className="list-row-title" style={{ fontWeight: 600 }}>
                   {g.label}
                   <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>
-                    {items.length} {items.length === 1 ? 'item' : 'itens'}
+                    {items.length} {items.length === 1 ? t('finance.item') : t('finance.itens')}
                   </span>
                 </span>
-                {items.length > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{share.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</span>}
+                {items.length > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{share.toLocaleString(getLocale(), { maximumFractionDigits: 1 })}%</span>}
                 {cmpG && items.length > 0 && <DeltaTag prev={cmpG.prev} curr={cmpG.now} currency="BRL" />}
                 <span style={{ marginLeft: 'auto', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(total)}</span>
                 <span style={{ width: 16, textAlign: 'center', color: 'var(--text-muted)' }}>{items.length ? (open ? '▲' : '▼') : ''}</span>
@@ -566,7 +564,7 @@ export function InvestmentsPage(): React.ReactElement {
         })}
         {active.length > 0 && (
           <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setOpenGroups(openGroups.size ? new Set() : new Set(investmentGroups.map((g) => g.key)))}>
-            {openGroups.size ? 'Fechar todos' : 'Ver detalhes de todos'}
+            {openGroups.size ? t('finance.fecharTodos') : t('finance.verDetalhesDeTodos')}
           </button>
         )}
       </div>
@@ -587,7 +585,7 @@ export function InvestmentsPage(): React.ReactElement {
       {closed.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-            Encerrados ({closed.length})
+            {t('finance.encerrados', { count: closed.length })}
           </div>
           <div className="list-stack">
             {closed.map(({ investment, since }) => (

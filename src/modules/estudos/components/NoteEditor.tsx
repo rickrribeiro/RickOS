@@ -1,20 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
 import { renderMarkdown } from '../markdown'
+import { t, getLocale } from '../../../i18n'
 
 function fmt(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 const TUTOR_ACTIONS: { key: string; label: string; instruction: string }[] = [
-  { key: 'simple', label: '🧒 Explique simples', instruction: 'Explique o conteúdo abaixo de forma simples, como se eu tivesse 12 anos, com analogias.' },
-  { key: 'summary', label: '📝 Resuma', instruction: 'Resuma o conteúdo abaixo em no máximo 5 bullets objetivos.' },
-  { key: 'exercise', label: '🏋️ Exercício', instruction: 'Crie 2 a 3 exercícios práticos (com a resposta ao final) sobre o conteúdo abaixo.' },
-  { key: 'gaps', label: '🕳️ O que falta', instruction: 'Aponte lacunas e pontos que eu deveria estudar a seguir a partir do conteúdo abaixo.' },
-  { key: 'socratic', label: '🧠 Tutor socrático', instruction: 'Aja como um tutor socrático. NÃO dê respostas nem explicações: apenas faça de 4 a 6 perguntas graduais (da mais básica à mais profunda) que me levem a raciocinar e descobrir sozinho o conteúdo abaixo. Numere as perguntas.' },
-  { key: 'recall', label: '🎯 Revisão ativa', instruction: 'Gere de 4 a 6 prompts de RECALL ATIVO a partir do conteúdo abaixo — perguntas abertas do tipo "explique sem olhar", "descreva com suas palavras", "reconstrua o raciocínio". Não inclua as respostas. Foque nos conceitos mais importantes para memória de longo prazo.' }
+  { key: 'simple', label: t('estudos.expliqueSimples'), instruction: 'Explique o conteúdo abaixo de forma simples, como se eu tivesse 12 anos, com analogias.' },
+  { key: 'summary', label: t('estudos.resuma'), instruction: 'Resuma o conteúdo abaixo em no máximo 5 bullets objetivos.' },
+  { key: 'exercise', label: t('estudos.exercicio'), instruction: 'Crie 2 a 3 exercícios práticos (com a resposta ao final) sobre o conteúdo abaixo.' },
+  { key: 'gaps', label: t('estudos.oQueFalta'), instruction: 'Aponte lacunas e pontos que eu deveria estudar a seguir a partir do conteúdo abaixo.' },
+  { key: 'socratic', label: t('estudos.tutorSocratico'), instruction: 'Aja como um tutor socrático. NÃO dê respostas nem explicações: apenas faça de 4 a 6 perguntas graduais (da mais básica à mais profunda) que me levem a raciocinar e descobrir sozinho o conteúdo abaixo. Numere as perguntas.' },
+  { key: 'recall', label: t('estudos.revisaoAtiva'), instruction: 'Gere de 4 a 6 prompts de RECALL ATIVO a partir do conteúdo abaixo — perguntas abertas do tipo "explique sem olhar", "descreva com suas palavras", "reconstrua o raciocínio". Não inclua as respostas. Foque nos conceitos mais importantes para memória de longo prazo.' }
 ]
 
 /** Split-view Markdown note editor (textarea | live preview) with debounced autosave. */
@@ -71,7 +72,7 @@ export function NoteEditor(): React.ReactElement {
     setTutorOut('')
   }
 
-  const title = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId)?.title ?? 'Item' : 'Visão geral do tópico'
+  const title = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId)?.title ?? t('estudos.item') : t('estudos.visaoGeralTopico')
 
   // reset when selection changes or the loaded note arrives
   useEffect(() => {
@@ -103,7 +104,7 @@ export function NoteEditor(): React.ReactElement {
     <div className="note-editor">
       <div className="note-editor-head">
         <strong>{title}</strong>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>salvo {fmt(savedAt)}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('estudos.salvo')} {fmt(savedAt)}</span>
       </div>
       <div className="md-split">
         <textarea
@@ -111,22 +112,22 @@ export function NoteEditor(): React.ReactElement {
           value={draft}
           onChange={(e) => onChange(e.target.value)}
           onBlur={flush}
-          placeholder="Escreva em Markdown: # título, **negrito**, `código`, - listas, [link](url)…"
+          placeholder={t('estudos.escrevaEmMarkdownTituloNegrito')}
           spellCheck={false}
         />
         <div className="md-preview-pane">
-          {draft.trim() ? renderMarkdown(draft) : <div className="empty-hint">Pré-visualização aparece aqui.</div>}
+          {draft.trim() ? renderMarkdown(draft) : <div className="empty-hint">{t('estudos.preVisualizacaoApareceAqui')}</div>}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🤖 Tutor:</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('estudos.tutor')}</span>
         {TUTOR_ACTIONS.map((a) => (
           <button
             key={a.key}
             className="btn btn-secondary btn-sm"
             disabled={tutorRunning || !draft.trim()}
-            title={draft.trim() ? '' : 'Escreva uma anotação primeiro'}
+            title={draft.trim() ? '' : t('estudos.escrevaUmaAnotacaoPrimeiro')}
             onClick={() => runTutor(a.instruction, a.label)}
           >
             {a.label}
@@ -137,12 +138,12 @@ export function NoteEditor(): React.ReactElement {
       {(tutorRunning || tutorOut) && (
         <div className="chart-section" style={{ marginTop: 8 }}>
           <div className="chart-title" style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>{tutorLabel}{tutorRunning ? ' — pensando…' : ''}</span>
+            <span>{tutorLabel}{tutorRunning ? t('estudos.pensando') : ''}</span>
             {!tutorRunning && tutorOut && (
               <span style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard.writeText(tutorOut)}>Copiar</button>
-                <button className="btn btn-secondary btn-sm" onClick={appendToNote}>Anexar à nota</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setTutorOut('')}>Fechar</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard.writeText(tutorOut)}>{t('estudos.copiar')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={appendToNote}>{t('estudos.anexarANota')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setTutorOut('')}>{t('estudos.fechar')}</button>
               </span>
             )}
           </div>

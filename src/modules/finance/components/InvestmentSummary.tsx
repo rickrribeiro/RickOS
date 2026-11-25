@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { comparableInvestmentDelta, convertToBase, formatMoney, investmentValueAtMonth, monthLabel, shiftMonth } from '../util'
+import { t, getLocale } from '../../../i18n'
 
-const fmtPct = (n: number): string => `${n >= 0 ? '+' : '−'}${Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
+const fmtPct = (n: number): string => `${n >= 0 ? '+' : '−'}${Math.abs(n).toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
 
 /**
  * Topo de Investimentos (mês selecionado): total e variação vs mês anterior, valorização (variação
@@ -76,42 +77,42 @@ export function InvestmentSummary(): React.ReactElement {
     <div className="chart-section" style={{ marginBottom: 12 }}>
       <div className="cards-grid" style={{ marginTop: 0 }}>
         <div className="stat-card">
-          <div className="stat-card-label">Total investido</div>
+          <div className="stat-card-label">{t('finance.totalInvestido')}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(s.now, base)}</div>
           <div className="stat-card-sub" style={{ color: color(s.variation) }}>
             {s.variation == null
-              ? 'sem base de comparação com o mês anterior'
-              : `${signed(s.variation)} vs. ${monthLabel(shiftMonth(month, -1))}${s.prev ? ` (${fmtPct((s.variation / s.prev) * 100)})` : ''}`}
+              ? t('finance.semBaseDeComparacaoCom')
+              : t('finance.vs', { p0: signed(s.variation), p1: monthLabel(shiftMonth(month, -1)), p2: s.prev ? ` (${fmtPct((s.variation / s.prev) * 100)})` : '' })}
             {(s.entered > 0 || s.left > 0) && s.variation != null && (
               <span style={{ display: 'block', color: 'var(--text-muted)' }}>
-                sem contar {[s.entered && `${s.entered} que entraram`, s.left && `${s.left} que saíram`].filter(Boolean).join(' e ')} do registro
+                {t('finance.semContar')} {[s.entered && t('finance.queEntraram', { n: s.entered }), s.left && t('finance.queSairam', { n: s.left })].filter(Boolean).join(t('finance.listaE'))} {t('finance.doRegistro')}
               </span>
             )}
           </div>
         </div>
-        <div className="stat-card" title="Variação descontando o dinheiro que entrou (aportes) e saiu (resgates): o quanto os investimentos renderam ou perderam de fato.">
-          <div className="stat-card-label">Valorização no mês</div>
+        <div className="stat-card" title={t('finance.variacaoDescontandoODinheiroQue')}>
+          <div className="stat-card-label">{t('finance.valorizacaoNoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: color(s.appreciation) }}>
             {s.appreciation == null ? '—' : signed(s.appreciation)}
           </div>
           <div className="stat-card-sub">
             {s.appreciation == null
-              ? 'precisa de investimentos com valor neste mês e no anterior'
-              : `variação ${signed(s.variation!)} − aportes ${formatMoney(s.contributions, base)} + resgates ${formatMoney(s.withdrawals, base)}${s.prev ? ` · ${fmtPct((s.appreciation / s.prev) * 100)}` : ''}`}
+              ? t('finance.precisaDeInvestimentosComValor')
+              : t('finance.variacaoAportesResgates', { p0: signed(s.variation!), p1: formatMoney(s.contributions, base), p2: formatMoney(s.withdrawals, base), p3: s.prev ? ` · ${fmtPct((s.appreciation / s.prev) * 100)}` : '' })}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Proventos no mês</div>
+          <div className="stat-card-label">{t('finance.proventosNoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: s.dividends > 0 ? 'var(--success)' : undefined }}>{formatMoney(s.dividends, base)}</div>
           <div className="stat-card-sub">
             {s.byAsset.length > 0 ? (
               <button className="btn btn-sm" style={{ padding: 0, background: 'transparent', border: 'none', color: 'var(--accent)' }} onClick={() => setShowProv((v) => !v)}>
-                {s.byAsset.length} {s.byAsset.length === 1 ? 'ativo' : 'ativos'} {showProv ? '▲' : '▼'}
+                {s.byAsset.length} {s.byAsset.length === 1 ? t('finance.ativo') : t('finance.ativos')} {showProv ? '▲' : '▼'}
               </button>
             ) : (
-              'nenhum no mês'
+              t('finance.nenhumNoMes')
             )}{' '}
-            · {s.year} até agora: {formatMoney(s.dividendsYear, base)}
+            {t('finance.ateAgora', { year: s.year, p1: formatMoney(s.dividendsYear, base) })}
           </div>
           {showProv && (
             <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -128,17 +129,17 @@ export function InvestmentSummary(): React.ReactElement {
           )}
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Aportes e resgates</div>
+          <div className="stat-card-label">{t('finance.aportesEResgates')}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{signed(s.allContributions - s.allWithdrawals)}</div>
           <div className="stat-card-sub">
-            aportes {formatMoney(s.allContributions, base)} · resgates {formatMoney(s.allWithdrawals, base)}
-            {s.taxes > 0 && ` · impostos ${formatMoney(s.taxes, base)}`}
+            {t('finance.aportesResgates', { p0: formatMoney(s.allContributions, base), p1: formatMoney(s.allWithdrawals, base) })}
+            {s.taxes > 0 && t('finance.impostos', { p0: formatMoney(s.taxes, base) })}
           </div>
         </div>
       </div>
       {!s.hasMovements && (
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-          Proventos, aportes e resgates vêm do Open Finance: clique em &quot;Atualizar do Open Finance&quot; para trazer as movimentações.
+          {t('finance.proventosAportesEResgatesVem')}
         </div>
       )}
     </div>

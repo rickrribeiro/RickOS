@@ -7,6 +7,7 @@ import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLab
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
 import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel, recurringKey, isRefund } from '../../../../shared/finance'
+import { t as tr } from '../../../i18n'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -138,7 +139,7 @@ export function TransactionsPage(): React.ReactElement {
     const text = await file.text()
     const rows = parseBankCsv(text)
     if (rows.length === 0) {
-      alert('Não consegui reconhecer o CSV. Esperado colunas de data e valor.')
+      alert(tr('finance.naoConseguiReconhecerOCsv'))
       return
     }
     // Duplicatas: idêntica (data+valor+tipo+descrição) é sempre pulada; mesma data+valor+tipo com descrição
@@ -157,14 +158,14 @@ export function TransactionsPage(): React.ReactElement {
     const categorized = fresh.filter((r) => matchCategoryId(r.description, categories) !== null).length
     if (
       !confirm(
-        `${rows.length} transações no arquivo (${dates[0]} a ${dates[dates.length - 1]}${rows[0]?.card ? ', fatura de cartão' : ''}).\n` +
-          (exactDupes ? `${exactDupes} já existem e serão puladas.\n` : '') +
-          `Importar ${fresh.length}? ${categorized} auto-categorizadas; o resto vai p/ "Outros" (e as Regras rodam na importação).`
+        tr('finance.import.noArquivo', { n: rows.length, from: dates[0], to: dates[dates.length - 1], card: rows[0]?.card ? tr('finance.import.faturaCartao') : '' }) + '\n' +
+          (exactDupes ? tr('finance.import.jaExistem', { n: exactDupes }) + '\n' : '') +
+          tr('finance.import.confirmar', { n: fresh.length, categorized })
       )
     )
       return
     let toImport = fresh
-    if (probable.length && confirm(`${probable.length} parecem já existir (mesma data, valor e tipo, com outra descrição — provavelmente vieram do Open Finance).\n\nOK = pular essas · Cancelar = importar mesmo assim`)) {
+    if (probable.length && confirm(tr('finance.parecemJaExistirMesmaData', { count: probable.length }))) {
       const skip = new Set(probable)
       toImport = fresh.filter((r) => !skip.has(r))
     }
@@ -202,10 +203,10 @@ export function TransactionsPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>💸 Transações</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('finance.transacoes')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {transactions.length} no mês
-            {monthListing.length > transactions.length && ` · ${monthListing.length - transactions.length} ignorada(s)`}
+            {tr('finance.noMes', { count: transactions.length })}
+            {monthListing.length > transactions.length && tr('finance.ignoradaS', { p0: monthListing.length - transactions.length })}
           </p>
         </div>
         <MonthNav />
@@ -221,24 +222,24 @@ export function TransactionsPage(): React.ReactElement {
               if (categoryId !== '' && categories.find((c) => c.id === categoryId)?.type !== v) setCategoryId('')
             }}
           >
-            <option value="expense">Despesa</option>
-            <option value="income">Receita</option>
+            <option value="expense">{tr('finance.despesa')}</option>
+            <option value="income">{tr('finance.receita')}</option>
           </select>
-          <input type="number" placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 100 }} />
+          <input type="number" placeholder={tr('finance.valor')} value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 100 }} />
           <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}>
-            <option value="">Categoria…</option>
+            <option value="">{tr('finance.categoria2')}</option>
             {categories.filter((c) => c.type === type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={accountId} onChange={(e) => setAccountId(e.target.value === '' ? '' : Number(e.target.value))}>
-            <option value="">Conta…</option>
+            <option value="">{tr('finance.conta2')}</option>
             {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <input placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
-          <button className="btn btn-primary btn-sm" onClick={handleAdd}>+ Adicionar</button>
+          <input placeholder={tr('finance.descricao')} value={description} onChange={(e) => setDescription(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+          <button className="btn btn-primary btn-sm" onClick={handleAdd}>{tr('finance.adicionar')}</button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {pluggyReady && (
@@ -246,14 +247,14 @@ export function TransactionsPage(): React.ReactElement {
               className="btn btn-secondary btn-sm"
               onClick={handlePluggy}
               disabled={pluggyBusy}
-              title={`Importa do Open Finance (Pluggy) só as transações de ${monthLabel(month)}`}
+              title={tr('finance.importaDoOpenFinancePluggy', { p0: monthLabel(month) })}
             >
-              {pluggyBusy ? 'Importando…' : '🏦 Importar do Open Finance (mês)'}
+              {pluggyBusy ? tr('finance.importando') : tr('finance.importarDoOpenFinanceMes')}
             </button>
           )}
           <input ref={fileRef} type="file" accept=".csv" onChange={handleCsv} style={{ display: 'none' }} />
-          <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>📥 Importar CSV</button>
-          <button className="btn btn-secondary btn-sm" onClick={handleExport} disabled={transactions.length === 0}>📤 Exportar CSV</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>{tr('finance.importarCsv')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={handleExport} disabled={transactions.length === 0}>{tr('finance.exportarCsv')}</button>
         </div>
         {pluggyMsg && (
           <div style={{ marginTop: 8, fontSize: 12, color: pluggyMsg.ok ? 'var(--success)' : 'var(--danger)' }}>
@@ -265,14 +266,14 @@ export function TransactionsPage(): React.ReactElement {
       <div className="tx-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
         <input
           type="search"
-          placeholder="🔍 Buscar (descrição, categoria, valor…)"
+          placeholder={tr('finance.buscarDescricaoCategoriaValor')}
           value={fText}
           onChange={(e) => setFText(e.target.value)}
           style={{ flex: '1 1 340px', minWidth: 160 }}
         />
         <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, whiteSpace: 'nowrap', cursor: 'pointer' }}>
           <input type="checkbox" checked={allMonths} onChange={(e) => setAllMonths(e.target.checked)} />
-          todos os meses
+          {tr('finance.todosOsMeses')}
         </label>
         <select
           value={fType}
@@ -283,12 +284,12 @@ export function TransactionsPage(): React.ReactElement {
             if ((v === 'income' || v === 'expense') && typeof fCategory === 'number' && categories.find((c) => c.id === fCategory)?.type !== v) setFCategory('')
           }}
         >
-          <option value="">Entradas e saídas</option>
-          <option value="income">Só entradas</option>
-          <option value="expense">Só saídas</option>
-          <option value="investment">Só investimentos (aplicação/resgate)</option>
-          <option value="transfer">Só transferências entre contas</option>
-          <option value="recurring">Só recorrentes</option>
+          <option value="">{tr('finance.entradasESaidas')}</option>
+          <option value="income">{tr('finance.soEntradas')}</option>
+          <option value="expense">{tr('finance.soSaidas')}</option>
+          <option value="investment">{tr('finance.soInvestimentosAplicacaoResgate')}</option>
+          <option value="transfer">{tr('finance.soTransferenciasEntreContas')}</option>
+          <option value="recurring">{tr('finance.soRecorrentes')}</option>
         </select>
         <select
           value={fCategory === '' ? '' : String(fCategory)}
@@ -297,8 +298,8 @@ export function TransactionsPage(): React.ReactElement {
             setFCategory(v === '' ? '' : v === 'none' ? 'none' : Number(v))
           }}
         >
-          <option value="">Todas as categorias</option>
-          <option value="none">Sem categoria</option>
+          <option value="">{tr('finance.todasAsCategorias')}</option>
+          <option value="none">{tr('finance.semCategoria')}</option>
           {categories
             .filter((c) => fType !== 'income' && fType !== 'expense' ? true : c.type === fType)
             .map((c) => (
@@ -308,21 +309,21 @@ export function TransactionsPage(): React.ReactElement {
             ))}
         </select>
         <select value={fPayment} onChange={(e) => setFPayment(e.target.value)}>
-          <option value="">Todas as formas de pagamento</option>
+          <option value="">{tr('finance.todasAsFormasDePagamento')}</option>
           {PAYMENT_METHODS.map((p) => (
             <option key={p.id} value={p.id}>
               {p.icon} {p.label}
             </option>
           ))}
-          <option value="none">Não identificada</option>
+          <option value="none">{tr('finance.naoIdentificada')}</option>
         </select>
         {filtering && (
           <button className="btn btn-secondary btn-sm" onClick={() => { setFType(''); setFCategory(''); setFPayment(''); setFText('') }}>
-            Limpar filtros
+            {tr('finance.limparFiltros')}
           </button>
         )}
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-          {filtering && `${filtered.length} de ${source.length}${allMonths ? ' (todos os meses)' : ''} · `}
+          {filtering && tr('finance.de', { count: filtered.length, count2: source.length, p2: allMonths ? tr('finance.todosOsMesesParen') : '' })}
           <span style={{ color: 'var(--success)' }}>+{inTotal}</span> ·{' '}
           <span style={{ color: 'var(--danger)' }}>−{outTotal}</span>
         </span>
@@ -333,14 +334,14 @@ export function TransactionsPage(): React.ReactElement {
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => setShowSuggestions((v) => !v)}
-            title="O app achou padrões de cobrança/entrada mensal. Confirme os que são recorrentes de verdade."
+            title={tr('finance.oAppAchouPadroesDe')}
           >
-            💡 {recurringSuggestions.length} {recurringSuggestions.length === 1 ? 'possível recorrente' : 'possíveis recorrentes'} {showSuggestions ? '▲' : '▼'}
+            💡 {recurringSuggestions.length} {recurringSuggestions.length === 1 ? tr('finance.possivelRecorrente') : tr('finance.possiveisRecorrentes')} {showSuggestions ? '▲' : '▼'}
           </button>
           {showSuggestions && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                Repetem ~todo mês com valor parecido. Ao confirmar, todas as transações do estabelecimento (e as próximas) ficam marcadas como recorrentes.
+                {tr('finance.repetemTodoMesComValor')}
               </div>
               {recurringSuggestions.map((s) => (
                 <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13 }}>
@@ -348,10 +349,10 @@ export function TransactionsPage(): React.ReactElement {
                     {s.label}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {s.type === 'income' ? '+' : '−'}~{formatMoney(s.avgAmount, s.currency)} · {s.count}× · última {s.lastDate.split('-').reverse().join('/')}
+                    {s.type === 'income' ? '+' : '−'}{tr('finance.ultima', { p0: formatMoney(s.avgAmount, s.currency), count: s.count })} {s.lastDate.split('-').reverse().join('/')}
                   </span>
-                  <button className="btn btn-primary btn-sm" onClick={() => setRecurring(s.key, true)}>Confirmar</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setRecurring(s.key, false)}>Não é</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => setRecurring(s.key, true)}>{tr('finance.confirmar')}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setRecurring(s.key, false)}>{tr('finance.naoE')}</button>
                 </div>
               ))}
             </div>
@@ -360,17 +361,17 @@ export function TransactionsPage(): React.ReactElement {
       )}
 
       <div className="list-stack">
-        {source.length === 0 && <div className="empty-hint">{allMonths ? 'Nenhuma transação.' : 'Nenhuma transação neste mês.'}</div>}
-        {source.length > 0 && filtered.length === 0 && <div className="empty-hint">Nenhuma transação com esses filtros.</div>}
+        {source.length === 0 && <div className="empty-hint">{allMonths ? tr('finance.nenhumaTransacao') : tr('finance.nenhumaTransacaoNesteMes')}</div>}
+        {source.length > 0 && filtered.length === 0 && <div className="empty-hint">{tr('finance.nenhumaTransacaoComEssesFiltros')}</div>}
         {filtered.map((t: Transaction) => t.ignoredReason ? (
-          <div key={t.id} className="list-row" style={{ opacity: 0.55 }} title="Não entra em nenhum cálculo nem gráfico">
+          <div key={t.id} className="list-row" style={{ opacity: 0.55 }} title={tr('finance.naoEntraEmNenhumCalculo')}>
             <span className="due-badge due-future">{allMonths ? t.date.split('-').reverse().join('/') : t.date.slice(5)}</span>
             <span className="list-row-title" style={{ color: 'var(--text-muted)' }}>{t.description || categoryName(t.categoryId)}</span>
-            <span className="project-chip" style={{ color: 'var(--text-muted)' }}>ignorada · {t.ignoredReason}</span>
+            <span className="project-chip" style={{ color: 'var(--text-muted)' }}>{tr('finance.ignorada')} {t.ignoredReason}</span>
             <span style={{ fontWeight: 600, color: 'var(--text-muted)', minWidth: 90, textAlign: 'right', textDecoration: 'line-through' }}>
               {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, t.currency)}
             </span>
-            <button className="btn btn-secondary btn-sm" onClick={() => markTransactionValid(t.id)}>Marcar como transação válida</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => markTransactionValid(t.id)}>{tr('finance.marcarComoTransacaoValida')}</button>
             <button className="btn btn-danger btn-sm" onClick={() => removeTransaction(t.id)}>✕</button>
           </div>
         ) : (
@@ -387,46 +388,46 @@ export function TransactionsPage(): React.ReactElement {
               <button
                 className="project-chip"
                 style={{ color: 'var(--accent)', cursor: 'pointer', border: 'none' }}
-                title="Movimentação de investimento: fora de receitas/gastos. Clique para desmarcar."
+                title={tr('finance.movimentacaoDeInvestimentoForaDe')}
                 onClick={() => {
-                  if (confirm('Desmarcar como investimento? Ela volta a contar como ' + (t.type === 'income' ? 'receita.' : 'gasto.')))
+                  if (confirm(tr(t.type === 'income' ? 'finance.desmarcarInvestimentoReceita' : 'finance.desmarcarInvestimentoGasto')))
                     setTransactionKind(t.id, 'normal')
                 }}
               >
-                📈 {t.type === 'income' ? 'resgate' : 'aplicação'}
+                📈 {t.type === 'income' ? tr('finance.resgate') : tr('finance.aplicacao')}
               </button>
             ) : null}
             {t.transfer ? (
               <button
                 className="project-chip"
                 style={{ color: 'var(--accent)', cursor: 'pointer', border: 'none' }}
-                title="Transferência entre suas contas: fora de receitas/gastos. Clique para desmarcar."
+                title={tr('finance.transferenciaEntreSuasContasFora')}
                 onClick={() => {
-                  if (confirm('Desmarcar como transferência? Ela volta a contar como ' + (t.type === 'income' ? 'receita.' : 'gasto.')))
+                  if (confirm(tr(t.type === 'income' ? 'finance.desmarcarTransferenciaReceita' : 'finance.desmarcarTransferenciaGasto')))
                     setTransactionKind(t.id, 'normal')
                 }}
               >
-                🔁 transferência
+                {tr('finance.transferencia')}
               </button>
             ) : null}
             {isRefund(t) ? (
-              <span className="project-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--warning)' }} title="Estorno sem a compra original encontrada (valor diferente ou compra fora do período). Hoje conta como receita.">
-                ↩ estorno sem compra
+              <span className="project-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--warning)' }} title={tr('finance.estornoSemACompraOriginal')}>
+                {tr('finance.estornoSemCompra')}
                 <button
                   className="btn btn-sm"
                   style={{ padding: '0 4px', lineHeight: 1.2, background: 'transparent', border: 'none', color: 'var(--text-secondary)' }}
-                  title="Ignorar este estorno (tirar dos cálculos)"
+                  title={tr('finance.ignorarEsteEstornoTirarDos')}
                   onClick={() => {
-                    if (confirm('Ignorar este estorno? Ele sai das receitas e de todos os cálculos.\n\nUse se a compra estornada também não deveria contar (ex.: você já a ignorou) ou se ela está fora do período importado.'))
+                    if (confirm(tr('finance.ignorarEsteEstornoEleSai')))
                       ignoreTransaction(t.id, 'Estorno (decidido à mão)')
                   }}
                 >
-                  ignorar
+                  {tr('finance.ignorar')}
                 </button>
               </span>
             ) : null}
             {t.installmentTotal && t.installmentNumber && !installmentOf(t.description) ? (
-              <span className="project-chip" title="Parcela (informada pelo banco)">
+              <span className="project-chip" title={tr('finance.parcelaInformadaPeloBanco')}>
                 {t.installmentNumber}/{t.installmentTotal}
               </span>
             ) : null}
@@ -434,22 +435,22 @@ export function TransactionsPage(): React.ReactElement {
               <button
                 className="project-chip"
                 style={{ color: 'var(--accent)', cursor: 'pointer', border: 'none' }}
-                title="Recorrente (se repete ~todo mês com valor parecido). Clique se não for."
+                title={tr('finance.recorrenteSeRepeteTodoMes')}
                 onClick={() => {
                   const key = recurringKey(t.description, t.type)
-                  if (key && confirm(`Desmarcar como recorrente?\n\nVale para todas as transações de "${t.description}" (inclusive as próximas). Dá para desfazer no Editar.`))
+                  if (key && confirm(tr('finance.desmarcarComoRecorrenteValePara', { description: t.description })))
                     setRecurring(key, false)
                 }}
               >
-                📅 recorrente
+                {tr('finance.recorrente2')}
               </button>
             ) : suggestedKeys.has(recurringKey(t.description, t.type)) ? (
-              <span className="project-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Possível recorrente: confirme ou descarte (vale para o estabelecimento)">
-                📅 recorrente?
+              <span className="project-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={tr('finance.possivelRecorrenteConfirmeOuDescarte')}>
+                {tr('finance.recorrente3')}
                 <button
                   className="btn btn-sm"
                   style={{ padding: '0 4px', lineHeight: 1.2, color: 'var(--success)', background: 'transparent', border: 'none' }}
-                  title="Confirmar como recorrente"
+                  title={tr('finance.confirmarComoRecorrente')}
                   onClick={() => setRecurring(recurringKey(t.description, t.type), true)}
                 >
                   ✓
@@ -457,7 +458,7 @@ export function TransactionsPage(): React.ReactElement {
                 <button
                   className="btn btn-sm"
                   style={{ padding: '0 4px', lineHeight: 1.2, color: 'var(--danger)', background: 'transparent', border: 'none' }}
-                  title="Não é recorrente"
+                  title={tr('finance.naoERecorrente')}
                   onClick={() => setRecurring(recurringKey(t.description, t.type), false)}
                 >
                   ✕
@@ -465,14 +466,14 @@ export function TransactionsPage(): React.ReactElement {
               </span>
             ) : null}
             {t.pending ? (
-              <span className="project-chip" style={{ color: 'var(--warning)' }} title="Pendente no banco: valor e descrição ainda podem mudar">
-                pendente
+              <span className="project-chip" style={{ color: 'var(--warning)' }} title={tr('finance.pendenteNoBancoValorE')}>
+                {tr('finance.pendente')}
               </span>
             ) : null}
             <span style={{ fontWeight: 600, color: t.type === 'income' ? 'var(--success)' : 'var(--danger)', minWidth: 90, textAlign: 'right' }}>
               {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, t.currency)}
             </span>
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(t)}>Editar</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(t)}>{tr('finance.editar')}</button>
             <button className="btn btn-danger btn-sm" onClick={() => removeTransaction(t.id)}>✕</button>
           </div>
         ))}

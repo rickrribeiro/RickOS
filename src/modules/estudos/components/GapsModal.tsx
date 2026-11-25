@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { StudyTopic, StudyNode } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
+import { t } from '../../../i18n'
 
 interface Gap {
   title: string
@@ -59,9 +60,9 @@ export function GapsModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
       if (rid !== runId.current) return
       runId.current = null
       setBusy(false)
-      if (!ok) return setError(err || 'Falha ao analisar.')
+      if (!ok) return setError(err || t('estudos.falhaAoAnalisar'))
       const g = extractGaps(output)
-      if (!g || !g.length) return setError('Nenhuma lacuna detectada (ou resposta inválida).')
+      if (!g || !g.length) return setError(t('estudos.nenhumaLacunaDetectadaOuResposta'))
       setGaps(g)
     })
     ;(async () => {
@@ -95,8 +96,8 @@ ${outline(nodes)}`
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 440, maxWidth: 600 }}>
-        <h2>🕳️ Lacunas do roadmap — {topic.name}</h2>
-        {busy && <div className="empty-hint" style={{ padding: 24 }}>Analisando o roadmap com IA…</div>}
+        <h2>{t('estudos.lacunasDoRoadmap')} {topic.name}</h2>
+        {busy && <div className="empty-hint" style={{ padding: 24 }}>{t('estudos.analisandoORoadmapComIa')}</div>}
         {error && <div style={{ fontSize: 13, color: 'var(--danger)' }}>{error}</div>}
         {!busy && gaps.length > 0 && (
           <div className="list-stack" style={{ maxHeight: 360, overflowY: 'auto' }}>
@@ -107,14 +108,14 @@ ${outline(nodes)}`
                   {g.reason && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>{g.reason}</span>}
                 </span>
                 <button className="btn btn-secondary btn-sm" onClick={() => addAsNode(i)} disabled={added.has(i)}>
-                  {added.has(i) ? '✓ Adicionado' : '+ Roadmap'}
+                  {added.has(i) ? t('estudos.adicionado') : t('estudos.roadmap')}
                 </button>
               </div>
             ))}
           </div>
         )}
         <div className="modal-actions">
-          <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+          <button className="btn btn-primary btn-sm" onClick={onClose}>{t('estudos.fechar')}</button>
         </div>
       </div>
     </div>

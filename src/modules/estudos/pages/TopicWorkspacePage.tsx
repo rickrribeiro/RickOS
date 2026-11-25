@@ -6,6 +6,7 @@ import { NoteEditor } from '../components/NoteEditor'
 import { FlashcardPanel } from '../components/FlashcardPanel'
 import { QuizModal } from '../components/QuizModal'
 import { GapsModal } from '../components/GapsModal'
+import { t as tr } from '../../../i18n'
 
 export function TopicWorkspacePage(): React.ReactElement {
   const { setPage } = useUIStore()
@@ -23,7 +24,7 @@ export function TopicWorkspacePage(): React.ReactElement {
     return (
       <div className="module-page">
         <div className="empty-hint">
-          Nenhum tópico selecionado. <button className="btn btn-secondary btn-sm" onClick={() => setPage('estudos')}>Voltar aos Estudos</button>
+          {tr('estudos.nenhumTopicoSelecionado')} <button className="btn btn-secondary btn-sm" onClick={() => setPage('estudos')}>{tr('estudos.voltarAosEstudos')}</button>
         </div>
       </div>
     )
@@ -35,8 +36,8 @@ export function TopicWorkspacePage(): React.ReactElement {
   async function runExport(fn: () => Promise<{ ok: boolean; message?: string; error?: string } | boolean>): Promise<void> {
     const r = await fn()
     if (typeof r === 'boolean') {
-      if (r) alert('Backup JSON exportado.')
-    } else if (r.ok) alert(r.message || 'Exportado.')
+      if (r) alert(tr('estudos.backupJsonExportado'))
+    } else if (r.ok) alert(r.message || tr('estudos.exportado'))
     else if (r.error) alert('Falha: ' + r.error)
   }
 
@@ -49,30 +50,30 @@ export function TopicWorkspacePage(): React.ReactElement {
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700 }}>{topic.name}</h2>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              {done}/{nodes.length} concluídos · {pct}%
+              {tr('estudos.concluidos2', { done, count: nodes.length, pct })}
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={() => setQuizOpen(true)} title="Gerar um quiz a partir das anotações">🧪 Quiz</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setGapsOpen(true)} title="Detectar pré-requisitos/itens faltando no roadmap">🕳️ Lacunas</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportMarkdown(topic.id))} title="Gerar caderno (.md) do tópico">📄 Caderno .md</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportJson(topic.id))} title="Backup JSON do tópico">🗄 JSON</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportFolder(topic.id))} title="Exportar pasta Markdown (Obsidian)">📁 Pasta</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setQuizOpen(true)} title={tr('estudos.gerarUmQuizAPartir')}>{tr('estudos.quiz2')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setGapsOpen(true)} title={tr('estudos.detectarPreRequisitosItensFaltando')}>{tr('estudos.lacunas')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportMarkdown(topic.id))} title={tr('estudos.gerarCadernoMdDoTopico')}>{tr('estudos.cadernoMd')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportJson(topic.id))} title={tr('estudos.backupJsonDoTopico')}>{tr('estudos.json2')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportFolder(topic.id))} title={tr('estudos.exportarPastaMarkdownObsidian')}>{tr('estudos.pasta2')}</button>
         </div>
       </div>
 
       <div className="study-workspace">
         <div className="study-col study-col-roadmap">
-          <div className="chart-title">🗺 Roadmap</div>
+          <div className="chart-title">{tr('estudos.roadmap2')}</div>
           <RoadmapTree />
         </div>
         <div className="study-col study-col-note">
-          <div className="chart-title">📝 Anotações</div>
+          <div className="chart-title">{tr('estudos.anotacoes')}</div>
           <NoteEditor />
         </div>
         <div className="study-col study-col-cards">
-          <div className="chart-title">🃏 Flashcards</div>
+          <div className="chart-title">{tr('estudos.flashcards2')}</div>
           <FlashcardPanel />
         </div>
       </div>

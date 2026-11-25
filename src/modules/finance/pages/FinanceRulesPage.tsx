@@ -4,6 +4,7 @@ import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney, monthLabel } from '../util'
 import { matchFinanceRule, parseKeywords } from '../../../../shared/finance'
+import { t } from '../../../i18n'
 
 /** Select de categoria agrupado por tipo. */
 function CategorySelect({
@@ -17,11 +18,11 @@ function CategorySelect({
 }): React.ReactElement {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}>
-      <option value="">Categoria…</option>
-      <optgroup label="Despesas">
+      <option value="">{t('finance.categoria2')}</option>
+      <optgroup label={t('finance.despesas')}>
         {categories.filter((c) => c.type === 'expense').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </optgroup>
-      <optgroup label="Receitas">
+      <optgroup label={t('finance.receitas')}>
         {categories.filter((c) => c.type === 'income').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </optgroup>
     </select>
@@ -71,7 +72,7 @@ function RuleRow({
   }
 
   async function remove(): Promise<void> {
-    if (!confirm(`Excluir a regra "${rule.keywords}" → ${cat?.name ?? '?'}?`)) return
+    if (!confirm(t('finance.excluirARegra', { keywords: rule.keywords, p1: cat?.name ?? '?' }))) return
     await window.api.financeRules.delete(rule.id)
     onChanged()
   }
@@ -79,26 +80,26 @@ function RuleRow({
   return (
     <div className="list-row" style={{ opacity: rule.active ? 1 : 0.55, flexWrap: 'wrap', gap: 6 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <button className="btn btn-secondary btn-sm" style={{ padding: '0 6px', lineHeight: 1.2 }} disabled={index === 0} onClick={() => move(-1)} title="Mais prioritária">▲</button>
-        <button className="btn btn-secondary btn-sm" style={{ padding: '0 6px', lineHeight: 1.2 }} disabled={index === total - 1} onClick={() => move(1)} title="Menos prioritária">▼</button>
+        <button className="btn btn-secondary btn-sm" style={{ padding: '0 6px', lineHeight: 1.2 }} disabled={index === 0} onClick={() => move(-1)} title={t('finance.maisPrioritaria')}>▲</button>
+        <button className="btn btn-secondary btn-sm" style={{ padding: '0 6px', lineHeight: 1.2 }} disabled={index === total - 1} onClick={() => move(1)} title={t('finance.menosPrioritaria')}>▼</button>
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }} title="Ativar/desativar">
+      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }} title={t('finance.ativarDesativar')}>
         <input type="checkbox" checked={!!rule.active} onChange={(e) => update({ active: e.target.checked })} />
-        {rule.active ? 'ativa' : 'inativa'}
+        {rule.active ? t('finance.ativa') : t('finance.inativa')}
       </label>
       <input
         value={keywords}
         onChange={(e) => setKeywords(e.target.value)}
         onBlur={saveKeywords}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-        placeholder="palavras, separadas, por vírgula"
+        placeholder={t('finance.palavrasSeparadasPorVirgula')}
         style={{ flex: 1, minWidth: 160 }}
-        title="Se a descrição contiver qualquer uma destas palavras (sem diferenciar maiúsculas/acentos)"
+        title={t('finance.seADescricaoContiverQualquer')}
       />
       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>→</span>
       <span className="priority-dot" style={{ background: cat?.color ?? 'var(--border)' }} />
       <CategorySelect categories={categories} value={rule.categoryId} onChange={(id) => id !== '' && update({ categoryId: id })} />
-      <button className="btn btn-danger btn-sm" onClick={remove} title="Excluir regra">✕</button>
+      <button className="btn btn-danger btn-sm" onClick={remove} title={t('finance.excluirRegra')}>✕</button>
     </div>
   )
 }
@@ -135,8 +136,8 @@ export function FinanceRulesPage(): React.ReactElement {
     setMsg(null)
     try {
       const items = await window.api.financeRules.preview(allMonths ? undefined : month)
-      if (!items.length) setMsg('Nenhuma transação sem categoria/em "Outros" bate com as regras ativas.')
-      else setPreview({ scope: allMonths ? 'todos os meses' : monthLabel(month), items })
+      if (!items.length) setMsg(t('finance.nenhumaTransacaoSemCategoriaEm'))
+      else setPreview({ scope: allMonths ? t('finance.todosOsMeses') : monthLabel(month), items })
     } finally {
       setBusy(false)
     }
@@ -147,7 +148,7 @@ export function FinanceRulesPage(): React.ReactElement {
     setBusy(true)
     try {
       await window.api.financeRules.apply(preview.items.map((i) => ({ id: i.id, categoryId: i.toCategoryId })))
-      setMsg(`${preview.items.length} transação(ões) categorizada(s).`)
+      setMsg(t('finance.transacaoOesCategorizadaS', { count: preview.items.length }))
       setPreview(null)
       await refresh()
     } finally {
@@ -161,8 +162,8 @@ export function FinanceRulesPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🪄 Regras</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Categorização automática das transações importadas</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('finance.regras')}</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('finance.categorizacaoAutomaticaDasTransacoesImportadas')}</p>
         </div>
         <MonthNav />
       </div>
@@ -170,7 +171,7 @@ export function FinanceRulesPage(): React.ReactElement {
       <div className="chart-section" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
-            placeholder="Palavras separadas por vírgula (ex.: uber, 99app, cabify)"
+            placeholder={t('finance.palavrasSeparadasPorVirgulaEx')}
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -178,51 +179,48 @@ export function FinanceRulesPage(): React.ReactElement {
           />
           <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} />
           <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={categoryId === '' || !parseKeywords(keywords).length}>
-            + Adicionar regra
+            {t('finance.adicionarRegra')}
           </button>
         </div>
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-          Se a descrição contiver qualquer uma das palavras (sem diferenciar maiúsculas/acentos), a transação vai para a categoria.
-          A regra só vale para transações do mesmo tipo da categoria (despesa/receita). Em conflito, vale a de cima.
-          Aplicadas automaticamente em toda importação (Open Finance e CSV), só em transações que chegam sem categoria ou em
-          &quot;Outros&quot;. Uma transação categorizada por regra deixa de ser tratada como transferência entre contas.
+          {t('finance.seADescricaoContiverQualquer2')}
         </p>
       </div>
 
       <div className="list-stack">
-        {rules.length === 0 && <div className="empty-hint">Nenhuma regra ainda.</div>}
+        {rules.length === 0 && <div className="empty-hint">{t('finance.nenhumaRegraAinda')}</div>}
         {rules.map((r, i) => (
           <RuleRow key={r.id} rule={r} index={i} total={rules.length} categories={categories} onChanged={load} />
         ))}
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Testar</div>
+        <div className="chart-title">{t('finance.testar')}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
           <select value={testType} onChange={(e) => setTestType(e.target.value as 'expense' | 'income')}>
-            <option value="expense">Despesa</option>
-            <option value="income">Receita</option>
+            <option value="expense">{t('finance.despesa')}</option>
+            <option value="income">{t('finance.receita')}</option>
           </select>
-          <input placeholder="Descrição de exemplo (ex.: UBER *TRIP)" value={testDesc} onChange={(e) => setTestDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+          <input placeholder={t('finance.descricaoDeExemploExUber')} value={testDesc} onChange={(e) => setTestDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
           {testDesc.trim() && (
             <span style={{ fontSize: 13, color: tested ? 'var(--success)' : 'var(--text-muted)' }}>
-              {tested ? `→ ${categoryName(tested.categoryId)} (regra "${tested.keywords}")` : 'nenhuma regra bate'}
+              {tested ? t('finance.regra', { p0: categoryName(tested.categoryId), keywords: tested.keywords }) : t('finance.nenhumaRegraBate')}
             </span>
           )}
         </div>
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Aplicar nas transações existentes</div>
+        <div className="chart-title">{t('finance.aplicarNasTransacoesExistentes')}</div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 8px' }}>
-          Só mexe nas que estão sem categoria ou em &quot;Outros&quot; — as que você já categorizou ficam como estão. Mostra a prévia antes.
+          {t('finance.soMexeNasQueEstao')}
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary btn-sm" disabled={busy || !rules.length} onClick={() => openPreview(false)}>
-            Aplicar em {monthLabel(month)}
+            {t('finance.aplicarEm', { p0: monthLabel(month) })}
           </button>
           <button className="btn btn-secondary btn-sm" disabled={busy || !rules.length} onClick={() => openPreview(true)}>
-            Aplicar em todos os meses
+            {t('finance.aplicarEmTodosOsMeses')}
           </button>
         </div>
         {msg && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>{msg}</div>}
@@ -231,7 +229,7 @@ export function FinanceRulesPage(): React.ReactElement {
       {preview && (
         <div className="modal-overlay" onClick={() => setPreview(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 340, maxWidth: 640 }}>
-            <h2>Categorizar {preview.items.length} transação(ões)?</h2>
+            <h2>{t('finance.categorizarTransacaoOes', { count: preview.items.length })}</h2>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{preview.scope}</p>
             <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {preview.items.map((i) => (
@@ -244,8 +242,8 @@ export function FinanceRulesPage(): React.ReactElement {
               ))}
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => setPreview(null)}>Cancelar</button>
-              <button className="btn btn-primary btn-sm" onClick={confirmApply} disabled={busy}>Aplicar</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setPreview(null)}>{t('finance.cancelar')}</button>
+              <button className="btn btn-primary btn-sm" onClick={confirmApply} disabled={busy}>{t('finance.aplicar')}</button>
             </div>
           </div>
         </div>

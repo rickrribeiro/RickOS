@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { StudyNode } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
+import { t } from '../../../i18n'
 
 interface TreeItem {
   node: StudyNode
@@ -47,22 +48,22 @@ function NodeEditor({ node, onClose }: { node: StudyNode; onClose: () => void })
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
-        <h2>Editar item</h2>
+        <h2>{t('estudos.editarItem')}</h2>
         <div className="editor-field">
-          <label>Título</label>
+          <label>{t('estudos.titulo')}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
         <div className="editor-field">
-          <label>Descrição</label>
+          <label>{t('estudos.descricao')}</label>
           <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="editor-field">
-          <label>Horas estimadas</label>
+          <label>{t('estudos.horasEstimadas')}</label>
           <input type="number" min={0} step={0.5} value={hours} onChange={(e) => setHours(e.target.value)} />
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('estudos.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{t('estudos.salvar')}</button>
         </div>
       </div>
     </div>
@@ -142,7 +143,7 @@ function NodeRow({ item, depth, siblings }: { item: TreeItem; depth: number; sib
         </button>
         <button
           className="study-status"
-          title={`Status: ${n.status} (clique p/ alternar)`}
+          title={t('estudos.statusCliquePAlternar', { status: n.status })}
           style={{ color: STATUS_COLOR[n.status] }}
           onClick={() => cycleNodeStatus(n)}
         >
@@ -157,11 +158,11 @@ function NodeRow({ item, depth, siblings }: { item: TreeItem; depth: number; sib
         </button>
         {hasChildren && <span className="study-node-pct">{pct}%</span>}
         <span className="study-node-actions">
-          <button title="Adicionar subitem" onClick={() => setAdding((a) => !a)}>＋</button>
-          <button title="Subir" onClick={() => moveNode(n.id, 'up')}>↑</button>
-          <button title="Descer" onClick={() => moveNode(n.id, 'down')}>↓</button>
-          <button title="Editar" onClick={() => setEditing(true)}>✎</button>
-          <button title="Excluir" onClick={() => window.confirm(`Excluir "${n.title}" e subitens?`) && removeNode(n.id)}>✕</button>
+          <button title={t('estudos.adicionarSubitem')} onClick={() => setAdding((a) => !a)}>＋</button>
+          <button title={t('estudos.subir')} onClick={() => moveNode(n.id, 'up')}>↑</button>
+          <button title={t('estudos.descer')} onClick={() => moveNode(n.id, 'down')}>↓</button>
+          <button title={t('estudos.editar')} onClick={() => setEditing(true)}>✎</button>
+          <button title={t('estudos.excluir')} onClick={() => window.confirm(t('estudos.excluirESubitens', { title: n.title })) && removeNode(n.id)}>✕</button>
         </span>
       </div>
 
@@ -169,12 +170,12 @@ function NodeRow({ item, depth, siblings }: { item: TreeItem; depth: number; sib
         <div className="study-node-add" style={{ paddingLeft: (depth + 1) * 16 }}>
           <input
             autoFocus
-            placeholder="Novo subitem…"
+            placeholder={t('estudos.novoSubitem')}
             value={childTitle}
             onChange={(e) => setChildTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' ? addChild() : e.key === 'Escape' ? setAdding(false) : undefined}
           />
-          <button className="btn btn-primary btn-sm" onClick={addChild}>Adicionar</button>
+          <button className="btn btn-primary btn-sm" onClick={addChild}>{t('estudos.adicionar')}</button>
         </div>
       )}
 
@@ -200,7 +201,7 @@ export function RoadmapTree(): React.ReactElement {
     <div>
       <div className="study-node-add" style={{ marginBottom: 8 }}>
         <input
-          placeholder="Nova seção/item…"
+          placeholder={t('estudos.novaSecaoItem')}
           value={rootTitle}
           onChange={(e) => setRootTitle(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addRoot()}
@@ -208,7 +209,7 @@ export function RoadmapTree(): React.ReactElement {
         <button className="btn btn-primary btn-sm" onClick={addRoot}>＋</button>
       </div>
       <div className="study-tree">
-        {tree.length === 0 && <div className="empty-hint">Sem itens. Adicione a primeira seção acima.</div>}
+        {tree.length === 0 && <div className="empty-hint">{t('estudos.semItensAdicioneAPrimeira')}</div>}
         {tree.map((item, i) => <NodeRow key={item.node.id} item={item} depth={0} siblings={tree} index={i} />)}
       </div>
     </div>

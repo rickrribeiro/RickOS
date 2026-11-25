@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { convertToBase, formatMoney, formatMoneyCompact, monthLabel, shiftMonth } from '../util'
+import { t as tr, getLocale } from '../../../i18n'
 
 interface Period {
   from: string
@@ -17,7 +18,7 @@ const STACK_LIMIT = 5 // colunas empilhadas: 5 categorias + "Outras"
 const MONTHS = 12
 
 const shortMonth = (m: string): string =>
-  new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+  new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1).toLocaleDateString(getLocale(), { month: 'short' }).replace('.', '')
 
 /** Gráficos por categoria (Relatórios): ranking no período A e evolução mensal empilhada. */
 export function CategoryCharts({ transactions, period, periodLabel }: { transactions: Transaction[]; period: Period; periodLabel: string }): React.ReactElement {
@@ -28,7 +29,7 @@ export function CategoryCharts({ transactions, period, periodLabel }: { transact
 
   const toBase = (t: Transaction): number => convertToBase(t.amount, t.currency, base, rates)
   const keyOf = (t: Transaction): Key => (t.categoryId == null ? NONE : t.categoryId)
-  const nameOf = (k: Key): string => (k === OTHER ? 'Outras' : k === NONE ? 'Sem categoria' : categoryName(k))
+  const nameOf = (k: Key): string => (k === OTHER ? tr('finance.outras') : k === NONE ? tr('finance.semCategoria') : categoryName(k))
   const colorOf = (k: Key): string => (k === OTHER || k === NONE ? 'var(--text-muted)' : categoryColor(k))
 
   // ── ranking no período ──
@@ -90,20 +91,20 @@ export function CategoryCharts({ transactions, period, periodLabel }: { transact
   return (
     <div className="chart-section" style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <div className="chart-title" style={{ marginRight: 'auto' }}>Por categoria</div>
+        <div className="chart-title" style={{ marginRight: 'auto' }}>{tr('finance.porCategoria')}</div>
         {(['expense', 'income'] as const).map((t) => (
           <button key={t} className={`btn btn-sm ${type === t ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setType(t)}>
-            {t === 'expense' ? 'Gastos' : 'Receitas'}
+            {t === 'expense' ? tr('finance.gastos') : tr('finance.receitas')}
           </button>
         ))}
       </div>
 
       {/* Ranking */}
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '12px 0 8px' }}>
-        {periodLabel} · total {formatMoney(ranked.total, base)}
+        {tr('finance.total', { periodLabel, p1: formatMoney(ranked.total, base) })}
       </div>
       {ranked.rows.length === 0 ? (
-        <div className="empty-hint">Sem {type === 'expense' ? 'gastos' : 'receitas'} neste período.</div>
+        <div className="empty-hint">{tr('finance.sem')} {type === 'expense' ? tr('finance.gastos2') : tr('finance.receitas2')} {tr('finance.nestePeriodo')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {ranked.rows.map((r) => {
@@ -115,7 +116,7 @@ export function CategoryCharts({ transactions, period, periodLabel }: { transact
                   <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(r.k)}</span>
                   <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(r.v, base)}</span>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 42, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {share.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
+                    {share.toLocaleString(getLocale(), { maximumFractionDigits: 1 })}%
                   </span>
                 </div>
                 <div style={{ height: 10, background: 'var(--bg-tertiary, var(--border))', borderRadius: 4 }}>
@@ -130,23 +131,23 @@ export function CategoryCharts({ transactions, period, periodLabel }: { transact
       {/* Evolução empilhada */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '24px 0 8px' }}>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 'auto' }}>
-          Evolução mensal · {monthLabel(stack.cols[0].m)} – {monthLabel(period.to)}
+          {tr('finance.evolucaoMensal', { p0: monthLabel(stack.cols[0].m), p1: monthLabel(period.to) })}
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowTable((v) => !v)}>
-          {showTable ? 'Ver gráfico' : 'Ver tabela'}
+          {showTable ? tr('finance.verGrafico') : tr('finance.verTabela')}
         </button>
       </div>
 
       {stack.series.length === 0 ? (
-        <div className="empty-hint">Sem movimento nos últimos 12 meses.</div>
+        <div className="empty-hint">{tr('finance.semMovimentoNosUltimos12')}</div>
       ) : showTable ? (
         <div style={{ overflowX: 'auto' }}>
           <table className="report-table">
             <thead>
               <tr>
-                <th>Mês</th>
+                <th>{tr('finance.mes')}</th>
                 {stack.series.map((k) => <th key={String(k)} style={{ textAlign: 'right' }}>{nameOf(k)}</th>)}
-                <th style={{ textAlign: 'right' }}>Total</th>
+                <th style={{ textAlign: 'right' }}>{tr('finance.total2')}</th>
               </tr>
             </thead>
             <tbody>
@@ -231,7 +232,7 @@ export function CategoryCharts({ transactions, period, periodLabel }: { transact
                     </div>
                   ))}
                   <div style={{ display: 'flex', borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 4 }}>
-                    <span style={{ flex: 1, color: 'var(--text-secondary)' }}>Total</span>
+                    <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{tr('finance.total2')}</span>
                     <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(hovered.total, base)}</strong>
                   </div>
                 </div>

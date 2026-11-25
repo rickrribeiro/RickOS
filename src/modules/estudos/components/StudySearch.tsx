@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { StudyTopic, StudyNode, StudyNote, StudyFlashcard } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
 import { useUIStore } from '../../../store/uiStore'
+import { t as tr } from '../../../i18n'
 
 interface Hit {
   topicId: number
@@ -53,7 +54,7 @@ export function StudySearch(): React.ReactElement {
       if (hay.includes(q)) out.push({ topicId: n.topicId, nodeId: n.id, kind: 'roadmap', label: n.title, snippet: snippetAround(n.description ?? n.title, q) })
     }
     for (const no of notes) {
-      if (no.content.toLowerCase().includes(q)) out.push({ topicId: no.topicId, nodeId: no.nodeId, kind: 'nota', label: 'Anotação', snippet: snippetAround(no.content, q) })
+      if (no.content.toLowerCase().includes(q)) out.push({ topicId: no.topicId, nodeId: no.nodeId, kind: 'nota', label: tr('estudos.anotacao'), snippet: snippetAround(no.content, q) })
     }
     for (const c of cards) {
       const hay = `${c.front} ${c.back}`.toLowerCase()
@@ -74,14 +75,14 @@ export function StudySearch(): React.ReactElement {
     <div style={{ marginBottom: 12 }}>
       <input
         type="text"
-        placeholder={loaded ? '🔍 Buscar em tópicos, roadmap, anotações e flashcards…' : 'Carregando índice…'}
+        placeholder={loaded ? tr('estudos.buscarEmTopicosRoadmapAnotacoes') : tr('estudos.carregandoIndice')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         style={{ width: '100%' }}
       />
       {query.trim().length >= 2 && (
         <div className="list-stack" style={{ marginTop: 8 }}>
-          {hits.length === 0 && <div className="empty-hint">Nada encontrado para “{query}”.</div>}
+          {hits.length === 0 && <div className="empty-hint">{tr('estudos.nadaEncontradoPara', { query })}</div>}
           {hits.map((h, i) => (
             <button key={i} className="list-row" style={{ textAlign: 'left', cursor: 'pointer', width: '100%' }} onClick={() => open(h)}>
               <span title={h.kind}>{KIND_ICON[h.kind]}</span>

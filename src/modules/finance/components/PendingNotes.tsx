@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { t } from '../../../i18n'
 
 const KEY = 'finance_pending_notes'
 
@@ -50,10 +51,10 @@ export function PendingNotes(): React.ReactElement {
     <div className="chart-section" style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div className="chart-title" style={{ marginRight: 'auto' }}>
-          📌 Pendências financeiras{lines > 0 ? ` · ${lines}` : ''}
+          {t('finance.pendenciasFinanceiras')}{lines > 0 ? ` · ${lines}` : ''}
         </div>
         <span style={{ fontSize: 11, color: status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
-          {status === 'saving' ? 'salvando…' : status === 'saved' ? '✓ salvo' : status === 'error' ? 'erro ao salvar' : ''}
+          {status === 'saving' ? t('finance.salvando') : status === 'saved' ? t('finance.salvo') : status === 'error' ? t('finance.erroAoSalvar') : ''}
         </span>
       </div>
       <textarea
@@ -64,7 +65,7 @@ export function PendingNotes(): React.ReactElement {
           if (timer.current) clearTimeout(timer.current)
           void save(text)
         }}
-        placeholder={'Coisas para lembrar (valem para todos os meses). Ex.:\n• João me deve R$ 50 do jantar\n• Conferir se a compra da loja X estornou\n• Pagar o IPVA até dia 10'}
+        placeholder={t('finance.coisasParaLembrarValemPara')}
         rows={Math.min(14, Math.max(4, text.split('\n').length + 1))}
         style={{ width: '100%', marginTop: 10, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.5, boxSizing: 'border-box' }}
       />

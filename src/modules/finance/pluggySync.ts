@@ -1,5 +1,6 @@
 import { PluggySyncResult } from '../../types'
 import { formatMoney } from './util'
+import { t as tr } from '../../i18n'
 
 /**
  * Pós-importação do Open Finance: pergunta antes de apagar pendentes que sumiram do banco
@@ -11,19 +12,19 @@ export async function finishPluggySync(r: PluggySyncResult, prefix = ''): Promis
   if (gone.length) {
     const sample = gone
       .slice(0, 8)
-      .map((t) => `• ${t.date.slice(5)} ${t.description ?? '(sem descrição)'} ${formatMoney(t.amount, t.currency)}`)
+      .map((t) => `• ${t.date.slice(5)} ${t.description ?? tr('finance.semDescricao')} ${formatMoney(t.amount, t.currency)}`)
       .join('\n')
     const more = gone.length > 8 ? `\n… e mais ${gone.length - 8}` : ''
     const ok = confirm(
-      `${gone.length} transação(ões) pendente(s) não aparecem mais no banco (canceladas ou substituídas pela versão lançada):\n\n${sample}${more}\n\nRemover do app?`
+      tr('finance.transacaoOesPendenteSNao', { count: gone.length, sample, more })
     )
     if (ok) {
       for (const t of gone) await window.api.transactions.delete(t.id)
       removed = gone.length
     }
   }
-  const parts = [`${r.imported} importadas`, `${r.updated} atualizadas`, `${r.skipped} já existiam`]
-  if (removed) parts.push(`${removed} pendentes removidas`)
-  else if (gone.length) parts.push(`${gone.length} pendentes sumidas mantidas`)
+  const parts = [tr('finance.sync.importadas', { n: r.imported }), tr('finance.sync.atualizadas', { n: r.updated }), tr('finance.sync.jaExistiam', { n: r.skipped })]
+  if (removed) parts.push(tr('finance.sync.pendentesRemovidas', { n: removed }))
+  else if (gone.length) parts.push(tr('finance.sync.pendentesMantidas', { n: gone.length }))
   return prefix + parts.join(', ') + '.'
 }

@@ -1,4 +1,5 @@
 import { Transaction, Investment, InvestmentHistory } from '../../types'
+import { getLocale } from '../../i18n'
 
 /** Current month as YYYY-MM (local). */
 export function currentMonth(): string {
@@ -15,7 +16,7 @@ export function shiftMonth(month: string, delta: number): string {
 
 export function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number)
-  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' })
 }
 
 const SYMBOL: Record<string, string> = { BRL: 'R$', USD: '$', JPY: '¥', EUR: '€' }
@@ -29,7 +30,7 @@ export function setMoneyHidden(v: boolean): void {
 export function formatMoney(amount: number, currency = 'BRL'): string {
   const sym = SYMBOL[currency] ?? currency + ' '
   if (moneyHidden) return `${sym} ••••`
-  return `${sym}${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `${sym}${amount.toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 /** Valor curto para rótulos de gráfico: 850, 1,2k, 15k, 1,3M (respeita o modo privacidade). */
@@ -37,7 +38,7 @@ export function formatMoneyCompact(amount: number): string {
   if (moneyHidden) return '••'
   const abs = Math.abs(amount)
   const sign = amount < 0 ? '-' : ''
-  const fmt = (v: number): string => v.toLocaleString('pt-BR', { maximumFractionDigits: v < 10 ? 1 : 0 })
+  const fmt = (v: number): string => v.toLocaleString(getLocale(), { maximumFractionDigits: v < 10 ? 1 : 0 })
   if (abs >= 1_000_000) return `${sign}${fmt(abs / 1_000_000)}M`
   if (abs >= 1_000) return `${sign}${fmt(abs / 1_000)}k`
   return `${sign}${Math.round(abs)}`

@@ -1,13 +1,14 @@
 import React, { useState } from 'react'
 import { StudyTopic } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
+import { t } from '../../../i18n'
 
 export const TOPIC_STATUSES = ['studying', 'planned', 'paused', 'completed'] as const
 export const TOPIC_STATUS_LABEL: Record<string, string> = {
-  studying: 'Estudando',
-  planned: 'Planejado',
-  paused: 'Pausado',
-  completed: 'Concluído'
+  studying: t('estudos.estudando'),
+  planned: t('estudos.planejado'),
+  paused: t('estudos.pausado'),
+  completed: t('estudos.concluido')
 }
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#0ea5e9', '#a855f7', '#ec4899']
 
@@ -34,18 +35,18 @@ export function TopicEditor({ topic, onClose }: { topic: StudyTopic | null; onCl
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
-        <h2>{topic ? 'Editar tópico' : 'Novo tópico'}</h2>
+        <h2>{topic ? t('estudos.editarTopico') : t('estudos.novoTopico')}</h2>
         <div className="editor-field">
-          <label>Nome</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="ex: Kubernetes" />
+          <label>{t('estudos.nome')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder={t('estudos.exKubernetes')} />
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Categoria</label>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="ex: DevOps, Idioma" />
+            <label>{t('estudos.categoria')}</label>
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder={t('estudos.exDevopsIdioma')} />
           </div>
           <div className="editor-field">
-            <label>Status</label>
+            <label>{t('estudos.status')}</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               {TOPIC_STATUSES.map((s) => (
                 <option key={s} value={s}>{TOPIC_STATUS_LABEL[s]}</option>
@@ -55,21 +56,21 @@ export function TopicEditor({ topic, onClose }: { topic: StudyTopic | null; onCl
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Prioridade</label>
+            <label>{t('estudos.prioridade')}</label>
             <select value={priority} onChange={(e) => setPriority(Number(e.target.value))}>
-              <option value={0}>Nenhuma</option>
-              <option value={1}>Baixa</option>
-              <option value={2}>Média</option>
-              <option value={3}>Alta</option>
+              <option value={0}>{t('estudos.nenhuma')}</option>
+              <option value={1}>{t('estudos.baixa')}</option>
+              <option value={2}>{t('estudos.media')}</option>
+              <option value={3}>{t('estudos.alta')}</option>
             </select>
           </div>
           <div className="editor-field">
-            <label>Meta (data)</label>
+            <label>{t('estudos.metaData')}</label>
             <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
           </div>
         </div>
         <div className="editor-field">
-          <label>Cor</label>
+          <label>{t('estudos.cor')}</label>
           <div style={{ display: 'flex', gap: 6 }}>
             {COLORS.map((c) => (
               <button
@@ -89,8 +90,8 @@ export function TopicEditor({ topic, onClose }: { topic: StudyTopic | null; onCl
           </div>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('estudos.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{t('estudos.salvar')}</button>
         </div>
       </div>
     </div>

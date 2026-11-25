@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
+import { t, getLocale } from '../../../i18n'
 
 interface GenCard {
   front: string
@@ -11,11 +12,11 @@ function nextReviewLabel(iso: string | null): { text: string; cls: string } {
   if (!iso) return { text: 'novo', cls: 'due-today' }
   const day = iso.slice(0, 10)
   const today = new Date().toISOString().slice(0, 10)
-  if (day <= today) return { text: 'vence hoje', cls: 'due-overdue' }
+  if (day <= today) return { text: t('estudos.venceHoje'), cls: 'due-overdue' }
   const d = new Date(`${day}T12:00:00`)
   const diff = Math.round((d.getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000)
-  const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  return { text: `em ${diff}d · ${label}`, cls: 'due-future' }
+  const label = d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' })
+  return { text: t('estudos.emD', { diff, label }), cls: 'due-future' }
 }
 
 /** Tolerant parse of a JSON array of {front, back} from Claude's output. */
@@ -63,12 +64,12 @@ export function FlashcardPanel(): React.ReactElement {
       runIdRef.current = null
       setGenerating(false)
       if (!ok) {
-        setGenError(error || 'Falha ao gerar.')
+        setGenError(error || t('estudos.falhaAoGerar'))
         return
       }
       const cards = extractCards(output)
       if (!cards || !cards.length) {
-        setGenError('A IA não devolveu flashcards válidos. Tente de novo.')
+        setGenError(t('estudos.aIaNaoDevolveuFlashcards'))
         return
       }
       setGenerated(cards)
@@ -133,17 +134,17 @@ ${content}
   return (
     <div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-        <input placeholder="Frente (pergunta)" value={front} onChange={(e) => setFront(e.target.value)} />
-        <input placeholder="Verso (resposta)" value={back} onChange={(e) => setBack(e.target.value)} />
+        <input placeholder={t('estudos.frentePergunta')} value={front} onChange={(e) => setFront(e.target.value)} />
+        <input placeholder={t('estudos.versoResposta')} value={back} onChange={(e) => setBack(e.target.value)} />
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-primary btn-sm" onClick={addManual} disabled={!front.trim() || !back.trim()}>＋ Cartão</button>
+          <button className="btn btn-primary btn-sm" onClick={addManual} disabled={!front.trim() || !back.trim()}>{t('estudos.cartao')}</button>
           <button
             className="btn btn-secondary btn-sm"
             onClick={generate}
             disabled={generating || !noteHasContent}
-            title={noteHasContent ? 'Gerar flashcards da nota selecionada via Claude local' : 'Escreva uma anotação primeiro'}
+            title={noteHasContent ? t('estudos.gerarFlashcardsDaNotaSelecionada') : t('estudos.escrevaUmaAnotacaoPrimeiro')}
           >
-            {generating ? 'Gerando…' : '✨ Gerar da nota'}
+            {generating ? t('estudos.gerando') : t('estudos.gerarDaNota')}
           </button>
         </div>
         {genError && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{genError}</div>}
@@ -151,7 +152,7 @@ ${content}
 
       {generated && (
         <div className="chart-section" style={{ marginBottom: 10 }}>
-          <div className="chart-title" style={{ fontSize: 13 }}>Gerados ({generated.length - excluded.size} selecionados)</div>
+          <div className="chart-title" style={{ fontSize: 13 }}>{t('estudos.geradosSelecionados', { p0: generated.length - excluded.size })}</div>
           <div className="list-stack" style={{ marginTop: 6 }}>
             {generated.map((c, i) => (
               <label key={i} className="list-row" style={{ alignItems: 'flex-start' }}>
@@ -176,15 +177,15 @@ ${content}
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={saveGenerated} disabled={generated.length - excluded.size === 0}>
-              Salvar selecionados
+              {t('estudos.salvarSelecionados')}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setGenerated(null)}>Descartar</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setGenerated(null)}>{t('estudos.descartar')}</button>
           </div>
         </div>
       )}
 
       <div className="list-stack">
-        {visible.length === 0 && <div className="empty-hint">Nenhum flashcard{selectedNodeId != null ? ' neste item' : ''}.</div>}
+        {visible.length === 0 && <div className="empty-hint">{t('estudos.nenhumFlashcard')}{selectedNodeId != null ? t('estudos.nesteItem') : ''}.</div>}
         {visible.map((f) => {
           const due = nextReviewLabel(f.nextReviewAt)
           return (
@@ -208,7 +209,7 @@ ${content}
                   </>
                 )}
               </button>
-              <span className={`due-badge ${due.cls}`} title="Próxima revisão">{due.text}</span>
+              <span className={`due-badge ${due.cls}`} title={t('estudos.proximaRevisao')}>{due.text}</span>
               <button className="btn btn-danger btn-sm" onClick={() => removeFlashcard(f.id)}>✕</button>
             </div>
           )

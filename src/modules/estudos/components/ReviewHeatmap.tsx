@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { localDateStr, localDayStartISO } from '@/utils/dates'
 import { useStudyStore } from '../store/studyStore'
+import { monthNames, t, weekdayNames } from '../../../i18n'
 
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-const MONTH_NAMES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-]
+const WEEKDAYS = weekdayNames()
+const MONTH_NAMES = monthNames()
 
 function heatColor(count: number, max: number): string {
   if (count === 0 || max === 0) return 'var(--bg-secondary)'
@@ -60,8 +58,8 @@ export function ReviewHeatmap(): React.ReactElement {
     <div className="chart-section" style={{ marginTop: 28, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>📊 Revisões por dia</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{total} cards revisados neste mês</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{t('estudos.revisoesPorDia')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{total} {t('estudos.cardsRevisadosNesteMes')}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button className="btn btn-secondary btn-sm" onClick={prevMonth}>‹</button>
@@ -84,7 +82,7 @@ export function ReviewHeatmap(): React.ReactElement {
           return (
             <div
               key={i}
-              title={`${cell.date}: ${count} revisão(ões)`}
+              title={t('estudos.revisaoOes', { date: cell.date, count })}
               style={{
                 aspectRatio: '1 / 1',
                 borderRadius: 6,

@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useHabitStore } from '../store/habitStore'
-import { t, getLocale } from '../../../i18n'
+import { t, getLocale, weekdayNames } from '../../../i18n'
 
-// dom..sáb no idioma atual (7/1/2024 foi um domingo)
-const WEEKDAYS = Array.from({ length: 7 }, (_, i) =>
-  new Date(2024, 0, 7 + i).toLocaleDateString(getLocale(), { weekday: 'short' }).replace('.', '')
-)
+const WEEKDAYS = weekdayNames()
 
 function currentMonthKey(): string {
   const d = new Date()

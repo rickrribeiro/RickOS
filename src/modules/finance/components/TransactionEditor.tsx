@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { transactionKind, PAYMENT_METHODS, recurringKey, type TransactionKind } from '../../../../shared/finance'
+import { t } from '../../../i18n'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -55,21 +56,21 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
-        <h2>Editar transação</h2>
+        <h2>{t('finance.editarTransacao')}</h2>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Tipo</label>
+            <label>{t('finance.tipo')}</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="expense">Despesa</option>
-              <option value="income">Receita</option>
+              <option value="expense">{t('finance.despesa')}</option>
+              <option value="income">{t('finance.receita')}</option>
             </select>
           </div>
           <div className="editor-field">
-            <label>Valor</label>
+            <label>{t('finance.valor')}</label>
             <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div className="editor-field">
-            <label>Moeda</label>
+            <label>{t('finance.moeda')}</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -77,7 +78,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Categoria</label>
+            <label>{t('finance.categoria')}</label>
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">—</option>
               {categories
@@ -86,56 +87,56 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
             </select>
           </div>
           <div className="editor-field">
-            <label>Conta</label>
+            <label>{t('finance.conta')}</label>
             <select value={accountId} onChange={(e) => setAccountId(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">—</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div className="editor-field">
-            <label>Data</label>
+            <label>{t('finance.data')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
         <div className="editor-field">
-          <label>Descrição</label>
+          <label>{t('finance.descricao')}</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="editor-field">
-          <label>Forma de pagamento</label>
+          <label>{t('finance.formaDePagamento')}</label>
           <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-            <option value="">Não identificada</option>
+            <option value="">{t('finance.naoIdentificada')}</option>
             {PAYMENT_METHODS.map((p) => <option key={p.id} value={p.id}>{p.icon} {p.label}</option>)}
           </select>
         </div>
         {key && (
           <div className="editor-field">
-            <label>Recorrência</label>
+            <label>{t('finance.recorrencia')}</label>
             <select value={recurringMode} onChange={(e) => setRecurringMode(e.target.value as '' | '1' | '0')}>
-              <option value="">Não decidido{suggested ? ' (sugerida como recorrente)' : ''}</option>
-              <option value="1">Recorrente</option>
-              <option value="0">Não é recorrente</option>
+              <option value="">{t('finance.naoDecidido')}{suggested ? t('finance.sugeridaComoRecorrente') : ''}</option>
+              <option value="1">{t('finance.recorrente')}</option>
+              <option value="0">{t('finance.naoERecorrente')}</option>
             </select>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Vale para todas as transações deste estabelecimento, inclusive as próximas.</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('finance.valeParaTodasAsTransacoes')}</span>
           </div>
         )}
         <div className="editor-field">
-          <label>Natureza</label>
+          <label>{t('finance.natureza')}</label>
           <select value={kind} onChange={(e) => setKind(e.target.value as TransactionKind)}>
-            <option value="normal">{type === 'income' ? 'Receita' : 'Gasto'} normal</option>
-            <option value="investment">Investimento ({type === 'income' ? 'resgate' : 'aplicação'})</option>
-            <option value="transfer">Transferência entre minhas contas</option>
+            <option value="normal">{type === 'income' ? t('finance.receita') : t('finance.gasto')} {t('finance.normal')}</option>
+            <option value="investment">{t('finance.investimento')}{type === 'income' ? t('finance.resgate') : t('finance.aplicacao')})</option>
+            <option value="transfer">{t('finance.transferenciaEntreMinhasContas')}</option>
           </select>
           {kind !== 'normal' && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Não conta como {type === 'income' ? 'receita' : 'gasto'}
-              {kind === 'investment' ? '; aparece à parte no Dashboard.' : ' — o dinheiro só mudou de conta.'}
+              {t('finance.naoContaComo')} {type === 'income' ? t('finance.receita2') : t('finance.gasto2')}
+              {kind === 'investment' ? t('finance.apareceAParteNoDashboard') : t('finance.oDinheiroSoMudouDe')}
             </span>
           )}
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('finance.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{t('finance.salvar')}</button>
         </div>
       </div>
     </div>

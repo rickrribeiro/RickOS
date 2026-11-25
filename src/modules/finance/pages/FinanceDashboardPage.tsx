@@ -4,6 +4,7 @@ import { MonthNav } from '../components/MonthNav'
 import { DailySpending } from '../components/DailySpending'
 import { PendingNotes } from '../components/PendingNotes'
 import { formatMoney, sumByCurrency, sumInBase, shiftMonth, monthLabel, portfolioAtMonth, chargesInBase, startingBillInBase, splitIncome, formatMoneyCompact } from '../util'
+import { t as tr } from '../../../i18n'
 
 /**
  * Saldo separado da conta (o Open Finance do Nubank sinaliza que existe, mas manda a lista vazia):
@@ -38,7 +39,7 @@ function ReservedLine({
   if (editing) {
     return (
       <div className="stat-card-sub" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        🔒 separado:
+        {tr('finance.separado')}
         <input
           autoFocus
           type="number"
@@ -51,7 +52,7 @@ function ReservedLine({
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
             if (e.key === 'Escape') setEditing(false)
           }}
-          title="Enter salva · Esc cancela · vale a partir deste mês"
+          title={tr('finance.enterSalvaEscCancelaVale')}
           style={{ width: 100, fontSize: 12, padding: '1px 4px' }}
         />
       </div>
@@ -63,9 +64,9 @@ function ReservedLine({
         className="stat-card-sub"
         onClick={start}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', textAlign: 'left', font: 'inherit', fontSize: 12 }}
-        title="Dinheiro separado na conta (o Open Finance não manda esse valor)"
+        title={tr('finance.dinheiroSeparadoNaContaO')}
       >
-        + saldo separado
+        {tr('finance.saldoSeparado')}
       </button>
     )
   }
@@ -74,18 +75,18 @@ function ReservedLine({
   const linkBtn: React.CSSProperties = { background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', color: pending ? 'var(--danger)' : 'var(--text-muted)', font: 'inherit' }
   return (
     <div className="stat-card-sub" style={pending ? { color: 'var(--danger)' } : undefined}>
-      🔒 separado: {formatMoney(amount, currency)}
+      {tr('finance.separado2', { p0: formatMoney(amount, currency) })}
       {pending && (
-        <span title="Sem registro neste mês — mostrando o último valor informado. Edite ou confirme para marcar como revisado.">
-          {' '}· ⚠ falta revisar
+        <span title={tr('finance.semRegistroNesteMesMostrando')}>
+          {' '}{tr('finance.faltaRevisar')}
         </span>
       )}{' '}
-      <button onClick={start} style={linkBtn} title="Editar o saldo separado deste mês">
+      <button onClick={start} style={linkBtn} title={tr('finance.editarOSaldoSeparadoDeste')}>
         ✎
       </button>
       {pending && (
-        <button onClick={() => onSave(amount)} style={linkBtn} title="O valor não mudou: confirmar para este mês">
-          ✓ manter
+        <button onClick={() => onSave(amount)} style={linkBtn} title={tr('finance.oValorNaoMudouConfirmar')}>
+          {tr('finance.manter')}
         </button>
       )}
     </div>
@@ -191,15 +192,15 @@ export function FinanceDashboardPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>💰 Finanças</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Visão do mês</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('finance.financas')}</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{tr('finance.visaoDoMes')}</p>
         </div>
         <MonthNav />
       </div>
 
       <div className="cards-grid">
         <div className="stat-card">
-          <div className="stat-card-label">Saldo total (contas)</div>
+          <div className="stat-card-label">{tr('finance.saldoTotalContas')}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{money(balByCur)}</div>
           {accountMonth.map(({ a, balance, syncedAt }) => {
             const reserved = reservedOf(a.id)
@@ -209,10 +210,10 @@ export function FinanceDashboardPage(): React.ReactElement {
                 <div className="stat-card-sub">
                   {a.externalId ? '🏦 ' : ''}
                   {a.name}
-                  {(accounts.length > 1 || hasReserved) && balance != null && ` · ${hasReserved ? 'em conta ' : ''}${formatMoney(balance, a.currency)}`}
+                  {(accounts.length > 1 || hasReserved) && balance != null && ` · ${hasReserved ? tr('finance.emConta') : ''}${formatMoney(balance, a.currency)}`}
                   {balance == null
-                    ? ' · sem registro de saldo neste mês'
-                    : syncedAt && ` · atualizado ${new Date(syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                    ? tr('finance.semRegistroDeSaldoNeste')
+                    : syncedAt && tr('finance.atualizado', { p0: new Date(syncedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
                 </div>
                 <ReservedLine
                   amount={reserved.amount}
@@ -223,88 +224,88 @@ export function FinanceDashboardPage(): React.ReactElement {
               </React.Fragment>
             )
           })}
-          {accounts.length === 0 && <div className="stat-card-sub">importe do Open Finance para trazer o saldo da conta</div>}
+          {accounts.length === 0 && <div className="stat-card-sub">{tr('finance.importeDoOpenFinancePara')}</div>}
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Receitas do mês</div>
+          <div className="stat-card-label">{tr('finance.receitasDoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--success)' }}>{formatMoney(incomeBase, base)}</div>
-          <div className="stat-card-sub">com extras</div>
+          <div className="stat-card-sub">{tr('finance.comExtras')}</div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success)', marginTop: 6 }}>{formatMoney(fixedBase, base)}</div>
           <div className="stat-card-sub">
-            sem extras (salário fixo{categories.some((c) => c.fixedIncome) ? `: ${categories.filter((c) => c.fixedIncome).map((c) => c.name).join(', ')}` : ''})
+            {tr('finance.semExtrasSalarioFixo')}{categories.some((c) => c.fixedIncome) ? `: ${categories.filter((c) => c.fixedIncome).map((c) => c.name).join(', ')}` : ''})
           </div>
           <div className="stat-card-sub" style={{ marginTop: 6 }}>
-            entradas extras {formatMoney(sumInBase(extraIncome, base, rates), base)} · {extraIncome.length}{' '}
-            {extraIncome.length === 1 ? 'entrada' : 'entradas'}
+            {tr('finance.entradasExtras', { p0: formatMoney(sumInBase(extraIncome, base, rates), base) })} {extraIncome.length}{' '}
+            {extraIncome.length === 1 ? tr('finance.entrada') : tr('finance.entradas')}
           </div>
           {Object.keys(redemptionsByCur).length > 0 && (
-            <div className="stat-card-sub" title="Resgates de investimento: não contam como receita">
-              + resgates de investimento {money(redemptionsByCur)}
+            <div className="stat-card-sub" title={tr('finance.resgatesDeInvestimentoNaoContam')}>
+              {tr('finance.resgatesDeInvestimento', { p0: money(redemptionsByCur) })}
             </div>
           )}
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Gastos do mês</div>
+          <div className="stat-card-label">{tr('finance.gastosDoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: 'var(--danger)' }}>{money(expenseByCur)}</div>
           {Object.keys(applicationsByCur).length > 0 && (
-            <div className="stat-card-sub" title="Aplicações em investimento: não contam como gasto">
-              + aplicações em investimento {money(applicationsByCur)}
+            <div className="stat-card-sub" title={tr('finance.aplicacoesEmInvestimentoNaoContam')}>
+              {tr('finance.aplicacoesEmInvestimento', { p0: money(applicationsByCur) })}
             </div>
           )}
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Meta (orçamento)</div>
+          <div className="stat-card-label">{tr('finance.metaOrcamento')}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(spentTotal)} / {formatMoney(budgetTotal)}</div>
           {budgetTotal > 0 && (
             <div className="stat-card-sub" style={{ color: spentTotal > budgetTotal ? 'var(--danger)' : 'var(--text-muted)' }}>
-              {spentTotal > budgetTotal ? '⚠ acima da meta' : `${Math.round((spentTotal / budgetTotal) * 100)}% usado`}
+              {spentTotal > budgetTotal ? tr('finance.acimaDaMeta') : tr('finance.usado', { p0: Math.round((spentTotal / budgetTotal) * 100) })}
             </div>
           )}
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Saldo do mês em {base}</div>
+          <div className="stat-card-label">{tr('finance.saldoDoMesEm')} {base}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: netBase >= 0 ? 'var(--success)' : 'var(--danger)' }}>
             {formatMoney(netBase, base)}
           </div>
-          <div className="stat-card-sub">com extras: {formatMoney(incomeBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
+          <div className="stat-card-sub">{tr('finance.comExtrasGastos', { p0: formatMoney(incomeBase, base) })} {formatMoney(expenseBase, base)}</div>
           <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6, color: netFixedBase >= 0 ? 'var(--success)' : 'var(--danger)' }}>
             {formatMoney(netFixedBase, base)}
           </div>
-          <div className="stat-card-sub">sem extras: salário {formatMoney(fixedBase, base)} − gastos {formatMoney(expenseBase, base)}</div>
+          <div className="stat-card-sub">{tr('finance.semExtrasSalarioGastos', { p0: formatMoney(fixedBase, base) })} {formatMoney(expenseBase, base)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Fatura inicial do mês</div>
+          <div className="stat-card-label">{tr('finance.faturaInicialDoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(startingBill.total, base)}</div>
           <div className="stat-card-sub">
-            {startingBill.count} {startingBill.count === 1 ? 'parcela' : 'parcelas'} de compras anteriores
-            {expenseBase > 0 && startingBill.total > 0 && ` · ${Math.round((startingBill.total / expenseBase) * 100)}% dos gastos`}
+            {startingBill.count} {startingBill.count === 1 ? tr('finance.parcela') : tr('finance.parcelas')} {tr('finance.deComprasAnteriores')}
+            {expenseBase > 0 && startingBill.total > 0 && tr('finance.dosGastos', { p0: Math.round((startingBill.total / expenseBase) * 100) })}
           </div>
           <div className="stat-card-sub" style={{ color: 'var(--text-muted)' }}>
-            {monthLabel(nextMonth)} já começa com {formatMoney(startingNext.total, base)}
+            {tr('finance.jaComecaCom', { p0: monthLabel(nextMonth), p1: formatMoney(startingNext.total, base) })}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Encargos do mês</div>
+          <div className="stat-card-label">{tr('finance.encargosDoMes')}</div>
           <div className="stat-card-value" style={{ fontSize: 16, color: chargesMonth.total > 0.004 ? 'var(--danger)' : undefined }}>
             {formatMoney(chargesMonth.total, base)}
           </div>
           <div className="stat-card-sub">
-            IOF {formatMoney(chargesMonth.byKind.iof, base)} · Juros {formatMoney(chargesMonth.byKind.juros, base)} · Multa{' '}
+            {tr('finance.iofJurosMulta', { p0: formatMoney(chargesMonth.byKind.iof, base), p1: formatMoney(chargesMonth.byKind.juros, base) })}{' '}
             {formatMoney(chargesMonth.byKind.multa, base)}
           </div>
           <div className="stat-card-sub" style={{ color: 'var(--text-muted)' }}>
-            {chargesMonth.count} {chargesMonth.count === 1 ? 'cobrança' : 'cobranças'} · {year} até agora: {formatMoney(chargesYear.total, base)}
+            {chargesMonth.count} {chargesMonth.count === 1 ? tr('finance.cobranca') : tr('finance.cobrancas')} {tr('finance.ateAgora', { year, p1: formatMoney(chargesYear.total, base) })}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">Investimentos em {base}</div>
+          <div className="stat-card-label">{tr('finance.investimentosEm')} {base}</div>
           <div className="stat-card-value" style={{ fontSize: 16 }}>{formatMoney(portfolioNow, base)}</div>
           {portfolio.length > 1 && portfolioPrev > 0 && (
             <div className="stat-card-sub" style={{ color: portfolioDelta >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-              {portfolioDelta >= 0 ? '▲' : '▼'} {formatMoney(Math.abs(portfolioDelta), base)} vs. mês anterior
+              {portfolioDelta >= 0 ? '▲' : '▼'} {tr('finance.vsMesAnterior', { p0: formatMoney(Math.abs(portfolioDelta), base) })}
             </div>
           )}
-          {portfolioNow > 0 && portfolioPrev <= 0 && <div className="stat-card-sub">primeiro mês registrado — a variação aparece a partir do próximo</div>}
+          {portfolioNow > 0 && portfolioPrev <= 0 && <div className="stat-card-sub">{tr('finance.primeiroMesRegistradoAVariacao')}</div>}
         </div>
       </div>
 
@@ -313,9 +314,9 @@ export function FinanceDashboardPage(): React.ReactElement {
       <DailySpending />
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Top categorias (gastos do mês)</div>
+        <div className="chart-title">{tr('finance.topCategoriasGastosDoMes')}</div>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {topCats.length === 0 && <div className="empty-hint">Sem gastos neste mês.</div>}
+          {topCats.length === 0 && <div className="empty-hint">{tr('finance.semGastosNesteMes')}</div>}
           {topCats.map((c) => (
             <div key={c.id}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 2 }}>
@@ -331,7 +332,7 @@ export function FinanceDashboardPage(): React.ReactElement {
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Evolução de gastos (12 meses)</div>
+        <div className="chart-title">{tr('finance.evolucaoDeGastos12Meses')}</div>
         <div className="evo-bars">
           {evolution.map((e) => (
             <EvoBar key={e.m} month={e.m} value={e.exp} max={evoMax} title={formatMoney(e.exp)} />
@@ -340,9 +341,9 @@ export function FinanceDashboardPage(): React.ReactElement {
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">Evolução de investimentos (12 meses) · {base}</div>
+        <div className="chart-title">{tr('finance.evolucaoDeInvestimentos12Meses')} {base}</div>
         {portfolioNow === 0 && portMax === 1 ? (
-          <div className="empty-hint">Sem investimentos registrados. Adicione em 📈 Investimentos.</div>
+          <div className="empty-hint">{tr('finance.semInvestimentosRegistradosAdicioneEm')}</div>
         ) : (
           <div className="evo-bars">
             {portfolio.map((p) => (

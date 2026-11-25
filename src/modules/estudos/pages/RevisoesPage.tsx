@@ -3,15 +3,16 @@ import { useUIStore } from '../../../store/uiStore'
 import { useStudyStore } from '../store/studyStore'
 import { Rating } from '../srs'
 import { ReviewHeatmap } from '../components/ReviewHeatmap'
+import { t as tr } from '../../../i18n'
 
 const RATINGS: { key: Rating; label: string; cls: string }[] = [
-  { key: 'again', label: 'Again', cls: 'btn-danger' },
-  { key: 'hard', label: 'Hard', cls: 'btn-secondary' },
-  { key: 'good', label: 'Good', cls: 'btn-primary' },
-  { key: 'easy', label: 'Easy', cls: 'btn-secondary' }
+  { key: 'again', label: tr('estudos.again'), cls: 'btn-danger' },
+  { key: 'hard', label: tr('estudos.hard'), cls: 'btn-secondary' },
+  { key: 'good', label: tr('estudos.good'), cls: 'btn-primary' },
+  { key: 'easy', label: tr('estudos.easy'), cls: 'btn-secondary' }
 ]
 
-const NO_CAT = 'Sem categoria'
+const NO_CAT = tr('estudos.semCategoria')
 const EXCLUDED_KEY = 'rickos:studyReviewExcludedCats'
 
 function loadExcluded(): Set<string> {
@@ -82,9 +83,9 @@ export function RevisoesPage(): React.ReactElement {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="btn btn-secondary btn-sm" onClick={() => setPage('estudos')}>←</button>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>🔁 Revisões</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('estudos.revisoes')}</h2>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              {filteredDue.length} para revisar{excluded.size > 0 ? ` (de ${dueCards.length})` : ''}
+              {tr('estudos.paraRevisar', { count: filteredDue.length })}{excluded.size > 0 ? tr('estudos.de', { count: dueCards.length }) : ''}
             </p>
           </div>
         </div>
@@ -92,7 +93,7 @@ export function RevisoesPage(): React.ReactElement {
 
       {categories.length > 1 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Categorias:</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tr('estudos.categorias')}</span>
           {categories.map((cat) => {
             const on = !excluded.has(cat)
             return (
@@ -100,14 +101,14 @@ export function RevisoesPage(): React.ReactElement {
                 key={cat}
                 className={`btn btn-sm ${on ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => toggleCat(cat)}
-                title={on ? 'Clique para excluir' : 'Clique para incluir'}
+                title={on ? tr('estudos.cliqueParaExcluir') : tr('estudos.cliqueParaIncluir')}
               >
                 {on ? '' : '✕ '}{cat} ({catCounts[cat]})
               </button>
             )
           })}
-          <button className="btn btn-secondary btn-sm" onClick={() => setAll(true)}>Todas</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setAll(false)}>Nenhuma</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setAll(true)}>{tr('estudos.todas')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setAll(false)}>{tr('estudos.nenhuma')}</button>
         </div>
       )}
 
@@ -124,8 +125,8 @@ export function RevisoesPage(): React.ReactElement {
           <div style={{ fontSize: 40 }}>{dueCards.length > 0 ? '🚫' : '🎉'}</div>
           <div style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
             {dueCards.length > 0
-              ? 'Nenhuma revisão nas categorias selecionadas.'
-              : 'Nada para revisar agora. Volte mais tarde!'}
+              ? tr('estudos.nenhumaRevisaoNasCategoriasSelecionadas')
+              : tr('estudos.nadaParaRevisarAgoraVolte')}
           </div>
         </div>
       ) : (
@@ -146,7 +147,7 @@ export function RevisoesPage(): React.ReactElement {
             </>
           ) : (
             <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setRevealed(true)}>
-              Mostrar resposta
+              {tr('estudos.mostrarResposta')}
             </button>
           )}
         </div>

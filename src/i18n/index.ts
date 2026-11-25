@@ -126,3 +126,18 @@ export function fmtTime(d: Date | string | number, opts?: Intl.DateTimeFormatOpt
 export function fmtDateTime(d: Date | string | number, opts?: Intl.DateTimeFormatOptions): string {
   return new Date(d).toLocaleString(getLocale(), opts)
 }
+
+/** Dom..Sáb no idioma atual (7/1/2024 foi um domingo). */
+export function weekdayNames(width: 'short' | 'long' | 'narrow' = 'short'): string[] {
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(2024, 0, 7 + i).toLocaleDateString(getLocale(), { weekday: width }).replace(/\.$/, '')
+  )
+}
+
+/** Janeiro..Dezembro no idioma atual, com a inicial maiúscula. */
+export function monthNames(width: 'short' | 'long' = 'long'): string[] {
+  return Array.from({ length: 12 }, (_, i) => {
+    const s = new Date(2024, i, 1).toLocaleDateString(getLocale(), { month: width }).replace(/\.$/, '')
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  })
+}

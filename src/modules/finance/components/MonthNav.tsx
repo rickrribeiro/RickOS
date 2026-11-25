@@ -1,6 +1,7 @@
 import React from 'react'
 import { useFinanceStore } from '../store/financeStore'
 import { monthLabel, shiftMonth } from '../util'
+import { t } from '../../../i18n'
 
 export function MonthNav(): React.ReactElement {
   const { month, setMonth, hidden, toggleHidden } = useFinanceStore()
@@ -9,7 +10,7 @@ export function MonthNav(): React.ReactElement {
       <button
         className="date-nav-btn"
         onClick={toggleHidden}
-        title={hidden ? 'Mostrar valores' : 'Ocultar valores'}
+        title={hidden ? t('finance.mostrarValores') : t('finance.ocultarValores')}
       >
         {hidden ? '🙈' : '👁'}
       </button>
