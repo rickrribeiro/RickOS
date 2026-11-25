@@ -3,6 +3,7 @@ import type { PersonalMemory, RelationKind } from '../../../../shared/memory'
 import { RELATION_LABEL } from '../../../../shared/memory'
 import { useMemoryStore } from '../store/memoryStore'
 import { Empty, useMemoryRefresh } from './ui'
+import { t } from '../../../i18n'
 
 interface Rel {
   id: number
@@ -65,8 +66,8 @@ export function ConnectionsTab(): React.ReactElement {
 
   if (!rels.length)
     return (
-      <Empty icon="🕸" title="Nenhuma conexão ainda">
-        Conexões nascem de consolidações aprovadas, conflitos resolvidos ou quando você relaciona memórias (botão 🔗 no detalhe de uma memória).
+      <Empty icon="🕸" title={t('memory.nenhumaConexaoAinda')}>
+        {t('memory.conexoesNascemDeConsolidacoesAprovadas')}
       </Empty>
     )
 
@@ -74,7 +75,7 @@ export function ConnectionsTab(): React.ReactElement {
     <div className="mem-two">
       <div className="mem-panel" style={{ padding: 8 }}>
         {center != null && byId.get(center) ? (
-          <svg className="mem-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Conexões de ${byId.get(center)!.title}`}>
+          <svg className="mem-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('memory.conexoesDe', { title: byId.get(center)!.title })}>
             {nodes.map((n) => (
               <line key={`l${n.r.id}`} x1={cx} y1={cy} x2={n.x} y2={n.y} className={n.r.kind}>
                 <title>{RELATION_LABEL[n.r.kind]}</title>
@@ -96,7 +97,7 @@ export function ConnectionsTab(): React.ReactElement {
             </g>
           </svg>
         ) : (
-          <p className="mem-muted">Escolha uma memória.</p>
+          <p className="mem-muted">{t('memory.escolhaUmaMemoria')}</p>
         )}
         <div className="mem-meta" style={{ padding: '0 6px 6px' }}>
           {(['RELATED_TO', 'SUPPORTS', 'DERIVED_FROM', 'SUPERSEDES', 'CONTRADICTS', 'PART_OF'] as RelationKind[]).map((k) => (
@@ -123,8 +124,8 @@ export function ConnectionsTab(): React.ReactElement {
       </div>
       <div className="mem-panel">
         <div className="mem-toolbar">
-          <select value={catId} onChange={(e) => setCatId(e.target.value ? Number(e.target.value) : '')} aria-label="Categoria">
-            <option value="">Todas as categorias</option>
+          <select value={catId} onChange={(e) => setCatId(e.target.value ? Number(e.target.value) : '')} aria-label={t('memory.categoria')}>
+            <option value="">{t('memory.todasAsCategorias')}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.icon} {c.name}
@@ -143,7 +144,7 @@ export function ConnectionsTab(): React.ReactElement {
             ))}
           </div>
         </div>
-        {connected.length === 0 && <p className="mem-muted">Nada com esses filtros.</p>}
+        {connected.length === 0 && <p className="mem-muted">{t('memory.nadaComEssesFiltros')}</p>}
         {connected.slice(0, 200).map((m) => (
           <button key={m.id} className={`mem-cat${m.id === center ? ' active' : ''}`} style={{ width: '100%' }} onClick={() => setFocus(m.id)}>
             {consolidated.has(m.id) ? '🧩' : conflicted.has(m.id) ? '⚡' : '•'} {m.title}

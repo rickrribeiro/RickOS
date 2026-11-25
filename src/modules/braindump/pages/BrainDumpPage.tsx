@@ -3,6 +3,7 @@ import { useTodoStore } from '../../todo/store/todoStore'
 import { useProjectStore } from '../../projects/store/projectStore'
 import { useCalendarStore } from '../../calendar/store/calendarStore'
 import { localDateStr } from '../../../utils/dates'
+import { t as tr } from '../../../i18n'
 
 const STATE_KEY = 'rickos:brainDump'
 
@@ -188,7 +189,7 @@ export function BrainDumpPage(): React.ReactElement {
     }
     const parsed = extractPlan(out)
     if (!parsed) {
-      setError('Não consegui interpretar o plano gerado. Tente novamente (a IA não devolveu um JSON válido).')
+      setError(tr('braindump.naoConseguiInterpretarOPlano'))
       return
     }
     setPlan(parsed)
@@ -267,7 +268,7 @@ export function BrainDumpPage(): React.ReactElement {
         nE++
       }
       await Promise.all([refreshTodos(), refreshProjects(), refreshEvents()])
-      flash(`Importado: ${nT} tarefas · ${nP} projetos · ${nE} eventos`)
+      flash(tr('braindump.importadoTarefasProjetosEventos', { nT, nP, nE }))
       setPlan(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -297,10 +298,9 @@ export function BrainDumpPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🧠 Despejar minha cabeça</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('braindump.despejarMinhaCabeca')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Escreva por ~5 minutos tudo o que está pensando. A IA transforma em tarefas, projetos,
-            próximos passos e agenda sugerida.
+            {tr('braindump.escrevaPor5MinutosTudo')}
           </p>
         </div>
         {toast && <span className="badge-hot" style={{ background: 'var(--accent-dim)', color: 'var(--accent-hover)' }}>{toast}</span>}
@@ -311,23 +311,23 @@ export function BrainDumpPage(): React.ReactElement {
           ⏱ {fmtClock(secondsLeft)}
         </span>
         <button className="btn btn-secondary btn-sm" onClick={() => setTimerOn((v) => !v)}>
-          {timerOn ? 'Pausar' : secondsLeft === 300 ? 'Iniciar 5 min' : 'Retomar'}
+          {timerOn ? tr('braindump.pausar') : secondsLeft === 300 ? tr('braindump.iniciar5Min') : tr('braindump.retomar')}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={() => { setSecondsLeft(300); setTimerOn(false) }}>
-          Zerar timer
+          {tr('braindump.zerarTimer')}
         </button>
-        <label style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>Modelo:</label>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{tr('braindump.modelo')}</label>
         <select value={model} onChange={(e) => { setModel(e.target.value); window.api.settings.set('claude_model', e.target.value) }}>
-          <option value="">Padrão</option>
-          <option value="sonnet">Sonnet</option>
-          <option value="opus">Opus</option>
-          <option value="haiku">Haiku</option>
+          <option value="">{tr('braindump.padrao')}</option>
+          <option value="sonnet">{tr('braindump.sonnet')}</option>
+          <option value="opus">{tr('braindump.opus')}</option>
+          <option value="haiku">{tr('braindump.haiku')}</option>
         </select>
       </div>
 
       <textarea
         rows={12}
-        placeholder="Despeje tudo aqui — tarefas soltas, ideias, preocupações, projetos, prazos… sem se preocupar com organização."
+        placeholder={tr('braindump.despejeTudoAquiTarefasSoltas')}
         value={text}
         onChange={(e) => {
           setText(e.target.value)
@@ -338,34 +338,34 @@ export function BrainDumpPage(): React.ReactElement {
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
         {running ? (
-          <button className="btn btn-danger" onClick={cancel}>⏹ Cancelar</button>
+          <button className="btn btn-danger" onClick={cancel}>{tr('braindump.cancelar')}</button>
         ) : (
           <button className="btn btn-primary" disabled={!text.trim()} onClick={generate}>
-            ✨ Transformar em plano
+            {tr('braindump.transformarEmPlano')}
           </button>
         )}
-        <button className="btn btn-secondary btn-sm" onClick={reset} disabled={running}>Limpar</button>
+        <button className="btn btn-secondary btn-sm" onClick={reset} disabled={running}>{tr('braindump.limpar')}</button>
         <button
           className="btn btn-secondary btn-sm"
           disabled={running || text.trim().length < 20}
-          title="Produtor aprovado da Memória Pessoal: a IA sugere conhecimentos sobre você; nada é salvo sem sua aprovação no Inbox"
+          title={tr('braindump.produtorAprovadoDaMemoriaPessoal')}
           onClick={() =>
             window.api.memory.produceBraindump(text).then(
-              () => flash('🧬 Enviado — sugestões no Inbox da Memória Pessoal'),
+              () => flash(tr('braindump.enviadoSugestoesNoInboxDa')),
               (e) => setError(e instanceof Error ? e.message : String(e))
             )
           }
         >
-          🧬 Sugerir memórias
+          {tr('braindump.sugerirMemorias')}
         </button>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{text.trim().length} caracteres</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{text.trim().length} {tr('braindump.caracteres')}</span>
       </div>
 
       {error && <div className="chart-section" style={{ borderColor: 'var(--danger)', marginBottom: 12 }}><div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div></div>}
 
       {running && (
         <div className="chart-section" style={{ marginBottom: 12 }}>
-          <div className="chart-title">Organizando… 🤔</div>
+          <div className="chart-title">{tr('braindump.organizando')}</div>
           <pre className="ai-output" style={{ maxHeight: 180 }}>{output || '…'}</pre>
         </div>
       )}
@@ -374,12 +374,12 @@ export function BrainDumpPage(): React.ReactElement {
         <>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={importPlan} disabled={importing || totalSelected === 0}>
-              {importing ? 'Importando…' : `✓ Importar selecionados (${totalSelected})`}
+              {importing ? tr('braindump.importando') : tr('braindump.importarSelecionados', { totalSelected })}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={generate}>↻ Gerar de novo</button>
+            <button className="btn btn-secondary btn-sm" onClick={generate}>{tr('braindump.gerarDeNovo')}</button>
           </div>
 
-          <PlanSection title="✅ Tarefas" empty="Nenhuma tarefa.">
+          <PlanSection title={tr('braindump.tarefas')} empty="Nenhuma tarefa.">
             {plan.tasks.map((t, i) => (
               <label key={i} className="list-row" style={{ alignItems: 'flex-start' }}>
                 <input type="checkbox" checked={isOn(`task:${i}`)} onChange={() => toggle(`task:${i}`)} />
@@ -387,13 +387,13 @@ export function BrainDumpPage(): React.ReactElement {
                   {t.title}
                   {t.notes && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>📝 {t.notes}</span>}
                 </span>
-                {t.priority > 0 && <span className="project-chip">P{t.priority}</span>}
+                {t.priority > 0 && <span className="project-chip">{tr('braindump.p')}{t.priority}</span>}
                 {t.dueDate && <span className="due-badge due-future">{t.dueDate}</span>}
               </label>
             ))}
           </PlanSection>
 
-          <PlanSection title="👣 Próximos passos" empty="Nenhum próximo passo.">
+          <PlanSection title={tr('braindump.proximosPassos')} empty="Nenhum próximo passo.">
             {plan.nextSteps.map((s, i) => (
               <label key={i} className="list-row">
                 <input type="checkbox" checked={isOn(`step:${i}`)} onChange={() => toggle(`step:${i}`)} />
@@ -402,7 +402,7 @@ export function BrainDumpPage(): React.ReactElement {
             ))}
           </PlanSection>
 
-          <PlanSection title="📁 Projetos" empty="Nenhum projeto.">
+          <PlanSection title={tr('braindump.projetos')} empty="Nenhum projeto.">
             {plan.projects.map((p, i) => (
               <label key={i} className="list-row" style={{ alignItems: 'flex-start' }}>
                 <input type="checkbox" checked={isOn(`proj:${i}`)} onChange={() => toggle(`proj:${i}`)} />
@@ -414,13 +414,13 @@ export function BrainDumpPage(): React.ReactElement {
             ))}
           </PlanSection>
 
-          <PlanSection title="📅 Agenda sugerida" empty="Nenhum evento sugerido.">
+          <PlanSection title={tr('braindump.agendaSugerida')} empty="Nenhum evento sugerido.">
             {plan.calendar.map((e, i) => (
               <label key={i} className="list-row">
                 <input type="checkbox" checked={isOn(`cal:${i}`)} onChange={() => toggle(`cal:${i}`)} />
                 <span className="list-row-title">{e.title}</span>
                 <span className="due-badge due-future">
-                  {e.date}{e.time ? ` ${e.time}` : ''}{e.durationMin ? ` · ${e.durationMin}min` : ''}
+                  {e.date}{e.time ? ` ${e.time}` : ''}{e.durationMin ? tr('braindump.min', { durationMin: e.durationMin }) : ''}
                 </span>
               </label>
             ))}

@@ -3,6 +3,7 @@ import { downloadText, pickFile } from '../../../api/files'
 import type { LegacyStatus, MemorySettings, PolicyOverride, PolicyView } from '../api'
 import { useMemoryStore } from '../store/memoryStore'
 import { JobBanner, errMsg, fmtDate, useJob } from './ui'
+import { t } from '../../../i18n'
 
 /** Configurações com efeito real no servidor. Nada aqui amplia a política de acesso do código. */
 export function SettingsTab(): React.ReactElement {
@@ -31,7 +32,7 @@ export function SettingsTab(): React.ReactElement {
       setMsg(`⚠️ ${errMsg(e)}`)
     }
   }
-  if (!s) return <p className="mem-muted">Carregando…</p>
+  if (!s) return <p className="mem-muted">{t('memory.carregando')}</p>
   const v = s.values
   const bool = (k: string): boolean => v[k] === '1'
   const setOverride = (uc: string, patch: Partial<PolicyOverride>): void => {
@@ -60,7 +61,7 @@ export function SettingsTab(): React.ReactElement {
     if (!f) return
     try {
       const r = await window.api.memory.importJson(await f.text(), mode)
-      setMsg(`✅ ${r.created} criada(s), ${r.suggested} no Inbox, ${r.skipped} ignorada(s).`)
+      setMsg(t('memory.criadaSNoInboxIgnorada', { created: r.created, suggested: r.suggested, skipped: r.skipped }))
     } catch (e) {
       setMsg(`⚠️ ${errMsg(e)}`)
     }
@@ -71,40 +72,40 @@ export function SettingsTab(): React.ReactElement {
       <div className="mem-col">
         {msg && <div className="mem-job">{msg}</div>}
         <div className="mem-panel">
-          <h3>🤖 Memory Agent e jobs</h3>
+          <h3>{t('memory.memoryAgentEJobs')}</h3>
           <label className="mem-switch">
             <input type="checkbox" checked={bool('memory_agent_enabled')} onChange={(e) => save({ memory_agent_enabled: e.target.checked })} />
             <span>
-              Processar eventos de fontes autorizadas
-              <small>Desligado por padrão. Hoje nenhuma funcionalidade externa está autorizada a enviar eventos.</small>
+              {t('memory.processarEventosDeFontesAutorizadas')}
+              <small>{t('memory.desligadoPorPadraoHojeNenhuma')}</small>
             </span>
           </label>
           <div className="mem-form">
             <label>
-              Frequência do agente (min)
+              {t('memory.frequenciaDoAgenteMin')}
               <input type="number" min={15} max={1440} defaultValue={v.memory_agent_interval_min} onBlur={(e) => save({ memory_agent_interval_min: e.target.value })} />
             </label>
             <label>
-              Eventos por lote
+              {t('memory.eventosPorLote')}
               <input type="number" min={1} max={50} defaultValue={v.memory_batch_size} onBlur={(e) => save({ memory_batch_size: e.target.value })} />
             </label>
           </div>
           <label className="mem-switch">
             <input type="checkbox" checked={bool('memory_consolidation_enabled')} onChange={(e) => save({ memory_consolidation_enabled: e.target.checked })} />
             <span>
-              Consolidação periódica
-              <small>Agrupa memórias parecidas e propõe aprendizados/conflitos. Sem nada parecido, não chama a IA.</small>
+              {t('memory.consolidacaoPeriodica')}
+              <small>{t('memory.agrupaMemoriasParecidasEPropoe')}</small>
             </span>
           </label>
           <div className="mem-form">
             <label>
-              A cada (dias)
+              {t('memory.aCadaDias')}
               <input type="number" min={1} max={90} defaultValue={v.memory_consolidation_days} onBlur={(e) => save({ memory_consolidation_days: e.target.value })} />
             </label>
             <label>
-              Rodar agora
+              {t('memory.rodarAgora')}
               <button className="btn btn-secondary btn-sm" onClick={async () => track(await window.api.memory.consolidateNow())}>
-                Consolidar agora
+                {t('memory.consolidarAgora')}
               </button>
             </label>
           </div>
@@ -112,51 +113,51 @@ export function SettingsTab(): React.ReactElement {
           <label className="mem-switch">
             <input type="checkbox" checked={bool('memory_notifications')} onChange={(e) => save({ memory_notifications: e.target.checked })} />
             <span>
-              Notificações agrupadas
-              <small>Uma por execução (novas sugestões, resultado da consolidação). Nunca uma por memória.</small>
+              {t('memory.notificacoesAgrupadas')}
+              <small>{t('memory.umaPorExecucaoNovasSugestoes')}</small>
             </span>
           </label>
         </div>
 
         <div className="mem-panel">
-          <h3>💸 Custos e limites</h3>
+          <h3>{t('memory.custosELimites')}</h3>
           <div className="mem-form">
             <label>
-              Chamadas de IA por dia
+              {t('memory.chamadasDeIaPorDia')}
               <input type="number" min={0} max={500} defaultValue={v.memory_max_llm_calls_day} onBlur={(e) => save({ memory_max_llm_calls_day: e.target.value })} />
             </label>
             <label>
-              Modelo (texto, migração, análise)
-              <input placeholder="sonnet" defaultValue={v.memory_ai_model} onBlur={(e) => save({ memory_ai_model: e.target.value })} />
+              {t('memory.modeloTextoMigracaoAnalise')}
+              <input placeholder={t('memory.sonnet')} defaultValue={v.memory_ai_model} onBlur={(e) => save({ memory_ai_model: e.target.value })} />
             </label>
             <label>
-              Modelo rápido (agente, lacunas, entrevista)
-              <input placeholder="haiku" defaultValue={v.memory_ai_model_fast} onBlur={(e) => save({ memory_ai_model_fast: e.target.value })} />
+              {t('memory.modeloRapidoAgenteLacunasEntrevista')}
+              <input placeholder={t('memory.haiku')} defaultValue={v.memory_ai_model_fast} onBlur={(e) => save({ memory_ai_model_fast: e.target.value })} />
             </label>
           </div>
         </div>
 
         <div className="mem-panel">
-          <h3>🔐 Privacidade e retenção</h3>
+          <h3>{t('memory.privacidadeERetencao')}</h3>
           <label className="mem-switch">
             <input type="checkbox" checked={bool('memory_consumers_enabled')} onChange={(e) => save({ memory_consumers_enabled: e.target.checked })} />
             <span>
-              Permitir que funcionalidades autorizadas recebam memórias
-              <small>Desligar bloqueia todo consumo de uma vez (inclusive as internas que leem memórias para comparar).</small>
+              {t('memory.permitirQueFuncionalidadesAutorizadasRecebam')}
+              <small>{t('memory.desligarBloqueiaTodoConsumoDe')}</small>
             </span>
           </label>
           <div className="mem-form">
             <label>
-              Traces do Inspector (dias)
+              {t('memory.tracesDoInspectorDias')}
               <input type="number" min={1} max={365} defaultValue={v.memory_trace_retention_days} onBlur={(e) => save({ memory_trace_retention_days: e.target.value })} />
             </label>
             <label>
-              Conteúdo de eventos processados (dias)
+              {t('memory.conteudoDeEventosProcessadosDias')}
               <input type="number" min={1} max={365} defaultValue={v.memory_event_retention_days} onBlur={(e) => save({ memory_event_retention_days: e.target.value })} />
             </label>
           </div>
           <div className="mem-section">
-            <h4>Categorias que a IA pode sugerir</h4>
+            <h4>{t('memory.categoriasQueAIaPode')}</h4>
             <div className="mem-seg">
               {categories
                 .filter((c) => !c.archivedAt)
@@ -184,20 +185,19 @@ export function SettingsTab(): React.ReactElement {
 
       <div className="mem-col">
         <div className="mem-panel">
-          <h3>🧭 Consumers e producers</h3>
+          <h3>{t('memory.consumersEProducers')}</h3>
           <p className="mem-muted" style={{ marginTop: 0 }}>
-            A política vive no código e é deny-by-default. Aqui você só pode <strong>restringir</strong>: desligar, reduzir orçamento ou sensibilidade. Integrações com
-            outros módulos aparecem como “aguardando aprovação” e não recebem nada.
+            {t('memory.aPoliticaViveNoCodigo')} <strong>{t('memory.restringir')}</strong>{t('memory.desligarReduzirOrcamentoOuSensibilidade')}
           </p>
           <div className="mem-scroll">
             <table className="mem-table">
               <thead>
                 <tr>
-                  <th>Caso de uso</th>
-                  <th>Consome</th>
-                  <th>Produz</th>
-                  <th>Tokens</th>
-                  <th>Ativo</th>
+                  <th>{t('memory.casoDeUso')}</th>
+                  <th>{t('memory.consome')}</th>
+                  <th>{t('memory.produz')}</th>
+                  <th>{t('memory.tokens')}</th>
+                  <th>{t('memory.ativo')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -207,10 +207,10 @@ export function SettingsTab(): React.ReactElement {
                     <tr key={p.useCase}>
                       <td>
                         <strong>{p.label}</strong>
-                        <div className="mem-muted">{p.internal ? 'interno' : p.approved ? p.module : `${p.module} · aguardando aprovação`}</div>
+                        <div className="mem-muted">{p.internal ? t('memory.interno') : p.approved ? p.module : t('memory.aguardandoAprovacao', { module: p.module })}</div>
                       </td>
-                      <td>{p.consume ? `até ${p.consume.maxSensitivity.toLowerCase()}` : '—'}</td>
-                      <td>{p.produce ? (o.produceDisabled ? 'desligado' : 'sim') : '—'}</td>
+                      <td>{p.consume ? t('memory.ate', { p0: p.consume.maxSensitivity.toLowerCase() }) : '—'}</td>
+                      <td>{p.produce ? (o.produceDisabled ? t('memory.desligado2') : t('memory.sim')) : '—'}</td>
                       <td>
                         {p.consume ? (() => {
                           const ceiling = p.consume.maxTokens
@@ -222,7 +222,7 @@ export function SettingsTab(): React.ReactElement {
                             style={{ width: 80 }}
                             defaultValue={o.maxTokens ?? p.consume.maxTokens}
                             onBlur={(e) => setOverride(p.useCase, { maxTokens: Number(e.target.value) < ceiling ? Number(e.target.value) : undefined })}
-                            aria-label={`Orçamento de ${p.label}`}
+                            aria-label={t('memory.orcamentoDe', { label: p.label })}
                           />
                           )
                         })() : (
@@ -231,9 +231,9 @@ export function SettingsTab(): React.ReactElement {
                       </td>
                       <td>
                         {p.approved || p.internal ? (
-                          <input type="checkbox" checked={!o.disabled} onChange={(e) => setOverride(p.useCase, { disabled: e.target.checked ? undefined : true })} aria-label={`Ativar ${p.label}`} />
+                          <input type="checkbox" checked={!o.disabled} onChange={(e) => setOverride(p.useCase, { disabled: e.target.checked ? undefined : true })} aria-label={t('memory.ativar', { label: p.label })} />
                         ) : (
-                          <span className="mem-chip warn">bloqueado</span>
+                          <span className="mem-chip warn">{t('memory.bloqueado')}</span>
                         )}
                       </td>
                     </tr>
@@ -245,45 +245,44 @@ export function SettingsTab(): React.ReactElement {
         </div>
 
         <div className="mem-panel">
-          <h3>📦 Exportar e importar</h3>
+          <h3>{t('memory.exportarEImportar')}</h3>
           <label className="mem-switch">
             <input type="checkbox" checked={includeRestricted} onChange={(e) => setIncludeRestricted(e.target.checked)} />
             <span>
-              Incluir memórias restritas na exportação
-              <small>O arquivo fica no seu dispositivo; guarde com cuidado.</small>
+              {t('memory.incluirMemoriasRestritasNaExportacao')}
+              <small>{t('memory.oArquivoFicaNoSeu')}</small>
             </span>
           </label>
           <div className="mem-actions">
             <button className="btn btn-secondary btn-sm" onClick={() => exportAs('json')}>
-              ⬇ JSON (completo)
+              {t('memory.jsonCompleto')}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => exportAs('md')}>
-              ⬇ Markdown
+              {t('memory.markdown')}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => importFile('review')} title="Cada memória vira sugestão no Inbox">
-              ⬆ Importar JSON (revisar)
+            <button className="btn btn-secondary btn-sm" onClick={() => importFile('review')} title={t('memory.cadaMemoriaViraSugestaoNo')}>
+              {t('memory.importarJsonRevisar')}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => window.confirm('Criar as memórias direto, sem revisão? Use só com arquivos exportados por você.') && importFile('direct')}>
-              ⬆ Importar JSON (direto)
+            <button className="btn btn-secondary btn-sm" onClick={() => window.confirm(t('memory.criarAsMemoriasDiretoSem')) && importFile('direct')}>
+              {t('memory.importarJsonDireto')}
             </button>
           </div>
         </div>
 
         <div className="mem-panel">
-          <h3>📚 Base de Conhecimento antiga</h3>
+          <h3>{t('memory.baseDeConhecimentoAntiga')}</h3>
           {legacy?.hasLegacy ? (
             <>
               <p className="mem-sub">
-                {legacy.chars} caracteres · {legacy.bullets} itens de lista. O documento continua guardado (sem página de edição) e as funcionalidades antigas seguem lendo
-                dele até a migração delas ser aprovada.
+                {t('memory.caracteresItensDeListaO', { chars: legacy.chars, bullets: legacy.bullets })}
               </p>
               <p className="mem-muted">
-                Migração: {legacy.pending} sugestão(ões) pendentes · {legacy.approved} aprovadas
-                {legacy.imports.length ? ` · última execução ${fmtDate(legacy.imports[0].createdAt, true)}` : ' · nunca executada'}
+                {t('memory.migracaoSugestaoOesPendentesAprovadas', { pending: legacy.pending, approved: legacy.approved })}
+                {legacy.imports.length ? t('memory.ultimaExecucao', { p0: fmtDate(legacy.imports[0].createdAt, true) }) : t('memory.nuncaExecutada')}
               </p>
               <div className="mem-actions">
                 <button className="btn btn-secondary btn-sm" onClick={async () => setMsg(JSON.stringify((await window.api.memory.migrate({ ai: false, force: true })).result))}>
-                  Reprocessar por linha
+                  {t('memory.reprocessarPorLinha')}
                 </button>
                 <button
                   className="btn btn-secondary btn-sm"
@@ -292,13 +291,13 @@ export function SettingsTab(): React.ReactElement {
                     if (r.jobId) track(r.jobId)
                   }}
                 >
-                  Reprocessar com IA
+                  {t('memory.reprocessarComIa')}
                 </button>
               </div>
-              <p className="mem-muted">Reprocessar não duplica: o que já virou memória ou foi rejeitado é ignorado.</p>
+              <p className="mem-muted">{t('memory.reprocessarNaoDuplicaOQue')}</p>
             </>
           ) : (
-            <p className="mem-sub">Vazia.</p>
+            <p className="mem-sub">{t('memory.vazia')}</p>
           )}
         </div>
       </div>

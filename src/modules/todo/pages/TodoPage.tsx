@@ -7,6 +7,7 @@ import { TodoBoard } from '../components/TodoBoard'
 import { AiPlanModal } from '../components/AiPlanModal'
 import { PRIORITIES, STATUSES, STATUS_LABELS, TodoStatus, TODO_TYPES, priorityDef, dueMeta, todoTypeDef } from '../constants'
 import { localDateStr, timeAgo } from '../../../utils/dates'
+import { t as tr } from '../../../i18n'
 
 type StatusFilter = 'all' | 'todo' | 'doing' | 'done'
 
@@ -152,24 +153,24 @@ export function TodoPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>✅ TODO</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('todo.todo2')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {openItems.length} em aberto · {list.doneTotal} feitas · {list.doneRecurring} recorrentes
+            {tr('todo.emAbertoFeitasRecorrentes', { count: openItems.length, doneTotal: list.doneTotal, doneRecurring: list.doneRecurring })}
             <span style={{ color: 'var(--text-muted)', marginLeft: 10 }}>
-              ↑↓ navegar · espaço concluir · p adiar · e editar
+              {tr('todo.navegarEspacoConcluirPAdiar')}
             </span>
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setPlanOpen(true)} title="Em breve">
-            ✨ Planejar com IA
+          <button className="btn btn-secondary btn-sm" onClick={() => setPlanOpen(true)} title={tr('todo.emBreve')}>
+            {tr('todo.planejarComIa')}
           </button>
           <div className="seg-toggle">
             <button className={`seg-btn ${view === 'list' ? 'active' : ''}`} onClick={() => changeView('list')}>
-              ☰ Lista
+              {tr('todo.lista')}
             </button>
             <button className={`seg-btn ${view === 'board' ? 'active' : ''}`} onClick={() => changeView('board')}>
-              ▦ Quadro
+              {tr('todo.quadro')}
             </button>
           </div>
         </div>
@@ -178,12 +179,12 @@ export function TodoPage(): React.ReactElement {
       <div className="quick-add-row">
         <input
           type="text"
-          placeholder="Nova tarefa"
+          placeholder={tr('todo.novaTarefa')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
         />
-        <select value={newType} onChange={(e) => setNewType(e.target.value)} title="Tipo da nova tarefa">
+        <select value={newType} onChange={(e) => setNewType(e.target.value)} title={tr('todo.tipoDaNovaTarefa')}>
           {TODO_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
               {t.icon} {t.label}
@@ -191,20 +192,20 @@ export function TodoPage(): React.ReactElement {
           ))}
         </select>
         <button className="btn btn-primary" onClick={handleAdd}>
-          + Adicionar
+          {tr('todo.adicionar')}
         </button>
       </div>
 
       <div className="todo-toolbar">
         <input
           type="text"
-          placeholder="🔍 Buscar…"
+          placeholder={tr('todo.buscar')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ flex: '1 1 110px', minWidth: 100 }}
         />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
-          <option value="all">Todos os status</option>
+          <option value="all">{tr('todo.todosOsStatus')}</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABELS[s]}
@@ -212,7 +213,7 @@ export function TodoPage(): React.ReactElement {
           ))}
         </select>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          <option value="all">Todos os tipos</option>
+          <option value="all">{tr('todo.todosOsTipos')}</option>
           {TODO_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
               {t.icon} {t.label}
@@ -220,15 +221,15 @@ export function TodoPage(): React.ReactElement {
           ))}
         </select>
         <select value={recurringFilter} onChange={(e) => setRecurringFilter(e.target.value as 'all' | 'yes' | 'no')}>
-          <option value="all">Recorrência: todas</option>
-          <option value="yes">🔁 Recorrentes</option>
-          <option value="no">Não recorrentes</option>
+          <option value="all">{tr('todo.recorrenciaTodas')}</option>
+          <option value="yes">{tr('todo.recorrentes')}</option>
+          <option value="no">{tr('todo.naoRecorrentes')}</option>
         </select>
         <select
           value={projectFilter}
           onChange={(e) => setProjectFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
         >
-          <option value="all">Todos os projetos</option>
+          <option value="all">{tr('todo.todosOsProjetos')}</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -237,10 +238,10 @@ export function TodoPage(): React.ReactElement {
         </select>
         <label
           className="todo-toolbar-check"
-          title="Recorrentes concluídas voltam para a lista só quando chega a data da próxima vez"
+          title={tr('todo.recorrentesConcluidasVoltamParaA')}
         >
           <input type="checkbox" checked={showUpcoming} onChange={(e) => toggleUpcoming(e.target.checked)} />
-          Mostrar recorrentes
+          {tr('todo.mostrarRecorrentes')}
           {!showUpcoming && list.upcomingRecurring > 0 && (
             <span style={{ color: 'var(--text-muted)' }}>({list.upcomingRecurring})</span>
           )}
@@ -268,19 +269,19 @@ export function TodoPage(): React.ReactElement {
       {view === 'list' && (
       <div className="list-stack">
         {openItems.length === 0 && list.doneTotal === 0 && !listLoading && (
-          <div className="empty-hint">Nenhuma tarefa encontrada.</div>
+          <div className="empty-hint">{tr('todo.nenhumaTarefaEncontrada')}</div>
         )}
         {openItems.map((t) => renderRow(t))}
         {list.doneTotal > 0 && (
-          <button className="todo-divider" onClick={toggleDone} title={doneCollapsed ? 'Mostrar concluídas' : 'Ocultar concluídas'}>
+          <button className="todo-divider" onClick={toggleDone} title={doneCollapsed ? tr('todo.mostrarConcluidas') : tr('todo.ocultarConcluidas')}>
             <span className={`nav-group-chevron ${doneCollapsed ? 'collapsed' : ''}`}>▾</span>
-            <span>Concluídas ({list.doneTotal})</span>
+            <span>{tr('todo.concluidas', { doneTotal: list.doneTotal })}</span>
           </button>
         )}
         {!doneCollapsed && doneItems.map((t) => renderRow(t))}
         {!doneCollapsed && doneRemaining > 0 && (
           <button className="btn btn-secondary btn-sm todo-more" onClick={loadMoreDone} disabled={listLoading}>
-            {listLoading ? 'Carregando…' : `Ver mais (${Math.min(DONE_PAGE, doneRemaining)} de ${doneRemaining})`}
+            {listLoading ? tr('todo.carregando') : tr('todo.verMaisDe', { p0: Math.min(DONE_PAGE, doneRemaining), doneRemaining })}
           </button>
         )}
       </div>
@@ -310,7 +311,7 @@ export function TodoPage(): React.ReactElement {
               />
               <button
                 className="priority-dot"
-                title={`Prioridade: ${prio.label} (clique p/ alternar)`}
+                title={tr('todo.prioridadeCliquePAlternar', { label: prio.label })}
                 style={{ background: prio.color }}
                 onClick={() => cyclePriority(t)}
               />
@@ -337,15 +338,15 @@ export function TodoPage(): React.ReactElement {
               )}
               <span
                 className="todo-type-chip"
-                title={`Tipo: ${type.label}`}
+                title={tr('todo.tipo2', { label: type.label })}
                 style={{ borderColor: type.color, color: type.color }}
               >
                 {type.icon} {type.label}
               </span>
               {proj && <span className="project-chip">{proj}</span>}
-              {t.recurrence && <span title="Tarefa recorrente">🔁</span>}
+              {t.recurrence && <span title={tr('todo.tarefaRecorrente')}>🔁</span>}
               {due && <span className={`due-badge ${due.cls}`}>{due.label}</span>}
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={`Criada em ${new Date(t.createdAt).toLocaleString('pt-BR')}`}>⏳ {timeAgo(t.createdAt)}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={tr('todo.criadaEm', { p0: new Date(t.createdAt).toLocaleString('pt-BR') })}>⏳ {timeAgo(t.createdAt)}</span>
               <select
                 value={t.status}
                 onChange={(e) => setStatus(t.id, e.target.value)}
@@ -359,10 +360,10 @@ export function TodoPage(): React.ReactElement {
               </select>
               <div className="list-row-actions">
                 <button className="btn btn-secondary btn-sm" onClick={() => setEditing(t)}>
-                  Editar
+                  {tr('todo.editar')}
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={() => remove(t.id)}>
-                  Excluir
+                  {tr('todo.excluir')}
                 </button>
               </div>
       </div>

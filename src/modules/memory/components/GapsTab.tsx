@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState } from 'react'
 import type { CoverageRow, CoverageState, FreshnessItem, KnowledgeGap } from '../api'
 import { useMemoryStore } from '../store/memoryStore'
 import { Empty, JobBanner, SensChip, errMsg, useJob, useMemoryRefresh } from './ui'
+import { t } from '../../../i18n'
 
 const STATE: Record<CoverageState, { label: string; cls: string }> = {
-  pouco_explorado: { label: 'Pouco explorado', cls: '' },
-  parcial: { label: 'Parcialmente conhecido', cls: 'accent' },
-  bem_documentado: { label: 'Bem documentado', cls: 'ok' },
-  revisar: { label: 'Necessita revisão', cls: 'warn' }
+  pouco_explorado: { label: t('memory.poucoExplorado'), cls: '' },
+  parcial: { label: t('memory.parcialmenteConhecido'), cls: 'accent' },
+  bem_documentado: { label: t('memory.bemDocumentado'), cls: 'ok' },
+  revisar: { label: t('memory.necessitaRevisao'), cls: 'warn' }
 }
 
 export function GapsTab(): React.ReactElement {
@@ -44,26 +45,26 @@ export function GapsTab(): React.ReactElement {
       <div className="mem-col">
         <div className="mem-panel">
           <h3>
-            🧩 Lacunas relevantes
+            {t('memory.lacunasRelevantes')}
             <button className="btn btn-secondary btn-sm" onClick={() => act(async () => track(await window.api.memory.detectGaps()))}>
-              ✨ Procurar lacunas
+              {t('memory.procurarLacunas')}
             </button>
           </h3>
           <p className="mem-muted" style={{ marginTop: 0 }}>
-            Só o que melhoraria alguma funcionalidade ou objetivo seu. Dispensar uma lacuna faz a IA não perguntar de novo.
+            {t('memory.soOQueMelhorariaAlguma')}
           </p>
           <JobBanner job={job} onClose={clear} />
           {msg && <div className="mem-job">{msg}</div>}
           {gaps.length === 0 ? (
-            <Empty icon="🧩" title="Nenhuma lacuna aberta">
-              Peça uma busca de lacunas ou converse em “Me conheça melhor”.
+            <Empty icon="🧩" title={t('memory.nenhumaLacunaAberta')}>
+              {t('memory.pecaUmaBuscaDeLacunas')}
             </Empty>
           ) : (
             <div className="mem-list">
               {gaps.map((g) => (
                 <div key={g.id} className="mem-sug">
                   <div className="mem-sug-head">
-                    <span className="mem-chip accent">{'●'.repeat(g.priority)} prioridade</span>
+                    <span className="mem-chip accent">{'●'.repeat(g.priority)} {t('memory.prioridade')}</span>
                     {g.category && <span className="mem-chip">{g.category}</span>}
                     <SensChip s={g.sensitivity} />
                   </div>
@@ -71,28 +72,28 @@ export function GapsTab(): React.ReactElement {
                     <strong>{g.topic}</strong>
                   </div>
                   <div className="mem-why">💡 {g.why}</div>
-                  {g.beneficiaries.length > 0 && <div className="mem-why">🎯 Ajudaria: {g.beneficiaries.join(', ')}</div>}
+                  {g.beneficiaries.length > 0 && <div className="mem-why">{t('memory.ajudaria')} {g.beneficiaries.join(', ')}</div>}
                   <div className="mem-sug-content">❓ {g.question}</div>
                   <div className="mem-sug-actions">
                     <input
                       style={{ flex: 1, minWidth: 180 }}
-                      placeholder="Responder (vira sugestão no Inbox)…"
+                      placeholder={t('memory.responderViraSugestaoNoInbox')}
                       value={answers[g.id] ?? ''}
                       onChange={(e) => setAnswers((a) => ({ ...a, [g.id]: e.target.value }))}
-                      aria-label={`Resposta para ${g.topic}`}
+                      aria-label={t('memory.respostaPara', { topic: g.topic })}
                     />
                     <button
                       className="btn btn-primary btn-sm"
                       disabled={!answers[g.id]?.trim()}
-                      onClick={() => act(async () => track(await window.api.memory.answerGap(g.id, answers[g.id])), 'Resposta enviada.')}
+                      onClick={() => act(async () => track(await window.api.memory.answerGap(g.id, answers[g.id])), t('memory.respostaEnviada'))}
                     >
-                      Responder
+                      {t('memory.responder')}
                     </button>
                     <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.gapStatus(g.id, 'dismissed'))}>
-                      Dispensar
+                      {t('memory.dispensar')}
                     </button>
                     <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.gapStatus(g.id, 'irrelevant'))}>
-                      Não é relevante
+                      {t('memory.naoERelevante')}
                     </button>
                   </div>
                 </div>
@@ -102,11 +103,11 @@ export function GapsTab(): React.ReactElement {
         </div>
 
         <div className="mem-panel">
-          <h3>🕰 Precisam de reconfirmação ({fresh.length})</h3>
+          <h3>{t('memory.precisamDeReconfirmacao', { count: fresh.length })}</h3>
           <p className="mem-muted" style={{ marginTop: 0 }}>
-            Critério determinístico por estabilidade e tipo (objetivos a cada 90 dias; formação concluída nunca).
+            {t('memory.criterioDeterministicoPorEstabilidadeE')}
           </p>
-          {fresh.length === 0 && <p className="mem-sub">Tudo em dia.</p>}
+          {fresh.length === 0 && <p className="mem-sub">{t('memory.tudoEmDia')}</p>}
           {fresh.map((f) => (
             <div key={f.memory.id} className="mem-row" style={{ fontSize: 13, padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
               <span className={`mem-chip${f.severity === 'alta' ? ' danger' : f.severity === 'media' ? ' warn' : ''}`}>{f.severity}</span>
@@ -117,10 +118,10 @@ export function GapsTab(): React.ReactElement {
                 {f.reason}
               </span>
               <button className="btn btn-primary btn-sm" onClick={() => act(() => window.api.memory.confirm(f.memory.id))}>
-                ✓ Continua valendo
+                {t('memory.continuaValendo')}
               </button>
               <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.setStatus(f.memory.id, 'outdated'))}>
-                Mudou
+                {t('memory.mudou')}
               </button>
             </div>
           ))}
@@ -130,9 +131,9 @@ export function GapsTab(): React.ReactElement {
       <div className="mem-col">
         <div className="mem-panel">
           <h3>
-            📊 Cobertura por domínio
+            {t('memory.coberturaPorDominio')}
             <button className="btn btn-secondary btn-sm" onClick={() => setShowCriteria((v) => !v)}>
-              critérios
+              {t('memory.criterios')}
             </button>
           </h3>
           {showCriteria && cov && (
@@ -142,7 +143,7 @@ export function GapsTab(): React.ReactElement {
                 <div key={c}>• {c}</div>
               ))}
               <div className="mem-muted" style={{ marginTop: 4 }}>
-                Mostra o que está registrado aqui — não mede quanto a IA “conhece você”.
+                {t('memory.mostraOQueEstaRegistrado')}
               </div>
             </div>
           )}
@@ -156,12 +157,12 @@ export function GapsTab(): React.ReactElement {
                   <span className={`mem-chip ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>
                 </div>
                 <div className="mem-muted">{r.why}</div>
-                {r.usedBy.length > 0 && <div className="mem-muted">Usada por: {r.usedBy.join(', ')}</div>}
+                {r.usedBy.length > 0 && <div className="mem-muted">{t('memory.usadaPor')} {r.usedBy.join(', ')}</div>}
               </button>
             ))}
           </div>
           <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={() => setTab('interview')}>
-            💬 Explorar um domínio em “Me conheça melhor”
+            {t('memory.explorarUmDominioEmMe')}
           </button>
         </div>
       </div>

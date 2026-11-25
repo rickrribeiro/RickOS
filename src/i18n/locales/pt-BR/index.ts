@@ -5,6 +5,13 @@ import { shell } from './shell'
 import { skin } from './skin'
 import { timetracker } from './timetracker'
 import { home } from './home'
+import { inbox } from './inbox'
+import { todo } from './todo'
+import { braindump } from './braindump'
+import { goals } from './goals'
+import { habits } from './habits'
+import { automations } from './automations'
+import { memory } from './memory'
 
 /** Dicionário de referência. Cada módulo tem seu arquivo, com chaves prefixadas (`todo.*`, `finance.*`…). */
 export const ptBR = {
@@ -14,7 +21,14 @@ export const ptBR = {
   ...shell,
   ...skin,
   ...timetracker,
-  ...home
+  ...home,
+  ...inbox,
+  ...todo,
+  ...braindump,
+  ...goals,
+  ...habits,
+  ...automations,
+  ...memory
 }
 
 export type MessageKey = keyof typeof ptBR

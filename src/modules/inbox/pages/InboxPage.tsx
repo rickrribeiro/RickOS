@@ -7,6 +7,7 @@ import { OcrCapture } from '../components/OcrCapture'
 import { timeAgo } from '../../../utils/dates'
 import { runJson } from '../../projects/lib/ai'
 import { isClosed } from '../../projects/lib/constants'
+import { t as tr, getLocale } from '../../../i18n'
 
 type SourceFilter = 'all' | 'ai' | 'manual'
 
@@ -51,7 +52,7 @@ Formato: {"items": [{"id": 1, "projectId": 2}]}`,
       const map: Record<number, number> = {}
       for (const it of r.items ?? []) if (it.projectId && projects.some((p) => p.id === it.projectId)) map[it.id] = it.projectId
       setAiSugg(map)
-      if (!Object.keys(map).length) setAiError('A IA não encontrou projetos para esses itens.')
+      if (!Object.keys(map).length) setAiError(tr('inbox.iaNaoEncontrouProjetos'))
     } catch (e) {
       setAiError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -80,9 +81,9 @@ Formato: {"items": [{"id": 1, "projectId": 2}]}`,
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>📥 Inbox</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('inbox.inbox')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Capture agora, processe depois. Atalho global: Ctrl+Shift+Space.
+            {tr('inbox.captureAgoraProcesseDepoisAtalho')}
           </p>
         </div>
         <span className="inbox-count">{inboxItems.length}</span>
@@ -95,18 +96,18 @@ Formato: {"items": [{"id": 1, "projectId": 2}]}`,
             className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? `Todos (${inboxItems.length})` : f === 'ai' ? `🤖 IA (${aiCount})` : `✍️ Manual (${inboxItems.length - aiCount})`}
+            {f === 'all' ? tr('inbox.todos', { count: inboxItems.length }) : f === 'ai' ? tr('inbox.ia', { aiCount }) : tr('inbox.manual', { p0: inboxItems.length - aiCount })}
           </button>
         ))}
         <span style={{ flex: 1 }} />
         {inboxItems.some((t) => t.projectId == null) && (
-          <button className="btn btn-secondary btn-sm" onClick={suggestProjects} disabled={aiRunning} title="A IA sugere o projeto de cada item">
-            {aiRunning ? 'Classificando…' : '✨ Sugerir projetos'}
+          <button className="btn btn-secondary btn-sm" onClick={suggestProjects} disabled={aiRunning} title={tr('inbox.aIaSugereOProjeto')}>
+            {aiRunning ? tr('inbox.classificando') : tr('inbox.sugerirProjetos')}
           </button>
         )}
         {Object.keys(aiSugg).length > 1 && (
           <button className="btn btn-primary btn-sm" onClick={async () => { for (const id of Object.keys(aiSugg)) await acceptSuggestion(Number(id)) }}>
-            Aceitar todas ({Object.keys(aiSugg).length})
+            {tr('inbox.aceitarTodas', { count: Object.keys(aiSugg).length })}
           </button>
         )}
       </div>
@@ -114,14 +115,14 @@ Formato: {"items": [{"id": 1, "projectId": 2}]}`,
       <div className="quick-add-row">
         <input
           type="text"
-          placeholder="O que está na sua cabeça? ([projeto] ou #projeto vincula)"
+          placeholder={tr('inbox.oQueEstaNaSua')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           autoFocus
         />
         <button className="btn btn-primary" onClick={handleAdd}>
-          + Capturar
+          {tr('inbox.capturar2')}
         </button>
       </div>
 
@@ -130,40 +131,40 @@ Formato: {"items": [{"id": 1, "projectId": 2}]}`,
       <OcrCapture onCreated={refresh} />
 
       <div className="list-stack" style={{ marginTop: 12 }}>
-        {items.length === 0 && <div className="empty-hint">Inbox vazia ✨</div>}
+        {items.length === 0 && <div className="empty-hint">{tr('inbox.inboxVazia')}</div>}
         {items.map((t) => (
           <div key={t.id} className="list-row">
             <span className="list-row-title">
-              {t.aiGenerated === 1 && <span className="project-chip" title="Gerado por IA" style={{ marginRight: 6 }}>🤖 IA</span>}
+              {t.aiGenerated === 1 && <span className="project-chip" title={tr('inbox.geradoPorIa')} style={{ marginRight: 6 }}>{tr('inbox.ia2')}</span>}
               {projectOf(t.projectId) && (
                 <span className="project-chip" style={{ marginRight: 6, borderLeft: `3px solid ${projectOf(t.projectId)!.color}` }}>🗂 {projectOf(t.projectId)!.name}</span>
               )}
               {t.title}
               {aiSugg[t.id] && projectOf(aiSugg[t.id]) && (
-                <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => acceptSuggestion(t.id)} title="Aceitar sugestão da IA">
+                <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => acceptSuggestion(t.id)} title={tr('inbox.aceitarSugestaoDaIa')}>
                   ✨ {projectOf(aiSugg[t.id])!.name} ✓
                 </button>
               )}
               {t.notes && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>📝 {t.notes}</span>}
-              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }} title={`Capturado em ${new Date(t.createdAt).toLocaleString('pt-BR')}`}>⏳ {timeAgo(t.createdAt)}</span>
+              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }} title={tr('inbox.capturadoEm', { p0: new Date(t.createdAt).toLocaleString(getLocale()) })}>⏳ {timeAgo(t.createdAt)}</span>
             </span>
             <div className="list-row-actions">
               <button className="btn btn-primary btn-sm" onClick={() => setStatus(t.id, 'todo')}>
-                → TODO
+                {tr('inbox.todo')}
               </button>
               <button
                 className="btn btn-secondary btn-sm"
                 style={{ color: '#10b981', borderColor: '#10b981' }}
-                title="Mover para TODO já concluído"
+                title={tr('inbox.moverParaTodoJaConcluido')}
                 onClick={() => setStatus(t.id, 'done')}
               >
-                ✓ Feito
+                {tr('inbox.feito')}
               </button>
               <button className="btn btn-secondary btn-sm" onClick={() => setProcessing(t)}>
-                Editar…
+                {tr('inbox.editar')}
               </button>
               <button className="btn btn-danger btn-sm" onClick={() => remove(t.id)}>
-                Excluir
+                {tr('inbox.excluir')}
               </button>
             </div>
           </div>

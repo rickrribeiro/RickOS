@@ -1,0 +1,23 @@
+export const goals = {
+  'goals.metas': '🎯 Metas',
+  'goals.concluidas': '{doneCount}/{count} concluídas',
+  'goals.meta': '＋ Meta',
+  'goals.meta2': 'Meta',
+  'goals.exTerminarRoadmapDeK8s': 'ex: terminar roadmap de K8s',
+  'goals.tipo': 'Tipo',
+  'goals.livre': 'Livre',
+  'goals.projeto': 'Projeto',
+  'goals.estudo': 'Estudo',
+  'goals.topicoDeEstudo': 'Tópico de estudo',
+  'goals.vincular': 'Vincular…',
+  'goals.quantidade': 'Quantidade',
+  'goals.quantoPrecisaAtingirNoMes': 'Quanto precisa atingir no mês',
+  'goals.unidade': 'Unidade',
+  'goals.cardsH': 'cards, h…',
+  'goals.unidadeExCardsHItens': 'Unidade (ex: cards, h, itens)',
+  'goals.adicionar': 'Adicionar',
+  'goals.cancelar': 'Cancelar',
+  'goals.nenhumaMetaPara': 'Nenhuma meta para {p0}.',
+  'goals.concluida': 'Concluída',
+  'goals.irPara': 'Ir para {p0}'
+}

@@ -65,5 +65,8 @@ export const shell = {
   'export.saving': 'Guardando…',
   'export.download': 'Descargar en el dispositivo',
   'export.chooseFolder': 'tú eliges la carpeta',
-  'export.failed': 'Error al exportar: {error}'
+  'export.failed': 'Error al exportar: {error}',
+  'time.ago.min': 'hace {n} min',
+  'time.ago.h': 'hace {n} h',
+  'time.ago.d': 'hace {n} d'
 }

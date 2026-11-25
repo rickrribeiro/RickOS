@@ -3,6 +3,7 @@ import type { MemoryInput, MemoryLayer, MemoryType, PersonalMemory, Sensitivity,
 import { LAYER_LABEL, MEMORY_LAYERS, MEMORY_TYPES, SENSITIVITIES, SENSITIVITY_LABEL, STABILITIES, STABILITY_LABEL, TYPE_LABEL, defaultLayer } from '../../../../shared/memory'
 import { useMemoryStore } from '../store/memoryStore'
 import { Modal, errMsg } from './ui'
+import { t as tr } from '../../../i18n'
 
 /** Criação/edição manual. Memória manual nasce confirmada e "declarada por mim". */
 export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMemory; onClose: () => void; onSaved?: (m: PersonalMemory) => void }): React.ReactElement {
@@ -44,23 +45,23 @@ export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMe
   }
 
   return (
-    <Modal title={memory ? 'Editar memória' : 'Nova memória'} onClose={onClose}>
+    <Modal title={memory ? tr('memory.editarMemoria') : tr('memory.novaMemoria2')} onClose={onClose}>
       <p className="mem-muted" style={{ margin: '6px 0 10px' }}>
-        Uma memória = uma ideia. Ex.: “Seoul é minha cidade favorita.”, “Prefiro hospedagens econômicas.”
+        {tr('memory.umaMemoriaUmaIdeiaEx')}
       </p>
       <div className="mem-form">
         <label className="full">
-          Conteúdo *
-          <textarea autoFocus value={f.content} onChange={(e) => set('content', e.target.value)} maxLength={2000} placeholder="Escreva em 1ª pessoa…" />
+          {tr('memory.conteudo2')}
+          <textarea autoFocus value={f.content} onChange={(e) => set('content', e.target.value)} maxLength={2000} placeholder={tr('memory.escrevaEm1Pessoa')} />
         </label>
         <label className="full">
-          Título (opcional)
-          <input value={f.title ?? ''} onChange={(e) => set('title', e.target.value)} maxLength={140} placeholder="Gerado do conteúdo se vazio" />
+          {tr('memory.tituloOpcional')}
+          <input value={f.title ?? ''} onChange={(e) => set('title', e.target.value)} maxLength={140} placeholder={tr('memory.geradoDoConteudoSeVazio')} />
         </label>
         <label>
-          Categoria
+          {tr('memory.categoria')}
           <select value={f.categoryId ?? ''} onChange={(e) => set('categoryId', e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Sem categoria</option>
+            <option value="">{tr('memory.semCategoria')}</option>
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.icon} {c.name}
@@ -69,7 +70,7 @@ export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMe
           </select>
         </label>
         <label>
-          Tipo
+          {tr('memory.tipo')}
           <select
             value={f.type}
             onChange={(e) => {
@@ -85,7 +86,7 @@ export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMe
           </select>
         </label>
         <label>
-          Camada
+          {tr('memory.camada')}
           <select value={f.layer} onChange={(e) => set('layer', e.target.value as MemoryLayer)}>
             {MEMORY_LAYERS.map((l) => (
               <option key={l} value={l}>
@@ -95,7 +96,7 @@ export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMe
           </select>
         </label>
         <label>
-          Estabilidade
+          {tr('memory.estabilidade')}
           <select value={f.stability} onChange={(e) => set('stability', e.target.value as Stability)}>
             {STABILITIES.map((s) => (
               <option key={s} value={s}>
@@ -105,11 +106,11 @@ export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMe
           </select>
         </label>
         <label>
-          Importância ({f.importance})
+          {tr('memory.importancia3')}{f.importance})
           <input type="range" min={1} max={5} value={f.importance} onChange={(e) => set('importance', Number(e.target.value))} />
         </label>
         <label>
-          Sensibilidade
+          {tr('memory.sensibilidade')}
           <select value={f.sensitivity} onChange={(e) => set('sensitivity', e.target.value as Sensitivity)}>
             {SENSITIVITIES.map((s) => (
               <option key={s} value={s}>
@@ -117,39 +118,39 @@ export function MemoryEditor({ memory, onClose, onSaved }: { memory?: PersonalMe
               </option>
             ))}
           </select>
-          {cat && cat.defaultSensitivity !== 'NORMAL' && <span className="mem-muted">A categoria já é {SENSITIVITY_LABEL[cat.defaultSensitivity].toLowerCase()}.</span>}
+          {cat && cat.defaultSensitivity !== 'NORMAL' && <span className="mem-muted">{tr('memory.aCategoriaJaE', { p0: SENSITIVITY_LABEL[cat.defaultSensitivity].toLowerCase() })}</span>}
         </label>
         <label>
-          Aconteceu em (opcional)
+          {tr('memory.aconteceuEmOpcional')}
           <input type="date" value={f.occurredAt?.slice(0, 10) ?? ''} onChange={(e) => set('occurredAt', e.target.value || null)} />
         </label>
         <label>
-          Válida até (opcional)
+          {tr('memory.validaAteOpcional')}
           <input type="date" value={f.validUntil?.slice(0, 10) ?? ''} onChange={(e) => set('validUntil', e.target.value || null)} />
         </label>
         <label>
-          Tags (vírgula)
-          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="ex.: coreia, cidades" />
+          {tr('memory.tagsVirgula')}
+          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder={tr('memory.exCoreiaCidades')} />
         </label>
         <label>
-          Escopo
-          <input value={f.scope ?? ''} onChange={(e) => set('scope', e.target.value)} placeholder="geral, trabalho, viagens…" />
+          {tr('memory.escopo')}
+          <input value={f.scope ?? ''} onChange={(e) => set('scope', e.target.value)} placeholder={tr('memory.geralTrabalhoViagens')} />
         </label>
         <label className="full mem-switch" style={{ flexDirection: 'row' }}>
           <input type="checkbox" checked={!!f.pinned} onChange={(e) => set('pinned', e.target.checked)} />
           <span>
-            📌 Fixar como essencial
-            <small>Memórias fixadas são consideradas “core” — mas só chegam a funcionalidades autorizadas para a categoria delas.</small>
+            {tr('memory.fixarComoEssencial')}
+            <small>{tr('memory.memoriasFixadasSaoConsideradasCore')}</small>
           </span>
         </label>
       </div>
       {err && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</p>}
       <div className="modal-actions">
         <button className="btn btn-secondary" onClick={onClose}>
-          Cancelar
+          {tr('memory.cancelar')}
         </button>
         <button className="btn btn-primary" disabled={busy || !f.content.trim()} onClick={save}>
-          {busy ? 'Salvando…' : 'Salvar'}
+          {busy ? tr('memory.salvando') : tr('memory.salvar')}
         </button>
       </div>
     </Modal>

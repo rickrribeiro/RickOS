@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import type { Overview } from '../api'
 import { useMemoryStore } from '../store/memoryStore'
 import { Empty, MemoryCard, fmtDate, jobLabel, relTime, useMemoryRefresh } from './ui'
+import { t } from '../../../i18n'
 
 export function OverviewTab(): React.ReactElement {
   const { categories, setTab, open, goCategory } = useMemoryStore()
@@ -10,7 +11,7 @@ export function OverviewTab(): React.ReactElement {
   useEffect(load, [load])
   useMemoryRefresh(load)
 
-  if (!o) return <p className="mem-muted">Carregando…</p>
+  if (!o) return <p className="mem-muted">{t('memory.carregando')}</p>
   const c = o.counts
   const fresh = c.active === 0 && c.pending === 0
 
@@ -23,13 +24,13 @@ export function OverviewTab(): React.ReactElement {
     <div>
       {fresh && (
         <div className="mem-banner">
-          <span>🌱 Comece contando algo sobre você, migrando a Base de Conhecimento antiga ou conversando em “Me conheça melhor”.</span>
+          <span>{t('memory.comeceContandoAlgoSobreVoce')}</span>
           <span className="mem-actions">
             <button className="btn btn-secondary btn-sm" onClick={() => setTab('inbox')}>
-              Migrar a Base
+              {t('memory.migrarABase')}
             </button>
             <button className="btn btn-primary btn-sm" onClick={() => setTab('interview')}>
-              💬 Me conheça melhor
+              {t('memory.meConhecaMelhor')}
             </button>
           </span>
         </div>
@@ -38,30 +39,30 @@ export function OverviewTab(): React.ReactElement {
       <div className="mem-grid">
         <button className="mem-stat" onClick={() => setTab('memories')}>
           <div className="v">{c.active}</div>
-          <div className="l">memórias ativas · {c.pinned} fixadas</div>
+          <div className="l">{t('memory.memoriasAtivasFixadas', { pinned: c.pinned })}</div>
         </button>
         <button className={`mem-stat${c.pending ? ' warn' : ''}`} onClick={() => setTab('inbox')}>
           <div className="v">{c.pending}</div>
-          <div className="l">sugestões para revisar{o.suggestions.oldestPendingDays ? ` · mais antiga ${o.suggestions.oldestPendingDays}d` : ''}</div>
+          <div className="l">{t('memory.sugestoesParaRevisar')}{o.suggestions.oldestPendingDays ? t('memory.maisAntigaD', { oldestPendingDays: o.suggestions.oldestPendingDays }) : ''}</div>
         </button>
         <button className={`mem-stat${c.conflicts ? ' warn' : ''}`} onClick={() => setTab('inbox')}>
           <div className="v">{c.conflicts}</div>
-          <div className="l">conflitos pendentes</div>
+          <div className="l">{t('memory.conflitosPendentes')}</div>
         </button>
         <button className={`mem-stat${c.needsReview ? ' warn' : ''}`} onClick={() => setTab('gaps')}>
           <div className="v">{c.needsReview}</div>
-          <div className="l">pedem reconfirmação</div>
+          <div className="l">{t('memory.pedemReconfirmacao')}</div>
         </button>
         <button className="mem-stat" onClick={() => setTab('gaps')}>
           <div className="v">{c.openGaps}</div>
-          <div className="l">lacunas abertas</div>
+          <div className="l">{t('memory.lacunasAbertas')}</div>
         </button>
       </div>
 
       <div className="mem-two">
         <div className="mem-col">
           <div className="mem-panel">
-            <h3>Adicionadas recentemente</h3>
+            <h3>{t('memory.adicionadasRecentemente')}</h3>
             {o.recent.length ? (
               <div className="mem-list">
                 {o.recent.map((m) => (
@@ -69,15 +70,15 @@ export function OverviewTab(): React.ReactElement {
                 ))}
               </div>
             ) : (
-              <Empty icon="🗂" title="Ainda vazio" />
+              <Empty icon="🗂" title={t('memory.aindaVazio')} />
             )}
           </div>
           {o.review.length > 0 && (
             <div className="mem-panel">
               <h3>
-                Precisam de revisão
+                {t('memory.precisamDeRevisao')}
                 <button className="btn btn-secondary btn-sm" onClick={() => setTab('gaps')}>
-                  ver todas
+                  {t('memory.verTodas')}
                 </button>
               </h3>
               {o.review.map((r) => (
@@ -92,14 +93,14 @@ export function OverviewTab(): React.ReactElement {
           )}
           {o.used.length > 0 && (
             <div className="mem-panel">
-              <h3>Mais usadas por IAs autorizadas</h3>
+              <h3>{t('memory.maisUsadasPorIasAutorizadas')}</h3>
               {o.used.map((m) => (
                 <div key={m.id} className="mem-row" style={{ fontSize: 13, padding: '3px 0' }}>
                   <button className="btn btn-secondary btn-sm" onClick={() => open(m.id)}>
                     {m.title}
                   </button>
                   <span className="mem-muted">
-                    {m.useCount}× · {relTime(m.lastUsedAt)}
+                    {t('memory.text', { useCount: m.useCount, p1: relTime(m.lastUsedAt) })}
                   </span>
                 </div>
               ))}
@@ -109,8 +110,8 @@ export function OverviewTab(): React.ReactElement {
 
         <div className="mem-col">
           <div className="mem-panel">
-            <h3>Por categoria</h3>
-            {topCats.length === 0 && <p className="mem-muted">Sem memórias ainda.</p>}
+            <h3>{t('memory.porCategoria')}</h3>
+            {topCats.length === 0 && <p className="mem-muted">{t('memory.semMemoriasAinda')}</p>}
             {topCats.map((x) => (
               <button key={x.id} className="mem-cat" style={{ width: '100%', flexDirection: 'column', alignItems: 'stretch', gap: 3 }} onClick={() => goCategory(x.id)}>
                 <span className="mem-row" style={{ justifyContent: 'space-between' }}>
@@ -127,7 +128,7 @@ export function OverviewTab(): React.ReactElement {
           </div>
           {o.gaps.length > 0 && (
             <div className="mem-panel">
-              <h3>Lacunas prioritárias</h3>
+              <h3>{t('memory.lacunasPrioritarias')}</h3>
               {o.gaps.map((g) => (
                 <div key={g.id} style={{ fontSize: 13, padding: '3px 0' }}>
                   <strong>{g.topic}</strong>
@@ -138,25 +139,25 @@ export function OverviewTab(): React.ReactElement {
           )}
           {o.growth.length > 1 && (
             <div className="mem-panel">
-              <h3>Memórias registradas por mês</h3>
-              <div className="mem-spark" aria-label="Memórias registradas por mês">
+              <h3>{t('memory.memoriasRegistradasPorMes')}</h3>
+              <div className="mem-spark" aria-label={t('memory.memoriasRegistradasPorMes')}>
                 {o.growth.map((g) => (
                   <span key={g.month} title={`${g.month}: ${g.n}`} style={{ height: `${(g.n / maxGrowth) * 100}%` }} />
                 ))}
               </div>
               <p className="mem-muted" style={{ marginTop: 4 }}>
-                Data de registro, não de quando algo mudou em você.
+                {t('memory.dataDeRegistroNaoDe')}
               </p>
             </div>
           )}
           <div className="mem-panel">
-            <h3>Memory Agent</h3>
+            <h3>{t('memory.memoryAgent')}</h3>
             <p className="mem-sub">
-              {o.agentEnabled ? '🟢 Ligado' : '⚪ Desligado'} · consolidação: {o.lastConsolidation ? fmtDate(o.lastConsolidation) : 'nunca'} · IA hoje: {o.llm.n}/{o.llm.limit} chamadas
-              {totalCost > 0 ? ` · 30d: US$ ${totalCost.toFixed(2)}` : ''}
+              {o.agentEnabled ? t('memory.ligado') : t('memory.desligado')} {t('memory.consolidacao')} {o.lastConsolidation ? fmtDate(o.lastConsolidation) : t('memory.nunca')} {t('memory.iaHojeChamadas', { n: o.llm.n, limit: o.llm.limit })}
+              {totalCost > 0 ? t('memory.30dUs', { p0: totalCost.toFixed(2) }) : ''}
             </p>
-            {c.pendingEvents > 0 && <p className="mem-sub">{c.pendingEvents} evento(s) aguardando processamento.</p>}
-            {c.failedEvents > 0 && <p className="mem-sub" style={{ color: 'var(--danger)' }}>{c.failedEvents} evento(s) falharam.</p>}
+            {c.pendingEvents > 0 && <p className="mem-sub">{c.pendingEvents} {t('memory.eventoSAguardandoProcessamento')}</p>}
+            {c.failedEvents > 0 && <p className="mem-sub" style={{ color: 'var(--danger)' }}>{c.failedEvents} {t('memory.eventoSFalharam')}</p>}
             {o.jobs.slice(0, 5).map((j) => (
               <div key={j.id} className="mem-muted">
                 {j.status === 'done' ? '✅' : j.status === 'failed' ? '⚠️' : '⏳'} {jobLabel(j.kind)} · {relTime(j.finishedAt ?? j.createdAt)}

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react'
+import { t } from '../../../i18n'
 
 interface Extracted {
   title: string
@@ -53,7 +54,7 @@ export function OcrCapture({ onCreated }: { onCreated: () => void }): React.Reac
 
   async function handleFile(file: File): Promise<void> {
     if (!file.type.startsWith('image/')) {
-      setError('Solte uma imagem (print, foto, boleto…).')
+      setError(t('inbox.solteUmaImagemPrintFoto'))
       return
     }
     setError('')
@@ -65,12 +66,12 @@ export function OcrCapture({ onCreated }: { onCreated: () => void }): React.Reac
       const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
       const res = await window.api.inbox.ocr(dataUrl, ext)
       if (!res.ok) {
-        setError(res.error || 'Falha ao processar a imagem.')
+        setError(res.error || t('inbox.falhaAoProcessarAImagem'))
         return
       }
       const parsed = parseExtracted(res.output || '')
       if (!parsed || !parsed.title) {
-        setError('Não consegui extrair informações. Tente uma imagem mais nítida.')
+        setError(t('inbox.naoConseguiExtrairInformacoesTente'))
         return
       }
       setDraft(parsed)
@@ -120,9 +121,9 @@ export function OcrCapture({ onCreated }: { onCreated: () => void }): React.Reac
         onPaste={onPaste}
         onClick={() => fileInput.current?.click()}
         tabIndex={0}
-        title="Arraste, cole (Ctrl+V) ou clique para escolher uma imagem"
+        title={t('inbox.arrasteColeCtrlVOu')}
       >
-        {busy ? '🔍 Lendo a imagem com IA…' : '🖼️ Arraste um print / boleto / comprovante / foto — ou cole (Ctrl+V)'}
+        {busy ? t('inbox.lendoAImagemComIa') : t('inbox.arrasteUmPrintBoletoComprovante')}
         <input
           ref={fileInput}
           type="file"
@@ -136,39 +137,39 @@ export function OcrCapture({ onCreated }: { onCreated: () => void }): React.Reac
       {draft && (
         <div className="modal-overlay" onClick={() => setDraft(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 420, maxWidth: 560 }}>
-            <h2>🖼️ Revisar extração</h2>
+            <h2>{t('inbox.revisarExtracao')}</h2>
             <div style={{ display: 'flex', gap: 12 }}>
               {preview && (
-                <img src={preview} alt="prévia" style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
+                <img src={preview} alt={t('inbox.previa')} style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
               )}
               <div style={{ flex: 1 }}>
                 <div className="editor-field">
-                  <label>Título</label>
+                  <label>{t('inbox.titulo')}</label>
                   <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} autoFocus />
                 </div>
                 <div className="editor-row">
                   <div className="editor-field">
-                    <label>Valor</label>
+                    <label>{t('inbox.valor')}</label>
                     <input type="number" value={draft.amount ?? ''} onChange={(e) => setDraft({ ...draft, amount: e.target.value ? Number(e.target.value) : null })} />
                   </div>
                   <div className="editor-field">
-                    <label>Data</label>
+                    <label>{t('inbox.data')}</label>
                     <input type="date" value={draft.date ?? ''} onChange={(e) => setDraft({ ...draft, date: e.target.value || null })} />
                   </div>
                 </div>
               </div>
             </div>
             <div className="editor-field">
-              <label>Link</label>
+              <label>{t('inbox.link')}</label>
               <input value={draft.link ?? ''} onChange={(e) => setDraft({ ...draft, link: e.target.value || null })} />
             </div>
             <div className="editor-field">
-              <label>Nota</label>
+              <label>{t('inbox.nota')}</label>
               <textarea rows={3} value={draft.note ?? ''} onChange={(e) => setDraft({ ...draft, note: e.target.value || null })} />
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => setDraft(null)}>Cancelar</button>
-              <button className="btn btn-primary btn-sm" onClick={createItem} disabled={!draft.title.trim()}>Criar no Inbox</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setDraft(null)}>{t('inbox.cancelar')}</button>
+              <button className="btn btn-primary btn-sm" onClick={createItem} disabled={!draft.title.trim()}>{t('inbox.criarNoInbox')}</button>
             </div>
           </div>
         </div>

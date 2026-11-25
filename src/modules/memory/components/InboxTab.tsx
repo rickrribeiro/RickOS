@@ -4,16 +4,17 @@ import { MEMORY_TYPES, OP_LABEL, SENSITIVITY_LABEL, TYPE_LABEL, VERDICT_LABEL } 
 import type { LegacyStatus } from '../api'
 import { useMemoryStore } from '../store/memoryStore'
 import { Empty, JobBanner, Modal, SensChip, errMsg, fmtDate, relTime, useJob, useMemoryRefresh } from './ui'
+import { t as tr } from '../../../i18n'
 
 const SOURCE_LABEL: Record<string, string> = {
-  migration: 'Migração da Base',
-  text: 'Texto livre',
-  import: 'Importação',
-  interview: 'Me conheça melhor',
-  analysis: 'Análise das memórias',
-  consolidation: 'Consolidação',
-  producer: 'Outro módulo (autorizado)',
-  manual: 'Manual'
+  migration: tr('memory.migracaoDaBase'),
+  text: tr('memory.textoLivre'),
+  import: tr('memory.importacao'),
+  interview: tr('memory.meConhecaMelhor2'),
+  analysis: tr('memory.analiseDasMemorias'),
+  consolidation: tr('memory.consolidacao2'),
+  producer: tr('memory.outroModuloAutorizado'),
+  manual: tr('memory.manual2')
 }
 const REJECT_VERDICTS: FeedbackVerdict[] = ['rejected', 'irrelevant', 'incorrect', 'duplicate', 'too_personal', 'other']
 
@@ -49,7 +50,7 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
   const safe = items.filter((s) => s.op === 'CREATE' && s.sensitivity === 'NORMAL' && s.reliability !== 'inferred')
   const catName = (slug: string | undefined): string => {
     const c = categories.find((x) => x.slug === slug)
-    return c ? `${c.icon} ${c.name}` : 'Sem categoria'
+    return c ? `${c.icon} ${c.name}` : tr('memory.semCategoria')
   }
 
   return (
@@ -57,11 +58,11 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
       {legacy?.hasLegacy && legacy.imports.length === 0 && view === 'open' && (
         <div className="mem-banner">
           <span>
-            📚 Sua <strong>Base de Conhecimento</strong> antiga tem {legacy.bullets} item(ns). Migre para memórias atômicas — o documento original é preservado.
+            {tr('memory.sua')} <strong>{tr('memory.baseDeConhecimento')}</strong> {tr('memory.antigaTemItemNsMigre', { bullets: legacy.bullets })}
           </span>
           <span className="mem-actions">
-            <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.migrate({ ai: false }), 'Sugestões da migração criadas.')}>
-              Uma por linha (sem IA)
+            <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.migrate({ ai: false }), tr('memory.sugestoesDaMigracaoCriadas'))}>
+              {tr('memory.umaPorLinhaSemIa')}
             </button>
             <button
               className="btn btn-primary btn-sm"
@@ -72,7 +73,7 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
                 })
               }
             >
-              ✨ Migrar com IA
+              {tr('memory.migrarComIa')}
             </button>
           </span>
         </div>
@@ -80,15 +81,15 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
       <JobBanner job={job} onClose={clear} />
 
       <div className="mem-toolbar">
-        <div className="mem-seg" role="group" aria-label="Situação">
+        <div className="mem-seg" role="group" aria-label={tr('memory.situacao')}>
           {(['open', 'snoozed', 'approved', 'rejected'] as const).map((v) => (
             <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
-              {{ open: 'Para revisar', snoozed: 'Adiadas', approved: 'Aprovadas', rejected: 'Rejeitadas' }[v]}
+              {tr(`memory.inbox.view.${v}`)}
             </button>
           ))}
         </div>
-        <select value={op} onChange={(e) => setOp(e.target.value as SuggestionOp | '')} aria-label="Operação">
-          <option value="">Todas as operações</option>
+        <select value={op} onChange={(e) => setOp(e.target.value as SuggestionOp | '')} aria-label={tr('memory.operacao')}>
+          <option value="">{tr('memory.todasAsOperacoes')}</option>
           {(Object.keys(OP_LABEL) as SuggestionOp[]).map((o) => (
             <option key={o} value={o}>
               {OP_LABEL[o]}
@@ -96,24 +97,24 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
           ))}
         </select>
         <span style={{ flex: 1 }} />
-        <button className="btn btn-secondary btn-sm" onClick={() => act(async () => track(await window.api.memory.analyze()))} title="Revisa as memórias existentes e sugere consolidações e conflitos">
-          🔎 Analisar minhas memórias
+        <button className="btn btn-secondary btn-sm" onClick={() => act(async () => track(await window.api.memory.analyze()))} title={tr('memory.revisaAsMemoriasExistentesE')}>
+          {tr('memory.analisarMinhasMemorias')}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={onPaste}>
-          📝 Colar texto
+          {tr('memory.colarTexto')}
         </button>
         {view === 'open' && safe.length > 1 && (
           <button
             className="btn btn-primary btn-sm"
-            title="Só novas memórias declaradas por você e não sensíveis"
+            title={tr('memory.soNovasMemoriasDeclaradasPor')}
             onClick={() =>
               act(async () => {
                 const r = await window.api.memory.approveMany(safe.map((s) => s.id))
-                setMsg(`✅ ${r.approved.length} aprovada(s)${r.skipped.length ? ` · ${r.skipped.length} precisam de revisão individual` : ''}.`)
+                setMsg(tr('memory.aprovadaS', { count: r.approved.length, p1: r.skipped.length ? ` · ${r.skipped.length} precisam de revisão individual` : '' }))
               })
             }
           >
-            ✓ Aprovar {safe.length} seguras
+            {tr('memory.aprovarSeguras', { count: safe.length })}
           </button>
         )}
       </div>
@@ -121,11 +122,11 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
 
       {items.length === 0 ? (
         view === 'open' ? (
-          <Empty icon="📭" title="Inbox vazio">
-            Nada para revisar. Sugestões chegam quando você cola um texto, conversa em “Me conheça melhor”, migra a Base antiga ou pede uma análise.
+          <Empty icon="📭" title={tr('memory.inboxVazio')}>
+            {tr('memory.nadaParaRevisarSugestoesChegam')}
           </Empty>
         ) : (
-          <Empty icon="—" title="Nada aqui" />
+          <Empty icon="—" title={tr('memory.nadaAqui')} />
         )
       ) : (
         <div className="mem-list">
@@ -142,7 +143,7 @@ export function InboxTab({ onPaste }: { onPaste: () => void }): React.ReactEleme
             act(async () => {
               await window.api.memory.approve(editing.id, { edited })
               setEditing(null)
-            }, '✅ Aprovada com edição.')
+            }, tr('memory.aprovadaComEdicao'))
           }
         />
       )}
@@ -180,10 +181,10 @@ function SuggestionCard({
         <span className="mem-chip accent">{OP_LABEL[s.op]}</span>
         {p && <span className="mem-chip">{catName(p.category)}</span>}
         {p && <span className={`mem-chip${p.type === 'INFERENCE' || p.type === 'LEARNING' ? ' warn' : ''}`}>{TYPE_LABEL[p.type]}</span>}
-        {inferred ? <span className="mem-chip warn">Inferência da IA</span> : s.sourceKind !== 'import' && <span className="mem-chip ok">Você disse</span>}
+        {inferred ? <span className="mem-chip warn">{tr('memory.inferenciaDaIa')}</span> : s.sourceKind !== 'import' && <span className="mem-chip ok">{tr('memory.voceDisse')}</span>}
         <SensChip s={s.sensitivity} />
-        {s.extractionConfidence != null && <span className="mem-muted">confiança da extração {Math.round(s.extractionConfidence * 100)}%</span>}
-        {s.status === 'needs_info' && <span className="mem-chip warn">pediu mais informações</span>}
+        {s.extractionConfidence != null && <span className="mem-muted">{tr('memory.confiancaDaExtracao2', { p0: Math.round(s.extractionConfidence * 100) })}</span>}
+        {s.status === 'needs_info' && <span className="mem-chip warn">{tr('memory.pediuMaisInformacoes')}</span>}
         <span className="mem-muted" style={{ marginLeft: 'auto' }}>
           {SOURCE_LABEL[s.sourceKind] ?? s.sourceKind} · {relTime(s.createdAt)}
         </span>
@@ -194,35 +195,35 @@ function SuggestionCard({
       {s.op === 'UPDATE' && p && targets[0] && (
         <div className="mem-diff">
           <div className="before">
-            <span className="lbl">Atual</span>
+            <span className="lbl">{tr('memory.atual')}</span>
             {targets[0].content}
           </div>
           <div className="after">
-            <span className="lbl">Proposto</span>
+            <span className="lbl">{tr('memory.proposto')}</span>
             {p.content}
           </div>
         </div>
       )}
       {(s.op === 'MERGE' || s.op === 'ARCHIVE' || s.op === 'RESOLVE') && (
         <div style={{ margin: '6px 0' }}>
-          <div className="mem-muted">{s.op === 'MERGE' ? 'Consolida (as originais ficam como “substituídas”):' : s.op === 'ARCHIVE' ? 'Arquivar:' : 'Memórias em conflito:'}</div>
+          <div className="mem-muted">{s.op === 'MERGE' ? tr('memory.consolidaAsOriginaisFicamComo') : s.op === 'ARCHIVE' ? tr('memory.arquivar3') : tr('memory.memoriasEmConflito')}</div>
           {targets.map((t) => (
             <div key={t.id} className="mem-row" style={{ fontSize: 13, padding: '2px 0' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => open(t.id)}>
                 #{t.id}
               </button>
               <span>{t.content}</span>
-              {snapshotOf(t.id) && snapshotOf(t.id) !== t.content && <span className="mem-chip warn">mudou desde a sugestão</span>}
+              {snapshotOf(t.id) && snapshotOf(t.id) !== t.content && <span className="mem-chip warn">{tr('memory.mudouDesdeASugestao')}</span>}
             </div>
           ))}
-          {targets.length < s.targetIds.length && <div className="mem-muted">Alguma memória-alvo não existe mais.</div>}
+          {targets.length < s.targetIds.length && <div className="mem-muted">{tr('memory.algumaMemoriaAlvoNaoExiste')}</div>}
         </div>
       )}
       {s.rationale && <div className="mem-why">💡 {s.rationale}</div>}
       {s.benefit && <div className="mem-why">🎯 {s.benefit}</div>}
       {s.evidence.length > 0 && (
         <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setShowEv((v) => !v)}>
-          {showEv ? 'Esconder' : 'Ver'} evidência ({s.evidence.length})
+          {showEv ? tr('memory.esconder') : tr('memory.ver')} {tr('memory.evidencia', { count: s.evidence.length })}
         </button>
       )}
       {showEv &&
@@ -236,7 +237,7 @@ function SuggestionCard({
         <div className="mem-sug-actions">
           {s.op === 'ASK' ? (
             <>
-              <input style={{ flex: 1, minWidth: 180 }} placeholder="Sua resposta…" value={answer} onChange={(e) => setAnswer(e.target.value)} aria-label="Resposta" />
+              <input style={{ flex: 1, minWidth: 180 }} placeholder={tr('memory.suaResposta')} value={answer} onChange={(e) => setAnswer(e.target.value)} aria-label={tr('memory.resposta')} />
               <button
                 className="btn btn-primary btn-sm"
                 disabled={!answer.trim()}
@@ -244,64 +245,64 @@ function SuggestionCard({
                   act(async () => {
                     await window.api.memory.extractText(`Pergunta: ${s.question}\nResposta: ${answer}`)
                     await window.api.memory.reject(s.id, 'other', 'respondida')
-                  }, 'Resposta enviada — as sugestões aparecem aqui em instantes.')
+                  }, tr('memory.respostaEnviadaAsSugestoesAparecem'))
                 }
               >
-                Responder
+                {tr('memory.responder')}
               </button>
             </>
           ) : s.op === 'RESOLVE' ? (
             <>
               {targets.map((t) => (
-                <button key={t.id} className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.approve(s.id, { resolution: { mode: 'keep', keepId: t.id } }), 'Conflito resolvido.')}>
-                  Manter #{t.id}
+                <button key={t.id} className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.approve(s.id, { resolution: { mode: 'keep', keepId: t.id } }), tr('memory.conflitoResolvido'))}>
+                  {tr('memory.manter', { id: t.id })}
                 </button>
               ))}
               {p && (
-                <button className="btn btn-primary btn-sm" onClick={() => act(() => window.api.memory.approve(s.id, { resolution: { mode: 'proposed' } }), 'Resolução aplicada.')}>
-                  Usar a resolução proposta
+                <button className="btn btn-primary btn-sm" onClick={() => act(() => window.api.memory.approve(s.id, { resolution: { mode: 'proposed' } }), tr('memory.resolucaoAplicada'))}>
+                  {tr('memory.usarAResolucaoProposta')}
                 </button>
               )}
-              <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.reject(s.id, 'other', 'as duas valem em contextos diferentes'), 'Mantidas as duas.')}>
-                As duas valem (contextos diferentes)
+              <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.reject(s.id, 'other', 'as duas valem em contextos diferentes'), tr('memory.mantidasAsDuas'))}>
+                {tr('memory.asDuasValemContextosDiferentes')}
               </button>
             </>
           ) : (
             <>
-              <button className="btn btn-primary btn-sm" onClick={() => act(() => window.api.memory.approve(s.id), '✅ Aprovada.')}>
-                ✓ Aprovar
+              <button className="btn btn-primary btn-sm" onClick={() => act(() => window.api.memory.approve(s.id), tr('memory.aprovada2'))}>
+                {tr('memory.aprovar')}
               </button>
               {p && (
                 <button className="btn btn-secondary btn-sm" onClick={onEdit}>
-                  ✏️ Editar e aprovar
+                  {tr('memory.editarEAprovar')}
                 </button>
               )}
             </>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.snooze(s.id, 7), 'Adiada por 7 dias.')}>
-            ⏰ Adiar
+          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.snooze(s.id, 7), tr('memory.adiadaPor7Dias'))}>
+            {tr('memory.adiar')}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setAsking((v) => !v)}>
-            ❔ Mais informações
+            {tr('memory.maisInformacoes')}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setRejecting((v) => !v)}>
-            ✕ Rejeitar
+            {tr('memory.rejeitar')}
           </button>
         </div>
       )}
       {asking && isOpen && (
         <div className="mem-sug-actions">
-          <input style={{ flex: 1, minWidth: 180 }} placeholder="O que falta? (fica registrado)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.needsInfo(s.id, note), 'Marcada.').then(() => setAsking(false))}>
-            Marcar
+          <input style={{ flex: 1, minWidth: 180 }} placeholder={tr('memory.oQueFaltaFicaRegistrado')} value={note} onChange={(e) => setNote(e.target.value)} />
+          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.needsInfo(s.id, note), tr('memory.marcada')).then(() => setAsking(false))}>
+            {tr('memory.marcar')}
           </button>
         </div>
       )}
       {rejecting && isOpen && (
         <div className="mem-sug-actions">
-          <span className="mem-muted">Por quê? (ajuda a IA a não repetir)</span>
+          <span className="mem-muted">{tr('memory.porQueAjudaAIa')}</span>
           {REJECT_VERDICTS.map((v) => (
-            <button key={v} className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.reject(s.id, v), 'Rejeitada.')}>
+            <button key={v} className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.reject(s.id, v), tr('memory.rejeitada'))}>
               {VERDICT_LABEL[v]}
             </button>
           ))}
@@ -309,14 +310,14 @@ function SuggestionCard({
       )}
       {s.status === 'approved' && (
         <div className="mem-sug-actions">
-          <span className="mem-muted">Aprovada {fmtDate(s.resolvedAt, true)}</span>
+          <span className="mem-muted">{tr('memory.aprovada')} {fmtDate(s.resolvedAt, true)}</span>
           {s.resultMemoryIds.map((id) => (
             <button key={id} className="btn btn-secondary btn-sm" onClick={() => open(id)}>
-              ver #{id}
+              {tr('memory.ver2', { id })}
             </button>
           ))}
-          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.undo(s.id), '↩︎ Desfeita.')}>
-            ↩︎ Desfazer
+          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.undo(s.id), tr('memory.desfeita'))}>
+            {tr('memory.desfazer')}
           </button>
         </div>
       )}
@@ -328,20 +329,20 @@ function EditBeforeApprove({ s, onClose, onApprove }: { s: MemorySuggestion; onC
   const cats = useMemoryStore((st) => st.categories).filter((c) => !c.archivedAt)
   const [p, setP] = useState<ProposedMemory>(s.proposed!)
   return (
-    <Modal title="Editar antes de aprovar" onClose={onClose}>
+    <Modal title={tr('memory.editarAntesDeAprovar')} onClose={onClose}>
       <div className="mem-form" style={{ marginTop: 10 }}>
         <label className="full">
-          Conteúdo
+          {tr('memory.conteudo')}
           <textarea value={p.content} onChange={(e) => setP({ ...p, content: e.target.value })} />
         </label>
         <label className="full">
-          Título
+          {tr('memory.titulo')}
           <input value={p.title} onChange={(e) => setP({ ...p, title: e.target.value })} />
         </label>
         <label>
-          Categoria
+          {tr('memory.categoria')}
           <select value={p.category} onChange={(e) => setP({ ...p, category: e.target.value })}>
-            <option value="">Sem categoria</option>
+            <option value="">{tr('memory.semCategoria')}</option>
             {cats.map((c) => (
               <option key={c.id} value={c.slug}>
                 {c.icon} {c.name}
@@ -350,7 +351,7 @@ function EditBeforeApprove({ s, onClose, onApprove }: { s: MemorySuggestion; onC
           </select>
         </label>
         <label>
-          Tipo
+          {tr('memory.tipo')}
           <select value={p.type} onChange={(e) => setP({ ...p, type: e.target.value as MemoryType })}>
             {MEMORY_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -360,11 +361,11 @@ function EditBeforeApprove({ s, onClose, onApprove }: { s: MemorySuggestion; onC
           </select>
         </label>
         <label>
-          Importância ({p.importance ?? 3})
+          {tr('memory.importancia2', { p0: p.importance ?? 3 })}
           <input type="range" min={1} max={5} value={p.importance ?? 3} onChange={(e) => setP({ ...p, importance: Number(e.target.value) })} />
         </label>
         <label>
-          Sensibilidade
+          {tr('memory.sensibilidade')}
           <select value={p.sensitivity ?? 'NORMAL'} onChange={(e) => setP({ ...p, sensitivity: e.target.value as ProposedMemory['sensitivity'] })}>
             {(['NORMAL', 'PRIVATE', 'RESTRICTED'] as const).map((x) => (
               <option key={x} value={x}>
@@ -376,10 +377,10 @@ function EditBeforeApprove({ s, onClose, onApprove }: { s: MemorySuggestion; onC
       </div>
       <div className="modal-actions">
         <button className="btn btn-secondary" onClick={onClose}>
-          Cancelar
+          {tr('memory.cancelar')}
         </button>
         <button className="btn btn-primary" disabled={!p.content.trim()} onClick={() => onApprove(p)}>
-          ✓ Aprovar
+          {tr('memory.aprovar')}
         </button>
       </div>
     </Modal>

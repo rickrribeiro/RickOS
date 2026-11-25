@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Goal, Project, StudyTopic } from '../../../types'
 import { useUIStore } from '../../../store/uiStore'
+import { t as tr, getLocale } from '../../../i18n'
 
 function currentMonth(): string {
   const d = new Date()
@@ -13,7 +14,7 @@ function shiftMonth(month: string, delta: number): string {
 }
 function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number)
-  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' })
 }
 
 interface Draft {
@@ -75,9 +76,9 @@ export function GoalsPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🎯 Metas</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{tr('goals.metas')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {doneCount}/{goals.length} concluídas
+            {tr('goals.concluidas', { doneCount, count: goals.length })}
           </p>
         </div>
         <div className="date-nav">
@@ -89,27 +90,27 @@ export function GoalsPage(): React.ReactElement {
 
       <div style={{ marginBottom: 12 }}>
         {!adding ? (
-          <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>＋ Meta</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>{tr('goals.meta')}</button>
         ) : (
           <div className="chart-section">
             <div className="goal-form">
               <label className="goal-field" style={{ flex: 1, minWidth: 200 }}>
-                <span>Meta</span>
-                <input placeholder="ex: terminar roadmap de K8s" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+                <span>{tr('goals.meta2')}</span>
+                <input placeholder={tr('goals.exTerminarRoadmapDeK8s')} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
               </label>
               <label className="goal-field">
-                <span>Tipo</span>
+                <span>{tr('goals.tipo')}</span>
                 <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'], refId: null })}>
-                  <option value="free">Livre</option>
-                  <option value="project">Projeto</option>
-                  <option value="study">Estudo</option>
+                  <option value="free">{tr('goals.livre')}</option>
+                  <option value="project">{tr('goals.projeto')}</option>
+                  <option value="study">{tr('goals.estudo')}</option>
                 </select>
               </label>
               {draft.kind !== 'free' && (
                 <label className="goal-field">
-                  <span>{draft.kind === 'project' ? 'Projeto' : 'Tópico de estudo'}</span>
+                  <span>{draft.kind === 'project' ? tr('goals.projeto') : tr('goals.topicoDeEstudo')}</span>
                   <select value={draft.refId ?? ''} onChange={(e) => setDraft({ ...draft, refId: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">Vincular…</option>
+                    <option value="">{tr('goals.vincular')}</option>
                     {(draft.kind === 'project' ? projects.map((p) => ({ id: p.id, name: p.name })) : topics.map((t) => ({ id: t.id, name: t.name }))).map((o) => (
                       <option key={o.id} value={o.id}>{o.name}</option>
                     ))}
@@ -117,16 +118,16 @@ export function GoalsPage(): React.ReactElement {
                 </label>
               )}
               <label className="goal-field" style={{ width: 90 }}>
-                <span>Quantidade</span>
-                <input type="number" min={1} value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value })} title="Quanto precisa atingir no mês" />
+                <span>{tr('goals.quantidade')}</span>
+                <input type="number" min={1} value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value })} title={tr('goals.quantoPrecisaAtingirNoMes')} />
               </label>
               <label className="goal-field" style={{ width: 90 }}>
-                <span>Unidade</span>
-                <input placeholder="cards, h…" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} title="Unidade (ex: cards, h, itens)" />
+                <span>{tr('goals.unidade')}</span>
+                <input placeholder={tr('goals.cardsH')} value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} title={tr('goals.unidadeExCardsHItens')} />
               </label>
               <div className="goal-form-actions">
-                <button className="btn btn-primary btn-sm" onClick={addGoal}>Adicionar</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setDraft(EMPTY) }}>Cancelar</button>
+                <button className="btn btn-primary btn-sm" onClick={addGoal}>{tr('goals.adicionar')}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setDraft(EMPTY) }}>{tr('goals.cancelar')}</button>
               </div>
             </div>
           </div>
@@ -134,13 +135,13 @@ export function GoalsPage(): React.ReactElement {
       </div>
 
       <div className="list-stack">
-        {goals.length === 0 && <div className="empty-hint">Nenhuma meta para {monthLabel(month)}.</div>}
+        {goals.length === 0 && <div className="empty-hint">{tr('goals.nenhumaMetaPara', { p0: monthLabel(month) })}</div>}
         {goals.map((g) => {
           const pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0
           const linked = refName(g)
           return (
             <div key={g.id} className="list-row" style={{ alignItems: 'center' }}>
-              <input type="checkbox" checked={g.done === 1} onChange={(e) => patch(g, { done: e.target.checked ? 1 : 0 })} title="Concluída" />
+              <input type="checkbox" checked={g.done === 1} onChange={(e) => patch(g, { done: e.target.checked ? 1 : 0 })} title={tr('goals.concluida')} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span className="list-row-title" style={{ textDecoration: g.done ? 'line-through' : 'none', color: g.done ? 'var(--text-muted)' : 'var(--text-primary)' }}>{g.title}</span>
@@ -149,7 +150,7 @@ export function GoalsPage(): React.ReactElement {
                       className="project-chip"
                       style={{ cursor: 'pointer' }}
                       onClick={() => setPage(g.kind === 'project' ? 'issues' : 'estudos')}
-                      title={`Ir para ${g.kind === 'project' ? 'Projetos' : 'Estudos'}`}
+                      title={tr('goals.irPara', { p0: g.kind === 'project' ? 'Projetos' : 'Estudos' })}
                     >
                       {g.kind === 'project' ? '📁' : '🎓'} {linked ?? '—'}
                     </button>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useTodoStore } from '../../todo/store/todoStore'
 import { parseCapture } from '../parse'
+import { t } from '../../../i18n'
 
 /**
  * Global quick-capture modal. Opens on the main-process global shortcut
@@ -57,11 +58,11 @@ export function QuickCapture(): React.ReactElement | null {
   return (
     <div className="modal-overlay" onClick={() => setOpen(false)}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>📥 Quick Capture</h2>
+        <h2>{t('inbox.quickCapture')}</h2>
         <input
           ref={inputRef}
           type="text"
-          placeholder="Título… (// nota rápida · #projeto ou [projeto] vincula)"
+          placeholder={t('inbox.tituloNotaRapidaProjetoOu')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
@@ -72,10 +73,10 @@ export function QuickCapture(): React.ReactElement | null {
         )}
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={() => setOpen(false)}>
-            Cancelar (Esc)
+            {t('inbox.cancelarEsc')}
           </button>
           <button className="btn btn-primary btn-sm" onClick={handleSubmit}>
-            Capturar
+            {t('inbox.capturar')}
           </button>
         </div>
       </div>

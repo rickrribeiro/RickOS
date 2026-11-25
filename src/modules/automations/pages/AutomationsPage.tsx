@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Rule, ScheduledJob } from '../../../types'
+import { t, getLocale } from '../../../i18n'
 
 interface ParamField {
   key: string
@@ -18,36 +19,36 @@ interface RuleDef {
 const RULE_DEFS: RuleDef[] = [
   {
     type: 'idle_productive',
-    label: '⏳ Sem foco produtivo',
-    describe: (p) => `Se ficar ${p.minutes ?? 45}min sem tarefa produtiva entre ${p.startHour ?? 9}h e ${p.endHour ?? 18}h → notifica.`,
+    label: t('automations.semFocoProdutivo'),
+    describe: (p) => t('automations.seFicarMinSemTarefa', { p0: p.minutes ?? 45, p1: p.startHour ?? 9, p2: p.endHour ?? 18 }),
     defaults: { minutes: 45, startHour: 9, endHour: 18 },
     fields: [
-      { key: 'minutes', label: 'Minutos', min: 5 },
-      { key: 'startHour', label: 'Início (h)', min: 0, max: 23 },
-      { key: 'endHour', label: 'Fim (h)', min: 1, max: 24 }
+      { key: 'minutes', label: t('automations.minutos'), min: 5 },
+      { key: 'startHour', label: t('automations.inicioH'), min: 0, max: 23 },
+      { key: 'endHour', label: t('automations.fimH'), min: 1, max: 24 }
     ]
   },
   {
     type: 'budget_threshold',
-    label: '💸 Estouro de orçamento',
-    describe: (p) => `Se o gasto de uma categoria passar de ${p.percent ?? 80}% do orçamento do mês → cria TODO + notifica.`,
+    label: t('automations.estouroDeOrcamento'),
+    describe: (p) => t('automations.seOGastoDeUma', { p0: p.percent ?? 80 }),
     defaults: { percent: 80 },
-    fields: [{ key: 'percent', label: '% do orçamento', min: 1, max: 100 }]
+    fields: [{ key: 'percent', label: t('automations.doOrcamento'), min: 1, max: 100 }]
   },
   {
     type: 'stale_branches',
-    label: '🌿 Trabalho esquecido em branches',
+    label: t('automations.trabalhoEsquecidoEmBranches'),
     describe: (p) =>
-      `Se alguma branch/worktree tiver código não entregue (sem PR, não enviado ou não commitado) parada há ${p.days ?? 3}+ dias → notifica (1×/dia).`,
+      t('automations.seAlgumaBranchWorktreeTiver', { p0: p.days ?? 3 }),
     defaults: { days: 3 },
-    fields: [{ key: 'days', label: 'Dias parada', min: 1 }]
+    fields: [{ key: 'days', label: t('automations.diasParada'), min: 1 }]
   },
   {
     type: 'due_flashcards',
-    label: '🔁 Flashcards acumulando',
-    describe: (p) => `Se houver mais de ${p.count ?? 30} flashcards vencidos → notifica.`,
+    label: t('automations.flashcardsAcumulando'),
+    describe: (p) => t('automations.seHouverMaisDeFlashcards', { p0: p.count ?? 30 }),
     defaults: { count: 30 },
-    fields: [{ key: 'count', label: 'Qtd. vencidos', min: 1 }]
+    fields: [{ key: 'count', label: t('automations.qtdVencidos'), min: 1 }]
   }
 ]
 
@@ -104,14 +105,14 @@ export function AutomationsPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>⚡ Automações</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('automations.automacoes')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Regras condição → ação, avaliadas de minuto a minuto enquanto o app está aberto.
+            {t('automations.regrasCondicaoAcaoAvaliadasDe')}
           </p>
         </div>
       </div>
 
-      <h3 className="dash-heading">Regras</h3>
+      <h3 className="dash-heading">{t('automations.regras')}</h3>
       <div className="list-stack">
         {RULE_DEFS.map((def) => {
           const rule = rules.find((r) => r.type === def.type)
@@ -120,16 +121,16 @@ export function AutomationsPage(): React.ReactElement {
             <div key={def.type} className="chart-section" style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {rule && (
-                  <input type="checkbox" checked={rule.enabled === 1} onChange={() => toggle(rule)} title="Ativar/desativar" />
+                  <input type="checkbox" checked={rule.enabled === 1} onChange={() => toggle(rule)} title={t('automations.ativarDesativar')} />
                 )}
                 <strong style={{ flex: 1 }}>{def.label}</strong>
                 {rule ? (
                   <>
-                    <button className="btn btn-primary btn-sm" onClick={() => save(rule)}>Salvar</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => save(rule)}>{t('automations.salvar')}</button>
                     <button className="btn btn-danger btn-sm" onClick={() => window.api.rules.delete(rule.id).then(refresh)}>✕</button>
                   </>
                 ) : (
-                  <button className="btn btn-secondary btn-sm" onClick={() => activate(def)}>Ativar</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => activate(def)}>{t('automations.ativar')}</button>
                 )}
               </div>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0' }}>{def.describe(p)}</p>
@@ -151,7 +152,7 @@ export function AutomationsPage(): React.ReactElement {
                   ))}
                   {rule.lastFiredAt && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'flex-end' }}>
-                      último disparo: {new Date(rule.lastFiredAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {t('automations.ultimoDisparo')} {new Date(rule.lastFiredAt).toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
@@ -161,29 +162,29 @@ export function AutomationsPage(): React.ReactElement {
         })}
       </div>
 
-      <h3 className="dash-heading">Agendador → Inbox</h3>
+      <h3 className="dash-heading">{t('automations.agendadorInbox')}</h3>
       <div className="chart-section" style={{ marginBottom: 8 }}>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-          Todo dia, no horário definido, o Claude local roda o prompt e o resultado vira um item no Inbox (🤖 IA).
+          {t('automations.todoDiaNoHorarioDefinido')}
         </p>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input placeholder="Nome (ex: Revisão matinal)" value={jobName} onChange={(e) => setJobName(e.target.value)} style={{ minWidth: 160 }} />
-          <input placeholder="Prompt (ex: revise meus TODOs vencidos e minha semana)" value={jobPrompt} onChange={(e) => setJobPrompt(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
-          <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>às</label>
+          <input placeholder={t('automations.nomeExRevisaoMatinal')} value={jobName} onChange={(e) => setJobName(e.target.value)} style={{ minWidth: 160 }} />
+          <input placeholder={t('automations.promptExReviseMeusTodos')} value={jobPrompt} onChange={(e) => setJobPrompt(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
+          <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('automations.as')}</label>
           <input type="number" min={0} max={23} value={jobHour} onChange={(e) => setJobHour(Number(e.target.value) || 0)} style={{ width: 64 }} />
-          <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>h</label>
-          <button className="btn btn-primary btn-sm" onClick={addJob}>＋ Agendar</button>
+          <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('automations.h')}</label>
+          <button className="btn btn-primary btn-sm" onClick={addJob}>{t('automations.agendar')}</button>
         </div>
       </div>
       <div className="list-stack">
-        {jobs.length === 0 && <div className="empty-hint">Nenhum agendamento.</div>}
+        {jobs.length === 0 && <div className="empty-hint">{t('automations.nenhumAgendamento')}</div>}
         {jobs.map((j) => (
           <div key={j.id} className="list-row">
             <input type="checkbox" checked={j.enabled === 1} onChange={() => window.api.jobs.update(j.id, j.name, j.prompt, j.hour, j.enabled ? 0 : 1).then(refresh)} />
             <span className="list-row-title">
-              {j.name} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {String(j.hour).padStart(2, '0')}h</span>
+              {j.name} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {String(j.hour).padStart(2, '0')}{t('automations.h')}</span>
             </span>
-            {j.lastRunAt && <span className="project-chip">último: {j.lastRunAt}</span>}
+            {j.lastRunAt && <span className="project-chip">{t('automations.ultimo')} {j.lastRunAt}</span>}
             <button className="btn btn-danger btn-sm" onClick={() => window.api.jobs.delete(j.id).then(refresh)}>✕</button>
           </div>
         ))}

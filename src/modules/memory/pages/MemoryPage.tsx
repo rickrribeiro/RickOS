@@ -14,17 +14,18 @@ import { TimelineTab } from '../components/TimelineTab'
 import { ConnectionsTab } from '../components/ConnectionsTab'
 import { InspectorTab } from '../components/InspectorTab'
 import { SettingsTab } from '../components/SettingsTab'
+import { t as tr } from '../../../i18n'
 
 const TABS: { key: MemoryTab; label: string }[] = [
-  { key: 'overview', label: '✨ Visão geral' },
-  { key: 'memories', label: '🗂 Memórias' },
-  { key: 'inbox', label: '📥 Inbox' },
-  { key: 'gaps', label: '🧩 Lacunas' },
-  { key: 'interview', label: '💬 Me conheça melhor' },
-  { key: 'timeline', label: '🕰 Linha do tempo' },
-  { key: 'connections', label: '🕸 Conexões' },
-  { key: 'inspector', label: '🔍 Inspector' },
-  { key: 'settings', label: '⚙️ Configurações' }
+  { key: 'overview', label: tr('memory.visaoGeral') },
+  { key: 'memories', label: tr('memory.memorias') },
+  { key: 'inbox', label: tr('memory.inbox2') },
+  { key: 'gaps', label: tr('memory.lacunas') },
+  { key: 'interview', label: tr('memory.meConhecaMelhor') },
+  { key: 'timeline', label: tr('memory.linhaDoTempo') },
+  { key: 'connections', label: tr('memory.conexoes') },
+  { key: 'inspector', label: tr('memory.inspector') },
+  { key: 'settings', label: tr('memory.configuracoes') }
 ]
 
 export function MemoryPage(): React.ReactElement {
@@ -45,18 +46,17 @@ export function MemoryPage(): React.ReactElement {
     <div className="module-page">
       <div className="mem-hero">
         <div>
-          <h2>🧬 Memória Pessoal</h2>
+          <h2>{tr('memory.memoriaPessoal')}</h2>
           <p>
-            O que a IA sabe sobre você — em memórias pequenas, com origem e histórico. A IA só <strong>sugere</strong>; nada entra sem a sua aprovação, e nenhuma
-            outra funcionalidade usa estas memórias sem autorização explícita.
+            {tr('memory.oQueAIaSabe')} <strong>{tr('memory.sugere')}</strong>{tr('memory.nadaEntraSemASua')}
           </p>
         </div>
         <div className="mem-actions">
           <button className="btn btn-secondary btn-sm" onClick={() => setPasting(true)}>
-            📝 Colar texto sobre mim
+            {tr('memory.colarTextoSobreMim')}
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
-            + Nova memória
+            {tr('memory.novaMemoria')}
           </button>
         </div>
       </div>

@@ -3,8 +3,9 @@ import { Habit } from '../../../types'
 import { useHabitStore } from '../store/habitStore'
 import { HabitStats } from '../components/HabitStats'
 import { localDateStr } from '../../../utils/dates'
+import { t, getLocale } from '../../../i18n'
 
-const SUGGESTED = ['Academia', 'Estudar japonês', 'Meditar', 'Dormir antes de 00:00', 'Sem álcool', 'Revisar TODO']
+const SUGGESTED = [t('habits.sug.gym'), t('habits.sug.japanese'), t('habits.sug.meditate'), t('habits.sug.sleep'), t('habits.sug.noAlcohol'), t('habits.sug.reviewTodo')]
 
 function offsetDay(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T12:00:00')
@@ -17,7 +18,7 @@ function formatDayLabel(dateStr: string): string {
   if (dateStr === today) return 'Hoje'
   if (dateStr === offsetDay(today, -1)) return 'Ontem'
   const d = new Date(dateStr + 'T12:00:00')
-  return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })
+  return d.toLocaleDateString(getLocale(), { weekday: 'long', day: '2-digit', month: '2-digit' })
 }
 
 function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => void }): React.ReactElement {
@@ -36,32 +37,32 @@ function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => void }):
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 360 }}>
-        <h2>Editar hábito</h2>
+        <h2>{t('habits.editarHabito')}</h2>
         <div className="editor-field">
-          <label>Nome</label>
+          <label>{t('habits.nome')}</label>
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         <div className="editor-row">
           <div className="editor-field">
-            <label>Frequência</label>
+            <label>{t('habits.frequencia')}</label>
             <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-              <option value="daily">Diária</option>
-              <option value="weekly">Semanal</option>
+              <option value="daily">{t('habits.diaria')}</option>
+              <option value="weekly">{t('habits.semanal')}</option>
             </select>
           </div>
           <div className="editor-field">
-            <label>Meta {frequency === 'weekly' ? '(x/semana)' : '(x/dia)'}</label>
+            <label>{t('habits.meta')} {frequency === 'weekly' ? t('habits.xSemana') : t('habits.xDia')}</label>
             <input type="number" min={1} value={target} onChange={(e) => setTarget(Number(e.target.value) || 1)} />
           </div>
         </div>
         <div className="editor-field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none' }}>
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Ativo
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> {t('habits.ativo')}
           </label>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('habits.cancelar')}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{t('habits.salvar')}</button>
         </div>
       </div>
     </div>
@@ -95,13 +96,13 @@ export function HabitsPage(): React.ReactElement {
     <div className="module-page">
       <div className="module-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🔥 Hábitos</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{t('habits.habitos')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {doneCount}/{activeHabits.length} concluídos
+            {t('habits.concluidos', { doneCount, count: activeHabits.length })}
           </p>
         </div>
         <div className="date-nav">
-          <button className="date-nav-btn" onClick={() => setDate(offsetDay(date, -1))} title="Dia anterior">
+          <button className="date-nav-btn" onClick={() => setDate(offsetDay(date, -1))} title={t('habits.diaAnterior')}>
             ‹
           </button>
           <span className="date-display">{formatDayLabel(date)}</span>
@@ -109,13 +110,13 @@ export function HabitsPage(): React.ReactElement {
             className="date-nav-btn"
             onClick={() => setDate(offsetDay(date, 1))}
             disabled={isToday}
-            title="Próximo dia"
+            title={t('habits.proximoDia')}
           >
             ›
           </button>
           {!isToday && (
             <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => setDate(today)}>
-              Hoje
+              {t('habits.hoje')}
             </button>
           )}
         </div>
@@ -124,17 +125,17 @@ export function HabitsPage(): React.ReactElement {
       <div className="quick-add-row">
         <input
           type="text"
-          placeholder="Novo hábito (ex: Academia)"
+          placeholder={t('habits.novoHabitoExAcademia')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
         />
-        <button className="btn btn-primary" onClick={() => handleAdd()}>+ Adicionar</button>
+        <button className="btn btn-primary" onClick={() => handleAdd()}>{t('habits.adicionar')}</button>
       </div>
 
       {missingSuggestions.length > 0 && (
         <div className="suggested-row">
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sugestões:</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('habits.sugestoes')}</span>
           {missingSuggestions.map((s) => (
             <button key={s} className="btn btn-secondary btn-sm" onClick={() => handleAdd(s)}>
               + {s}
@@ -144,7 +145,7 @@ export function HabitsPage(): React.ReactElement {
       )}
 
       <div className="list-stack" style={{ marginTop: 12 }}>
-        {habits.length === 0 && <div className="empty-hint">Nenhum hábito ainda.</div>}
+        {habits.length === 0 && <div className="empty-hint">{t('habits.nenhumHabitoAinda')}</div>}
         {habits.map((h) => {
           const done = isDone(h.id)
           const cells = last7(h.id)
@@ -154,7 +155,7 @@ export function HabitsPage(): React.ReactElement {
               <button
                 className={`habit-toggle ${done ? 'done' : ''}`}
                 onClick={() => toggle(h.id)}
-                title={done ? 'Concluído hoje' : 'Marcar hoje'}
+                title={done ? t('habits.concluidoHoje') : t('habits.marcarHoje')}
               >
                 {done ? '✓' : ''}
               </button>
@@ -162,7 +163,7 @@ export function HabitsPage(): React.ReactElement {
                 <div style={{ color: done ? 'var(--success)' : 'var(--text-primary)', fontSize: 14 }}>
                   {h.name}
                   {h.frequency === 'weekly' && (
-                    <span className="project-chip" style={{ marginLeft: 8 }}>meta {h.target}/sem</span>
+                    <span className="project-chip" style={{ marginLeft: 8 }}>{t('habits.metaSem', { target: h.target })}</span>
                   )}
                 </div>
                 <div className="habit-grid">
@@ -172,12 +173,12 @@ export function HabitsPage(): React.ReactElement {
                 </div>
               </div>
               <div className="habit-stats">
-                <span title="Sequência">🔥 {streak(h.id)}</span>
-                <span title="Últimos 7 dias">{weekRate(h.id)}/7</span>
+                <span title={t('habits.sequencia')}>🔥 {streak(h.id)}</span>
+                <span title={t('habits.ultimos7Dias')}>{weekRate(h.id)}/7</span>
               </div>
               <div className="list-row-actions">
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(h)}>Editar</button>
-                <button className="btn btn-danger btn-sm" onClick={() => remove(h.id)}>Excluir</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(h)}>{t('habits.editar')}</button>
+                <button className="btn btn-danger btn-sm" onClick={() => remove(h.id)}>{t('habits.excluir')}</button>
               </div>
             </div>
           )

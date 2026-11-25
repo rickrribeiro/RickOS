@@ -3,6 +3,7 @@ import type { MemoryCategory, MemoryFilter, MemoryPage, MemoryStatus, MemoryType
 import { MEMORY_STATUSES, MEMORY_TYPES, SENSITIVITIES, SENSITIVITY_LABEL, STATUS_LABEL, TYPE_LABEL } from '../../../../shared/memory'
 import { useMemoryStore } from '../store/memoryStore'
 import { Empty, MemoryCard, Modal, errMsg, useMemoryRefresh } from './ui'
+import { t as tr } from '../../../i18n'
 
 const PAGE = 60
 
@@ -35,9 +36,9 @@ export function MemoriesTab({ onNew }: { onNew: () => void }): React.ReactElemen
 
   return (
     <div className="mem-layout">
-      <nav className="mem-cats" aria-label="Categorias">
+      <nav className="mem-cats" aria-label={tr('memory.categorias')}>
         <button className={`mem-cat${categoryFilter == null ? ' active' : ''}`} onClick={() => goCategory(null)}>
-          🧬 Todas
+          {tr('memory.todas')}
         </button>
         {visible.map((c) => (
           <button key={c.id} className={`mem-cat${categoryFilter === c.id ? ' active' : ''}`} onClick={() => goCategory(c.id)}>
@@ -47,63 +48,63 @@ export function MemoriesTab({ onNew }: { onNew: () => void }): React.ReactElemen
           </button>
         ))}
         <button className="mem-cat" onClick={() => setManaging(true)} style={{ color: 'var(--accent)' }}>
-          ⚙︎ Gerenciar categorias
+          {tr('memory.gerenciarCategorias')}
         </button>
       </nav>
 
       <div>
         <div className="mem-toolbar">
-          <input type="search" placeholder="Buscar no conteúdo, título ou tags…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar memórias" />
-          <select value={type} onChange={(e) => setType(e.target.value as MemoryType | '')} aria-label="Tipo">
-            <option value="">Todos os tipos</option>
+          <input type="search" placeholder={tr('memory.buscarNoConteudoTituloOu')} value={q} onChange={(e) => setQ(e.target.value)} aria-label={tr('memory.buscarMemorias')} />
+          <select value={type} onChange={(e) => setType(e.target.value as MemoryType | '')} aria-label={tr('memory.tipo')}>
+            <option value="">{tr('memory.todosOsTipos')}</option>
             {MEMORY_TYPES.map((t) => (
               <option key={t} value={t}>
                 {TYPE_LABEL[t]}
               </option>
             ))}
           </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value as MemoryStatus | 'live' | 'all')} aria-label="Status">
-            <option value="live">Em uso</option>
+          <select value={status} onChange={(e) => setStatus(e.target.value as MemoryStatus | 'live' | 'all')} aria-label={tr('memory.status')}>
+            <option value="live">{tr('memory.emUso')}</option>
             {MEMORY_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABEL[s]}
               </option>
             ))}
-            <option value="all">Todas</option>
+            <option value="all">{tr('memory.todas2')}</option>
           </select>
-          <select value={sens} onChange={(e) => setSens(e.target.value as Sensitivity | '')} aria-label="Sensibilidade">
-            <option value="">Qualquer sensibilidade</option>
+          <select value={sens} onChange={(e) => setSens(e.target.value as Sensitivity | '')} aria-label={tr('memory.sensibilidade')}>
+            <option value="">{tr('memory.qualquerSensibilidade')}</option>
             {SENSITIVITIES.map((s) => (
               <option key={s} value={s}>
                 {SENSITIVITY_LABEL[s]}
               </option>
             ))}
           </select>
-          <input style={{ width: 110 }} placeholder="#tag" value={tag} onChange={(e) => setTag(e.target.value.replace(/^#/, ''))} aria-label="Tag" />
-          <select value={sort} onChange={(e) => setSort(e.target.value as NonNullable<MemoryFilter['sort']>)} aria-label="Ordenar">
-            <option value="recent">Recentes</option>
-            <option value="importance">Importância</option>
-            <option value="used">Mais usadas</option>
-            <option value="title">A–Z</option>
+          <input style={{ width: 110 }} placeholder={tr('memory.tag')} value={tag} onChange={(e) => setTag(e.target.value.replace(/^#/, ''))} aria-label={tr('memory.tag2')} />
+          <select value={sort} onChange={(e) => setSort(e.target.value as NonNullable<MemoryFilter['sort']>)} aria-label={tr('memory.ordenar')}>
+            <option value="recent">{tr('memory.recentes')}</option>
+            <option value="importance">{tr('memory.importancia')}</option>
+            <option value="used">{tr('memory.maisUsadas')}</option>
+            <option value="title">{tr('memory.aZ')}</option>
           </select>
           <label className="mem-row mem-sub" style={{ cursor: 'pointer' }}>
-            <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} /> 📌 fixadas
+            <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} /> {tr('memory.fixadas')}
           </label>
         </div>
         <p className="mem-muted" style={{ margin: '0 0 8px' }}>
-          {page.total} memória(s){filtered ? ' com estes filtros' : ''}
+          {tr('memory.memoriaS', { total: page.total })}{filtered ? tr('memory.comEstesFiltros') : ''}
         </p>
         {page.items.length === 0 ? (
           filtered || categoryFilter != null ? (
-            <Empty icon="🔎" title="Nada encontrado">
-              Ajuste a busca ou os filtros.
+            <Empty icon="🔎" title={tr('memory.nadaEncontrado')}>
+              {tr('memory.ajusteABuscaOuOs')}
             </Empty>
           ) : (
-            <Empty icon="🌱" title="Nenhuma memória ainda">
-              Crie uma, cole um texto sobre você ou migre a Base de Conhecimento antiga (aba Inbox).
+            <Empty icon="🌱" title={tr('memory.nenhumaMemoriaAinda')}>
+              {tr('memory.crieUmaColeUmTexto')}
               <div style={{ marginTop: 10 }}>
                 <button className="btn btn-primary btn-sm" onClick={onNew}>
-                  + Nova memória
+                  {tr('memory.novaMemoria')}
                 </button>
               </div>
             </Empty>
@@ -115,7 +116,7 @@ export function MemoriesTab({ onNew }: { onNew: () => void }): React.ReactElemen
             ))}
             {page.total > page.items.length && (
               <button className="btn btn-secondary btn-sm" onClick={() => setLimit((l) => l + PAGE)}>
-                Carregar mais ({page.total - page.items.length})
+                {tr('memory.carregarMais', { p0: page.total - page.items.length })}
               </button>
             )}
           </div>
@@ -144,11 +145,11 @@ function CategoryManager({ onClose }: { onClose: () => void }): React.ReactEleme
     run(() => window.api.memory.reorderCategories(ids))
   }
   return (
-    <Modal title="Categorias" onClose={onClose}>
-      <p className="mem-muted">Crie domínios novos sem mexer em código. Arquivar esconde a categoria; as memórias continuam lá.</p>
+    <Modal title={tr('memory.categorias')} onClose={onClose}>
+      <p className="mem-muted">{tr('memory.crieDominiosNovosSemMexer')}</p>
       <div className="mem-toolbar">
-        <input style={{ width: 60 }} placeholder="🎵" value={icon} onChange={(e) => setIcon(e.target.value)} aria-label="Ícone" />
-        <input style={{ flex: 1 }} placeholder="Nova categoria" value={name} onChange={(e) => setName(e.target.value)} aria-label="Nome" />
+        <input style={{ width: 60 }} placeholder="🎵" value={icon} onChange={(e) => setIcon(e.target.value)} aria-label={tr('memory.icone')} />
+        <input style={{ flex: 1 }} placeholder={tr('memory.novaCategoria')} value={name} onChange={(e) => setName(e.target.value)} aria-label={tr('memory.nome')} />
         <button
           className="btn btn-primary btn-sm"
           disabled={!name.trim()}
@@ -160,7 +161,7 @@ function CategoryManager({ onClose }: { onClose: () => void }): React.ReactEleme
             })
           }
         >
-          Criar
+          {tr('memory.criar')}
         </button>
       </div>
       {err && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</p>}
@@ -172,9 +173,9 @@ function CategoryManager({ onClose }: { onClose: () => void }): React.ReactEleme
               defaultValue={c.name}
               style={{ flex: 1, minWidth: 120 }}
               onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && run(() => window.api.memory.updateCategory(c.id, { name: e.target.value }))}
-              aria-label={`Nome de ${c.name}`}
+              aria-label={tr('memory.nomeDe', { name: c.name })}
             />
-            <select value={c.defaultSensitivity} onChange={(e) => run(() => window.api.memory.updateCategory(c.id, { defaultSensitivity: e.target.value as Sensitivity }))} aria-label="Sensibilidade padrão">
+            <select value={c.defaultSensitivity} onChange={(e) => run(() => window.api.memory.updateCategory(c.id, { defaultSensitivity: e.target.value as Sensitivity }))} aria-label={tr('memory.sensibilidadePadrao')}>
               {SENSITIVITIES.map((s) => (
                 <option key={s} value={s}>
                   {SENSITIVITY_LABEL[s]}
@@ -182,14 +183,14 @@ function CategoryManager({ onClose }: { onClose: () => void }): React.ReactEleme
               ))}
             </select>
             <span className="mem-muted">{c.memoryCount ?? 0}</span>
-            <button className="btn btn-secondary btn-sm" disabled={i === 0} onClick={() => move(c, -1)} aria-label="Subir">
+            <button className="btn btn-secondary btn-sm" disabled={i === 0} onClick={() => move(c, -1)} aria-label={tr('memory.subir')}>
               ↑
             </button>
-            <button className="btn btn-secondary btn-sm" disabled={i === categories.length - 1} onClick={() => move(c, 1)} aria-label="Descer">
+            <button className="btn btn-secondary btn-sm" disabled={i === categories.length - 1} onClick={() => move(c, 1)} aria-label={tr('memory.descer')}>
               ↓
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => run(() => window.api.memory.updateCategory(c.id, { archived: !c.archivedAt }))}>
-              {c.archivedAt ? 'Restaurar' : 'Arquivar'}
+              {c.archivedAt ? tr('memory.restaurar') : tr('memory.arquivar')}
             </button>
           </div>
         ))}

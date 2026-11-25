@@ -1,4 +1,5 @@
 import { localDateStr } from '../../utils/dates'
+import { t as tr } from '../../i18n'
 
 export interface PriorityDef {
   value: number
@@ -8,10 +9,10 @@ export interface PriorityDef {
 
 /** priority is an INTEGER column: higher = more important (sorts to the top). */
 export const PRIORITIES: PriorityDef[] = [
-  { value: 0, label: 'Nenhuma', color: 'var(--text-muted)' },
-  { value: 1, label: 'Baixa', color: '#22c55e' },
-  { value: 2, label: 'Média', color: '#f59e0b' },
-  { value: 3, label: 'Alta', color: '#ef4444' }
+  { value: 0, label: tr('todo.nenhuma'), color: 'var(--text-muted)' },
+  { value: 1, label: tr('todo.baixa'), color: '#22c55e' },
+  { value: 2, label: tr('todo.media'), color: '#f59e0b' },
+  { value: 3, label: tr('todo.alta'), color: '#ef4444' }
 ]
 
 export function priorityDef(value: number): PriorityDef {
@@ -30,10 +31,10 @@ export interface TodoTypeDef {
 
 /** Kind of task. `type` is a TEXT column; existing tasks default to 'projeto'. */
 export const TODO_TYPES: TodoTypeDef[] = [
-  { value: 'projeto', label: 'Projeto', icon: '📁', color: '#3b82f6' },
-  { value: 'compra', label: 'A comprar', icon: '🛒', color: '#22c55e' },
-  { value: 'urgente', label: 'Resolver urgente', icon: '🔥', color: '#ef4444' },
-  { value: 'lembrete', label: 'Lembrete', icon: '🔔', color: '#a855f7' }
+  { value: 'projeto', label: tr('todo.projeto'), icon: '📁', color: '#3b82f6' },
+  { value: 'compra', label: tr('todo.aComprar'), icon: '🛒', color: '#22c55e' },
+  { value: 'urgente', label: tr('todo.resolverUrgente'), icon: '🔥', color: '#ef4444' },
+  { value: 'lembrete', label: tr('todo.lembrete'), icon: '🔔', color: '#a855f7' }
 ]
 
 export function todoTypeDef(value: string | null | undefined): TodoTypeDef {
@@ -41,10 +42,10 @@ export function todoTypeDef(value: string | null | undefined): TodoTypeDef {
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-  inbox: 'Caixa de entrada',
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Concluído'
+  inbox: tr('todo.caixaDeEntrada'),
+  todo: tr('todo.aFazer'),
+  doing: tr('todo.fazendo'),
+  done: tr('todo.concluido')
 }
 
 export interface DueMeta {
@@ -57,7 +58,7 @@ export function dueMeta(dueDate: string | null, done: boolean): DueMeta | null {
   if (!dueDate) return null
   if (done) return { label: dueDate, cls: 'due-done' }
   const today = localDateStr(new Date())
-  if (dueDate < today) return { label: 'Atrasada', cls: 'due-overdue' }
-  if (dueDate === today) return { label: 'Hoje', cls: 'due-today' }
+  if (dueDate < today) return { label: tr('todo.atrasada'), cls: 'due-overdue' }
+  if (dueDate === today) return { label: tr('todo.hoje'), cls: 'due-today' }
   return { label: dueDate, cls: 'due-future' }
 }

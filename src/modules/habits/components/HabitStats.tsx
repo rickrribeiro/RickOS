@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useHabitStore } from '../store/habitStore'
+import { t, getLocale } from '../../../i18n'
 
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+// dom..sáb no idioma atual (7/1/2024 foi um domingo)
+const WEEKDAYS = Array.from({ length: 7 }, (_, i) =>
+  new Date(2024, 0, 7 + i).toLocaleDateString(getLocale(), { weekday: 'short' }).replace('.', '')
+)
 
 function currentMonthKey(): string {
   const d = new Date()
@@ -14,7 +18,7 @@ function shiftMonthKey(k: string, delta: number): string {
 }
 function monthLabel(k: string): string {
   const [y, m] = k.split('-').map(Number)
-  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' })
 }
 
 export function HabitStats(): React.ReactElement {
@@ -80,7 +84,7 @@ export function HabitStats(): React.ReactElement {
   return (
     <div style={{ marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <h3 className="chart-title">📊 Estatísticas de hábitos</h3>
+        <h3 className="chart-title">{t('habits.estatisticasDeHabitos')}</h3>
         <div className="date-nav">
           <button className="date-nav-btn" onClick={() => setMonthKey(shiftMonthKey(monthKey, -1))}>‹</button>
           <span className="date-display" style={{ minWidth: 150, textTransform: 'capitalize' }}>{monthLabel(monthKey)}</span>
@@ -89,14 +93,14 @@ export function HabitStats(): React.ReactElement {
       </div>
 
       {active.length === 0 ? (
-        <div className="empty-hint">Cadastre hábitos para ver as estatísticas.</div>
+        <div className="empty-hint">{t('habits.cadastreHabitosParaVerAs')}</div>
       ) : (
         <>
           <div className="chart-section" style={{ overflowX: 'auto' }}>
             <table className="habit-grid-table">
               <thead>
                 <tr>
-                  <th className="hg-name">Hábito</th>
+                  <th className="hg-name">{t('habits.habito')}</th>
                   {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
                     <th key={d} className={`hg-day ${[0, 6].includes(weekdayOf(d)) ? 'weekend' : ''}`}>{d}</th>
                   ))}
@@ -121,21 +125,21 @@ export function HabitStats(): React.ReactElement {
 
           <div className="cards-grid" style={{ marginTop: 12 }}>
             <div className="stat-card">
-              <div className="stat-card-label">Conclusão no mês</div>
+              <div className="stat-card-label">{t('habits.conclusaoNoMes')}</div>
               <div className="stat-card-value">{overall}%</div>
-              <div className="stat-card-sub">{active.length} hábitos × {elapsed} dias</div>
+              <div className="stat-card-sub">{active.length} {t('habits.habitosDias', { elapsed })}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-card-label">Melhor / pior dia</div>
+              <div className="stat-card-label">{t('habits.melhorPiorDia')}</div>
               <div className="stat-card-value" style={{ fontSize: 15 }}>
                 {best ? `${best.label} ${best.rate}%` : '—'} <span style={{ color: 'var(--text-muted)' }}>/</span> {worst ? `${worst.label} ${worst.rate}%` : '—'}
               </div>
             </div>
             <div className="stat-card" style={{ gridColumn: '1 / -1' }}>
-              <div className="stat-card-label">Conclusão por dia da semana</div>
+              <div className="stat-card-label">{t('habits.conclusaoPorDiaDaSemana')}</div>
               <div className="weekday-bars">
                 {weekdayStats.map((s) => (
-                  <div key={s.w} className="weekday-bar-col" title={s.rate === null ? 'sem dados' : `${s.rate}%`}>
+                  <div key={s.w} className="weekday-bar-col" title={s.rate === null ? t('habits.semDados') : `${s.rate}%`}>
                     <div className="weekday-bar-track">
                       <div
                         className="weekday-bar-fill"

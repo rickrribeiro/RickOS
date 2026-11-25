@@ -2,21 +2,22 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { MemoryCategory, MemoryStatus, MemoryType, PersonalMemory, Reliability, Sensitivity } from '../../../../shared/memory'
 import { RELIABILITY_LABEL, SENSITIVITY_LABEL, STATUS_LABEL, TYPE_LABEL } from '../../../../shared/memory'
 import type { JobView } from '../api'
+import { t as tr, getLocale } from '../../../i18n'
 
 export function fmtDate(iso: string | null | undefined, withTime = false): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return withTime ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : d.toLocaleDateString('pt-BR')
+  return withTime ? d.toLocaleString(getLocale(), { dateStyle: 'short', timeStyle: 'short' }) : d.toLocaleDateString(getLocale())
 }
 
 export function relTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const s = (Date.now() - Date.parse(iso)) / 1000
-  if (s < 60) return 'agora'
-  if (s < 3600) return `há ${Math.floor(s / 60)} min`
-  if (s < 86400) return `há ${Math.floor(s / 3600)} h`
-  if (s < 86400 * 30) return `há ${Math.floor(s / 86400)} d`
+  if (s < 60) return tr('time.now')
+  if (s < 3600) return tr('time.ago.min', { n: Math.floor(s / 60) })
+  if (s < 86400) return tr('time.ago.h', { n: Math.floor(s / 3600) })
+  if (s < 86400 * 30) return tr('time.ago.d', { n: Math.floor(s / 86400) })
   return fmtDate(iso)
 }
 
@@ -27,7 +28,7 @@ export function TypeChip({ type }: { type: MemoryType }): React.ReactElement {
 export function SensChip({ s }: { s: Sensitivity }): React.ReactElement | null {
   if (s === 'NORMAL') return null
   return (
-    <span className={`mem-chip ${s === 'RESTRICTED' ? 'danger' : 'warn'}`} title="Sensibilidade efetiva (memória ou categoria)">
+    <span className={`mem-chip ${s === 'RESTRICTED' ? 'danger' : 'warn'}`} title={tr('memory.sensibilidadeEfetivaMemoriaOuCategoria')}>
       {s === 'RESTRICTED' ? '🔒' : '🔐'} {SENSITIVITY_LABEL[s]}
     </span>
   )
@@ -45,7 +46,7 @@ export function ReliabilityChip({ r }: { r: Reliability }): React.ReactElement |
 
 export function CategoryLabel({ cats, id }: { cats: MemoryCategory[]; id: number | null }): React.ReactElement {
   const c = cats.find((x) => x.id === id)
-  return <span className="mem-chip">{c ? `${c.icon} ${c.name}` : 'Sem categoria'}</span>
+  return <span className="mem-chip">{c ? `${c.icon} ${c.name}` : tr('memory.semCategoria')}</span>
 }
 
 export function MemoryCard({ m, cats, onOpen }: { m: PersonalMemory; cats: MemoryCategory[]; onOpen: (id: number) => void }): React.ReactElement {
@@ -53,7 +54,7 @@ export function MemoryCard({ m, cats, onOpen }: { m: PersonalMemory; cats: Memor
   return (
     <button className={`mem-card${dim ? ' dim' : ''}`} onClick={() => onOpen(m.id)}>
       <div className="mem-card-title">
-        {m.pinned && <span title="Fixada">📌</span>}
+        {m.pinned && <span title={tr('memory.fixada')}>📌</span>}
         <span>{m.title}</span>
       </div>
       {m.content.trim() !== m.title.trim() && m.content.trim() !== `${m.title.trim()}.` && <div className="mem-card-body">{m.content}</div>}
@@ -69,7 +70,7 @@ export function MemoryCard({ m, cats, onOpen }: { m: PersonalMemory; cats: Memor
           </span>
         ))}
         <span className="mem-muted" style={{ marginLeft: 'auto' }}>
-          {m.useCount > 0 ? `usada ${m.useCount}× · ` : ''}
+          {m.useCount > 0 ? tr('memory.usada', { useCount: m.useCount }) : ''}
           {relTime(m.updatedAt)}
         </span>
       </div>
@@ -90,7 +91,7 @@ export function Modal({ title, onClose, children, wide }: { title: React.ReactNo
       <div className="modal mem-modal" style={wide ? { maxWidth: 880 } : undefined} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="mem-detail-head">
           <h2 style={{ margin: 0, fontSize: 16 }}>{title}</h2>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} aria-label="Fechar">
+          <button className="btn btn-secondary btn-sm" onClick={onClose} aria-label={tr('memory.fechar')}>
             ✕
           </button>
         </div>
@@ -113,14 +114,14 @@ export function Empty({ icon, title, children }: { icon: string; title: string; 
 export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 const JOB_LABEL: Record<string, string> = {
-  text: 'Organizando o texto em memórias',
-  analyze: 'Analisando suas memórias',
-  consolidation: 'Consolidando memórias',
-  migration: 'Migrando a Base de Conhecimento',
-  'import-md': 'Extraindo memórias do Markdown',
-  gaps: 'Procurando lacunas',
-  'gap-answer': 'Lendo sua resposta',
-  agent_batch: 'Memory Agent processando eventos'
+  text: tr('memory.organizandoOTextoEmMemorias'),
+  analyze: tr('memory.analisandoSuasMemorias'),
+  consolidation: tr('memory.consolidandoMemorias'),
+  migration: tr('memory.migrandoABaseDeConhecimento'),
+  'import-md': tr('memory.extraindoMemoriasDoMarkdown'),
+  gaps: tr('memory.procurandoLacunas'),
+  'gap-answer': tr('memory.lendoSuaResposta'),
+  agent_batch: tr('memory.memoryAgentProcessandoEventos')
 }
 export const jobLabel = (k: string): string => JOB_LABEL[k] ?? k
 
@@ -165,15 +166,15 @@ export function JobBanner({ job, onClose }: { job: JobView | null; onClose: () =
   if (job.status === 'running' || job.status === 'queued')
     return (
       <div className="mem-job" role="status">
-        <span className="mem-spin" /> {jobLabel(job.kind)}… isso pode levar alguns segundos. Você pode sair da tela.
+        <span className="mem-spin" /> {tr('memory.issoPodeLevarAlgunsSegundos', { p0: jobLabel(job.kind) })}
       </div>
     )
   if (job.status === 'failed')
     return (
       <div className="mem-job err" role="alert">
-        ⚠️ {job.error ?? 'Falhou.'}{' '}
+        ⚠️ {job.error ?? tr('memory.falhou')}{' '}
         <button className="btn btn-secondary btn-sm" onClick={onClose}>
-          ok
+          {tr('memory.ok')}
         </button>
       </div>
     )
@@ -181,9 +182,9 @@ export function JobBanner({ job, onClose }: { job: JobView | null; onClose: () =
   const n = st.proposed ?? st.suggested ?? st.created ?? 0
   return (
     <div className="mem-job" role="status">
-      ✅ {jobLabel(job.kind)}: {st.skipped ? st.skipped : n ? `${n} sugestão(ões) no Inbox` : 'nada novo que valha lembrar'}.
+      ✅ {jobLabel(job.kind)}: {st.skipped ? st.skipped : n ? tr('memory.sugestaoOesNoInbox', { n }) : tr('memory.nadaNovoQueValhaLembrar')}.
       <button className="btn btn-secondary btn-sm" onClick={onClose} style={{ marginLeft: 'auto' }}>
-        ok
+        {tr('memory.ok')}
       </button>
     </div>
   )

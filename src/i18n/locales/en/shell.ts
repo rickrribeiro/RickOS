@@ -65,5 +65,8 @@ export const shell = {
   'export.saving': 'Saving…',
   'export.download': 'Download to device',
   'export.chooseFolder': 'you choose the folder',
-  'export.failed': 'Export failed: {error}'
+  'export.failed': 'Export failed: {error}',
+  'time.ago.min': '{n} min ago',
+  'time.ago.h': '{n} h ago',
+  'time.ago.d': '{n} d ago'
 }

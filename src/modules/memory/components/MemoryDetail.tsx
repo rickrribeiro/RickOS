@@ -4,19 +4,20 @@ import { LAYER_LABEL, ORIGIN_LABEL, RELATION_KINDS, RELATION_LABEL, RELIABILITY_
 import { useMemoryStore } from '../store/memoryStore'
 import { MemoryEditor } from './MemoryEditor'
 import { CategoryLabel, Modal, SensChip, StatusChip, TypeChip, errMsg, fmtDate, useMemoryRefresh } from './ui'
+import { t as tr } from '../../../i18n'
 
 const CHANGE_LABEL: Record<string, string> = {
-  create: 'Criada',
-  update: 'Editada',
-  confirm: 'Confirmada',
-  pin: 'Fixada',
-  unpin: 'Desafixada',
-  'status:archived': 'Arquivada',
-  'status:active': 'Restaurada',
-  'status:outdated': 'Marcada como desatualizada',
-  'status:superseded': 'Substituída',
-  'status:expired': 'Expirou',
-  'status:unconfirmed': 'Marcada como não confirmada'
+  create: tr('memory.criada'),
+  update: tr('memory.editada'),
+  confirm: tr('memory.confirmada'),
+  pin: tr('memory.fixada'),
+  unpin: tr('memory.desafixada'),
+  'status:archived': tr('memory.arquivada'),
+  'status:active': tr('memory.restaurada'),
+  'status:outdated': tr('memory.marcadaComoDesatualizada'),
+  'status:superseded': tr('memory.substituida'),
+  'status:expired': tr('memory.expirou'),
+  'status:unconfirmed': tr('memory.marcadaComoNaoConfirmada')
 }
 
 export function MemoryDetailModal({ id, onClose }: { id: number; onClose: () => void }): React.ReactElement {
@@ -43,11 +44,11 @@ export function MemoryDetailModal({ id, onClose }: { id: number; onClose: () => 
     }
   }
 
-  if (d === undefined) return <Modal title="Carregando…" onClose={onClose}>{null}</Modal>
+  if (d === undefined) return <Modal title={tr('memory.carregando')} onClose={onClose}>{null}</Modal>
   if (d === null)
     return (
-      <Modal title="Memória não encontrada" onClose={onClose}>
-        <p className="mem-sub">Ela pode ter sido excluída.</p>
+      <Modal title={tr('memory.memoriaNaoEncontrada')} onClose={onClose}>
+        <p className="mem-sub">{tr('memory.elaPodeTerSidoExcluida')}</p>
       </Modal>
     )
   const m = d.memory
@@ -70,101 +71,101 @@ export function MemoryDetailModal({ id, onClose }: { id: number; onClose: () => 
 
       <div className="mem-sug-actions">
         <button className="btn btn-primary btn-sm" onClick={() => setEditing(true)}>
-          ✏️ Editar
+          {tr('memory.editar')}
         </button>
         {live && (
-          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.confirm(m.id))} title="Continua verdadeira">
-            ✓ Confirmar
+          <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.confirm(m.id))} title={tr('memory.continuaVerdadeira')}>
+            {tr('memory.confirmar')}
           </button>
         )}
         <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.pin(m.id, !m.pinned))}>
-          {m.pinned ? 'Desafixar' : '📌 Fixar'}
+          {m.pinned ? tr('memory.desafixar') : tr('memory.fixar')}
         </button>
         {live ? (
           <>
             {m.status !== 'outdated' && (
               <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.setStatus(m.id, 'outdated'))}>
-                Desatualizada
+                {tr('memory.desatualizada')}
               </button>
             )}
             <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.setStatus(m.id, 'archived'))}>
-              🗄 Arquivar
+              {tr('memory.arquivar2')}
             </button>
           </>
         ) : (
           <button className="btn btn-secondary btn-sm" onClick={() => act(() => window.api.memory.setStatus(m.id, 'active'))}>
-            ↩︎ Restaurar
+            {tr('memory.restaurar2')}
           </button>
         )}
         <button className="btn btn-secondary btn-sm" onClick={() => setRelating(true)}>
-          🔗 Relacionar
+          {tr('memory.relacionar')}
         </button>
         <button
           className="btn btn-danger btn-sm"
           style={{ marginLeft: 'auto' }}
           onClick={() => {
-            if (window.confirm('Excluir DEFINITIVAMENTE? Some também o histórico, as evidências e as relações. Para guardar sem usar, prefira Arquivar.'))
+            if (window.confirm(tr('memory.excluirDefinitivamenteSomeTambemO')))
               void window.api.memory.delete(m.id).then(onClose, (e) => setErr(errMsg(e)))
           }}
         >
-          Excluir
+          {tr('memory.excluir')}
         </button>
       </div>
       {err && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</p>}
 
       <div className="mem-section">
-        <h4>Rastreabilidade</h4>
+        <h4>{tr('memory.rastreabilidade')}</h4>
         <dl className="mem-kv">
-          <dt>Origem</dt>
+          <dt>{tr('memory.origem')}</dt>
           <dd>
             {ORIGIN_LABEL[m.origin] ?? m.origin}
             {m.originRef ? ` · ${m.originRef}` : ''}
           </dd>
-          <dt>Confiabilidade</dt>
+          <dt>{tr('memory.confiabilidade')}</dt>
           <dd>{RELIABILITY_LABEL[m.reliability]}</dd>
-          <dt>Confiança da extração</dt>
-          <dd>{m.extractionConfidence == null ? '— (manual)' : `${Math.round(m.extractionConfidence * 100)}% · do modelo, não prova que é verdade`}</dd>
-          <dt>Confirmada por você</dt>
-          <dd>{m.confirmedAt ? fmtDate(m.confirmedAt, true) : 'não'}</dd>
-          <dt>Importância</dt>
+          <dt>{tr('memory.confiancaDaExtracao')}</dt>
+          <dd>{m.extractionConfidence == null ? tr('memory.manual') : tr('memory.doModeloNaoProvaQue', { p0: Math.round(m.extractionConfidence * 100) })}</dd>
+          <dt>{tr('memory.confirmadaPorVoce')}</dt>
+          <dd>{m.confirmedAt ? fmtDate(m.confirmedAt, true) : tr('memory.nao')}</dd>
+          <dt>{tr('memory.importancia')}</dt>
           <dd>{'★'.repeat(m.importance)}{'☆'.repeat(5 - m.importance)}</dd>
-          <dt>Estabilidade</dt>
+          <dt>{tr('memory.estabilidade')}</dt>
           <dd>{STABILITY_LABEL[m.stability]}</dd>
-          <dt>Camada</dt>
+          <dt>{tr('memory.camada')}</dt>
           <dd>{LAYER_LABEL[m.layer]}</dd>
-          <dt>Sensibilidade</dt>
+          <dt>{tr('memory.sensibilidade')}</dt>
           <dd>
             {SENSITIVITY_LABEL[m.sensitivity]}
-            {m.effectiveSensitivity !== m.sensitivity ? ` (efetiva: ${SENSITIVITY_LABEL[m.effectiveSensitivity]}, pela categoria)` : ''}
+            {m.effectiveSensitivity !== m.sensitivity ? tr('memory.efetivaPelaCategoria', { p0: SENSITIVITY_LABEL[m.effectiveSensitivity] }) : ''}
           </dd>
-          <dt>Escopo</dt>
+          <dt>{tr('memory.escopo')}</dt>
           <dd>{m.scope}</dd>
           {m.occurredAt && (
             <>
-              <dt>Aconteceu em</dt>
+              <dt>{tr('memory.aconteceuEm')}</dt>
               <dd>{fmtDate(m.occurredAt)}</dd>
             </>
           )}
           {(m.validFrom || m.validUntil) && (
             <>
-              <dt>Validade</dt>
+              <dt>{tr('memory.validade')}</dt>
               <dd>
                 {fmtDate(m.validFrom)} → {fmtDate(m.validUntil)}
               </dd>
             </>
           )}
-          <dt>Registrada / atualizada</dt>
+          <dt>{tr('memory.registradaAtualizada')}</dt>
           <dd>
-            {fmtDate(m.createdAt, true)} · {fmtDate(m.updatedAt, true)} (v{m.version})
+            {tr('memory.v', { p0: fmtDate(m.createdAt, true), p1: fmtDate(m.updatedAt, true), version: m.version })}
           </dd>
-          <dt>Uso por IAs autorizadas</dt>
-          <dd>{m.useCount ? `${m.useCount}× · última ${fmtDate(m.lastUsedAt, true)}` : 'nunca'}</dd>
+          <dt>{tr('memory.usoPorIasAutorizadas')}</dt>
+          <dd>{m.useCount ? tr('memory.ultima', { useCount: m.useCount, p1: fmtDate(m.lastUsedAt, true) }) : tr('memory.nunca')}</dd>
           {m.supersededById && (
             <>
-              <dt>Substituída por</dt>
+              <dt>{tr('memory.substituidaPor')}</dt>
               <dd>
                 <button className="btn btn-secondary btn-sm" onClick={() => open(m.supersededById)}>
-                  ver memória #{m.supersededById}
+                  {tr('memory.verMemoria', { supersededById: m.supersededById })}
                 </button>
               </dd>
             </>
@@ -173,8 +174,8 @@ export function MemoryDetailModal({ id, onClose }: { id: number; onClose: () => 
       </div>
 
       <div className="mem-section">
-        <h4>Evidências ({d.evidence.length})</h4>
-        {d.evidence.length === 0 && <p className="mem-muted">Sem evidências registradas.</p>}
+        <h4>{tr('memory.evidencias', { count: d.evidence.length })}</h4>
+        {d.evidence.length === 0 && <p className="mem-muted">{tr('memory.semEvidenciasRegistradas')}</p>}
         {d.evidence.map((e) => (
           <div key={e.id} className="mem-ev">
             “{e.excerpt}”
@@ -187,15 +188,15 @@ export function MemoryDetailModal({ id, onClose }: { id: number; onClose: () => 
       </div>
 
       <div className="mem-section">
-        <h4>Relações ({d.relations.length})</h4>
-        {d.relations.length === 0 && <p className="mem-muted">Nenhuma.</p>}
+        <h4>{tr('memory.relacoes', { count: d.relations.length })}</h4>
+        {d.relations.length === 0 && <p className="mem-muted">{tr('memory.nenhuma')}</p>}
         {d.relations.map((r) => (
           <div key={`${r.id}-${r.direction}`} className="mem-row" style={{ fontSize: 13, padding: '3px 0' }}>
             <span className={`mem-chip${r.kind === 'CONTRADICTS' ? ' danger' : ''}`}>{r.direction === 'out' ? RELATION_LABEL[r.kind] : `← ${RELATION_LABEL[r.kind]}`}</span>
             <button className="btn btn-secondary btn-sm" onClick={() => open(r.otherId!)}>
               {r.otherTitle}
             </button>
-            <button className="btn btn-secondary btn-sm" title="Remover relação" onClick={() => act(() => window.api.memory.removeRelation(r.id))}>
+            <button className="btn btn-secondary btn-sm" title={tr('memory.removerRelacao')} onClick={() => act(() => window.api.memory.removeRelation(r.id))}>
               ✕
             </button>
           </div>
@@ -203,13 +204,13 @@ export function MemoryDetailModal({ id, onClose }: { id: number; onClose: () => 
       </div>
 
       <div className="mem-section">
-        <h4>Histórico ({d.revisions.length})</h4>
+        <h4>{tr('memory.historico', { count: d.revisions.length })}</h4>
         {d.revisions.map((r) => (
           <div key={r.id} className="mem-rev">
-            <strong>{CHANGE_LABEL[r.changeKind] ?? r.changeKind}</strong> · {fmtDate(r.createdAt, true)} · {r.actor === 'user' ? 'você' : r.actor === 'agent' ? 'IA' : 'sistema'}
+            <strong>{CHANGE_LABEL[r.changeKind] ?? r.changeKind}</strong> · {fmtDate(r.createdAt, true)} · {r.actor === 'user' ? tr('memory.voce') : r.actor === 'agent' ? tr('memory.ia') : tr('memory.sistema')}
             {r.reason ? ` · ${r.reason}` : ''}
-            {r.snapshot?.content && r.snapshot.content !== m.content && <div className="mem-muted">antes: “{r.snapshot.content}”</div>}
-            {r.snapshot?.status && r.changeKind.startsWith('status:') && <div className="mem-muted">status anterior: {STATUS_LABEL[r.snapshot.status]}</div>}
+            {r.snapshot?.content && r.snapshot.content !== m.content && <div className="mem-muted">{tr('memory.antes', { content: r.snapshot.content })}</div>}
+            {r.snapshot?.status && r.changeKind.startsWith('status:') && <div className="mem-muted">{tr('memory.statusAnterior')} {STATUS_LABEL[r.snapshot.status]}</div>}
           </div>
         ))}
       </div>
@@ -232,7 +233,7 @@ function RelationPicker({ from, onClose, onDone }: { from: PersonalMemory; onClo
     return () => clearTimeout(t)
   }, [q, from.id])
   return (
-    <Modal title="Relacionar memória" onClose={onClose}>
+    <Modal title={tr('memory.relacionarMemoria')} onClose={onClose}>
       <p className="mem-sub">“{from.title}”</p>
       <div className="mem-toolbar">
         <select value={kind} onChange={(e) => setKind(e.target.value as RelationKind)}>
@@ -242,7 +243,7 @@ function RelationPicker({ from, onClose, onDone }: { from: PersonalMemory; onClo
             </option>
           ))}
         </select>
-        <input type="search" autoFocus placeholder="Buscar a outra memória…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" autoFocus placeholder={tr('memory.buscarAOutraMemoria')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {err && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</p>}
       <div className="mem-list">

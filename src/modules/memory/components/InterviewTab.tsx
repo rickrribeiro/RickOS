@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { Interview } from '../api'
 import { useMemoryStore } from '../store/memoryStore'
 import { errMsg, fmtDate } from './ui'
+import { t as tr } from '../../../i18n'
 
 const PRESETS = [
   'Conheça melhor minhas preferências de viagem',
@@ -55,10 +56,9 @@ export function InterviewTab(): React.ReactElement {
     return (
       <div className="mem-chat">
         <div className="mem-panel">
-          <h3>💬 Me conheça melhor</h3>
+          <h3>{tr('memory.meConhecaMelhor')}</h3>
           <p className="mem-sub">
-            Uma conversa leve: a IA pergunta, você responde do jeito que quiser, pode pular qualquer pergunta e parar quando quiser. O que valer a pena guardar vira
-            sugestão no Inbox — nada é salvo sem você aprovar. Temas sensíveis nunca são forçados.
+            {tr('memory.umaConversaLeveAIa')}
           </p>
           <div className="mem-seg" style={{ margin: '10px 0' }}>
             {PRESETS.map((p) => (
@@ -68,9 +68,9 @@ export function InterviewTab(): React.ReactElement {
             ))}
           </div>
           <div className="mem-toolbar">
-            <input style={{ flex: 1, minWidth: 200 }} placeholder="Ou escreva um tema…" value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Tema" />
-            <select value={catId} onChange={(e) => setCatId(e.target.value ? Number(e.target.value) : '')} aria-label="Categoria">
-              <option value="">Qualquer categoria</option>
+            <input style={{ flex: 1, minWidth: 200 }} placeholder={tr('memory.ouEscrevaUmTema')} value={topic} onChange={(e) => setTopic(e.target.value)} aria-label={tr('memory.tema')} />
+            <select value={catId} onChange={(e) => setCatId(e.target.value ? Number(e.target.value) : '')} aria-label={tr('memory.categoria')}>
+              <option value="">{tr('memory.qualquerCategoria')}</option>
               {categories
                 .filter((c) => !c.archivedAt)
                 .map((c) => (
@@ -80,19 +80,19 @@ export function InterviewTab(): React.ReactElement {
                 ))}
             </select>
             <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => window.api.memory.startInterview(topic, catId || null))}>
-              {busy ? 'Pensando…' : 'Começar'}
+              {busy ? tr('memory.pensando') : tr('memory.comecar')}
             </button>
           </div>
           {err && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</p>}
         </div>
         {history.length > 0 && (
           <div className="mem-panel">
-            <h3>Conversas anteriores</h3>
+            <h3>{tr('memory.conversasAnteriores')}</h3>
             {history.map((h) => (
               <button key={h.id} className="mem-cat" style={{ width: '100%' }} onClick={() => setIv(h)}>
                 {h.topic}
                 <span className="n">
-                  {h.turns.filter((t) => t.answer).length} resp. · {fmtDate(h.createdAt)}
+                  {tr('memory.resp', { count: h.turns.filter((t) => t.answer).length, p1: fmtDate(h.createdAt) })}
                 </span>
               </button>
             ))}
@@ -108,16 +108,16 @@ export function InterviewTab(): React.ReactElement {
         <span className="mem-actions">
           {proposed > 0 && (
             <button className="btn btn-secondary btn-sm" onClick={() => setTab('inbox')}>
-              📥 {proposed} sugestão(ões) · Inbox ({pending})
+              {tr('memory.sugestaoOesInbox', { proposed, pending })}
             </button>
           )}
           {iv.status === 'open' ? (
             <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => run(() => window.api.memory.endInterview(iv.id))}>
-              Encerrar
+              {tr('memory.encerrar')}
             </button>
           ) : (
             <button className="btn btn-secondary btn-sm" onClick={() => setIv(null)}>
-              Nova conversa
+              {tr('memory.novaConversa')}
             </button>
           )}
         </span>
@@ -131,10 +131,10 @@ export function InterviewTab(): React.ReactElement {
           {t.answer && (
             <div className="mem-bubble me">
               {t.answer}
-              {t.proposed != null && <small>{t.proposed ? `${t.proposed} sugestão(ões) para revisar` : 'nada novo para guardar'}</small>}
+              {t.proposed != null && <small>{t.proposed ? tr('memory.sugestaoOesParaRevisar', { proposed: t.proposed }) : tr('memory.nadaNovoParaGuardar')}</small>}
             </div>
           )}
-          {t.skipped && <div className="mem-bubble me skip">pulou</div>}
+          {t.skipped && <div className="mem-bubble me skip">{tr('memory.pulou')}</div>}
         </React.Fragment>
       ))}
       {busy && (
@@ -142,11 +142,11 @@ export function InterviewTab(): React.ReactElement {
           <span className="mem-spin" style={{ display: 'inline-block' }} />
         </div>
       )}
-      {iv.status === 'ended' && <p className="mem-muted">Conversa encerrada. Revise as sugestões no Inbox.</p>}
+      {iv.status === 'ended' && <p className="mem-muted">{tr('memory.conversaEncerradaReviseAsSugestoes')}</p>}
       {iv.status === 'open' && !waiting && !busy && (
         // a IA falhou depois de uma resposta (ou a conversa foi reaberta): pede a próxima pergunta
         <button className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => run(() => window.api.memory.skipInterview(iv.id))}>
-          Continuar conversa
+          {tr('memory.continuarConversa')}
         </button>
       )}
       {waiting && (
@@ -161,19 +161,19 @@ export function InterviewTab(): React.ReactElement {
             autoFocus
             rows={2}
             style={{ flex: '1 1 260px', resize: 'vertical', fontFamily: 'inherit' }}
-            placeholder="Sua resposta…"
+            placeholder={tr('memory.suaResposta')}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && answer.trim()) void run(() => window.api.memory.answerInterview(iv.id, answer))
             }}
-            aria-label="Resposta"
+            aria-label={tr('memory.resposta')}
           />
           <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !answer.trim()}>
-            Responder
+            {tr('memory.responder')}
           </button>
           <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => run(() => window.api.memory.skipInterview(iv.id))}>
-            Pular
+            {tr('memory.pular')}
           </button>
         </form>
       )}

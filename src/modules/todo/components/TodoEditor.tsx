@@ -3,6 +3,7 @@ import { Todo } from '../../../types'
 import { useTodoStore } from '../store/todoStore'
 import { useProjectStore } from '../../projects/store/projectStore'
 import { PRIORITIES, STATUSES, STATUS_LABELS, TODO_TYPES } from '../constants'
+import { t as tr } from '../../../i18n'
 
 interface TodoEditorProps {
   todo: Todo
@@ -69,20 +70,20 @@ export function TodoEditor({ todo, onClose }: TodoEditorProps): React.ReactEleme
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
-        <h2>{todo.status === 'inbox' ? 'Processar item' : 'Editar tarefa'}</h2>
+        <h2>{todo.status === 'inbox' ? tr('todo.processarItem') : tr('todo.editarTarefa')}</h2>
 
         <div className="editor-field">
-          <label>Título</label>
+          <label>{tr('todo.titulo')}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
 
         <div className="editor-field">
-          <label>Notas</label>
+          <label>{tr('todo.notas')}</label>
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
 
         <div className="editor-field">
-          <label>Tipo</label>
+          <label>{tr('todo.tipo')}</label>
           <select value={type} onChange={(e) => setType(e.target.value)}>
             {TODO_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
@@ -94,7 +95,7 @@ export function TodoEditor({ todo, onClose }: TodoEditorProps): React.ReactEleme
 
         <div className="editor-row">
           <div className="editor-field">
-            <label>Status</label>
+            <label>{tr('todo.status')}</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               {statusOptions.map((s) => (
                 <option key={s} value={s}>
@@ -104,7 +105,7 @@ export function TodoEditor({ todo, onClose }: TodoEditorProps): React.ReactEleme
             </select>
           </div>
           <div className="editor-field">
-            <label>Prioridade</label>
+            <label>{tr('todo.prioridade')}</label>
             <select value={priority} onChange={(e) => setPriority(Number(e.target.value))}>
               {PRIORITIES.map((p) => (
                 <option key={p.value} value={p.value}>
@@ -117,16 +118,16 @@ export function TodoEditor({ todo, onClose }: TodoEditorProps): React.ReactEleme
 
         <div className="editor-row">
           <div className="editor-field">
-            <label>Vencimento</label>
+            <label>{tr('todo.vencimento')}</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
           <div className="editor-field">
-            <label>Projeto</label>
+            <label>{tr('todo.projeto')}</label>
             <select
               value={projectId ?? ''}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">Nenhum</option>
+              <option value="">{tr('todo.nenhum')}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -138,39 +139,39 @@ export function TodoEditor({ todo, onClose }: TodoEditorProps): React.ReactEleme
 
         <div className="editor-row">
           <div className="editor-field">
-            <label>Repetir</label>
+            <label>{tr('todo.repetir')}</label>
             <select value={recType} onChange={(e) => setRecType(e.target.value)}>
-              <option value="">Não repetir</option>
-              <option value="everyNDays">A cada N dias</option>
-              <option value="dayOfMonth">Dia X do mês</option>
-              <option value="afterCompletion">N dias após concluir</option>
+              <option value="">{tr('todo.naoRepetir')}</option>
+              <option value="everyNDays">{tr('todo.aCadaNDias')}</option>
+              <option value="dayOfMonth">{tr('todo.diaXDoMes')}</option>
+              <option value="afterCompletion">{tr('todo.nDiasAposConcluir')}</option>
             </select>
           </div>
           {(recType === 'everyNDays' || recType === 'afterCompletion') && (
             <div className="editor-field">
-              <label>N (dias)</label>
+              <label>{tr('todo.nDias')}</label>
               <input type="number" min={1} value={recN} onChange={(e) => setRecN(Number(e.target.value) || 1)} />
             </div>
           )}
           {recType === 'dayOfMonth' && (
             <div className="editor-field">
-              <label>Dia do mês</label>
+              <label>{tr('todo.diaDoMes')}</label>
               <input type="number" min={1} max={31} value={recDay} onChange={(e) => setRecDay(Number(e.target.value) || 1)} />
             </div>
           )}
         </div>
         {recType && (
           <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Ao concluir, uma nova tarefa nasce automaticamente com o próximo prazo.
+            {tr('todo.aoConcluirUmaNovaTarefa')}
           </p>
         )}
 
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={onClose}>
-            Cancelar
+            {tr('todo.cancelar')}
           </button>
           <button className="btn btn-primary btn-sm" onClick={handleSave}>
-            Salvar
+            {tr('todo.salvar')}
           </button>
         </div>
       </div>

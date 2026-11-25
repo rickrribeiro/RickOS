@@ -6,6 +6,13 @@ import { shell } from './shell'
 import { skin } from './skin'
 import { timetracker } from './timetracker'
 import { home } from './home'
+import { inbox } from './inbox'
+import { habits } from './habits'
+import { memory } from './memory'
+import { todo } from './todo'
+import { braindump } from './braindump'
+import { goals } from './goals'
+import { automations } from './automations'
 
 export const en: Messages = {
   ...common,
@@ -14,5 +21,12 @@ export const en: Messages = {
   ...shell,
   ...skin,
   ...timetracker,
-  ...home
+  ...home,
+  ...inbox,
+  ...habits,
+  ...memory,
+  ...todo,
+  ...braindump,
+  ...goals,
+  ...automations
 }

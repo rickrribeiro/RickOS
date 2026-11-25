@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Todo } from '../../../types'
 import { STATUSES, STATUS_LABELS, TodoStatus, dueMeta, priorityDef, todoTypeDef } from '../constants'
+import { t as tr } from '../../../i18n'
 
 interface Props {
   open: Todo[]
@@ -194,11 +195,11 @@ export function TodoBoard(props: Props): React.ReactElement {
               <span className="kanban-count">{count}</span>
             </header>
             <div className="todo-col-body">
-              {items.length === 0 && <div className="todo-col-empty">Arraste um card para cá</div>}
+              {items.length === 0 && <div className="todo-col-empty">{tr('todo.arrasteUmCardParaCa')}</div>}
               {items.map((t) => renderCard(t, st))}
               {st === 'done' && doneRemaining > 0 && (
                 <button className="btn btn-secondary btn-sm todo-more" onClick={props.onLoadMoreDone} disabled={loading}>
-                  {loading ? 'Carregando…' : `Ver mais (${Math.min(donePage, doneRemaining)} de ${doneRemaining})`}
+                  {loading ? tr('todo.carregando') : tr('todo.verMaisDe', { p0: Math.min(donePage, doneRemaining), doneRemaining })}
                 </button>
               )}
             </div>
@@ -231,7 +232,7 @@ export function TodoBoard(props: Props): React.ReactElement {
           props.onSelect(t.id)
           props.onEdit(t)
         }}
-        title="Arraste para mudar de coluna · clique para editar"
+        title={tr('todo.arrasteParaMudarDeColuna')}
       >
         <div className="todo-card-top">
           <span className="todo-card-handle" aria-hidden>
@@ -240,7 +241,7 @@ export function TodoBoard(props: Props): React.ReactElement {
           <span className="todo-card-title">{t.title}</span>
           <button
             className="priority-dot"
-            title={`Prioridade: ${prio.label} (clique p/ alternar)`}
+            title={tr('todo.prioridadeCliquePAlternar', { label: prio.label })}
             style={{ background: prio.color }}
             onClick={(e) => {
               e.stopPropagation()
@@ -249,11 +250,11 @@ export function TodoBoard(props: Props): React.ReactElement {
           />
         </div>
         <div className="todo-card-meta">
-          <span className="todo-type-chip" title={`Tipo: ${type.label}`} style={{ borderColor: type.color, color: type.color }}>
+          <span className="todo-type-chip" title={tr('todo.tipo2', { label: type.label })} style={{ borderColor: type.color, color: type.color }}>
             {type.icon} {type.label}
           </span>
           {proj && <span className="project-chip">{proj}</span>}
-          {t.recurrence && <span title="Tarefa recorrente">🔁</span>}
+          {t.recurrence && <span title={tr('todo.tarefaRecorrente')}>🔁</span>}
           {t.notes && t.notes.trim() && <span title={t.notes}>📝</span>}
           {due && <span className={`due-badge ${due.cls}`}>{due.label}</span>}
         </div>
