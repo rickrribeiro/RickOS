@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { NAV_GROUPS, groupKey, isToggleable } from '../../../navigation'
 import { useModuleStore } from '../../../store/moduleStore'
+import { Icon } from '../../../icons/Icon'
 
 const TOGGLEABLE = NAV_GROUPS.filter(isToggleable)
 
@@ -65,7 +66,7 @@ function ModulesModal({ onClose }: { onClose: () => void }): React.ReactElement 
                 <div className={`modules-row${on ? '' : ' off'}`}>
                   <label className="modules-main">
                     <input type="checkbox" checked={on} onChange={() => toggle(key)} />
-                    <span className="modules-icon">{icon}</span>
+                    <span className="modules-icon"><Icon name={icon} /></span>
                     <span className="modules-name">
                       {name}
                       {partial && <span className="modules-count"> {visible}/{g.items.length}</span>}
@@ -98,7 +99,7 @@ function ModulesModal({ onClose }: { onClose: () => void }): React.ReactElement 
                       return (
                         <label key={i.id} className={`modules-subrow${pageOn ? '' : ' off'}`}>
                           <input type="checkbox" checked={pageOn} disabled={!on} onChange={() => toggle(i.id)} />
-                          <span className="modules-icon">{i.icon}</span>
+                          <span className="modules-icon"><Icon name={i.icon} /></span>
                           <span>{i.label}</span>
                         </label>
                       )

@@ -1,105 +1,107 @@
 import { Page } from './types'
+import { IconKey } from './icons/packs'
 
 /** Sidebar: grupos (módulos) e páginas. Cada grupo pode ser ocultado em Configurações → Módulos. */
 export interface NavItem {
   id: Page
   label: string
-  icon: string
+  /** chave do pacote de ícones (src/icons/packs/default.ts) */
+  icon: IconKey
 }
 
 export interface NavGroup {
   label: string
-  groupIcon?: string
+  groupIcon?: IconKey
   items: NavItem[]
 }
 
 export const NAV_GROUPS: NavGroup[] = [
-  { label: '', items: [{ id: 'home', label: 'Dashboard', icon: '🏠' }] },
+  { label: '', items: [{ id: 'home', label: 'Dashboard', icon: 'home' }] },
   {
     label: 'Time Tracker',
-    groupIcon: '⏱',
+    groupIcon: 'timetracker',
     items: [
-      { id: 'timeline', label: 'Timeline', icon: '⏱' },
-      { id: 'calendar', label: 'Calendar', icon: '📅' },
-      { id: 'tasks', label: 'Tasks', icon: '📋' },
-      { id: 'tags', label: 'Tags', icon: '🏷' },
-      { id: 'dashboard', label: 'Stats', icon: '📊' }
+      { id: 'timeline', label: 'Timeline', icon: 'timeline' },
+      { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+      { id: 'tasks', label: 'Tasks', icon: 'tasks' },
+      { id: 'tags', label: 'Tags', icon: 'tags' },
+      { id: 'dashboard', label: 'Stats', icon: 'stats' }
     ]
   },
   {
     label: 'Organização',
-    groupIcon: '🗂',
+    groupIcon: 'organization',
     items: [
-      { id: 'inbox', label: 'Inbox', icon: '📥' },
-      { id: 'todo', label: 'TODO', icon: '✅' },
-      { id: 'braindump', label: 'Brain Dump', icon: '🧠' },
-      { id: 'goals', label: 'Metas', icon: '🎯' },
-      { id: 'habits', label: 'Hábitos', icon: '🔥' },
-      { id: 'automations', label: 'Automações', icon: '⚡' },
-      { id: 'memory', label: 'Memória Pessoal', icon: '🧬' }
+      { id: 'inbox', label: 'Inbox', icon: 'inbox' },
+      { id: 'todo', label: 'TODO', icon: 'todo' },
+      { id: 'braindump', label: 'Brain Dump', icon: 'braindump' },
+      { id: 'goals', label: 'Metas', icon: 'goals' },
+      { id: 'habits', label: 'Hábitos', icon: 'habits' },
+      { id: 'automations', label: 'Automações', icon: 'automations' },
+      { id: 'memory', label: 'Memória Pessoal', icon: 'memory' }
     ]
   },
   {
     label: 'Social',
-    groupIcon: '👥',
+    groupIcon: 'social',
     items: [
-      { id: 'crm', label: 'Pessoas', icon: '🤝' },
-      { id: 'chats', label: 'Chats', icon: '💬' }
+      { id: 'crm', label: 'Pessoas', icon: 'people' },
+      { id: 'chats', label: 'Chats', icon: 'chats' }
     ]
   },
   {
     label: 'Estudos',
-    groupIcon: '🎓',
+    groupIcon: 'studies',
     items: [
-      { id: 'estudos', label: 'Dashboard', icon: '🎓' },
-      { id: 'estudos-review', label: 'Revisões', icon: '🔁' }
+      { id: 'estudos', label: 'Dashboard', icon: 'studies-dashboard' },
+      { id: 'estudos-review', label: 'Revisões', icon: 'reviews' }
     ]
   },
    {
     label: 'Finanças',
-    groupIcon: '💰',
+    groupIcon: 'finance',
     items: [
-      { id: 'finance-dashboard', label: 'Dashboard', icon: '💰' },
-      { id: 'transactions', label: 'Transações', icon: '💸' },
-      { id: 'budget', label: 'Categorias', icon: '🏷️' },
-      { id: 'finance-rules', label: 'Regras', icon: '🪄' },
-      { id: 'investments', label: 'Investimentos', icon: '📈' },
-      { id: 'reports', label: 'Relatórios', icon: '🧾' }
+      { id: 'finance-dashboard', label: 'Dashboard', icon: 'finance-dashboard' },
+      { id: 'transactions', label: 'Transações', icon: 'transactions' },
+      { id: 'budget', label: 'Categorias', icon: 'categories' },
+      { id: 'finance-rules', label: 'Regras', icon: 'finance-rules' },
+      { id: 'investments', label: 'Investimentos', icon: 'investments' },
+      { id: 'reports', label: 'Relatórios', icon: 'reports' }
     ]
   },
   {
     label: 'Projetos',
-    groupIcon: '📁',
+    groupIcon: 'projects',
     items: [
-      { id: 'projects', label: 'Projetos', icon: '🗂' },
-      { id: 'issues', label: 'Issues (Kanban)', icon: '📌' },
-      { id: 'worktrees', label: 'Worktrees & Branches', icon: '🌿' }
+      { id: 'projects', label: 'Projetos', icon: 'projects-list' },
+      { id: 'issues', label: 'Issues (Kanban)', icon: 'issues' },
+      { id: 'worktrees', label: 'Worktrees & Branches', icon: 'worktrees' }
     ]
   },
   
   {
     label: 'Viagens',
-    groupIcon: '✈️',
+    groupIcon: 'travel',
     items: [
-      { id: 'destinations', label: 'Destinos', icon: '🗺' },
-      { id: 'stays', label: 'Hospedagens', icon: '🏨' },
-      { id: 'trip-monitoring', label: 'Passagens', icon: '🔔' },
-      { id: 'itinerary', label: 'Roteiro', icon: '🧭' }
+      { id: 'destinations', label: 'Destinos', icon: 'destinations' },
+      { id: 'stays', label: 'Hospedagens', icon: 'stays' },
+      { id: 'trip-monitoring', label: 'Passagens', icon: 'flights' },
+      { id: 'itinerary', label: 'Roteiro', icon: 'itinerary' }
     ]
   },
   {
     label: 'IA',
-    groupIcon: '🤖',
+    groupIcon: 'ai',
     items: [
-      { id: 'ai-skills', label: 'Skills', icon: '🧩' },
-      { id: 'ai-agents', label: 'Agentes', icon: '🤝' },
-      { id: 'ai-runner', label: 'Prompt Runner', icon: '▶️' },
-      { id: 'ai-history', label: 'Histórico', icon: '🕐' }
+      { id: 'ai-skills', label: 'Skills', icon: 'skills' },
+      { id: 'ai-agents', label: 'Agentes', icon: 'agents' },
+      { id: 'ai-runner', label: 'Prompt Runner', icon: 'runner' },
+      { id: 'ai-history', label: 'Histórico', icon: 'history' }
     ]
   },
-  { label: '', items: [{ id: 'jarvis', label: 'Jarvis', icon: '🧞' }] },
-  { label: '', items: [{ id: 'settings', label: 'Configurações', icon: '⚙️' }] },
-  { label: '', items: [{ id: 'links', label: 'Links', icon: '🔗' }] }
+  { label: '', items: [{ id: 'jarvis', label: 'Jarvis', icon: 'jarvis' }] },
+  { label: '', items: [{ id: 'settings', label: 'Configurações', icon: 'settings' }] },
+  { label: '', items: [{ id: 'links', label: 'Links', icon: 'links' }] }
 ]
 
 /** Chave estável do grupo (o rótulo, ou o id da página para itens soltos). */

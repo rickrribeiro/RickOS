@@ -50,6 +50,7 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `electron/preload` | `window.desktop`: só o que o navegador não faz |
 | `src/App.tsx` | `PAGES` (registry); rota = `#/<page>` |
 | `src/navigation.ts` | `NAV_GROUPS` (sidebar); grupos podem ser ocultados em Configurações → Módulos (`hidden_modules`) |
+| `src/icons/` | pacotes de ícones (Aparência → Ícones): `<Icon name>` resolve no pacote escolhido e cai no padrão (`packs/default.ts`, emojis) quando falta. Chave nova de ícone nasce em `default.ts`; pacote novo = arquivo em `packs/` + entrada em `ICON_PACKS` |
 | `src/types/index.ts` | interfaces, union `Page`, tipos de `window.api` e `window.desktop` |
 | `src/modules/<módulo>/` | `pages/`, `components/`, `store/` de cada área |
 | `src/store/` | stores globais (`uiStore`, `notificationStore`) |

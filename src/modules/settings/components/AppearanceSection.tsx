@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { useNavStyleStore } from '../../../store/navStyleStore'
+import { useIconPackStore } from '../../../store/iconPackStore'
+import { ICON_PACKS } from '../../../icons/packs'
 import {
   DEFAULT_SKIN,
   SKIN_OPTIONS,
@@ -19,6 +21,7 @@ export function AppearanceSection(): React.ReactElement {
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const platform = window.desktop ? 'desktop' : 'web'
   const { navStyle, setNavStyle } = useNavStyleStore()
+  const { pack: iconPack, setPack: setIconPack } = useIconPackStore()
   const [favorites, setFavorites] = useState<Skin[]>(getFavoriteSkins())
   const [showAll, setShowAll] = useState(false)
 
@@ -85,6 +88,16 @@ export function AppearanceSection(): React.ReactElement {
           </div>
         </div>
       )}
+      <div className="editor-field">
+        <label>Ícones</label>
+        <div className="seg-toggle">
+          {ICON_PACKS.map((p) => (
+            <button key={p.id} className={`seg-btn ${iconPack === p.id ? 'active' : ''}`} onClick={() => setIconPack(p.id)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="editor-field">
         <label>Navegação dos módulos</label>
         <div className="seg-toggle">

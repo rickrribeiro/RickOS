@@ -55,6 +55,7 @@ import { NotificationBell, UnreadDot } from './components/NotificationBell'
 import { lastTab, rememberTab, tabGroupOf, visibleNavGroups } from './navigation'
 import { useModuleStore } from './store/moduleStore'
 import { useNavStyleStore } from './store/navStyleStore'
+import { Icon } from './icons/Icon'
 
 const PAGES: Record<Page, React.ComponentType> = {
   timeline: TimelinePage,
@@ -277,7 +278,7 @@ export default function App(): React.ReactElement {
                       onClick={() => setPage(lastTab(group))}
                       title={group.items.map((i) => i.label).join(' · ')}
                     >
-                      <span className="nav-icon">{group.groupIcon}</span>
+                      <span className="nav-icon">{group.groupIcon && <Icon name={group.groupIcon} />}</span>
                       <span className="nav-label">{group.label}</span>
                       {group.items.some((i) => i.id === 'ai-runner') && <RunnerNavBadge compact />}
                     </button>
@@ -322,7 +323,7 @@ export default function App(): React.ReactElement {
                     aria-expanded={!isCollapsed}
                   >
                     <span className={`nav-group-chevron ${isCollapsed ? 'collapsed' : ''}`}>▾</span>
-                    {group.groupIcon && <span className="nav-group-icon">{group.groupIcon}</span>}
+                    {group.groupIcon && <span className="nav-group-icon"><Icon name={group.groupIcon} /></span>}
                     <span>{group.label}</span>
                     {isCollapsed && group.items.some((i) => i.id === 'ai-runner') && <RunnerNavBadge compact />}
                   </button>
@@ -335,7 +336,7 @@ export default function App(): React.ReactElement {
                           className={`nav-btn ${currentPage === item.id ? 'active' : ''}`}
                           onClick={() => setPage(item.id)}
                         >
-                          {!group.label && <span className="nav-icon">{item.icon}</span>}
+                          {!group.label && <span className="nav-icon"><Icon name={item.icon} /></span>}
                           <span className="nav-label">{item.label}</span>
                           {item.id === 'ai-runner' && <RunnerNavBadge />}
                         </button>
@@ -394,7 +395,7 @@ export default function App(): React.ReactElement {
                   className={`module-tab ${currentPage === item.id ? 'active' : ''}`}
                   onClick={() => setPage(item.id)}
                 >
-                  <span className="module-tab-icon">{item.icon}</span>
+                  <span className="module-tab-icon"><Icon name={item.icon} /></span>
                   {item.label}
                   {item.id === 'ai-runner' && <RunnerNavBadge />}
                 </button>
