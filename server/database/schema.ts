@@ -184,7 +184,14 @@ export const SCHEMA = `
     pending INTEGER NOT NULL DEFAULT 0,     -- 1 = pendente no banco (valor/descrição ainda podem mudar)
     investment INTEGER NOT NULL DEFAULT 0,  -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
     transfer INTEGER NOT NULL DEFAULT 0,    -- 1 = transferência entre contas próprias (fora de receitas/gastos)
-    paymentMethod TEXT                      -- credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
+    paymentMethod TEXT,                     -- credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
+    recurring INTEGER NOT NULL DEFAULT 0    -- 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
+  );
+
+  -- Exceções de recorrência por estabelecimento (chave = recurringKey): o usuário corrige a detecção.
+  CREATE TABLE IF NOT EXISTS recurring_overrides (
+    key TEXT PRIMARY KEY,
+    recurring INTEGER NOT NULL              -- 1 = sempre recorrente, 0 = nunca
   );
 
   -- Regras de categorização automática de transações (Finanças → Regras).

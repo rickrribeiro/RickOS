@@ -92,6 +92,8 @@ import {
   setTransactionIgnored,
   setTransactionKind,
   setTransactionPaymentMethod,
+  setRecurringOverride,
+  getRecurringOverrides,
   getFinanceRules,
   createFinanceRule,
   updateFinanceRule,
@@ -208,6 +210,7 @@ import { runClaude } from './services/claude'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
 import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
+import { recomputeRecurring } from './services/recurring'
 import { countsInTotals, type TransactionKind } from '../shared/finance'
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
@@ -324,6 +327,8 @@ export function startScheduler(): void {
   setTimeout(() => void checkProjectRadar().catch(() => undefined), 60000)
   void recoverDelegations().catch(() => undefined)
   void recoverConversations().catch((e) => console.error('[prompt-runner] recuperação', e))
+  // Finanças: recorrência é derivada das transações — recalcula no boot (cobre a migração e regras novas).
+  setTimeout(() => void recomputeRecurring().catch((e) => console.error('[recorrência]', e)), 5000)
   setInterval(() => void checkProjectRadar().catch(() => undefined), 60 * 60 * 1000)
   // Passagens: retoma execuções interrompidas, migra registros antigos e dispara monitores vencidos.
   void bootFlights().catch((e) => console.error('[flights] boot', e))
@@ -942,17 +947,27 @@ ipcMain.handle('categories:setFixedIncome', (_, id: number, fixed: boolean) => s
 ipcMain.handle('categories:delete', (_, id: number) => deleteCategory(id))
 
 ipcMain.handle('transactions:getAll', (_, month?: string) => getTransactions(month))
-ipcMain.handle('transactions:create', (_, accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) =>
-  createTransaction(accountId, categoryId, amount, currency, type, description, date)
+/** Depois de mexer em transações, recalcula a recorrência (sem travar a resposta em caso de erro). */
+async function afterTxChange<T>(r: T): Promise<T> {
+  await recomputeRecurring().catch((e) => console.error('[recorrência]', e))
+  return r
+}
+ipcMain.handle('transactions:create', async (_, accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) =>
+  afterTxChange(await createTransaction(accountId, categoryId, amount, currency, type, description, date))
 )
-ipcMain.handle('transactions:update', (_, id: number, accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) =>
-  updateTransaction(id, accountId, categoryId, amount, currency, type, description, date)
+ipcMain.handle('transactions:update', async (_, id: number, accountId: number | null, categoryId: number | null, amount: number, currency: string, type: string, description: string | null, date: string) =>
+  afterTxChange(await updateTransaction(id, accountId, categoryId, amount, currency, type, description, date))
 )
-ipcMain.handle('transactions:delete', (_, id: number) => deleteTransaction(id))
-ipcMain.handle('transactions:setIgnored', (_, id: number, reason: string | null) => setTransactionIgnored(id, reason))
+ipcMain.handle('transactions:delete', async (_, id: number) => afterTxChange(await deleteTransaction(id)))
+ipcMain.handle('transactions:recurringOverrides', () => getRecurringOverrides())
+ipcMain.handle('transactions:setRecurring', async (_, key: string, recurring: boolean | null) => {
+  await setRecurringOverride(key, recurring)
+  return recomputeRecurring()
+})
+ipcMain.handle('transactions:setIgnored', async (_, id: number, reason: string | null) => afterTxChange(await setTransactionIgnored(id, reason)))
 ipcMain.handle('transactions:setPaymentMethod', (_, id: number, method: string | null) => setTransactionPaymentMethod(id, method))
-ipcMain.handle('transactions:setKind', (_, id: number, kind: TransactionKind) => setTransactionKind(id, kind))
-ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[]) => bulkInsertTransactions(await categorizeNew(rows)))
+ipcMain.handle('transactions:setKind', async (_, id: number, kind: TransactionKind) => afterTxChange(await setTransactionKind(id, kind)))
+ipcMain.handle('transactions:bulk', async (_, rows: Omit<DbTransaction, 'id'>[]) => afterTxChange(await bulkInsertTransactions(await categorizeNew(rows))))
 
 ipcMain.handle('financeRules:getAll', () => getFinanceRules())
 ipcMain.handle('financeRules:create', (_, categoryId: number, keywords: string) => createFinanceRule(categoryId, keywords))
@@ -980,7 +995,7 @@ ipcMain.handle('investments:rename', (_, id: number, name: string) => renameInve
 ipcMain.handle('pluggy:sync', async (_, month?: string) => {
   const r = await syncPluggy(month)
   await setSetting('pluggy_last_sync', new Date().toISOString())
-  return r
+  return afterTxChange(r)
 })
 ipcMain.handle('pluggy:status', () => pluggyConfigured())
 ipcMain.handle('pluggy:syncInvestments', async () => {

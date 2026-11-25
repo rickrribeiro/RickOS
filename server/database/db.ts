@@ -462,6 +462,13 @@ const MIGRATIONS: Migration[] = [
       try { db.run('ALTER TABLE categories ADD COLUMN fixedIncome INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
       try { db.run("UPDATE categories SET fixedIncome = 1 WHERE id = 1 AND type = 'income';") } catch { /* tabela ausente */ }
     }
+  },
+  {
+    version: 35,
+    label: 'Transações: recorrente (detecção automática + exceções por estabelecimento)',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN recurring INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
+    }
   }
 ]
 

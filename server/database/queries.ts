@@ -1198,6 +1198,7 @@ export interface DbTransaction {
   investment?: number // 1 = aplicação/resgate de investimento (fora de receitas/gastos)
   transfer?: number // 1 = transferência entre contas próprias (fora de receitas/gastos)
   paymentMethod?: string | null // credito | debito | pix | ted | boleto | transferencia | saque | deposito
+  recurring?: number // 1 = recorrente
 }
 export interface DbBudget {
   id: number
@@ -1374,6 +1375,31 @@ export async function applyExternalTransactionUpdate(
     }
   }
   run(db, `UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, [...vals, id])
+}
+// ── Recorrência ──
+export async function getRecurringOverrides(): Promise<{ key: string; recurring: number }[]> {
+  const db = await getDb()
+  return getAll<{ key: string; recurring: number }>(db, 'SELECT key, recurring FROM recurring_overrides')
+}
+/** recurring null = volta para a detecção automática. */
+export async function setRecurringOverride(key: string, recurring: boolean | null): Promise<void> {
+  const db = await getDb()
+  if (recurring == null) run(db, 'DELETE FROM recurring_overrides WHERE key = ?', [key])
+  else run(db, 'INSERT INTO recurring_overrides (key, recurring) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET recurring = excluded.recurring', [key, recurring ? 1 : 0])
+}
+/** Grava o flag `recurring` só nas transações em que ele mudou. Retorna quantas mudaram. */
+export async function setTransactionsRecurring(recurringIds: Set<number>): Promise<number> {
+  const db = await getDb()
+  const rows = getAll<{ id: number; recurring: number }>(db, 'SELECT id, recurring FROM transactions')
+  let changed = 0
+  for (const r of rows) {
+    const want = recurringIds.has(r.id) ? 1 : 0
+    if (r.recurring !== want) {
+      run(db, 'UPDATE transactions SET recurring = ? WHERE id = ?', [want, r.id])
+      changed++
+    }
+  }
+  return changed
 }
 export async function setTransactionPaymentMethod(id: number, method: string | null): Promise<void> {
   const db = await getDb()

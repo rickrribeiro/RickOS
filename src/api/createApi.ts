@@ -412,6 +412,8 @@ export function createApi() {
       setIgnored: (id: number, reason: string | null) => invoke('transactions:setIgnored', id, reason),
       setKind: (id: number, kind: 'normal' | 'investment' | 'transfer') => invoke('transactions:setKind', id, kind),
       setPaymentMethod: (id: number, method: string | null) => invoke('transactions:setPaymentMethod', id, method),
+      recurringOverrides: () => invoke('transactions:recurringOverrides'),
+      setRecurring: (key: string, recurring: boolean | null) => invoke('transactions:setRecurring', key, recurring),
       bulk: (rows: unknown[]) => invoke('transactions:bulk', rows)
     },
     budgets: {

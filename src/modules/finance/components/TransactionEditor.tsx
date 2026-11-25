@@ -1,12 +1,27 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
-import { transactionKind, PAYMENT_METHODS, type TransactionKind } from '../../../../shared/finance'
+import { transactionKind, PAYMENT_METHODS, recurringKey, type TransactionKind } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
 export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: () => void }): React.ReactElement {
-  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod } = useFinanceStore()
+  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod, setRecurring } = useFinanceStore()
+  // recorrência é por estabelecimento: '' = automático, '1' = sempre, '0' = nunca
+  const key = recurringKey(tx.description, tx.type)
+  const [recurringMode, setRecurringMode] = useState<'' | '1' | '0'>('')
+  const [recurringLoaded, setRecurringLoaded] = useState<'' | '1' | '0'>('')
+  useEffect(() => {
+    window.api.transactions
+      .recurringOverrides()
+      .then((list) => {
+        const o = list.find((x) => x.key === key)
+        const v = o == null ? '' : o.recurring ? '1' : '0'
+        setRecurringMode(v)
+        setRecurringLoaded(v)
+      })
+      .catch(() => undefined)
+  }, [key])
   const [type, setType] = useState(tx.type)
   const [amount, setAmount] = useState(String(tx.amount))
   const [currency, setCurrency] = useState(tx.currency)
@@ -32,6 +47,7 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
     })
     if (kind !== transactionKind(tx)) await setTransactionKind(tx.id, kind)
     if (payment !== (tx.paymentMethod ?? '')) await setTransactionPaymentMethod(tx.id, payment || null)
+    if (key && recurringMode !== recurringLoaded) await setRecurring(key, recurringMode === '' ? null : recurringMode === '1')
     onClose()
   }
 
@@ -91,6 +107,17 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
             {PAYMENT_METHODS.map((p) => <option key={p.id} value={p.id}>{p.icon} {p.label}</option>)}
           </select>
         </div>
+        {key && (
+          <div className="editor-field">
+            <label>Recorrência</label>
+            <select value={recurringMode} onChange={(e) => setRecurringMode(e.target.value as '' | '1' | '0')}>
+              <option value="">Automática (detectada: {tx.recurring ? 'recorrente' : 'não recorrente'})</option>
+              <option value="1">Sempre recorrente</option>
+              <option value="0">Nunca recorrente</option>
+            </select>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Vale para todas as transações deste estabelecimento, inclusive as próximas.</span>
+          </div>
+        )}
         <div className="editor-field">
           <label>Natureza</label>
           <select value={kind} onChange={(e) => setKind(e.target.value as TransactionKind)}>

@@ -207,3 +207,73 @@ export function pluggyRateText(rate: number | null | undefined, rateType: string
   if (fixedAnnualRate != null) return `${fmt(fixedAnnualRate)}% a.a.`
   return null
 }
+
+// ── Recorrência (assinaturas, contas fixas, salário) ─────────────────────────
+
+/**
+ * Chave do "estabelecimento" para agrupar recorrências: descrição sem acentos, sem números,
+ * sem códigos de pedido (ex.: "Airbnb * Hm984pdp2m" → "airbnb") e com o tipo.
+ */
+export function recurringKey(description: string | null | undefined, type: string): string {
+  let d = normalizeText(description ?? '')
+  d = d.replace(/\*\s*\S*\d\S*/g, ' ') // códigos após "*" com dígitos
+  d = d.replace(/[0-9]+/g, ' ').replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return d ? `${type}:${d}` : ''
+}
+
+interface RecurringCandidate {
+  id: number
+  date: string
+  amount: number
+  type: string
+  description: string | null
+  ignoredReason?: string | null
+  investment?: number | null
+  transfer?: number | null
+}
+
+const INSTALLMENT_RE = /(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/
+const CHARGE_RE = /\b(iof|juros|multa|encargos?)\b/i
+
+const dayDiff = (a: string, b: string): number => (Date.parse(b) - Date.parse(a)) / 86_400_000
+
+/**
+ * Ids das transações recorrentes: mesma chave, ≥ 3 ocorrências encadeadas com ~1 mês entre elas
+ * (25–35 dias) e valor variando até 10%. Parcelas, encargos, ignoradas, investimentos e
+ * transferências ficam de fora. Regra igual à da análise de recorrência da Pluggy.
+ */
+export function detectRecurringIds(txs: RecurringCandidate[]): Set<number> {
+  const groups = new Map<string, RecurringCandidate[]>()
+  for (const t of txs) {
+    if (t.ignoredReason || t.investment || t.transfer) continue
+    const d = t.description ?? ''
+    if (CHARGE_RE.test(d)) continue
+    const inst = INSTALLMENT_RE.exec(d)
+    if (inst && Number(inst[2]) >= 2 && Number(inst[1]) <= Number(inst[2])) continue
+    const k = recurringKey(d, t.type)
+    if (!k) continue
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k)!.push(t)
+  }
+  const out = new Set<number>()
+  for (const list of groups.values()) {
+    if (list.length < 3) continue
+    list.sort((a, b) => a.date.localeCompare(b.date))
+    // encadeia: de cada transação, a próxima ~1 mês depois com valor parecido
+    for (let i = 0; i < list.length; i++) {
+      const chain = [list[i]]
+      let cur = list[i]
+      for (let j = i + 1; j < list.length; j++) {
+        const gap = dayDiff(cur.date, list[j].date)
+        if (gap < 25) continue
+        if (gap > 35) break
+        if (Math.abs(list[j].amount - cur.amount) <= 0.1 * Math.max(cur.amount, list[j].amount)) {
+          chain.push(list[j])
+          cur = list[j]
+        }
+      }
+      if (chain.length >= 3) for (const c of chain) out.add(c.id)
+    }
+  }
+  return out
+}

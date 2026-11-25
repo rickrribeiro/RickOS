@@ -6,7 +6,7 @@ import { TransactionEditor } from '../components/TransactionEditor'
 import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
-import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel } from '../../../../shared/finance'
+import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel, recurringKey } from '../../../../shared/finance'
 
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
@@ -22,6 +22,7 @@ export function TransactionsPage(): React.ReactElement {
     removeTransaction,
     markTransactionValid,
     setTransactionKind,
+    setRecurring,
     importTransactions,
     categoryName
   } = useFinanceStore()
@@ -39,7 +40,7 @@ export function TransactionsPage(): React.ReactElement {
   const [pluggyBusy, setPluggyBusy] = useState(false)
   const [pluggyMsg, setPluggyMsg] = useState<{ text: string; ok: boolean } | null>(null)
   // filtros da lista
-  const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment' | 'transfer'>('')
+  const [fType, setFType] = useState<'' | 'income' | 'expense' | 'investment' | 'transfer' | 'recurring'>('')
   const [fCategory, setFCategory] = useState<'' | 'none' | number>('')
   const [fText, setFText] = useState('')
   const [fPayment, setFPayment] = useState<string>('') // '' = todas, 'none' = não identificada
@@ -69,7 +70,7 @@ export function TransactionsPage(): React.ReactElement {
   const filtered = source.filter(
     (t) =>
       (fType === '' ||
-        (fType === 'investment' ? !!t.investment : fType === 'transfer' ? !!t.transfer : t.type === fType)) &&
+        (fType === 'investment' ? !!t.investment : fType === 'transfer' ? !!t.transfer : fType === 'recurring' ? !!t.recurring : t.type === fType)) &&
       (fCategory === '' || (fCategory === 'none' ? t.categoryId == null : t.categoryId === fCategory)) &&
       (fPayment === '' || (fPayment === 'none' ? !t.paymentMethod : t.paymentMethod === fPayment)) &&
       matchesText(t)
@@ -241,7 +242,7 @@ export function TransactionsPage(): React.ReactElement {
         <select
           value={fType}
           onChange={(e) => {
-            const v = e.target.value as '' | 'income' | 'expense' | 'investment' | 'transfer'
+            const v = e.target.value as '' | 'income' | 'expense' | 'investment' | 'transfer' | 'recurring'
             setFType(v)
             // categoria escolhida é do outro tipo → some do select; limpa para não esconder tudo
             if ((v === 'income' || v === 'expense') && typeof fCategory === 'number' && categories.find((c) => c.id === fCategory)?.type !== v) setFCategory('')
@@ -252,6 +253,7 @@ export function TransactionsPage(): React.ReactElement {
           <option value="expense">Só saídas</option>
           <option value="investment">Só investimentos (aplicação/resgate)</option>
           <option value="transfer">Só transferências entre contas</option>
+          <option value="recurring">Só recorrentes</option>
         </select>
         <select
           value={fCategory === '' ? '' : String(fCategory)}
@@ -339,6 +341,20 @@ export function TransactionsPage(): React.ReactElement {
                 }}
               >
                 🔁 transferência
+              </button>
+            ) : null}
+            {t.recurring ? (
+              <button
+                className="project-chip"
+                style={{ color: 'var(--accent)', cursor: 'pointer', border: 'none' }}
+                title="Recorrente (se repete ~todo mês com valor parecido). Clique se não for."
+                onClick={() => {
+                  const key = recurringKey(t.description, t.type)
+                  if (key && confirm(`Não é recorrente?\n\nVale para todas as transações de "${t.description}" (inclusive as próximas). Dá para desfazer no Editar.`))
+                    setRecurring(key, false)
+                }}
+              >
+                📅 recorrente
               </button>
             ) : null}
             {t.pending ? (
