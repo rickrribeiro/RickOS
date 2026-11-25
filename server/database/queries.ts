@@ -1199,6 +1199,8 @@ export interface DbTransaction {
   transfer?: number // 1 = transferência entre contas próprias (fora de receitas/gastos)
   paymentMethod?: string | null // credito | debito | pix | ted | boleto | transferencia | saque | deposito
   recurring?: number // 1 = recorrente
+  installmentNumber?: number | null // parcela n (Pluggy)
+  installmentTotal?: number | null // de N
 }
 export interface DbBudget {
   id: number
@@ -1360,7 +1362,7 @@ export async function updateTransaction(
  */
 export async function applyExternalTransactionUpdate(
   id: number,
-  fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type' | 'paymentMethod'>>,
+  fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type' | 'paymentMethod' | 'installmentNumber' | 'installmentTotal'>>,
   externalId: string,
   externalSig: string,
   pending: number
@@ -1368,7 +1370,7 @@ export async function applyExternalTransactionUpdate(
   const db = await getDb()
   const sets = ['externalId = ?', 'externalSig = ?', 'pending = ?']
   const vals: (string | number | null)[] = [externalId, externalSig, pending]
-  for (const k of ['amount', 'description', 'date', 'type', 'paymentMethod'] as const) {
+  for (const k of ['amount', 'description', 'date', 'type', 'paymentMethod', 'installmentNumber', 'installmentTotal'] as const) {
     if (k in fields) {
       sets.push(`${k} = ?`)
       vals.push(fields[k] ?? null)
@@ -1424,8 +1426,8 @@ export async function bulkInsertTransactions(rows: Omit<DbTransaction, 'id'>[]):
   for (const r of rows) {
     run(
       db,
-      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending, investment, transfer, paymentMethod) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0, r.investment ?? 0, r.transfer ?? 0, r.paymentMethod ?? null]
+      'INSERT INTO transactions (accountId, categoryId, amount, currency, type, description, date, ignoredReason, externalId, externalSig, pending, investment, transfer, paymentMethod, installmentNumber, installmentTotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.accountId, r.categoryId, r.amount, r.currency, r.type, r.description, r.date, r.ignoredReason ?? null, r.externalId ?? null, r.externalSig ?? null, r.pending ?? 0, r.investment ?? 0, r.transfer ?? 0, r.paymentMethod ?? null, r.installmentNumber ?? null, r.installmentTotal ?? null]
     )
   }
   return rows.length

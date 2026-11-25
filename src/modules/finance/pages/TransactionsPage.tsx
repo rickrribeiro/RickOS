@@ -3,7 +3,7 @@ import { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { TransactionEditor } from '../components/TransactionEditor'
-import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency } from '../util'
+import { formatMoney, parseBankCsv, transactionsToCsv, matchCategoryId, monthLabel, sumByCurrency, installmentOf } from '../util'
 import { localDateStr } from '../../../utils/dates'
 import { finishPluggySync } from '../pluggySync'
 import { detectInvestmentMove, detectOwnTransfer, detectPaymentMethod, countsInTotals, normalizeText, PAYMENT_METHODS, paymentMethodLabel, recurringKey } from '../../../../shared/finance'
@@ -342,6 +342,11 @@ export function TransactionsPage(): React.ReactElement {
               >
                 🔁 transferência
               </button>
+            ) : null}
+            {t.installmentTotal && t.installmentNumber && !installmentOf(t.description) ? (
+              <span className="project-chip" title="Parcela (informada pelo banco)">
+                {t.installmentNumber}/{t.installmentTotal}
+              </span>
             ) : null}
             {t.recurring ? (
               <button

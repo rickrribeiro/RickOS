@@ -444,6 +444,8 @@ export interface Transaction {
   transfer?: number // 1 = transferência entre contas próprias: fora de receitas/gastos
   paymentMethod?: string | null // credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
   recurring?: number // 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
+  installmentNumber?: number | null // parcela n (Open Finance)
+  installmentTotal?: number | null // de N
 }
 
 export interface RulePreviewItem {

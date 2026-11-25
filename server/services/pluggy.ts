@@ -42,6 +42,7 @@ interface PluggyTransaction {
   category?: string | null
   operationType?: string | null // ex.: PAGAMENTO_FATURA, PIX, TED, BOLETO, CARTAO…
   paymentData?: { paymentMethod?: string | null } | null
+  creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null } | null
 }
 
 /**
@@ -249,6 +250,8 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
         date: t.date.slice(0, 10),
         ignoredReason: isCardBillPayment(t, acc) ? 'Pagamento de fatura do cartão' : null,
         investment: detectInvestmentMove(t.description, t.category) ? 1 : 0,
+        installmentNumber: t.creditCardMetadata?.totalInstallments ? (t.creditCardMetadata.installmentNumber ?? null) : null,
+        installmentTotal: t.creditCardMetadata?.totalInstallments ?? null,
         paymentMethod: detectPaymentMethod(t.description, {
           accountType: acc.type,
           paymentMethod: t.paymentData?.paymentMethod,
@@ -280,9 +283,12 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
     const cur = byExternal.get(inc.externalId)
     if (cur) {
       // forma de pagamento: só preenche quando o app ainda não tem (não sobrescreve escolha do usuário)
-      const fillPayment = !cur.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {}
+      const fillPayment = {
+        ...(!cur.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {}),
+        ...(cur.installmentTotal == null && inc.installmentTotal ? { installmentNumber: inc.installmentNumber, installmentTotal: inc.installmentTotal } : {})
+      }
       if (cur.externalSig === inc.externalSig) {
-        if (fillPayment.paymentMethod) await applyExternalTransactionUpdate(cur.id, fillPayment, inc.externalId, inc.externalSig, inc.pending)
+        if (Object.keys(fillPayment).length) await applyExternalTransactionUpdate(cur.id, fillPayment, inc.externalId, inc.externalSig, inc.pending)
         if (!month || inc.date.startsWith(month)) skipped++
         continue
       }
@@ -293,7 +299,7 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
       } catch {
         prev = null
       }
-      const fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type' | 'paymentMethod'>> = { ...fillPayment }
+      const fields: Partial<Pick<DbTransaction, 'amount' | 'description' | 'date' | 'type' | 'paymentMethod' | 'installmentNumber' | 'installmentTotal'>> = { ...fillPayment }
       const next = [inc.amount, inc.description, inc.date, inc.type] as const
       ;(['amount', 'description', 'date', 'type'] as const).forEach((k, i) => {
         const bankChanged = !prev || prev[i] !== next[i]
@@ -309,7 +315,10 @@ export async function syncPluggy(month?: string): Promise<PluggySyncResult> {
     if (old) {
       await applyExternalTransactionUpdate(
         old.id,
-        !old.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {},
+        {
+          ...(!old.paymentMethod && inc.paymentMethod ? { paymentMethod: inc.paymentMethod } : {}),
+          ...(old.installmentTotal == null && inc.installmentTotal ? { installmentNumber: inc.installmentNumber, installmentTotal: inc.installmentTotal } : {})
+        },
         inc.externalId,
         inc.externalSig,
         inc.pending

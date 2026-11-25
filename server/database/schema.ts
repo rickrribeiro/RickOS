@@ -185,7 +185,9 @@ export const SCHEMA = `
     investment INTEGER NOT NULL DEFAULT 0,  -- 1 = aplicação/resgate de investimento (fora de receitas/gastos)
     transfer INTEGER NOT NULL DEFAULT 0,    -- 1 = transferência entre contas próprias (fora de receitas/gastos)
     paymentMethod TEXT,                     -- credito | debito | pix | ted | boleto | transferencia | saque | deposito (null = não identificada)
-    recurring INTEGER NOT NULL DEFAULT 0    -- 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
+    recurring INTEGER NOT NULL DEFAULT 0,   -- 1 = recorrente (detecção automática ou exceção do usuário por estabelecimento)
+    installmentNumber INTEGER,              -- parcela n (creditCardMetadata do Pluggy); null = à vista/desconhecido
+    installmentTotal INTEGER                -- de N parcelas
   );
 
   -- Exceções de recorrência por estabelecimento (chave = recurringKey): o usuário corrige a detecção.

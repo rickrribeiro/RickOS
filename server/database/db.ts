@@ -469,6 +469,14 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       try { db.run('ALTER TABLE transactions ADD COLUMN recurring INTEGER NOT NULL DEFAULT 0;') } catch { /* exists */ }
     }
+  },
+  {
+    version: 36,
+    label: 'Transações: número da parcela (n de N) vindo do Open Finance',
+    run: (db) => {
+      try { db.run('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER;') } catch { /* exists */ }
+      try { db.run('ALTER TABLE transactions ADD COLUMN installmentTotal INTEGER;') } catch { /* exists */ }
+    }
   }
 ]
 

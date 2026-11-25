@@ -230,6 +230,7 @@ interface RecurringCandidate {
   ignoredReason?: string | null
   investment?: number | null
   transfer?: number | null
+  installmentTotal?: number | null
 }
 
 const INSTALLMENT_RE = /(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/
@@ -246,6 +247,7 @@ export function detectRecurringIds(txs: RecurringCandidate[]): Set<number> {
   const groups = new Map<string, RecurringCandidate[]>()
   for (const t of txs) {
     if (t.ignoredReason || t.investment || t.transfer) continue
+    if (t.installmentTotal && t.installmentTotal >= 2) continue // parcela (campo do Open Finance)
     const d = t.description ?? ''
     if (CHARGE_RE.test(d)) continue
     const inst = INSTALLMENT_RE.exec(d)

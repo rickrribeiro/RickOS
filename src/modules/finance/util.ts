@@ -119,13 +119,19 @@ export function installmentOf(description: string | null): { n: number; total: n
   return n >= 1 && total >= 2 && n <= total ? { n, total } : null
 }
 
+/** Parcela da transação: campo do Open Finance (exato) ou, sem ele, o "n/N" da descrição. */
+export function installmentOfTx(t: { description: string | null; installmentNumber?: number | null; installmentTotal?: number | null }): { n: number; total: number } | null {
+  if (t.installmentTotal && t.installmentTotal >= 2 && t.installmentNumber) return { n: t.installmentNumber, total: t.installmentTotal }
+  return installmentOf(t.description)
+}
+
 /**
  * Fatura inicial do mês: parcelas (2ª em diante) de compras feitas em meses anteriores que caem
  * neste mês — o quanto a fatura já começa antes de qualquer compra nova. Encargos (ex.: IOF de
  * uma compra parcelada) ficam de fora.
  */
 export function startingBillInBase(
-  items: { type: string; description: string | null; amount: number; currency: string }[],
+  items: { type: string; description: string | null; amount: number; currency: string; installmentNumber?: number | null; installmentTotal?: number | null }[],
   base: string,
   rates: Record<string, number>
 ): { total: number; count: number } {
@@ -133,7 +139,7 @@ export function startingBillInBase(
   let count = 0
   for (const t of items) {
     if (t.type !== 'expense' || chargeKind(t)) continue
-    const inst = installmentOf(t.description)
+    const inst = installmentOfTx(t)
     if (!inst || inst.n < 2) continue
     total += convertToBase(t.amount, t.currency, base, rates)
     count++
