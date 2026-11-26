@@ -79,7 +79,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   openAt: async (topicId, nodeId, target = 'note', refId = null) => {
     set({ activeTopicId: topicId, selectedNodeId: nodeId, focus: { target, refId }, nodes: [], flashcards: [], note: null })
     saveSel(topicId, nodeId)
-    await get().refreshActive()
+    await Promise.all([get().topics.some((t) => t.id === topicId) ? null : get().refreshTopics(), get().refreshActive()])
   },
   clearFocus: () => set({ focus: null }),
   activeTopicId: loadSel().topicId,
