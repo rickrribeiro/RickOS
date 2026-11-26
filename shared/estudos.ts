@@ -225,6 +225,7 @@ export interface TopicRow {
   goal: string | null
   reviewWhenArchived: number
   readingMode: 'hidden' | 'visible'
+  uid: string | null
 }
 
 export interface LibraryTopic extends TopicRow {
@@ -440,3 +441,86 @@ export interface QuestionInput {
   hint?: string | null
   origin?: string
 }
+
+// ── Repositório / Sincronizar / adoção (server/estudos/git.ts, adopt.ts, bundle.ts) ──
+
+export interface GitConfig {
+  remote: string
+  branch: string
+  folder: string
+}
+
+export interface SyncResult {
+  status: SyncStatus
+  /** Chave de mensagem para a UI (texto final é traduzido no front). */
+  message: string
+  detail?: string
+  commit?: string | null
+  committed: boolean
+  /** Arquivos editados fora do rickOS mantidos como estão no repositório. */
+  keptExternal: string[]
+  /** Editados dos dois lados: repositório mantido, versão do rickOS salva em `divergenceDir`. */
+  conflicts: string[]
+  divergenceDir?: string | null
+  at: string
+}
+
+export interface LinkPreview {
+  remote: string
+  branch: string
+  folder: string
+  emptyRepo: boolean
+  branchExists: boolean
+  /** free = pasta livre; managed = já tem manifesto do rickOS (dá para restaurar); occupied = ocupada por outros arquivos. */
+  folderState: 'free' | 'managed' | 'occupied'
+  folderFiles: number
+  topLevel: string[]
+  notesOutside: number
+  suggestion: string | null
+  previewId: string
+}
+
+export interface GitStatus {
+  config: GitConfig | null
+  linked: boolean
+  pending: boolean
+  last: SyncResult | null
+}
+
+export type SyncStatus = 'synced' | 'pushed' | 'pending' | 'divergent' | 'error'
+
+export interface AdoptFile {
+  path: string
+  title: string
+  section: string | null
+  chars: number
+  hash: string
+  status: 'new' | 'unchanged' | 'changed'
+  images: string[]
+  missing: string[]
+}
+
+export interface AdoptPreview {
+  subpath: string
+  recognized: AdoptFile[]
+  ignored: string[]
+  collisions: { path: string; reason: 'mesmo-titulo' | 'ja-existe-no-topico' }[]
+  missingLinks: { path: string; link: string }[]
+}
+
+export interface AdoptApply {
+  subpath: string
+  topicId: number | null
+  newTopicName?: string | null
+  /** note = vira nota autoral de um nó; source = vira fonte de leitura. */
+  mode: 'note' | 'source'
+  decisions: Record<string, 'create' | 'update' | 'skip'>
+}
+
+export interface RestoreReport {
+  created: string[]
+  skipped: string[]
+  attachments: number
+  missingAttachments: string[]
+}
+

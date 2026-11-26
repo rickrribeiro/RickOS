@@ -5,6 +5,7 @@ import { flights } from './flights'
 import { chats } from './chats'
 import { aiconv } from './aiconv'
 import { db } from './db'
+import { estudos } from './estudos'
 
 /** Textos que o servidor manda para a interface (notificações, alertas, erros). Prompts de IA NÃO entram aqui. */
 export const ptBR = {
@@ -14,7 +15,8 @@ export const ptBR = {
   ...flights,
   ...chats,
   ...aiconv,
-  ...db
+  ...db,
+  ...estudos
 }
 
 export type ServerKey = keyof typeof ptBR

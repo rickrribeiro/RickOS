@@ -1,9 +1,37 @@
 import React from 'react'
+import { authedUrl } from '../../api/transport'
+
+/**
+ * Resolve o src de uma imagem: `anexos/<arquivo>` (ou `../anexos/…` vindo de uma exportação) vira a
+ * rota autenticada do servidor; https é mostrado como está; o resto não carrega (fica o texto).
+ */
+export function imageSrc(src: string): string | null {
+  const m = /^(?:\.\.\/)*anexos\/([^?#]+)$/.exec(src.trim())
+  if (m) return authedUrl(`/api/estudos/anexo/${encodeURIComponent(decodeURIComponent(m[1]))}`)
+  if (/^https:\/\//i.test(src)) return src
+  return null
+}
+
+function Img({ src, alt, block }: { src: string; alt: string; block?: boolean }): React.ReactElement {
+  const url = imageSrc(src)
+  if (!url) return <span className="md-img-missing" title={src}>🖼 {alt || src}</span>
+  const img = <img className="md-img" src={url} alt={alt} loading="lazy" />
+  return block ? (
+    <figure className="md-figure">
+      {img}
+      {alt && <figcaption>{alt}</figcaption>}
+    </figure>
+  ) : (
+    img
+  )
+}
+
+const IMAGE_LINE = /^\s*!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/
 
 /** Inline: `code`, **bold**, *italic*, [text](url). React escapes text → XSS-safe. */
 function renderInline(text: string, keyBase: string): React.ReactNode[] {
   const out: React.ReactNode[] = []
-  const regex = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g
+  const regex = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(!\[[^\]]*\]\([^)]+\))|(\[[^\]]+\]\([^)]+\))/g
   let last = 0
   let m: RegExpExecArray | null
   let i = 0
@@ -17,6 +45,9 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
       out.push(<strong key={key}>{tok.slice(2, -2)}</strong>)
     } else if (tok.startsWith('*')) {
       out.push(<em key={key}>{tok.slice(1, -1)}</em>)
+    } else if (tok.startsWith('![')) {
+      const mm = /!\[([^\]]*)\]\(([^)\s]+)/.exec(tok)
+      out.push(mm ? <Img key={key} src={mm[2]} alt={mm[1]} /> : tok)
     } else {
       const mm = /\[([^\]]+)\]\(([^)]+)\)/.exec(tok)
       if (mm) {
@@ -54,6 +85,14 @@ export function renderMarkdown(md: string): React.ReactNode {
 
   while (i < lines.length) {
     const line = lines[i]
+
+    // imagem sozinha na linha → figura com legenda (alt)
+    const im = IMAGE_LINE.exec(line)
+    if (im) {
+      blocks.push(<Img key={key++} src={im[2]} alt={im[1]} block />)
+      i++
+      continue
+    }
 
     // code fence
     if (/^```/.test(line)) {
@@ -146,6 +185,7 @@ export function renderMarkdown(md: string): React.ReactNode {
       !/^>\s?/.test(lines[i]) &&
       !/^\s*[-*]\s+/.test(lines[i]) &&
       !/^\s*\d+\.\s+/.test(lines[i]) &&
+      !IMAGE_LINE.test(lines[i]) &&
       !isTableStart(lines, i)
     ) {
       buf.push(lines[i++])

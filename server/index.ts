@@ -12,6 +12,7 @@ import { subscribe } from './events'
 import { finishGoogleConnect } from './services/google'
 import { registerChatAgentRoutes } from './chats/agentRelay'
 import { fetchAsset } from './chats/service'
+import { attachmentFile } from './estudos/attachments'
 import { loadServerLocale, tt } from './i18n'
 
 export interface StartedServer {
@@ -124,6 +125,17 @@ export async function startServer(overrides: Partial<ServerConfig> = {}): Promis
     } catch (e) {
       return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : tt('rpc.anexoIndisponivel') })
     }
+  })
+
+  // Estudos: imagens do caderno (link estável anexos/<arquivo>)
+  app.get<{ Params: { file: string } }>('/api/estudos/anexo/:file', { preHandler: requireAuth }, async (req, reply) => {
+    const a = await attachmentFile(String(req.params.file || ''))
+    if (!a) return reply.code(404).send({ ok: false, error: tt('rpc.anexoIndisponivel') })
+    reply.header('Content-Type', a.mime)
+    reply.header('Cache-Control', 'private, max-age=31536000, immutable')
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('Content-Security-Policy', "default-src 'none'")
+    return reply.send(fs.createReadStream(a.file))
   })
 
   app.get('/api/export/db', { preHandler: requireAuth }, async (_req, reply) => {

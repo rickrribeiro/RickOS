@@ -3465,3 +3465,18 @@ button.todo-divider:hover {
 .flashcard-foot { margin-top: 12px; text-align: right; }
 .study-col input, .study-col select, .study-col textarea { min-width: 0; max-width: 100%; }
 .study-col .study-tree input { flex: 1; }
+.md-figure { margin: 8px 0; }
+.md-figure figcaption { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.md-img { max-width: 100%; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.md-img-missing { font-size: 12px; color: var(--text-muted); }
+.image-insert { display: flex; flex-direction: column; gap: 6px; padding: 8px; margin: 6px 0; border: 1px dashed var(--accent); border-radius: var(--radius-sm); }
+.image-insert .md-img { max-height: 180px; object-fit: contain; align-self: flex-start; }
+.sync-wrap { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sync-status { font-size: 11px; color: var(--text-muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-pushed, .sync-synced { color: var(--success); }
+.sync-pending, .sync-divergent { color: var(--warning); }
+.sync-error { color: var(--danger); }
+.sync-result { margin-top: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.repo-modal { max-width: 680px; }
+.repo-summary { font-size: 12px; overflow-wrap: anywhere; }
+.study-col.collapsed { min-height: 0; }

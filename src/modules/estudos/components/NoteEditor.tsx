@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useStudyStore } from '../store/studyStore'
-import { renderMarkdown } from '../markdown'
+import { renderMarkdown, imageSrc } from '../markdown'
+import { fileToBase64 } from '../../../api/files'
 import { t, getLocale } from '../../../i18n'
 import type { AcaoTutor } from '../../../../shared/prompts/estudos/tutor'
 
@@ -32,6 +33,62 @@ export function NoteEditor(): React.ReactElement {
   const area = useRef<HTMLTextAreaElement | null>(null)
   const draftRef = useRef(draft)
   draftRef.current = draft
+  const fileInput = useRef<HTMLInputElement | null>(null)
+  const [image, setImage] = useState<{ ref: string; cursor: number; caption: string } | null>(null)
+  const [imageBusy, setImageBusy] = useState(false)
+  const [imageError, setImageError] = useState('')
+
+  /** Envia a imagem ao servidor; o texto só muda quando eu confirmo a inserção (falha não mexe na nota). */
+  async function uploadImage(file: File): Promise<void> {
+    if (!file.type.startsWith('image/')) return
+    const cursor = area.current?.selectionStart ?? draftRef.current.length
+    setImageError('')
+    setImageBusy(true)
+    try {
+      const dataUrl = await fileToBase64(file)
+      const r = await window.api.estudos.uploadAttachment(file.name || 'imagem', file.type, dataUrl.slice(dataUrl.indexOf(',') + 1))
+      setImage({ ref: r.ref, cursor, caption: '' })
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
+  function insertImage(): void {
+    if (!image) return
+    const cur = draftRef.current
+    const at = Math.min(image.cursor, cur.length)
+    const before = cur.slice(0, at)
+    const after = cur.slice(at)
+    const caption = image.caption.replace(/[\[\]\n]/g, ' ').trim()
+    const snippet = `${before && !before.endsWith('\n') ? '\n' : ''}![${caption}](${image.ref})\n${after.startsWith('\n') ? '' : '\n'}`
+    onChange(before + snippet + after)
+    setImage(null)
+    requestAnimationFrame(() => {
+      const el = area.current
+      if (el) {
+        const pos = before.length + snippet.length
+        el.focus()
+        el.setSelectionRange(pos, pos)
+      }
+    })
+  }
+
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>): void {
+    const f = [...e.clipboardData.files].find((x) => x.type.startsWith('image/'))
+    if (f) {
+      e.preventDefault()
+      uploadImage(f)
+    }
+  }
+  function onDrop(e: React.DragEvent<HTMLTextAreaElement>): void {
+    const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'))
+    if (f) {
+      e.preventDefault()
+      uploadImage(f)
+    }
+  }
 
   // posição e "onde parei" desta nota (checkpoint no servidor: vale para os dois clientes)
   useEffect(() => {
@@ -176,8 +233,33 @@ export function NoteEditor(): React.ReactElement {
           {saveState === 'error' && t('est.erroAoSalvar')}
           {(saveState === 'saved' || saveState === 'idle') && `${t('estudos.salvo')} ${fmt(savedAt)}`}
         </span>
+        <button className="btn btn-secondary btn-sm" onClick={() => fileInput.current?.click()} disabled={imageBusy} title={t('est.imagemDica')}>
+          {imageBusy ? t('est.enviandoImagem') : t('est.imagem')}
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) uploadImage(f)
+          }}
+        />
         <button className="btn btn-secondary btn-sm" onClick={() => setPreview(!preview)}>{preview ? t('est.esconderPrevia') : t('est.mostrarPrevia')}</button>
       </div>
+      {imageError && <div className="study-error">{t('est.imagemFalhou', { erro: imageError })}</div>}
+      {image && (
+        <div className="image-insert">
+          {imageSrc(image.ref) && <img className="md-img" src={imageSrc(image.ref)!} alt="" />}
+          <input value={image.caption} onChange={(e) => setImage({ ...image, caption: e.target.value })} placeholder={t('est.legendaOpcional')} autoFocus onKeyDown={(e) => e.key === 'Enter' && insertImage()} />
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setImage(null)}>{t('estudos.cancelar')}</button>
+            <button className="btn btn-primary btn-sm" onClick={insertImage}>{t('est.inserirImagem')}</button>
+          </div>
+        </div>
+      )}
       <div className="where-stopped">
         <input
           value={whereStopped}
@@ -195,6 +277,9 @@ export function NoteEditor(): React.ReactElement {
           onChange={(e) => onChange(e.target.value)}
           onBlur={flush}
           onKeyUp={() => checkpoint()}
+          onPaste={onPaste}
+          onDrop={onDrop}
+          onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
           onClick={() => checkpoint()}
           placeholder={t('estudos.escrevaEmMarkdownTituloNegrito')}
           spellCheck={false}

@@ -1,4 +1,11 @@
 import type {
+  AdoptApply,
+  AdoptPreview,
+  GitConfig,
+  GitStatus,
+  LinkPreview,
+  RestoreReport,
+  SyncResult,
   AttemptRow,
   CardFilters,
   CardOut,
@@ -77,6 +84,18 @@ export interface EstudosApi {
   deleteQuestion(id: number): Promise<void>
   recordAttempt(id: number, a: { answer?: string | null; helpUsed?: string | null; outcome: AttemptRow['outcome'] }): Promise<AttemptRow>
   attempts(id: number): Promise<AttemptRow[]>
+
+  uploadAttachment(name: string, mime: string, base64: string): Promise<{ fileName: string; ref: string; mime: string; size: number }>
+  exportAll(): Promise<{ path: string; base64: string }[]>
+  gitStatus(): Promise<GitStatus>
+  gitPreview(cfg: Partial<GitConfig>): Promise<LinkPreview>
+  gitLink(cfg: GitConfig & { previewId: string }): Promise<GitConfig>
+  gitUnlink(): Promise<void>
+  sync(): Promise<SyncResult>
+  gitTree(): Promise<string[]>
+  restoreFromRepo(): Promise<RestoreReport>
+  adoptPreview(subpath: string, topicId: number | null): Promise<AdoptPreview>
+  adoptApply(input: AdoptApply): Promise<{ topicId: number; created: number; updated: number; skipped: number; images: number }>
 }
 
 export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
@@ -116,9 +135,21 @@ export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
   'updateQuestion',
   'deleteQuestion',
   'recordAttempt',
-  'attempts'
+  'attempts',
+  'uploadAttachment',
+  'exportAll',
+  'gitStatus',
+  'gitPreview',
+  'gitLink',
+  'gitUnlink',
+  'sync',
+  'gitTree',
+  'restoreFromRepo',
+  'adoptPreview',
+  'adoptApply'
 ]
 
 export interface EstudosWindowApi extends EstudosApi {
   onUpdated(cb: (p: { kind: string; topicId: number | null }) => void): () => void
+  onSync(cb: (p: { phase: 'running' | 'done'; result?: SyncResult }) => void): () => void
 }

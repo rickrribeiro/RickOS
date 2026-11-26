@@ -630,6 +630,16 @@ const MIGRATIONS: Migration[] = [
         st.free()
       })
     }
+  },
+  {
+    version: 46,
+    label: 'Estudos: uid estável do tópico (pasta na exportação/Git e restauração sem duplicar)',
+    run: (db) => {
+      try {
+        db.run('ALTER TABLE study_topics ADD COLUMN uid TEXT')
+      } catch { /* exists */ }
+      db.run("UPDATE study_topics SET uid = lower(hex(randomblob(8))) WHERE uid IS NULL OR uid = ''")
+    }
   }
 ]
 

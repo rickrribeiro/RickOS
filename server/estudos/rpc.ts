@@ -2,7 +2,12 @@ import type { CardStatus, CheckpointTarget, Rating, StudyCardInput, TopicStatus 
 import { RATINGS } from '../../shared/estudos'
 import { broadcast } from '../events'
 import * as repo from './repo'
+import * as gitSync from './git'
+import { applyAdopt, previewAdopt, type AdoptApply } from './adopt'
+import { listAttachments, storeAttachment } from './attachments'
+import { exportAll } from './bundle'
 import { StudyError } from './sql'
+import { tt } from '../i18n'
 
 /**
  * Canais `estudos:*` (Estudos v2). Nenhum deles chama IA: abrir, filtrar, revisar, aprovar,
@@ -15,7 +20,7 @@ export const changed = (kind: string, topicId?: number | null): void => broadcas
 
 export const id = (v: unknown): number => {
   const n = Number(v)
-  if (!Number.isInteger(n) || n <= 0) throw new StudyError('Identificador inválido.')
+  if (!Number.isInteger(n) || n <= 0) throw new StudyError(tt('estudos.idInvalido'))
   return n
 }
 const optId = (v: unknown): number | null => (v == null || v === '' ? null : id(v))
@@ -56,7 +61,7 @@ export function registerEstudosRpc(handle: Handle): void {
   })
   handle('estudos:timeOptions', (_e, minutes: number, filters?: repo.TimeFilters) => {
     const m = Number(minutes)
-    if (!Number.isFinite(m) || m <= 0 || m > 600) throw new StudyError('Tempo inválido.')
+    if (!Number.isFinite(m) || m <= 0 || m > 600) throw new StudyError(tt('estudos.tempoInvalido'))
     return repo.getTimeOptions(m, filters ?? {})
   })
 
@@ -102,7 +107,7 @@ export function registerEstudosRpc(handle: Handle): void {
   })
   handle('estudos:queue', (_e, f?: repo.QueueFilters) => repo.getReviewQueue(f ?? {}))
   handle('estudos:review', async (_e, stateId: number, rating: Rating) => {
-    if (!RATINGS.includes(rating)) throw new StudyError('Avaliação inválida.')
+    if (!RATINGS.includes(rating)) throw new StudyError(tt('estudos.avaliacaoInvalida'))
     const s = await repo.reviewState(id(stateId), rating)
     changed('review')
     return s
@@ -162,4 +167,47 @@ export function registerEstudosRpc(handle: Handle): void {
     return r
   })
   handle('estudos:attempts', (_e, qid: number) => repo.listAttempts(id(qid)))
+
+  // ── Anexos (imagens do caderno) ──
+  handle('estudos:uploadAttachment', async (_e, name: string, mime: string, base64: string) => {
+    if (typeof base64 !== 'string' || !base64) throw new StudyError(tt('estudos.arquivoVazio'))
+    const a = await storeAttachment(Buffer.from(base64, 'base64'), name ? String(name).slice(0, 200) : null, String(mime ?? ''))
+    return { fileName: a.fileName, ref: `anexos/${a.fileName}`, mime: a.mime, size: a.size }
+  })
+  handle('estudos:attachments', () => listAttachments())
+
+  // ── Exportação completa (pasta) — mesma do Git, sem IA ──
+  handle('estudos:exportAll', async () => {
+    const { files } = await exportAll()
+    return files.map((f) => ({ path: f.path, base64: Buffer.isBuffer(f.content) ? f.content.toString('base64') : Buffer.from(f.content, 'utf8').toString('base64') }))
+  })
+
+  // ── Repositório de estudos / Sincronizar ──
+  handle('estudos:gitStatus', () => gitSync.getStatus())
+  handle('estudos:gitPreview', (_e, cfg: Partial<gitSync.GitConfig>) => gitSync.previewLink(cfg ?? {}))
+  handle('estudos:gitLink', async (_e, cfg: gitSync.GitConfig & { previewId: string }) => {
+    const r = await gitSync.link(cfg)
+    changed('git')
+    return r
+  })
+  handle('estudos:gitUnlink', async () => {
+    await gitSync.unlink()
+    changed('git')
+  })
+  handle('estudos:sync', () => gitSync.sync())
+  handle('estudos:gitTree', async () => {
+    await gitSync.refreshCheckout()
+    return gitSync.repoTree()
+  })
+  handle('estudos:restoreFromRepo', async () => {
+    const r = await gitSync.restoreFromRepo()
+    changed('topics')
+    return r
+  })
+  handle('estudos:adoptPreview', (_e, subpath: string, topicId: number | null) => previewAdopt(String(subpath ?? '.'), optId(topicId)))
+  handle('estudos:adoptApply', async (_e, input: AdoptApply) => {
+    const r = await applyAdopt({ ...input, topicId: optId(input?.topicId), mode: input?.mode === 'source' ? 'source' : 'note', decisions: input?.decisions ?? {} })
+    changed('topics', r.topicId)
+    return r
+  })
 }

@@ -5,6 +5,7 @@ import type { StudyTopicHours } from '../../../types'
 import { useStudyStore } from '../store/studyStore'
 import { TopicEditor, TOPIC_STATUS_LABEL } from '../components/TopicEditor'
 import { StudySearch } from '../components/StudySearch'
+import { RepoPanel, SyncButton } from '../components/RepoPanel'
 import { t as tr } from '../../../i18n'
 
 const GROUPS: LibraryGroup[] = ['ativos', 'futuros', 'antigos']
@@ -56,6 +57,7 @@ export function EstudosDashboardPage(): React.ReactElement {
   const [creating, setCreating] = useState(false)
   const [futureName, setFutureName] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const [repoOpen, setRepoOpen] = useState(false)
 
   async function load(): Promise<void> {
     const [l, c, q, qs] = await Promise.all([
@@ -163,6 +165,7 @@ export function EstudosDashboardPage(): React.ReactElement {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary btn-sm" onClick={() => setPage('estudos-review')}>{tr('estudos.revisoes2', { count: due })}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setPage('estudos-test')}>{tr('est.testarContagem', { count: questions })}</button>
+          <SyncButton onOpen={() => setRepoOpen(true)} />
           <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{tr('estudos.topico')}</button>
         </div>
       </div>
@@ -339,6 +342,7 @@ export function EstudosDashboardPage(): React.ReactElement {
         </>
       )}
 
+      {repoOpen && <RepoPanel onClose={() => { setRepoOpen(false); load() }} />}
       {(creating || editing) && (
         <TopicEditor
           topic={editing}

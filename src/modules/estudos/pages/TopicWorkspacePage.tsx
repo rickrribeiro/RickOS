@@ -161,7 +161,7 @@ export function TopicWorkspacePage(): React.ReactElement {
       {/* Os painéis ficam montados (display) para manter rascunho e rolagem ao trocar de aba. */}
       <div style={{ display: tab === 'caderno' ? 'block' : 'none' }}>
         <div className={`study-notebook ${reader === 'on' ? 'with-reader' : ''} ${roadmapOpen ? '' : 'no-roadmap'}`}>
-          <div className="study-col study-col-roadmap">
+          <div className={`study-col study-col-roadmap ${roadmapOpen ? '' : 'collapsed'}`}>
             <button className="chart-title study-collapse" onClick={() => setRoadmapOpen(!roadmapOpen)} aria-expanded={roadmapOpen}>
               {roadmapOpen ? '▾' : '▸'} {tr('estudos.roadmap2')}
             </button>

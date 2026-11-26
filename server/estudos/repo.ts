@@ -40,6 +40,7 @@ import type {
   TopicInput,
   TopicRow
 } from '../../shared/estudos'
+import { tt } from '../i18n'
 
 export type {
   AttemptRow,
@@ -100,7 +101,7 @@ function newPerDay(db: Database): number {
 }
 
 export async function setNewPerDay(n: number): Promise<void> {
-  if (!Number.isFinite(n) || n < 0 || n > 1000) throw new StudyError('Limite de novos inválido.')
+  if (!Number.isFinite(n) || n < 0 || n > 1000) throw new StudyError(tt('estudos.limiteNovosInvalido'))
   await tx((db) => setSetting(db, NEW_PER_DAY_KEY, String(Math.floor(n))))
 }
 
@@ -123,7 +124,7 @@ export async function setPinned(p: PinnedAction | null): Promise<void> {
 const TOPIC_STATUSES: TopicStatus[] = ['studying', 'planned', 'paused', 'completed']
 
 function checkStatus(s: string): TopicStatus {
-  if (!TOPIC_STATUSES.includes(s as TopicStatus)) throw new StudyError(`Status inválido: ${s}`)
+  if (!TOPIC_STATUSES.includes(s as TopicStatus)) throw new StudyError(tt('estudos.statusInvalidoValor', { status: s }))
   return s as TopicStatus
 }
 
@@ -136,13 +137,13 @@ const clean = (s: string | null | undefined): string | null => (s == null ? null
 
 export async function createTopic(input: TopicInput): Promise<TopicRow> {
   const name = (input.name ?? '').trim()
-  if (!name) throw new StudyError('O tópico precisa de um título.')
+  if (!name) throw new StudyError(tt('estudos.topicoSemTitulo'))
   const status = checkStatus(input.status ?? 'studying')
   return tx((db) => {
     const id = exec(
       db,
-      `INSERT INTO study_topics (name, category, status, targetDate, priority, color, createdAt, kind, targetLanguage, explanationLanguage, goal, reviewWhenArchived, readingMode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO study_topics (name, category, status, targetDate, priority, color, createdAt, kind, targetLanguage, explanationLanguage, goal, reviewWhenArchived, readingMode, uid)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, lower(hex(randomblob(8))))`,
       [
         name,
         clean(input.category),
@@ -171,10 +172,10 @@ export async function createFutureTopic(name: string): Promise<TopicRow> {
 export async function updateTopic(id: number, patch: Partial<TopicInput>): Promise<TopicRow> {
   return tx((db) => {
     const cur = one<TopicRow>(db, 'SELECT * FROM study_topics WHERE id = ?', [id])
-    if (!cur) throw new StudyError('Tópico não encontrado.')
+    if (!cur) throw new StudyError(tt('estudos.topicoNaoEncontrado'))
     const has = (k: keyof TopicInput): boolean => Object.prototype.hasOwnProperty.call(patch, k)
     const name = has('name') ? (patch.name ?? '').trim() : cur.name
-    if (!name) throw new StudyError('O tópico precisa de um título.')
+    if (!name) throw new StudyError(tt('estudos.topicoSemTitulo'))
     exec(
       db,
       `UPDATE study_topics SET name = ?, category = ?, status = ?, targetDate = ?, priority = ?, color = ?, kind = ?, targetLanguage = ?,
@@ -400,9 +401,9 @@ export async function listCategories(): Promise<CategoryRow[]> {
 
 export async function createCategory(name: string): Promise<CategoryRow> {
   const n = (name ?? '').trim()
-  if (!n) throw new StudyError('Nome da categoria vazio.')
+  if (!n) throw new StudyError(tt('estudos.categoriaVazia'))
   return tx((db) => {
-    if (one(db, 'SELECT 1 FROM study_card_categories WHERE name = ?', [n])) throw new StudyError(`A categoria "${n}" já existe.`)
+    if (one(db, 'SELECT 1 FROM study_card_categories WHERE name = ?', [n])) throw new StudyError(tt('estudos.categoriaExiste', { nome: n }))
     const max = one<{ m: number }>(db, 'SELECT COALESCE(MAX(sortOrder), 0) AS m FROM study_card_categories')?.m ?? 0
     const id = exec(db, 'INSERT INTO study_card_categories (name, sortOrder, createdAt) VALUES (?, ?, ?)', [n, max + 10, nowIso()])
     return { id, name: n, sortOrder: max + 10, cards: 0 }
@@ -411,9 +412,9 @@ export async function createCategory(name: string): Promise<CategoryRow> {
 
 export async function renameCategory(id: number, name: string): Promise<void> {
   const n = (name ?? '').trim()
-  if (!n) throw new StudyError('Nome da categoria vazio.')
+  if (!n) throw new StudyError(tt('estudos.categoriaVazia'))
   await tx((db) => {
-    if (one(db, 'SELECT 1 FROM study_card_categories WHERE name = ? AND id <> ?', [n, id])) throw new StudyError(`A categoria "${n}" já existe.`)
+    if (one(db, 'SELECT 1 FROM study_card_categories WHERE name = ? AND id <> ?', [n, id])) throw new StudyError(tt('estudos.categoriaExiste', { nome: n }))
     exec(db, 'UPDATE study_card_categories SET name = ? WHERE id = ?', [n, id])
   })
 }
@@ -505,9 +506,9 @@ function ensureState(db: Database, cardId: number, direction: CardDirection): vo
 }
 
 function validCard(input: StudyCardInput): void {
-  if (!(input.front ?? '').trim()) throw new StudyError('A frente do cartão está vazia.')
-  if (input.cardType !== 'cloze' && !(input.back ?? '').trim()) throw new StudyError('O verso do cartão está vazio.')
-  if (input.cardType === 'cloze' && !/\{\{[^}]+\}\}/.test(input.front)) throw new StudyError('Marque a lacuna com {{trecho}}.')
+  if (!(input.front ?? '').trim()) throw new StudyError(tt('estudos.frenteVazia'))
+  if (input.cardType !== 'cloze' && !(input.back ?? '').trim()) throw new StudyError(tt('estudos.versoVazio'))
+  if (input.cardType === 'cloze' && !/\{\{[^}]+\}\}/.test(input.front)) throw new StudyError(tt('estudos.marqueLacuna'))
 }
 
 /** Insere um cartão dentro de uma transação já aberta (usado também por importações). */
@@ -547,7 +548,7 @@ export async function createCard(input: StudyCardInput): Promise<CardOut> {
 export async function updateCard(id: number, input: Omit<StudyCardInput, 'topicId'> & { topicId?: number }): Promise<CardOut> {
   await tx((db) => {
     const cur = one<CardDb>(db, 'SELECT * FROM study_flashcards WHERE id = ?', [id])
-    if (!cur) throw new StudyError('Cartão não encontrado.')
+    if (!cur) throw new StudyError(tt('estudos.cartaoNaoEncontrado'))
     validCard({ ...input, topicId: cur.topicId })
     exec(
       db,
@@ -574,7 +575,7 @@ export async function updateCard(id: number, input: Omit<StudyCardInput, 'topicI
 
 /** Ativa / suspende o cartão inteiro, ou aprova um sugerido ('suggested' → 'active'). */
 export async function setCardStatus(id: number, status: CardStatus): Promise<void> {
-  if (!['active', 'suspended', 'suggested'].includes(status)) throw new StudyError('Status inválido.')
+  if (!['active', 'suspended', 'suggested'].includes(status)) throw new StudyError(tt('estudos.statusInvalido'))
   await tx((db) => exec(db, 'UPDATE study_flashcards SET status = ? WHERE id = ?', [status, id]))
 }
 
@@ -693,7 +694,7 @@ export async function getReviewQueue(f: QueueFilters = {}, now: Date = new Date(
 export async function reviewState(stateId: number, rating: Rating, now: Date = new Date()): Promise<StateRow> {
   return tx((db) => {
     const s = one<StateRow>(db, 'SELECT * FROM study_card_states WHERE id = ?', [stateId])
-    if (!s) throw new StudyError('Cartão não encontrado.')
+    if (!s) throw new StudyError(tt('estudos.cartaoNaoEncontrado'))
     const card = one<{ topicId: number }>(db, 'SELECT topicId FROM study_flashcards WHERE id = ?', [s.cardId])!
     const u = schedule(s, rating, now)
     exec(
@@ -736,8 +737,8 @@ export async function listSources(topicId: number, nodeId?: number | null): Prom
 
 export function insertSource(db: Database, s: SourceInput): number {
   const title = (s.title ?? '').trim()
-  if (!title) throw new StudyError('A fonte precisa de um título.')
-  if (s.kind === 'link' && !(s.url ?? '').trim()) throw new StudyError('Informe o link.')
+  if (!title) throw new StudyError(tt('estudos.fonteSemTitulo'))
+  if (s.kind === 'link' && !(s.url ?? '').trim()) throw new StudyError(tt('estudos.informeLink'))
   const now = nowIso()
   return exec(
     db,
@@ -754,7 +755,7 @@ export async function createSource(s: SourceInput): Promise<SourceRow> {
 export async function updateSource(id: number, patch: Partial<SourceInput>): Promise<SourceRow> {
   return tx((db) => {
     const cur = one<SourceRow>(db, 'SELECT * FROM study_sources WHERE id = ?', [id])
-    if (!cur) throw new StudyError('Fonte não encontrada.')
+    if (!cur) throw new StudyError(tt('estudos.fonteNaoEncontrada'))
     const has = (k: keyof SourceInput): boolean => Object.prototype.hasOwnProperty.call(patch, k)
     exec(db, 'UPDATE study_sources SET nodeId = ?, title = ?, content = ?, url = ?, locator = ?, originHash = ?, updatedAt = ? WHERE id = ?', [
       has('nodeId') ? patch.nodeId ?? null : cur.nodeId,
@@ -868,7 +869,7 @@ export async function getCheckpoint(topicId: number, nodeId: number | null, targ
 
 export function insertQuestion(db: Database, q: QuestionInput): number {
   const prompt = (q.prompt ?? '').trim()
-  if (!prompt) throw new StudyError('A pergunta está vazia.')
+  if (!prompt) throw new StudyError(tt('estudos.perguntaVazia'))
   const now = nowIso()
   return exec(
     db,
@@ -885,7 +886,7 @@ export async function createQuestion(q: QuestionInput): Promise<QuestionRow> {
 export async function updateQuestion(id: number, patch: Partial<QuestionInput> & { status?: 'active' | 'archived'; revisit?: boolean }): Promise<void> {
   await tx((db) => {
     const cur = one<QuestionRow>(db, 'SELECT * FROM study_questions WHERE id = ?', [id])
-    if (!cur) throw new StudyError('Pergunta não encontrada.')
+    if (!cur) throw new StudyError(tt('estudos.perguntaNaoEncontrada'))
     const has = (k: string): boolean => Object.prototype.hasOwnProperty.call(patch, k)
     exec(db, 'UPDATE study_questions SET prompt = ?, reference = ?, hint = ?, kind = ?, nodeId = ?, status = ?, revisit = ?, updatedAt = ? WHERE id = ?', [
       has('prompt') ? (patch.prompt ?? '').trim() || cur.prompt : cur.prompt,
@@ -936,10 +937,10 @@ export async function listQuestions(f: { topicId?: number | null; nodeId?: numbe
 }
 
 export async function recordAttempt(questionId: number, a: { answer?: string | null; helpUsed?: string | null; outcome: AttemptRow['outcome'] }): Promise<AttemptRow> {
-  if (!['ok', 'partial', 'miss', 'skipped'].includes(a.outcome)) throw new StudyError('Resultado inválido.')
+  if (!['ok', 'partial', 'miss', 'skipped'].includes(a.outcome)) throw new StudyError(tt('estudos.resultadoInvalido'))
   return tx((db) => {
     const q = one<QuestionRow>(db, 'SELECT * FROM study_questions WHERE id = ?', [questionId])
-    if (!q) throw new StudyError('Pergunta não encontrada.')
+    if (!q) throw new StudyError(tt('estudos.perguntaNaoEncontrada'))
     const id = exec(db, 'INSERT INTO study_attempts (questionId, topicId, answer, helpUsed, outcome, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [
       questionId,
       q.topicId,

@@ -646,6 +646,28 @@ export const SCHEMA = `
     updatedAt TEXT NOT NULL
   );
 
+  -- Anexos do caderno (imagens). Arquivo em <dataDir>/estudos/anexos/<fileName>; a nota guarda
+  -- o link relativo estável "anexos/<fileName>" (o mesmo da exportação/Git).
+  CREATE TABLE IF NOT EXISTS study_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sha256 TEXT NOT NULL UNIQUE,
+    fileName TEXT NOT NULL UNIQUE,
+    originalName TEXT,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
+  -- Origem de conteúdo importado (repositório/pasta): reconhece reimportações sem duplicar
+  CREATE TABLE IF NOT EXISTS study_origins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    originKey TEXT NOT NULL UNIQUE,      -- ex.: repo:notas/mandarim/aula-1.md
+    hash TEXT NOT NULL,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE CASCADE,
+    importedAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS study_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     questionId INTEGER NOT NULL REFERENCES study_questions(id) ON DELETE CASCADE,
