@@ -246,6 +246,7 @@
   .md-split,
   .runner-grid,
   .study-workspace,
+  .study-notebook,
   [style*='grid-template-columns'] {
     grid-template-columns: 1fr !important;
   }
@@ -253,6 +254,13 @@
     font-size: 20px;
     min-width: 0;
   }
+  /* Estudos v2 */
+  .study-modal { min-width: 0; width: calc(100vw - 32px); }
+  .study-lib-search { min-width: 0; max-width: none; width: 100%; }
+  .study-lib-bar { width: 70px; }
+  .study-continue-btn { width: 100%; }
+  .study-more-menu { right: auto; left: 0; }
+  .study-header-actions { width: 100%; }
   /* gráficos de evolução (12 barras): valor e mês menores para caber em 390px */
   .evo-bars {
     gap: 2px;

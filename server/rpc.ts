@@ -232,6 +232,7 @@ import { countsInTotals, firstBusinessDay, type TransactionKind } from '../share
 import { registerFlightRpc } from './flights/rpc'
 import { registerChatRpc } from './chats/rpc'
 import { registerMemoryRpc } from './memory/rpc'
+import { registerEstudosRpc } from './estudos/rpc'
 import { memoryTick } from './memory/jobs'
 import { recoverConversations, registerAiConvRpc } from './aiconv/rpc'
 import { startChatsEngine } from './chats/sync'
@@ -1145,6 +1146,7 @@ registerChatRpc((channel, fn) => ipcMain.handle(channel, fn))
 
 // Memória Pessoal: canais `memory:*` (server/memory/rpc.ts).
 registerMemoryRpc((channel, fn) => ipcMain.handle(channel, fn))
+registerEstudosRpc((channel, fn) => ipcMain.handle(channel, fn))
 
 ipcMain.handle('tripDocs:get', (_, tripId: number) => getTripDocuments(tripId))
 ipcMain.handle('tripDocs:set', (_, tripId: number, item: string, checked: number) =>

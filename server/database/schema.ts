@@ -579,6 +579,83 @@ export const SCHEMA = `
     createdAt TEXT NOT NULL
   );
 
+  -- Estudos v2 (colunas novas das tabelas antigas ficam na migração 45 de db.ts)
+  CREATE TABLE IF NOT EXISTS study_card_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL
+  );
+
+  -- Agenda SM-2 por direção (forward = reconhecimento/frente→verso; reverse = produção/verso→frente)
+  CREATE TABLE IF NOT EXISTS study_card_states (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cardId INTEGER NOT NULL REFERENCES study_flashcards(id) ON DELETE CASCADE,
+    direction TEXT NOT NULL DEFAULT 'forward',
+    easeFactor REAL NOT NULL DEFAULT 2.5,
+    intervalDays INTEGER NOT NULL DEFAULT 0,
+    repetitions INTEGER NOT NULL DEFAULT 0,
+    nextReviewAt TEXT,
+    lastReviewedAt TEXT,
+    introducedAt TEXT,
+    suspended INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (cardId, direction)
+  );
+
+  -- Fontes externas (texto colado, TXT/MD importado, link com página/trecho/timestamp)
+  CREATE TABLE IF NOT EXISTS study_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL DEFAULT 'text',     -- text | file | link
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    url TEXT,
+    locator TEXT,                          -- página, trecho ou timestamp
+    originPath TEXT,                       -- arquivo de origem (importação)
+    originHash TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  -- Onde parei (um por tópico/nó/alvo/ref; o mais recente vale para "Continuar")
+  CREATE TABLE IF NOT EXISTS study_checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER,
+    target TEXT NOT NULL DEFAULT 'note',   -- note | source | lesson | cards | test
+    refId INTEGER,
+    position TEXT,
+    whereStopped TEXT,
+    updatedAt TEXT NOT NULL
+  );
+
+  -- Perguntas salvas (revisão ativa, exercícios, socráticas, erros do quiz) e minhas tentativas
+  CREATE TABLE IF NOT EXISTS study_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL DEFAULT 'recall',   -- recall | exercise | socratic | quiz
+    prompt TEXT NOT NULL,
+    reference TEXT,
+    hint TEXT,
+    origin TEXT NOT NULL DEFAULT 'manual', -- manual | tutor | quiz
+    status TEXT NOT NULL DEFAULT 'active', -- active | archived
+    revisit INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS study_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    questionId INTEGER NOT NULL REFERENCES study_questions(id) ON DELETE CASCADE,
+    topicId INTEGER NOT NULL,
+    answer TEXT,
+    helpUsed TEXT,                         -- hint | reference | null
+    outcome TEXT NOT NULL,                 -- ok | partial | miss | skipped
+    createdAt TEXT NOT NULL
+  );
+
   -- Travel Stay Finder (busca de hospedagens)
   CREATE TABLE IF NOT EXISTS travel_stay_favorites (
     id TEXT PRIMARY KEY,

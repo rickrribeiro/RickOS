@@ -24,6 +24,7 @@ export const nav = {
   'nav.page.chats': 'Chats',
   'nav.page.estudos': 'Dashboard',
   'nav.page.estudos-review': 'Revisões',
+  'nav.page.estudos-test': 'Testar o que ficou',
   'nav.page.finance-dashboard': 'Dashboard',
   'nav.page.transactions': 'Transações',
   'nav.page.budget': 'Categorias',

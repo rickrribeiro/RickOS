@@ -36,6 +36,7 @@ export const DEFAULT_ICONS = {
   studies: '🎓',
   'studies-dashboard': '🎓',
   reviews: '🔁',
+  'studies-test': '🧪',
   // Finanças
   finance: '💰',
   'finance-dashboard': '💰',

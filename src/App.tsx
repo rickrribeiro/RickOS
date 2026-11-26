@@ -20,6 +20,7 @@ import { StayFinderPage } from './modules/travel-stays/pages/StayFinderPage'
 import { EstudosDashboardPage } from './modules/estudos/pages/EstudosDashboardPage'
 import { TopicWorkspacePage } from './modules/estudos/pages/TopicWorkspacePage'
 import { RevisoesPage } from './modules/estudos/pages/RevisoesPage'
+import { TestarPage } from './modules/estudos/pages/TestarPage'
 import { ProjectsPage } from './modules/projects/pages/ProjectsPage'
 import { ProjectDetailPage } from './modules/projects/pages/ProjectDetailPage'
 import { FlightsDashboardPage } from './modules/flights/pages/FlightsDashboardPage'
@@ -74,6 +75,7 @@ const PAGES: Record<Page, React.ComponentType> = {
   estudos: EstudosDashboardPage,
   'estudos-topic': TopicWorkspacePage,
   'estudos-review': RevisoesPage,
+  'estudos-test': TestarPage,
   projects: ProjectsPage,
   project: ProjectDetailPage,
   issues: IssuesPage,

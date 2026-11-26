@@ -588,6 +588,48 @@ const MIGRATIONS: Migration[] = [
         db.run('ALTER TABLE ai_chamadas ADD COLUMN effort TEXT')
       } catch { /* exists */ }
     }
+  },
+  {
+    version: 45,
+    label: 'Estudos v2: idiomas, cartões por direção, categorias, origem dos nós',
+    run: (db) => {
+      const add = (sql: string): void => {
+        try {
+          db.run(sql)
+        } catch { /* exists */ }
+      }
+      add("ALTER TABLE study_topics ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'")
+      add('ALTER TABLE study_topics ADD COLUMN targetLanguage TEXT')
+      add('ALTER TABLE study_topics ADD COLUMN explanationLanguage TEXT')
+      add('ALTER TABLE study_topics ADD COLUMN goal TEXT')
+      add('ALTER TABLE study_topics ADD COLUMN reviewWhenArchived INTEGER NOT NULL DEFAULT 0')
+      add("ALTER TABLE study_topics ADD COLUMN readingMode TEXT NOT NULL DEFAULT 'hidden'")
+      add("ALTER TABLE study_nodes ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'")
+      add('ALTER TABLE study_nodes ADD COLUMN planId INTEGER')
+      add("ALTER TABLE study_flashcards ADD COLUMN cardType TEXT NOT NULL DEFAULT 'basic'")
+      add('ALTER TABLE study_flashcards ADD COLUMN categoryId INTEGER')
+      add('ALTER TABLE study_flashcards ADD COLUMN language TEXT')
+      add('ALTER TABLE study_flashcards ADD COLUMN example TEXT')
+      add('ALTER TABLE study_flashcards ADD COLUMN reading TEXT')
+      add('ALTER TABLE study_flashcards ADD COLUMN variants TEXT')
+      add('ALTER TABLE study_flashcards ADD COLUMN drill TEXT')
+      add("ALTER TABLE study_flashcards ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+      add('ALTER TABLE study_review_log ADD COLUMN direction TEXT')
+      add('ALTER TABLE study_review_log ADD COLUMN stateId INTEGER')
+      // Agenda existente vira a direção "forward" de cada cartão, com o histórico SM-2 intacto.
+      // introducedAt: cartão já revisado conta como introduzido (não consome a cota de novos).
+      db.run(`INSERT OR IGNORE INTO study_card_states
+        (cardId, direction, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, introducedAt, suspended)
+        SELECT id, 'forward', easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, lastReviewedAt, 0
+        FROM study_flashcards`)
+      db.run("UPDATE study_review_log SET direction = 'forward' WHERE direction IS NULL")
+      const now = new Date().toISOString()
+      ;['vocabulário', 'expressão', 'gramática', 'escrita', 'pronúncia', 'conceito'].forEach((name, i) => {
+        const st = db.prepare('INSERT OR IGNORE INTO study_card_categories (name, sortOrder, createdAt) VALUES (?, ?, ?)')
+        st.run([name, (i + 1) * 10, now])
+        st.free()
+      })
+    }
   }
 ]
 

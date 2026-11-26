@@ -3,6 +3,7 @@ import { ExportFile, downloadText, pickFile, pickFolderFiles, pickJson, fileToBa
 import type { NextActionSize, ProjectPatch, ProjectRepoInput, ProjectStatus, ProjectStatusPayload, TodoListFilters } from '../types'
 import { CHATS_METHODS, type ChatsApi } from '../modules/chats/api'
 import { MEMORY_METHODS, type MemoryWindowApi } from '../modules/memory/api'
+import { ESTUDOS_METHODS, type EstudosWindowApi } from '../modules/estudos/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { NewsConfig, NewsDigest, NewsState } from '../../shared/news'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
@@ -21,6 +22,14 @@ function chatsApi(): ChatsApi & {
   out.onStatus = (cb: (s: ChatsStatus) => void) => subscribe('chats:status', (p) => cb(p as ChatsStatus))
   out.onAi = (cb: (r: AiSuggestResult) => void) => subscribe('chats:ai', (p) => cb(p as AiSuggestResult))
   return out as unknown as ReturnType<typeof chatsApi>
+}
+
+/** `window.api.estudos`: canais `estudos:<método>` + evento `estudos:updated`. */
+function estudosApi(): EstudosWindowApi {
+  const out: Record<string, unknown> = {}
+  for (const m of ESTUDOS_METHODS) out[m] = (...args: unknown[]) => invoke(`estudos:${m}`, ...args)
+  out.onUpdated = (cb: (p: { kind: string; topicId: number | null }) => void) => subscribe('estudos:updated', (p) => cb(p as { kind: string; topicId: number | null }))
+  return out as unknown as EstudosWindowApi
 }
 
 /** `window.api.memory`: canais `memory:<método>` + eventos `memory:updated` / `memory:job`. */
@@ -553,6 +562,7 @@ export function createApi() {
       markOpened: (id: number) => invoke('links:markOpened', id),
       delete: (id: number) => invoke('links:delete', id)
     },
+    estudos: estudosApi(),
     study: {
       topics: () => invoke('study:topics'),
       createTopic: (name: string, category: string | null, status: string, targetDate: string | null, priority: number, color: string) =>

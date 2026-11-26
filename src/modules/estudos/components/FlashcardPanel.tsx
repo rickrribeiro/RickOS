@@ -1,26 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react'
+import type { CardOut, CategoryRow } from '../../../../shared/estudos'
+import { clozeHide } from '../../../../shared/estudos'
 import { useStudyStore } from '../store/studyStore'
+import { CardEditor, CategoryManager } from './CardEditor'
 import { t, getLocale } from '../../../i18n'
 
-interface GenCard {
-  front: string
-  back: string
-}
-
-/** Human label for when a card is next due (nextReviewAt = YYYY-MM-DD or ISO). */
-function nextReviewLabel(iso: string | null): { text: string; cls: string } {
-  if (!iso) return { text: 'novo', cls: 'due-today' }
+/** Quando a direção vence (nextReviewAt = YYYY-MM-DD). */
+function nextLabel(iso: string | null, isNew: boolean): string {
+  if (isNew) return t('est.novo')
+  if (!iso) return t('estudos.venceHoje')
   const day = iso.slice(0, 10)
   const today = new Date().toISOString().slice(0, 10)
-  if (day <= today) return { text: t('estudos.venceHoje'), cls: 'due-overdue' }
+  if (day <= today) return t('estudos.venceHoje')
   const d = new Date(`${day}T12:00:00`)
   const diff = Math.round((d.getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000)
-  const label = d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' })
-  return { text: t('estudos.emD', { diff, label }), cls: 'due-future' }
+  return t('estudos.emD', { diff, label: d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' }) })
 }
 
-/** Tolerant parse of a JSON array of {front, back} from Claude's output. */
-function extractCards(raw: string): GenCard[] | null {
+/** JSON [{front, back}] tolerante (a IA às vezes cerca com ```). */
+function extractCards(raw: string): { front: string; back: string }[] | null {
   if (!raw) return null
   let s = raw.trim()
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
@@ -31,173 +29,186 @@ function extractCards(raw: string): GenCard[] | null {
   try {
     const v = JSON.parse(s)
     if (!Array.isArray(v)) return null
-    return v
-      .map((c: Record<string, unknown>) => ({ front: String(c.front ?? '').trim(), back: String(c.back ?? '').trim() }))
-      .filter((c) => c.front && c.back)
+    return v.map((c: Record<string, unknown>) => ({ front: String(c.front ?? '').trim(), back: String(c.back ?? '').trim() })).filter((c) => c.front && c.back)
   } catch {
     return null
   }
 }
 
+/**
+ * Cartões do tópico: criar/editar sem IA, filtrar por nó/categoria, suspender por direção.
+ * Cartões gerados pela IA ficam SUGERIDOS (fora do baralho ativo) até eu aprovar.
+ */
 export function FlashcardPanel(): React.ReactElement {
-  const { flashcards, selectedNodeId, note, activeTopicId, createFlashcard, removeFlashcard } = useStudyStore()
-  const [front, setFront] = useState('')
-  const [back, setBack] = useState('')
-  const [flipped, setFlipped] = useState<Set<number>>(new Set())
-
-  // AI generation
+  const { selectedNodeId, note, activeTopicId, topicMeta, nodes } = useStudyStore()
+  const [cards, setCards] = useState<CardOut[]>([])
+  const [suggested, setSuggested] = useState<CardOut[]>([])
+  const [cats, setCats] = useState<CategoryRow[]>([])
+  const [catFilter, setCatFilter] = useState<string>('')
+  const [onlyNode, setOnlyNode] = useState(true)
+  const [editing, setEditing] = useState<CardOut | null | 'new'>(null)
+  const [managing, setManaging] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
-  const [generated, setGenerated] = useState<GenCard[] | null>(null)
-  const [excluded, setExcluded] = useState<Set<number>>(new Set())
   const runIdRef = useRef<string | null>(null)
-  const outputRef = useRef('')
+
+  async function load(): Promise<void> {
+    if (activeTopicId == null) return
+    const categoryId = catFilter === 'none' ? 'none' : catFilter ? Number(catFilter) : null
+    const nodeId = onlyNode && selectedNodeId != null ? selectedNodeId : null
+    const [c, s, k] = await Promise.all([
+      window.api.estudos.cards({ topicId: activeTopicId, nodeId, categoryId }),
+      window.api.estudos.cards({ topicId: activeTopicId, status: 'suggested' }),
+      window.api.estudos.categories()
+    ])
+    setCards(c.filter((x) => x.status !== 'suggested'))
+    setSuggested(s)
+    setCats(k)
+  }
 
   useEffect(() => {
-    const offChunk = window.api.ai.onChunk((rid) => {
-      if (rid && rid === runIdRef.current) outputRef.current = ''
-    })
-    const offDone = window.api.ai.onDone(({ runId: rid, ok, output, error }) => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTopicId, selectedNodeId, catFilter, onlyNode])
+
+  useEffect(() => {
+    const off = window.api.estudos.onUpdated((p) => (p.kind === 'cards' || p.kind === 'categories') && load())
+    const offDone = window.api.ai.onDone(async ({ runId: rid, ok, output, error }) => {
       if (rid !== runIdRef.current) return
       runIdRef.current = null
       setGenerating(false)
-      if (!ok) {
-        setGenError(error || t('estudos.falhaAoGerar'))
-        return
-      }
-      const cards = extractCards(output)
-      if (!cards || !cards.length) {
-        setGenError(t('estudos.aIaNaoDevolveuFlashcards'))
-        return
-      }
-      setGenerated(cards)
-      setExcluded(new Set())
+      if (!ok) return setGenError(error || t('estudos.falhaAoGerar'))
+      const gen = extractCards(output)
+      if (!gen || !gen.length) return setGenError(t('estudos.aIaNaoDevolveuFlashcards'))
+      const { activeTopicId: tid, selectedNodeId: nid } = useStudyStore.getState()
+      if (tid == null) return
+      // persistidos como sugeridos: sobrevivem à navegação e não entram na fila até eu aprovar
+      for (const c of gen) await window.api.estudos.createCard({ topicId: tid, nodeId: nid, front: c.front, back: c.back, status: 'suggested' })
+      load()
     })
     return () => {
-      offChunk()
+      off()
       offDone()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const visible = selectedNodeId != null ? flashcards.filter((f) => f.nodeId === selectedNodeId) : flashcards
-
-  async function addManual(): Promise<void> {
-    if (!front.trim() || !back.trim()) return
-    await createFlashcard(front.trim(), back.trim(), selectedNodeId)
-    setFront('')
-    setBack('')
-  }
 
   async function generate(): Promise<void> {
     const content = note?.content?.trim()
     if (!content || generating) return
     setGenError('')
-    setGenerated(null)
     setGenerating(true)
     try {
-      const rid = await window.api.ai.start({ chamada: 'estudos.flashcards', params: { anotacao: content }, save: false, source: 'estudos' })
-      runIdRef.current = rid
+      runIdRef.current = await window.api.ai.start({ chamada: 'estudos.flashcards', params: { anotacao: content }, save: false, source: 'estudos' })
     } catch (e) {
       setGenerating(false)
       setGenError(e instanceof Error ? e.message : String(e))
     }
   }
 
-  async function saveGenerated(): Promise<void> {
-    if (!generated || activeTopicId == null) return
-    for (let i = 0; i < generated.length; i++) {
-      if (excluded.has(i)) continue
-      await createFlashcard(generated[i].front, generated[i].back, selectedNodeId)
-    }
-    setGenerated(null)
+  async function approveAll(): Promise<void> {
+    for (const c of suggested) await window.api.estudos.setCardStatus(c.id, 'active')
+    load()
   }
 
-  const noteHasContent = !!note?.content?.trim()
+  if (!topicMeta) return <div className="empty-hint">…</div>
+  const isLang = topicMeta.kind === 'language'
+  const dirLabel = (d: string): string => (d === 'forward' ? (isLang ? t('est.reconhecimento') : t('est.frenteVerso')) : isLang ? t('est.producao') : t('est.versoFrente'))
 
   return (
-    <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-        <input placeholder={t('estudos.frentePergunta')} value={front} onChange={(e) => setFront(e.target.value)} />
-        <input placeholder={t('estudos.versoResposta')} value={back} onChange={(e) => setBack(e.target.value)} />
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-primary btn-sm" onClick={addManual} disabled={!front.trim() || !back.trim()}>{t('estudos.cartao')}</button>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={generate}
-            disabled={generating || !noteHasContent}
-            title={noteHasContent ? t('estudos.gerarFlashcardsDaNotaSelecionada') : t('estudos.escrevaUmaAnotacaoPrimeiro')}
-          >
-            {generating ? t('estudos.gerando') : t('estudos.gerarDaNota')}
-          </button>
-        </div>
-        {genError && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{genError}</div>}
+    <div className="cards-panel">
+      <div className="cards-toolbar">
+        <button className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>{t('estudos.cartao')}</button>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={generate}
+          disabled={generating || !note?.content?.trim()}
+          title={note?.content?.trim() ? t('estudos.gerarFlashcardsDaNotaSelecionada') : t('estudos.escrevaUmaAnotacaoPrimeiro')}
+        >
+          {generating ? t('estudos.gerando') : t('estudos.gerarDaNota')}
+        </button>
+        <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
+          <option value="">{t('est.todasCategorias')}</option>
+          <option value="none">{t('estudos.semCategoria')}</option>
+          {cats.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        {selectedNodeId != null && (
+          <label className="study-check">
+            <input type="checkbox" checked={onlyNode} onChange={(e) => setOnlyNode(e.target.checked)} />
+            {t('est.soDesteItem')}
+          </label>
+        )}
+        <button className="btn btn-secondary btn-sm" onClick={() => setManaging(true)}>{t('est.categorias')}</button>
       </div>
+      {genError && <div className="study-error">{genError}</div>}
 
-      {generated && (
-        <div className="chart-section" style={{ marginBottom: 10 }}>
-          <div className="chart-title" style={{ fontSize: 13 }}>{t('estudos.geradosSelecionados', { p0: generated.length - excluded.size })}</div>
-          <div className="list-stack" style={{ marginTop: 6 }}>
-            {generated.map((c, i) => (
-              <label key={i} className="list-row" style={{ alignItems: 'flex-start' }}>
-                <input
-                  type="checkbox"
-                  checked={!excluded.has(i)}
-                  onChange={() =>
-                    setExcluded((prev) => {
-                      const next = new Set(prev)
-                      next.has(i) ? next.delete(i) : next.add(i)
-                      return next
-                    })
-                  }
-                />
-                <span className="list-row-title" style={{ whiteSpace: 'normal' }}>
-                  <strong>{c.front}</strong>
-                  <br />
-                  <span style={{ color: 'var(--text-secondary)' }}>{c.back}</span>
-                </span>
-              </label>
-            ))}
+      {suggested.length > 0 && (
+        <div className="chart-section suggested-box">
+          <div className="chart-title" style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
+            <span>{t('est.sugeridos', { count: suggested.length })}</span>
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-primary btn-sm" onClick={approveAll}>{t('est.aprovarTodos')}</button>
+            </span>
           </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-            <button className="btn btn-primary btn-sm" onClick={saveGenerated} disabled={generated.length - excluded.size === 0}>
-              {t('estudos.salvarSelecionados')}
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setGenerated(null)}>{t('estudos.descartar')}</button>
+          <p className="study-hint">{t('est.sugeridosDica')}</p>
+          <div className="list-stack">
+            {suggested.map((c) => (
+              <div key={c.id} className="list-row card-row suggested">
+                <div className="card-row-text">
+                  <div>{c.front}</div>
+                  <div className="card-row-back">{c.back}</div>
+                </div>
+                <div className="list-row-actions">
+                  <button className="btn btn-primary btn-sm" onClick={() => window.api.estudos.setCardStatus(c.id, 'active').then(load)}>{t('est.aprovar')}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setEditing(c)}>{t('estudos.editar')}</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => window.api.estudos.deleteCard(c.id).then(load)}>{t('est.recusar')}</button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       <div className="list-stack">
-        {visible.length === 0 && <div className="empty-hint">{t('estudos.nenhumFlashcard')}{selectedNodeId != null ? t('estudos.nesteItem') : ''}.</div>}
-        {visible.map((f) => {
-          const due = nextReviewLabel(f.nextReviewAt)
-          return (
-            <div key={f.id} className="list-row" style={{ alignItems: 'flex-start' }}>
-              <button
-                className="list-row-title"
-                style={{ textAlign: 'left', whiteSpace: 'normal', cursor: 'pointer' }}
-                onClick={() =>
-                  setFlipped((prev) => {
-                    const next = new Set(prev)
-                    next.has(f.id) ? next.delete(f.id) : next.add(f.id)
-                    return next
-                  })
-                }
-              >
-                <strong>{f.front}</strong>
-                {flipped.has(f.id) && (
-                  <>
-                    <br />
-                    <span style={{ color: 'var(--text-secondary)' }}>{f.back}</span>
-                  </>
-                )}
-              </button>
-              <span className={`due-badge ${due.cls}`} title={t('estudos.proximaRevisao')}>{due.text}</span>
-              <button className="btn btn-danger btn-sm" onClick={() => removeFlashcard(f.id)}>✕</button>
+        {cards.length === 0 && <div className="empty-hint">{t('estudos.nenhumFlashcard')}</div>}
+        {cards.map((c) => (
+          <div key={c.id} className={`list-row card-row ${c.status === 'suspended' ? 'is-suspended' : ''}`}>
+            <div className="card-row-text">
+              <div lang={isLang ? topicMeta.targetLanguage ?? undefined : undefined}>{c.cardType === 'cloze' ? clozeHide(c.front) : c.front}</div>
+              <div className="card-row-back">{c.back}</div>
+              <div className="card-row-meta">
+                {c.categoryName && <span className="project-chip">{c.categoryName}</span>}
+                {c.cardType === 'cloze' && <span className="project-chip">{t('est.formatoLacuna')}</span>}
+                {c.status === 'suspended' && <span className="project-chip">{t('est.suspenso')}</span>}
+                {c.states.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`dir-chip ${s.suspended ? 'off' : ''}`}
+                    title={s.suspended ? t('est.retomarDirecao') : t('est.suspenderDirecao')}
+                    onClick={() => window.api.estudos.setStateSuspended(s.id, !s.suspended).then(load)}
+                  >
+                    {dirLabel(s.direction)} · {s.suspended ? t('est.suspenso') : nextLabel(s.nextReviewAt, s.lastReviewedAt == null)}
+                  </button>
+                ))}
+              </div>
             </div>
-          )
-        })}
+            <div className="list-row-actions">
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(c)}>{t('estudos.editar')}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => window.api.estudos.setCardStatus(c.id, c.status === 'suspended' ? 'active' : 'suspended').then(load)}>
+                {c.status === 'suspended' ? t('est.reativar') : t('est.suspender')}
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={() => window.confirm(t('est.excluirCartao')) && window.api.estudos.deleteCard(c.id).then(load)}>✕</button>
+            </div>
+          </div>
+        ))}
       </div>
+
+      {editing && (
+        <CardEditor topic={topicMeta} nodes={nodes} nodeId={selectedNodeId} card={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={load} />
+      )}
+      {managing && <CategoryManager onClose={() => { setManaging(false); load() }} />}
     </div>
   )
 }

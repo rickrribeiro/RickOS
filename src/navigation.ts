@@ -61,7 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
     groupIcon: 'studies',
     items: [
       { id: 'estudos', labelKey: 'nav.page.estudos', icon: 'studies-dashboard' },
-      { id: 'estudos-review', labelKey: 'nav.page.estudos-review', icon: 'reviews' }
+      { id: 'estudos-review', labelKey: 'nav.page.estudos-review', icon: 'reviews' },
+      { id: 'estudos-test', labelKey: 'nav.page.estudos-test', icon: 'studies-test' }
     ]
   },
    {

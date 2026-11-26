@@ -21,10 +21,53 @@ const TUTOR_ACTIONS: { key: AcaoTutor; label: string }[] = [
 
 /** Split-view Markdown note editor (textarea | live preview) with debounced autosave. */
 export function NoteEditor(): React.ReactElement {
-  const { note, selectedNodeId, nodes, saveNote } = useStudyStore()
+  const { note, selectedNodeId, nodes, saveNote, activeTopicId } = useStudyStore()
   const [draft, setDraft] = useState(note?.content ?? '')
   const [savedAt, setSavedAt] = useState<string | null>(note?.updatedAt ?? null)
+  const [saveState, setSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
+  const [whereStopped, setWhereStopped] = useState('')
+  const [preview, setPreview] = useState(true)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cpTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const area = useRef<HTMLTextAreaElement | null>(null)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+
+  // posição e "onde parei" desta nota (checkpoint no servidor: vale para os dois clientes)
+  useEffect(() => {
+    if (activeTopicId == null) return
+    let alive = true
+    window.api.estudos.checkpoint(activeTopicId, selectedNodeId, 'note', null).then((cp) => {
+      if (!alive) return
+      setWhereStopped(cp?.whereStopped ?? '')
+      try {
+        const pos = cp?.position ? JSON.parse(cp.position) : null
+        const el = area.current
+        if (el && typeof pos?.cursor === 'number') {
+          requestAnimationFrame(() => {
+            const c = Math.min(pos.cursor, el.value.length)
+            el.setSelectionRange(c, c)
+            if (typeof pos.scroll === 'number') el.scrollTop = pos.scroll
+          })
+        }
+      } catch { /* posição antiga inválida */ }
+    })
+    return () => {
+      alive = false
+    }
+  }, [activeTopicId, selectedNodeId, note?.id])
+
+  function checkpoint(where?: string): void {
+    if (activeTopicId == null) return
+    const el = area.current
+    const position = el ? JSON.stringify({ cursor: el.selectionStart, scroll: Math.round(el.scrollTop) }) : null
+    if (cpTimer.current) clearTimeout(cpTimer.current)
+    const topicId = activeTopicId
+    const nodeId = selectedNodeId
+    cpTimer.current = setTimeout(() => {
+      window.api.estudos.saveCheckpoint({ topicId, nodeId, target: 'note', position, ...(where !== undefined ? { whereStopped: where } : {}) })
+    }, where !== undefined ? 0 : 1500)
+  }
 
   // IA tutor
   const [tutorRunning, setTutorRunning] = useState(false)
@@ -80,14 +123,23 @@ export function NoteEditor(): React.ReactElement {
   }, [selectedNodeId, note?.id])
 
   async function persist(v: string): Promise<void> {
-    await saveNote(v)
-    setSavedAt(new Date().toISOString())
+    setSaveState('saving')
+    try {
+      await saveNote(v)
+      setSavedAt(new Date().toISOString())
+      // outra tecla durante o envio: continua "não salvo" até o próximo autosave
+      setSaveState(draftRef.current === v ? 'saved' : 'dirty')
+    } catch {
+      setSaveState('error') // o rascunho continua na tela; nada se perde
+    }
   }
 
   function onChange(v: string): void {
     setDraft(v)
+    setSaveState('dirty')
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => persist(v), 800)
+    checkpoint()
   }
 
   function flush(): void {
@@ -95,27 +147,63 @@ export function NoteEditor(): React.ReactElement {
       clearTimeout(timer.current)
       timer.current = null
     }
-    persist(draft)
+    if (saveState === 'dirty' || saveState === 'error') persist(draft)
+    checkpoint()
   }
+
+  // salva ao sair da tela / trocar de nó
+  useEffect(() => {
+    // ids capturados aqui: no cleanup o store já aponta para o nó novo
+    const topicId = activeTopicId
+    const nodeId = selectedNodeId
+    return () => {
+      if (timer.current && topicId != null) {
+        clearTimeout(timer.current)
+        timer.current = null
+        window.api.study.saveNote(topicId, nodeId, draftRef.current)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNodeId, activeTopicId])
 
   return (
     <div className="note-editor">
       <div className="note-editor-head">
         <strong>{title}</strong>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('estudos.salvo')} {fmt(savedAt)}</span>
+        <span className={`save-state save-${saveState}`} aria-live="polite">
+          {saveState === 'saving' && t('est.salvando')}
+          {saveState === 'dirty' && t('est.naoSalvo')}
+          {saveState === 'error' && t('est.erroAoSalvar')}
+          {(saveState === 'saved' || saveState === 'idle') && `${t('estudos.salvo')} ${fmt(savedAt)}`}
+        </span>
+        <button className="btn btn-secondary btn-sm" onClick={() => setPreview(!preview)}>{preview ? t('est.esconderPrevia') : t('est.mostrarPrevia')}</button>
       </div>
-      <div className="md-split">
+      <div className="where-stopped">
+        <input
+          value={whereStopped}
+          onChange={(e) => setWhereStopped(e.target.value)}
+          onBlur={() => checkpoint(whereStopped)}
+          onKeyDown={(e) => e.key === 'Enter' && checkpoint(whereStopped)}
+          placeholder={t('est.ondePareiPlaceholder')}
+        />
+      </div>
+      <div className={`md-split ${preview ? '' : 'md-split-single'}`}>
         <textarea
+          ref={area}
           className="md-input"
           value={draft}
           onChange={(e) => onChange(e.target.value)}
           onBlur={flush}
+          onKeyUp={() => checkpoint()}
+          onClick={() => checkpoint()}
           placeholder={t('estudos.escrevaEmMarkdownTituloNegrito')}
           spellCheck={false}
         />
-        <div className="md-preview-pane">
-          {draft.trim() ? renderMarkdown(draft) : <div className="empty-hint">{t('estudos.preVisualizacaoApareceAqui')}</div>}
-        </div>
+        {preview && (
+          <div className="md-preview-pane">
+            {draft.trim() ? renderMarkdown(draft) : <div className="empty-hint">{t('estudos.preVisualizacaoApareceAqui')}</div>}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>

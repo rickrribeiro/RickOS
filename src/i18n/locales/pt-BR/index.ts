@@ -15,6 +15,7 @@ import { memory } from './memory'
 import { crm } from './crm'
 import { chats } from './chats'
 import { estudos } from './estudos'
+import { estudosV2 } from './estudosV2'
 import { finance } from './finance'
 import { projects } from './projects'
 import { travel } from './travel'
@@ -42,6 +43,7 @@ export const ptBR = {
   ...crm,
   ...chats,
   ...estudos,
+  ...estudosV2,
   ...finance,
   ...projects,
   ...travel,

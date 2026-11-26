@@ -804,6 +804,7 @@ export type Page =
   | 'estudos'
   | 'estudos-topic'
   | 'estudos-review'
+  | 'estudos-test'
   // Projetos
   | 'projects'
   | 'project'
@@ -1197,6 +1198,7 @@ declare global {
         onAi: (cb: (r: AiSuggestResult) => void) => () => void
       }
       memory: import('../modules/memory/api').MemoryWindowApi
+      estudos: import('../modules/estudos/api').EstudosWindowApi
       news: {
         state: () => Promise<import('../../shared/news').NewsState>
         setCategories: (list: string[]) => Promise<string[]>

@@ -12,7 +12,14 @@ const MOTORES: Partial<Record<MotorIa, MotorExecutor>> = {
   codex: motorCodex
 }
 
+/** Só para testes: substitui todos os motores (fixtures sem gastar tokens e contagem de chamadas). */
+let motorDeTeste: ((motor: MotorIa) => MotorExecutor) | null = null
+export function definirMotorDeTeste(fn: ((motor: MotorIa) => MotorExecutor) | null): void {
+  motorDeTeste = fn
+}
+
 export function criarMotor(motor: MotorIa): MotorExecutor {
+  if (motorDeTeste) return motorDeTeste(motor)
   const m = MOTORES[motor]
   if (!m) throw new Error(`Motor de IA "${motor}" não executa prompts de texto genéricos.`)
   return m

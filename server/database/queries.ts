@@ -2663,13 +2663,22 @@ export async function getStudyFlashcards(topicId?: number): Promise<DbStudyFlash
     ? getAll<DbStudyFlashcard>(db, 'SELECT * FROM study_flashcards ORDER BY id DESC')
     : getAll<DbStudyFlashcard>(db, 'SELECT * FROM study_flashcards WHERE topicId = ? ORDER BY id DESC', [topicId])
 }
-export async function getDueFlashcards(nowISO: string): Promise<DbStudyFlashcard[]> {
-  const db = await getDb()
-  return getAll<DbStudyFlashcard>(
-    db,
-    'SELECT * FROM study_flashcards WHERE nextReviewAt IS NULL OR nextReviewAt <= ? ORDER BY nextReviewAt ASC, id ASC',
-    [nowISO]
-  )
+/**
+ * Itens de revisão vencidos hoje (uma linha por DIREÇÃO do cartão), com os filtros padrão da
+ * fila diária: só tópicos Ativos (e arquivados marcados "revisar quando arquivado") e o limite
+ * de novos. Home/briefing e a regra `due_flashcards` usam o total.
+ */
+export async function getDueFlashcards(_nowISO: string): Promise<DbStudyFlashcard[]> {
+  const { getReviewQueue } = await import('../estudos/repo')
+  const q = await getReviewQueue({})
+  return q.items.map((i) => ({
+    ...(i.card as unknown as DbStudyFlashcard),
+    easeFactor: i.state.easeFactor,
+    intervalDays: i.state.intervalDays,
+    repetitions: i.state.repetitions,
+    nextReviewAt: i.state.nextReviewAt,
+    lastReviewedAt: i.state.lastReviewedAt
+  }))
 }
 export async function createStudyFlashcard(
   topicId: number,
@@ -2683,7 +2692,9 @@ export async function createStudyFlashcard(
     'INSERT INTO study_flashcards (topicId, nodeId, front, back, createdAt) VALUES (?, ?, ?, ?, ?)',
     [topicId, nodeId, front, back, new Date().toISOString()]
   )
-  return getOne<DbStudyFlashcard>(db, 'SELECT * FROM study_flashcards WHERE id = ?', [lastInsertId(db)])!
+  const cardId = lastInsertId(db)
+  run(db, "INSERT OR IGNORE INTO study_card_states (cardId, direction) VALUES (?, 'forward')", [cardId])
+  return getOne<DbStudyFlashcard>(db, 'SELECT * FROM study_flashcards WHERE id = ?', [cardId])!
 }
 export async function updateStudyFlashcard(id: number, front: string, back: string): Promise<DbStudyFlashcard> {
   const db = await getDb()
@@ -2711,9 +2722,15 @@ export async function reviewStudyFlashcard(
     [easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, id]
   )
   const card = getOne<DbStudyFlashcard>(db, 'SELECT * FROM study_flashcards WHERE id = ?', [id])!
+  // canal legado: agenda a direção forward (a mesma que as colunas do cartão espelham)
   run(
     db,
-    'INSERT INTO study_review_log (flashcardId, topicId, rating, reviewedAt) VALUES (?, ?, ?, ?)',
+    "UPDATE study_card_states SET easeFactor = ?, intervalDays = ?, repetitions = ?, nextReviewAt = ?, lastReviewedAt = ?, introducedAt = COALESCE(introducedAt, ?) WHERE cardId = ? AND direction = 'forward'",
+    [easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, lastReviewedAt, id]
+  )
+  run(
+    db,
+    "INSERT INTO study_review_log (flashcardId, topicId, rating, reviewedAt, direction) VALUES (?, ?, ?, ?, 'forward')",
     [id, card.topicId, rating ?? null, lastReviewedAt]
   )
   return card
@@ -2818,6 +2835,11 @@ export async function importStudyBundle(bundle: StudyBundle): Promise<number> {
       db,
       'INSERT INTO study_flashcards (topicId, nodeId, front, back, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [newTopicId, mappedNode, fc.front, fc.back, fc.easeFactor ?? 2.5, fc.intervalDays ?? 0, fc.repetitions ?? 0, fc.nextReviewAt ?? null, fc.lastReviewedAt ?? null, fc.createdAt ?? now]
+    )
+    run(
+      db,
+      "INSERT OR IGNORE INTO study_card_states (cardId, direction, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, introducedAt) VALUES (?, 'forward', ?, ?, ?, ?, ?, ?)",
+      [lastInsertId(db), fc.easeFactor ?? 2.5, fc.intervalDays ?? 0, fc.repetitions ?? 0, fc.nextReviewAt ?? null, fc.lastReviewedAt ?? null, fc.lastReviewedAt ?? null]
     )
   }
   return newTopicId

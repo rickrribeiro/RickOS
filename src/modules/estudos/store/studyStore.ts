@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { StudyTopic, StudyNode, StudyNote, StudyFlashcard } from '../../../types'
+import type { CheckpointTarget, TopicRow } from '../../../../shared/estudos'
 import { schedule, Rating } from '../srs'
 
 const SEL_KEY = 'rickos:studySel'
@@ -17,8 +18,19 @@ function saveSel(topicId: number | null, nodeId: number | null): void {
   localStorage.setItem(SEL_KEY, JSON.stringify({ topicId, nodeId }))
 }
 
+/** Para onde o workspace abre (vem do Continuar, da Home ou de um checkpoint). */
+export interface WorkspaceFocus {
+  target: CheckpointTarget
+  refId: number | null
+}
+
 interface StudyState {
   topics: StudyTopic[]
+  /** Metadados v2 do tópico ativo (idioma, objetivo…). */
+  topicMeta: TopicRow | null
+  focus: WorkspaceFocus | null
+  openAt: (topicId: number, nodeId: number | null, target?: CheckpointTarget, refId?: number | null) => Promise<void>
+  clearFocus: () => void
   activeTopicId: number | null
   nodes: StudyNode[]
   selectedNodeId: number | null
@@ -57,6 +69,14 @@ const NEXT_STATUS: Record<string, string> = { todo: 'doing', doing: 'done', done
 
 export const useStudyStore = create<StudyState>((set, get) => ({
   topics: [],
+  topicMeta: null,
+  focus: null,
+  openAt: async (topicId, nodeId, target = 'note', refId = null) => {
+    set({ activeTopicId: topicId, selectedNodeId: nodeId, focus: { target, refId }, nodes: [], flashcards: [], note: null })
+    saveSel(topicId, nodeId)
+    await get().refreshActive()
+  },
+  clearFocus: () => set({ focus: null }),
   activeTopicId: loadSel().topicId,
   nodes: [],
   selectedNodeId: loadSel().nodeId,
@@ -68,7 +88,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   refreshTopics: async () => set({ topics: await window.api.study.topics() }),
 
   setActiveTopic: async (id) => {
-    set({ activeTopicId: id, selectedNodeId: null, note: null, nodes: [], flashcards: [] })
+    set({ activeTopicId: id, selectedNodeId: null, note: null, nodes: [], flashcards: [], topicMeta: null, focus: null })
     saveSel(id, null)
     if (id != null) await get().refreshActive()
   },
@@ -83,12 +103,13 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   refreshActive: async () => {
     const topicId = get().activeTopicId
     if (topicId == null) return
-    const [nodes, flashcards, note] = await Promise.all([
+    const [nodes, flashcards, note, topicMeta] = await Promise.all([
       window.api.study.nodes(topicId),
       window.api.study.flashcards(topicId),
-      window.api.study.getNote(topicId, get().selectedNodeId)
+      window.api.study.getNote(topicId, get().selectedNodeId),
+      window.api.estudos.topic(topicId)
     ])
-    set({ nodes, flashcards, note })
+    set({ nodes, flashcards, note, topicMeta })
   },
 
   refreshDue: async () => set({ dueCards: await window.api.study.due(new Date().toISOString()) }),
