@@ -133,3 +133,26 @@ export const AULA_TURNO = {
   pontoDeRetorno: null,
   fraseDeRetomada: 'Paramos na validação do tiro pelo servidor.'
 }
+
+/** Pacote C completo sobre a nota de mandarim (trecho exato: "明天 = amanhã"). */
+export function pacoteMandarim(parentId: number | null): Record<string, unknown> {
+  return {
+    explicacao: { conteudo: 'Em mandarim, o **tempo vem antes do verbo**: 明天(amanhã) + 见面(encontrar-se).', vazio: null },
+    resumo: { conteudo: 'Tempo → (sujeito) → verbo. 明天几点见面？ pergunta o horário de amanhã.', vazio: null },
+    exercicios: { itens: [{ enunciado: 'Diga "sábado às 3 da tarde".', pista: '星期六 + 下午', solucao: '星期六下午三点', criterios: 'tempo antes do verbo' }], vazio: null },
+    socraticas: { itens: [{ pergunta: 'Onde fica 明天 na frase?', referencia: 'antes do verbo' }, { pergunta: 'E se for sábado?', referencia: '星期六' }], vazio: null },
+    revisaoAtiva: { itens: [{ pedido: 'Sem olhar: como se pergunta "a que horas nos vemos amanhã?"', referencia: '明天几点见面？' }], vazio: null },
+    revisaoEditorial: {
+      itens: [
+        { trecho: '明天 = amanhã', motivo: 'Falta a leitura, que você usa para pronunciar.', tipo: 'acrescimo', sugestao: '(míngtiān)', substituicao: null },
+        { trecho: '几点 = que horas', motivo: 'Dúvida de intenção: quer anotar 点 sozinho?', tipo: 'pergunta', sugestao: 'Quer anotar 点 (hora) separado?', substituicao: null }
+      ],
+      vazio: null
+    },
+    subtopicos: {
+      itens: [{ parentId, posicao: 0, titulo: 'Dias da semana (星期)', motivo: 'Sem eles não dá para propor sábado.', conexaoObjetivo: 'remarcar para outro dia', tipo: 'pre-requisito', prerequisito: null }],
+      vazio: null
+    },
+    cartoes: { itens: [{ front: '星期六', back: 'sábado', exemplo: '星期六见！', leitura: 'xīngqīliù' }, { front: '你好', back: 'olá', exemplo: null, leitura: null }], vazio: null }
+  }
+}

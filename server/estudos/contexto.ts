@@ -128,3 +128,73 @@ export function contextoAula(
     .filter(Boolean)
     .join('\n\n')
 }
+
+export interface ContextoNo {
+  contexto: string
+  /** Assinatura da minha nota (para "material anterior à última edição"). */
+  noteSignature: string
+  /** Assinatura das entradas relevantes (nota, aula, fontes, mapa, tentativas). */
+  inputSignature: string
+  temNotaAutoral: boolean
+}
+
+/** Contexto do material do nó (C/D/E). nodeId null = tópico inteiro. */
+export function contextoNo(db: Database, t: TopicRow, nodeId: number | null, opts: { vocabulario?: string[] } = {}): ContextoNo {
+  const nodes = all<NodeRow>(db, 'SELECT * FROM study_nodes WHERE topicId = ?', [t.id])
+  const node = nodeId != null ? nodes.find((n) => n.id === nodeId) ?? null : null
+  const nota =
+    (nodeId == null
+      ? one<{ content: string }>(db, 'SELECT content FROM study_notes WHERE topicId = ? AND nodeId IS NULL', [t.id])
+      : one<{ content: string }>(db, 'SELECT content FROM study_notes WHERE nodeId = ?', [nodeId]))?.content ?? ''
+  const fontes = all<{ title: string; content: string; locator: string | null }>(
+    db,
+    'SELECT title, content, locator FROM study_sources WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY updatedAt DESC',
+    [t.id, nodeId]
+  )
+  const lesson = one<{ id: number }>(db, 'SELECT id FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1', [t.id, nodeId])
+  const turnos = lesson ? all<{ role: string; content: string }>(db, 'SELECT role, content FROM study_lesson_turns WHERE lessonId = ? ORDER BY id', [lesson.id]) : []
+  const tentativas = all<{ prompt: string; answer: string | null; outcome: string }>(
+    db,
+    `SELECT q.prompt, a.answer, a.outcome FROM study_attempts a JOIN study_questions q ON q.id = a.questionId
+     WHERE q.topicId = ? AND (? IS NULL OR q.nodeId = ?) ORDER BY a.createdAt DESC LIMIT 8`,
+    [t.id, nodeId, nodeId]
+  )
+  const cartoes = all<{ front: string }>(db, "SELECT front FROM study_flashcards WHERE topicId = ? AND (? IS NULL OR nodeId = ?) AND status <> 'suggested' LIMIT 80", [t.id, nodeId, nodeId])
+  const recusas = all<{ kind: string; payload: string }>(db, "SELECT kind, payload FROM study_suggestions WHERE topicId = ? AND status = 'rejected' ORDER BY id DESC LIMIT 30", [t.id])
+  const recusasTxt = recusas
+    .map((r) => {
+      try {
+        const p = JSON.parse(r.payload)
+        return r.kind === 'subtopic' ? `- subtópico recusado: ${p.titulo}` : `- edição recusada sobre "${String(p.trecho ?? '').slice(0, 80)}"`
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
+  let budget = ORCAMENTO.turnos
+  const aula: string[] = []
+  for (const tr of [...turnos].reverse()) {
+    const piece = `${tr.role === 'me' ? 'EU' : 'TUTOR'}: ${corta(tr.content.trim(), 1500)}`
+    if (budget - piece.length < 0 && aula.length) break
+    budget -= piece.length
+    aula.unshift(piece)
+  }
+  const fontesTxt = fontes.slice(0, 4).map((f) => `### ${f.title}${f.locator ? ` (${f.locator})` : ''}\n${corta(f.content.trim(), 1500)}`)
+  const temNotaAutoral = !!nota.trim()
+  const contexto = [
+    cabecalhoTopico(t),
+    `## Mapa completo (com IDs)\n${mapaComIds(nodes)}`,
+    `## Item selecionado\n${node ? `[id ${node.id}] ${node.title}${node.description ? `\n${node.description}` : ''}` : 'Tópico inteiro (visão geral)'}`,
+    temNotaAutoral ? `## Minha nota (autoral)\n${corta(nota.trim(), ORCAMENTO.notaNo)}` : '## Minha nota (autoral)\n(vazia — deixe a revisão editorial vazia)',
+    fontesTxt.length ? `## Material externo deste item\n${fontesTxt.join('\n\n')}` : '',
+    aula.length ? `## Aula gerada (turnos recentes)\n${aula.join('\n\n')}` : '',
+    tentativas.length ? `## Minhas tentativas recentes\n${tentativas.map((a) => `- ${a.prompt} → ${a.answer ?? '(sem resposta)'} [${a.outcome}]`).join('\n')}` : '',
+    cartoes.length ? `## Cartões que já existem (não duplicar)\n${cartoes.map((c) => `- ${c.front}`).join('\n')}` : '',
+    opts.vocabulario?.length ? `## Cobertura de vocabulário escolhida (cubra todos, sem duplicar)\n${opts.vocabulario.map((v) => `- ${v}`).join('\n')}` : '',
+    recusasTxt.length ? `## Recusas anteriores (não reapresente)\n${recusasTxt.join('\n')}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+  const noteSignature = assinatura(nota)
+  return { contexto, noteSignature, inputSignature: assinatura(contexto), temNotaAutoral }
+}

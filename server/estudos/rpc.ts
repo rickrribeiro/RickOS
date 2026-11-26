@@ -7,6 +7,8 @@ import { applyAdopt, previewAdopt, type AdoptApply } from './adopt'
 import { listAttachments, storeAttachment } from './attachments'
 import { exportAll } from './bundle'
 import * as tutor from './tutor'
+import * as material from './material'
+import { SECOES, type Secao } from '../../shared/prompts/estudos/pedagogia/schemas'
 import { diagnosticoCodex } from '../ia/motores/codex'
 import { EFFORTS_DO_MOTOR, modeloValido } from '../../shared/prompts/motores'
 import { PERFIS_ESTUDOS, type PerfilEstudos } from '../../shared/prompts/estudos/perfis'
@@ -272,5 +274,38 @@ export function registerEstudosRpc(handle: Handle): void {
   handle('estudos:appendToNote', async (_e, topicId: number, nodeId: number | null, text: string) => {
     await tutor.appendToNote(id(topicId), optId(nodeId), String(text ?? ''))
     changed('notes', id(topicId))
+  })
+
+  // ── Material do nó (C), revisão editorial (D), subtópicos (E) ──
+  handle('estudos:material', (_e, topicId: number, nodeId: number | null) => material.getMaterial(id(topicId), optId(nodeId)))
+  handle('estudos:prepareNode', (_e, topicId: number, nodeId: number | null, opts?: { vocabulario?: string[] }) =>
+    material.prepareNode(id(topicId), optId(nodeId), { vocabulario: Array.isArray(opts?.vocabulario) ? opts!.vocabulario.map(String).slice(0, 300) : undefined })
+  )
+  handle('estudos:regenerateSection', (_e, topicId: number, nodeId: number | null, secao: Secao) => {
+    if (!SECOES.includes(secao)) throw new StudyError(tt('estudos.secaoInvalida'))
+    return material.regenerateSection(id(topicId), optId(nodeId), secao)
+  })
+  handle('estudos:reviewNote', (_e, topicId: number, nodeId: number | null) => material.reviewNote(id(topicId), optId(nodeId)))
+  handle('estudos:suggestSubtopics', (_e, topicId: number, nodeId: number | null) => material.suggestSubtopics(id(topicId), optId(nodeId)))
+  handle('estudos:acceptEditorial', async (_e, sid: number, opts?: { text?: string | null; anchor?: string | null; replace?: boolean }) => {
+    const r = await material.acceptEditorial(id(sid), opts ?? {})
+    if (r.ok) changed('notes')
+    return r
+  })
+  handle('estudos:decideSuggestion', async (_e, sid: number, status: 'rejected' | 'comment' | 'pending') => {
+    if (!['rejected', 'comment', 'pending'].includes(status)) throw new StudyError(tt('estudos.statusInvalido'))
+    await material.decideSuggestion(id(sid), status)
+    changed('suggestions')
+  })
+  handle('estudos:acceptSubtopic', async (_e, sid: number, opts?: { parentId?: number | null; title?: string | null; position?: number | null }) => {
+    const nodeId = await material.acceptSubtopic(id(sid), { ...opts, parentId: opts?.parentId === undefined ? undefined : optId(opts.parentId) })
+    changed('nodes')
+    return nodeId
+  })
+  handle('estudos:saveItemAsQuestion', async (_e, topicId: number, nodeId: number | null, kind: 'recall' | 'exercise' | 'socratic', prompt: string, reference: string | null, hint: string | null) => {
+    if (!['recall', 'exercise', 'socratic'].includes(kind)) throw new StudyError(tt('estudos.statusInvalido'))
+    const qid = await material.saveItemAsQuestion(id(topicId), optId(nodeId), kind, String(prompt ?? ''), reference ?? null, hint ?? null)
+    changed('questions', id(topicId))
+    return qid
   })
 }

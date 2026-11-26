@@ -44,15 +44,17 @@ Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs a
 | **crm/** | | |
 | `retomarContato.ts` | 2-3 opções de mensagem para retomar contato | `src/modules/crm/pages/CrmPage.tsx` |
 | **estudos/** | | |
-| `tutor.ts` | Botões do tutor (explicar simples, resumir, exercícios, lacunas, socrático, recall ativo) | `src/modules/estudos/components/NoteEditor.tsx` |
 | `flashcards.ts` | Gerar flashcards de uma anotação | `src/modules/estudos/components/FlashcardPanel.tsx` |
-| `lacunasRoadmap.ts` | Pré-requisitos que faltam no roadmap do tópico | `src/modules/estudos/components/GapsModal.tsx` |
 | `quiz.ts` | Quiz de múltipla escolha | `src/modules/estudos/components/QuizModal.tsx` |
 | `pedagogia/textos.ts` | **Textos-base A–E** (masterclass, aula, material do nó, revisão editorial, subtópicos) + camada comum + blocos de seção; `VERSAO_PEDAGOGIA` | (assets, montados pelos arquivos abaixo) |
 | `pedagogia/schemas.ts` | Contratos de saída (JSON Schema estrito, `--output-schema` do Codex) | `server/estudos/tutor.ts` |
 | `perfis.ts` | Perfis de modelo/effort só de Estudos (`study_ai_*`) | (padrões das chamadas abaixo) |
 | `masterclass.ts` | A: "quero estudar X para Y" → mapa completo + abertura da 1ª aula (Codex, astra/high) | `server/estudos/tutor.ts` |
 | `aula.ts` | B: aula conversacional, um turno por vez (Codex, sol/medium) | `server/estudos/tutor.ts` |
+| `pacoteNo.ts` | C (+D, E): material do nó numa geração só, seções independentes (Codex, sol/medium) | `server/estudos/material.ts` |
+| `secaoNo.ts` | C: gerar de novo UMA seção com o mesmo bloco do pacote | `server/estudos/material.ts` |
+| `revisaoEditorial.ts` | D: revisar minha anotação mantendo minha voz (Codex, sol/low) | `server/estudos/material.ts` |
+| `subtopicos.ts` | E: subtópicos que faltam, com o pai certo (Codex, sol/low) | `server/estudos/material.ts` |
 | **github/** | | |
 | `criarIssue.ts` | Cria no GitHub (via `gh`) uma issue local | `server/services/github.ts` |
 | **home/** | | |

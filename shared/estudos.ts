@@ -598,3 +598,41 @@ export interface IaPerfisView {
   perfis: Record<'plano' | 'aula' | 'editorial', { modelo: string; effort: string; padraoModelo: string; padraoEffort: string }>
   efforts: string[]
 }
+
+// ── Material do nó / sugestões (server/estudos/material.ts) ──
+
+export interface MaterialRow {
+  id: number
+  topicId: number
+  nodeKey: number
+  nodeId: number | null
+  section: string
+  content: string
+  runId: number
+  model: string | null
+  effort: string | null
+  promptVersion: string | null
+  inputSignature: string | null
+  noteSignature: string | null
+  createdAt: string
+}
+
+export interface SuggestionRow {
+  id: number
+  topicId: number
+  nodeId: number | null
+  kind: 'editorial' | 'subtopic'
+  fingerprint: string
+  payload: string
+  status: 'pending' | 'accepted' | 'rejected' | 'comment' | 'superseded'
+  runId: number | null
+  baseSignature: string | null
+  createdAt: string
+  decidedAt: string | null
+}
+
+export interface MaterialView {
+  sections: (MaterialRow & { stale: boolean })[]
+  suggestions: SuggestionRow[]
+  noteSignature: string
+}

@@ -3,7 +3,6 @@ import { useStudyStore } from '../store/studyStore'
 import { renderMarkdown, imageSrc } from '../markdown'
 import { fileToBase64 } from '../../../api/files'
 import { t, getLocale } from '../../../i18n'
-import type { AcaoTutor } from '../../../../shared/prompts/estudos/tutor'
 
 function fmt(iso: string | null): string {
   if (!iso) return '—'
@@ -11,18 +10,9 @@ function fmt(iso: string | null): string {
   return isNaN(d.getTime()) ? '—' : d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-const TUTOR_ACTIONS: { key: AcaoTutor; label: string }[] = [
-  { key: 'simple', label: t('estudos.expliqueSimples') },
-  { key: 'summary', label: t('estudos.resuma') },
-  { key: 'exercise', label: t('estudos.exercicio') },
-  { key: 'gaps', label: t('estudos.oQueFalta') },
-  { key: 'socratic', label: t('estudos.tutorSocratico') },
-  { key: 'recall', label: t('estudos.revisaoAtiva') }
-]
-
 /** Split-view Markdown note editor (textarea | live preview) with debounced autosave. */
 export function NoteEditor(): React.ReactElement {
-  const { note, selectedNodeId, nodes, saveNote, activeTopicId } = useStudyStore()
+  const { note, selectedNodeId, nodes, saveNote, activeTopicId, setNoteDirty } = useStudyStore()
   const [draft, setDraft] = useState(note?.content ?? '')
   const [savedAt, setSavedAt] = useState<string | null>(note?.updatedAt ?? null)
   const [saveState, setSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
@@ -126,51 +116,21 @@ export function NoteEditor(): React.ReactElement {
     }, where !== undefined ? 0 : 1500)
   }
 
-  // IA tutor
-  const [tutorRunning, setTutorRunning] = useState(false)
-  const [tutorOut, setTutorOut] = useState('')
-  const [tutorLabel, setTutorLabel] = useState('')
-  const tutorRunId = useRef<string | null>(null)
-
-  useEffect(() => {
-    const offChunk = window.api.ai.onChunk((rid, text) => {
-      if (rid && rid === tutorRunId.current) setTutorOut((o) => o + text)
-    })
-    const offDone = window.api.ai.onDone(({ runId: rid, ok, output, error }) => {
-      if (rid !== tutorRunId.current) return
-      tutorRunId.current = null
-      setTutorRunning(false)
-      setTutorOut(ok ? output : error || 'Falha.')
-    })
-    return () => {
-      offChunk()
-      offDone()
-    }
-  }, [])
-
-  async function runTutor(acao: AcaoTutor, label: string): Promise<void> {
-    const content = draft.trim()
-    if (!content || tutorRunning) return
-    setTutorLabel(label)
-    setTutorOut('')
-    setTutorRunning(true)
-    try {
-      const rid = await window.api.ai.start({ chamada: 'estudos.tutor', params: { acao, conteudo: content }, save: false, source: 'estudos' })
-      tutorRunId.current = rid
-    } catch (e) {
-      setTutorRunning(false)
-      setTutorOut(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  function appendToNote(): void {
-    const merged = `${draft.trimEnd()}\n\n## ${tutorLabel}\n${tutorOut.trim()}\n`
-    onChange(merged)
-    persist(merged)
-    setTutorOut('')
-  }
-
   const title = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId)?.title ?? t('estudos.item') : t('estudos.visaoGeralTopico')
+
+  // estado do autosave visível para quem aplica sugestões na nota
+  useEffect(() => {
+    setNoteDirty(saveState === 'dirty' || saveState === 'saving' || saveState === 'error')
+  }, [saveState])
+
+  // a nota mudou no servidor (sugestão aceita, aula adicionada, outro cliente) e não tenho rascunho pendente
+  useEffect(() => {
+    if (note && saveState !== 'dirty' && saveState !== 'saving' && note.content !== draftRef.current) {
+      setDraft(note.content)
+      setSavedAt(note.updatedAt)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.updatedAt])
 
   // reset when selection changes or the loaded note arrives
   useEffect(() => {
@@ -291,38 +251,6 @@ export function NoteEditor(): React.ReactElement {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('estudos.tutor')}</span>
-        {TUTOR_ACTIONS.map((a) => (
-          <button
-            key={a.key}
-            className="btn btn-secondary btn-sm"
-            disabled={tutorRunning || !draft.trim()}
-            title={draft.trim() ? '' : t('estudos.escrevaUmaAnotacaoPrimeiro')}
-            onClick={() => runTutor(a.key, a.label)}
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
-
-      {(tutorRunning || tutorOut) && (
-        <div className="chart-section" style={{ marginTop: 8 }}>
-          <div className="chart-title" style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>{tutorLabel}{tutorRunning ? t('estudos.pensando') : ''}</span>
-            {!tutorRunning && tutorOut && (
-              <span style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard.writeText(tutorOut)}>{t('estudos.copiar')}</button>
-                <button className="btn btn-secondary btn-sm" onClick={appendToNote}>{t('estudos.anexarANota')}</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setTutorOut('')}>{t('estudos.fechar')}</button>
-              </span>
-            )}
-          </div>
-          <div className="md-preview-pane" style={{ marginTop: 6, minHeight: 0 }}>
-            {tutorOut ? renderMarkdown(tutorOut) : <div className="empty-hint">…</div>}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

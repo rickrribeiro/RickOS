@@ -9,7 +9,7 @@ import { SourcePanel } from '../components/SourcePanel'
 import { LessonPanel } from '../components/LessonPanel'
 import { PlanPanel } from '../components/PlanPanel'
 import { QuizModal } from '../components/QuizModal'
-import { GapsModal } from '../components/GapsModal'
+import { MaterialPanel, NoteReview } from '../components/MaterialPanel'
 import { TopicEditor } from '../components/TopicEditor'
 import type { PinnedAction } from '../../../../shared/estudos'
 import { t as tr } from '../../../i18n'
@@ -45,10 +45,10 @@ export function TopicWorkspacePage(): React.ReactElement {
   const [reader, setReader] = useState<'on' | 'off'>(() => loadPref<'on' | 'off'>(READER_KEY, 'on', ['on', 'off']))
   const [roadmapOpen, setRoadmapOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 900)
   const [quizOpen, setQuizOpen] = useState(false)
-  const [gapsOpen, setGapsOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [planOpen, setPlanOpen] = useState(false)
-  const [readerTab, setReaderTab] = useState<'fontes' | 'aula'>('fontes')
+  const [readerTab, setReaderTab] = useState<'fontes' | 'aula' | 'material'>('fontes')
+  const [subBusy, setSubBusy] = useState(false)
   const [pinned, setPinned] = useState<PinnedAction | null>(null)
   const topic = topics.find((x) => x.id === activeTopicId) ?? null
 
@@ -152,7 +152,27 @@ export function TopicWorkspacePage(): React.ReactElement {
           <button className="btn btn-primary btn-sm" onClick={() => setPlanOpen(true)} title={tr('est.roteiroDica')}>{tr('est.roteiroBotao')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>{tr('estudos.editar')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setQuizOpen(true)} title={tr('estudos.gerarUmQuizAPartir')}>{tr('estudos.quiz2')}</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setGapsOpen(true)} title={tr('estudos.detectarPreRequisitosItensFaltando')}>{tr('estudos.lacunas')}</button>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={subBusy}
+            title={tr('est.sugerirSubtopicosDica')}
+            onClick={async () => {
+              setSubBusy(true)
+              try {
+                await window.api.estudos.suggestSubtopics(topic.id, selectedNodeId)
+                setTab('caderno')
+                setReader('on')
+                setReaderTab('material')
+                setPane('leitura')
+              } catch (e) {
+                alert(e instanceof Error ? e.message : String(e))
+              } finally {
+                setSubBusy(false)
+              }
+            }}
+          >
+            {tr('est.sugerirSubtopicos')}
+          </button>
           <details className="study-more">
             <summary className="btn btn-secondary btn-sm">{tr('est.exportar')}</summary>
             <div className="study-more-menu">
@@ -190,11 +210,13 @@ export function TopicWorkspacePage(): React.ReactElement {
             <div className="reader-tabs">
               <button className={`study-tab ${readerTab === 'fontes' ? 'active' : ''}`} onClick={() => setReaderTab('fontes')}>{tr('est.fontes')}</button>
               <button className={`study-tab ${readerTab === 'aula' ? 'active' : ''}`} onClick={() => setReaderTab('aula')}>{tr('est.aula')}</button>
+              <button className={`study-tab ${readerTab === 'material' ? 'active' : ''}`} onClick={() => setReaderTab('material')}>{tr('est.material')}</button>
             </div>
             <div style={{ display: readerTab === 'fontes' ? 'block' : 'none' }}>
               <SourcePanel />
             </div>
             {readerTab === 'aula' && <LessonPanel />}
+            {readerTab === 'material' && <MaterialPanel onOpenLesson={() => setReaderTab('aula')} onOpenCards={() => setTab('cartoes')} />}
           </div>
           <div className={`study-col study-col-note ${pane === 'notas' ? 'pane-on' : 'pane-off'}`}>
             <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -202,6 +224,7 @@ export function TopicWorkspacePage(): React.ReactElement {
               <button className="link-btn desktop-only" onClick={toggleReader}>{reader === 'on' ? tr('est.ocultarLeitura') : tr('est.mostrarLeituraPainel')}</button>
             </div>
             <NoteEditor />
+            <NoteReview />
           </div>
         </div>
       </div>
@@ -209,7 +232,6 @@ export function TopicWorkspacePage(): React.ReactElement {
       {tab === 'perguntas' && <QuestionsPanel key={selectedNodeId ?? 'topic'} />}
 
       {quizOpen && <QuizModal topic={topic} onClose={() => setQuizOpen(false)} />}
-      {gapsOpen && <GapsModal topic={topic} onClose={() => setGapsOpen(false)} />}
       {planOpen && (
         <PlanPanel
           topic={topicMeta}

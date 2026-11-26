@@ -53,5 +53,9 @@ export const estudos: Record<K, string> = {
   'estudos.nadaParaResponder': 'No hay ningún turno mío esperando respuesta.',
   'estudos.perfilInvalido': 'Perfil de IA no válido.',
   'estudos.modeloInvalido': 'Modelo no válido.',
-  'estudos.effortInvalido': 'Effort no válido para Codex.'
+  'estudos.effortInvalido': 'Effort no válido para Codex.',
+  'estudos.secaoInvalida': 'Sección no válida.',
+  'estudos.notaVaziaParaRevisar': 'La nota de este ítem está vacía: no hay nada que revisar.',
+  'estudos.sugestaoNaoEncontrada': 'Sugerencia no encontrada.',
+  'estudos.paiInvalido': 'El ítem padre elegido no existe en este tema.'
 }

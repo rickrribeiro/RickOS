@@ -12,11 +12,13 @@ import { automacoesAgendado } from './automacoes/agendado'
 import { braindumpOrganizar } from './braindump/organizar'
 import { crmRetomarContato } from './crm/retomarContato'
 import { estudosFlashcards } from './estudos/flashcards'
-import { estudosLacunas } from './estudos/lacunasRoadmap'
 import { estudosQuiz } from './estudos/quiz'
-import { estudosTutor } from './estudos/tutor'
 import { estudosMasterclass } from './estudos/masterclass'
 import { estudosAula } from './estudos/aula'
+import { estudosPacoteNo } from './estudos/pacoteNo'
+import { estudosSecaoNo } from './estudos/secaoNo'
+import { estudosRevisaoEditorial } from './estudos/revisaoEditorial'
+import { estudosSubtopicos } from './estudos/subtopicos'
 import { githubCriarIssue } from './github/criarIssue'
 import { homeBriefing } from './home/briefingMatinal'
 import { homeRevisaoSemanal } from './home/revisaoSemanal'
@@ -68,12 +70,14 @@ export const DEFINICOES = {
   'inbox.ocr': inboxOcr,
   'inbox.classificar': inboxClassificar,
   'braindump.organizar': braindumpOrganizar,
-  'estudos.tutor': estudosTutor,
   'estudos.flashcards': estudosFlashcards,
-  'estudos.lacunas': estudosLacunas,
   'estudos.quiz': estudosQuiz,
   'estudos.masterclass': estudosMasterclass,
   'estudos.aula': estudosAula,
+  'estudos.pacoteNo': estudosPacoteNo,
+  'estudos.secaoNo': estudosSecaoNo,
+  'estudos.revisaoEditorial': estudosRevisaoEditorial,
+  'estudos.subtopicos': estudosSubtopicos,
   'projetos.plano': projetosPlano,
   'projetos.proximaAcao': projetosProximaAcao,
   'projetos.ondePareiProjeto': projetosOndePareiProjeto,

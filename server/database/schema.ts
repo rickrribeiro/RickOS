@@ -718,6 +718,39 @@ export const SCHEMA = `
     createdAt TEXT NOT NULL
   );
 
+  -- Material do nó (pacote C): última geração VÁLIDA por tópico/nó/seção. nodeKey 0 = tópico inteiro.
+  CREATE TABLE IF NOT EXISTS study_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeKey INTEGER NOT NULL DEFAULT 0,
+    nodeId INTEGER,
+    section TEXT NOT NULL,
+    content TEXT NOT NULL,               -- JSON da seção (schema da seção)
+    runId INTEGER NOT NULL,
+    model TEXT,
+    effort TEXT,
+    promptVersion TEXT,
+    inputSignature TEXT,
+    noteSignature TEXT,                  -- assinatura da nota quando gerou (detecta "anterior à última edição")
+    createdAt TEXT NOT NULL,
+    UNIQUE (topicId, nodeKey, section)
+  );
+
+  -- Sugestões do tutor que dependem de decisão minha (revisão editorial, subtópicos)
+  CREATE TABLE IF NOT EXISTS study_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER,
+    kind TEXT NOT NULL,                  -- editorial | subtopic
+    fingerprint TEXT NOT NULL,
+    payload TEXT NOT NULL,               -- JSON do item
+    status TEXT NOT NULL DEFAULT 'pending', -- pending | accepted | rejected | comment | superseded
+    runId INTEGER,
+    baseSignature TEXT,                  -- versão do material (nota/mapa) sobre a qual foi gerada
+    createdAt TEXT NOT NULL,
+    decidedAt TEXT
+  );
+
   -- Origem de conteúdo importado (repositório/pasta): reconhece reimportações sem duplicar
   CREATE TABLE IF NOT EXISTS study_origins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -49,5 +49,9 @@ export const estudos = {
   'estudos.nadaParaResponder': 'Não há turno meu aguardando resposta.',
   'estudos.perfilInvalido': 'Perfil de IA inválido.',
   'estudos.modeloInvalido': 'Modelo inválido.',
-  'estudos.effortInvalido': 'Effort inválido para o Codex.'
+  'estudos.effortInvalido': 'Effort inválido para o Codex.',
+  'estudos.secaoInvalida': 'Seção inválida.',
+  'estudos.notaVaziaParaRevisar': 'A nota deste item está vazia: não há o que revisar.',
+  'estudos.sugestaoNaoEncontrada': 'Sugestão não encontrada.',
+  'estudos.paiInvalido': 'O item pai escolhido não existe neste tópico.'
 }

@@ -102,6 +102,19 @@ export function QuizModal({ topic, onClose }: { topic: StudyTopic; onClose: () =
     const score = questions.reduce((s, q, i) => s + (answers[i] === q.answerIndex ? 1 : 0), 0)
     const durationMs = Date.now() - startedAt.current
     await window.api.study.saveQuizAttempt(topic.id, score, questions.length, durationMs)
+    // cada erro vira "erro para revisitar" em Testar o que ficou (sem IA)
+    for (let i = 0; i < questions.length; i++) {
+      const qq = questions[i]
+      if (answers[i] === qq.answerIndex) continue
+      const created = await window.api.estudos.createQuestion({
+        topicId: topic.id,
+        kind: 'quiz',
+        prompt: `${qq.question}\n${qq.options.map((o, k) => `${String.fromCharCode(97 + k)}) ${o}`).join('\n')}`,
+        reference: qq.options[qq.answerIndex],
+        origin: 'quiz'
+      })
+      await window.api.estudos.recordAttempt(created.id, { answer: answers[i] != null ? qq.options[answers[i] as number] : null, outcome: 'miss' })
+    }
     setAttempts(await window.api.study.quizAttempts(topic.id))
     setPhase('result')
   }

@@ -1,4 +1,5 @@
 import type {
+  MaterialView,
   DiagnosticoCodex,
   IaPerfisView,
   LessonRow,
@@ -120,6 +121,16 @@ export interface EstudosApi {
   sendTurn(lessonId: number, text: string, clientKey: string): Promise<RunRow>
   retryTurn(lessonId: number): Promise<RunRow>
   appendToNote(topicId: number, nodeId: number | null, text: string): Promise<void>
+
+  material(topicId: number, nodeId: number | null): Promise<MaterialView>
+  prepareNode(topicId: number, nodeId: number | null, opts?: { vocabulario?: string[] }): Promise<RunRow>
+  regenerateSection(topicId: number, nodeId: number | null, secao: string): Promise<RunRow>
+  reviewNote(topicId: number, nodeId: number | null): Promise<RunRow>
+  suggestSubtopics(topicId: number, nodeId: number | null): Promise<RunRow>
+  acceptEditorial(id: number, opts?: { text?: string | null; anchor?: string | null; replace?: boolean }): Promise<{ ok: true; content: string } | { ok: false; reason: 'stale' | 'ambiguous' | 'decided' }>
+  decideSuggestion(id: number, status: 'rejected' | 'comment' | 'pending'): Promise<void>
+  acceptSubtopic(id: number, opts?: { parentId?: number | null; title?: string | null; position?: number | null }): Promise<number>
+  saveItemAsQuestion(topicId: number, nodeId: number | null, kind: 'recall' | 'exercise' | 'socratic', prompt: string, reference: string | null, hint: string | null): Promise<number>
 }
 
 export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
@@ -187,7 +198,16 @@ export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
   'lesson',
   'sendTurn',
   'retryTurn',
-  'appendToNote'
+  'appendToNote',
+  'material',
+  'prepareNode',
+  'regenerateSection',
+  'reviewNote',
+  'suggestSubtopics',
+  'acceptEditorial',
+  'decideSuggestion',
+  'acceptSubtopic',
+  'saveItemAsQuestion'
 ]
 
 export interface EstudosWindowApi extends EstudosApi {

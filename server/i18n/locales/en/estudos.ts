@@ -53,5 +53,9 @@ export const estudos: Record<K, string> = {
   'estudos.nadaParaResponder': 'There is no turn of mine waiting for an answer.',
   'estudos.perfilInvalido': 'Invalid AI profile.',
   'estudos.modeloInvalido': 'Invalid model.',
-  'estudos.effortInvalido': 'Invalid effort for Codex.'
+  'estudos.effortInvalido': 'Invalid effort for Codex.',
+  'estudos.secaoInvalida': 'Invalid section.',
+  'estudos.notaVaziaParaRevisar': 'This item\'s note is empty: nothing to review.',
+  'estudos.sugestaoNaoEncontrada': 'Suggestion not found.',
+  'estudos.paiInvalido': 'The chosen parent item doesn\'t exist in this topic.'
 }

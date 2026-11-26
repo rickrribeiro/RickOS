@@ -3508,3 +3508,30 @@ button.todo-divider:hover {
 .lesson-input { display: flex; gap: 6px; align-items: flex-end; }
 .lesson-input textarea { flex: 1; }
 .lesson-turn .md-preview-pane { min-height: 0; }
+.material-panel { display: flex; flex-direction: column; gap: 8px; }
+.material-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.material-tabs { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.material-tabs .study-tab { font-size: 12px; padding: 4px 8px; }
+.material-tabs .study-tab.missing { opacity: 0.5; }
+.material-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.material-body { display: flex; flex-direction: column; gap: 8px; }
+.material-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+.material-item .md-preview-pane, .material-body > .md-preview-pane { min-height: 0; }
+.material-solution { border-left: 3px solid var(--accent); padding-left: 8px; }
+.material-item .flashcard-face { font-size: 15px; text-align: left; }
+.note-review { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.ed-box { display: flex; flex-direction: column; gap: 8px; }
+.ed-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; overflow-wrap: anywhere; }
+.ed-item.comment { font-size: 12px; color: var(--text-secondary); }
+.ed-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ed-head input { flex: 1; min-width: 140px; }
+.ed-trecho { font-style: italic; color: var(--text-secondary); }
+.ed-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ed-diff { font-size: 12px; background: var(--bg-tertiary); padding: 6px; border-radius: var(--radius-sm); white-space: pre-wrap; }
+.ed-diff del { color: var(--danger); }
+.ed-diff ins { color: var(--success); text-decoration: none; background: var(--success-dim); }
+.ed-anchor { text-decoration: underline dotted; }
+.ed-ctx { color: var(--text-muted); }
+.ed-question { font-size: 13px; }
+.ed-reconcile { display: flex; flex-direction: column; gap: 4px; }
+.ed-erro-factual { color: var(--danger); }

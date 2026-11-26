@@ -29,6 +29,9 @@ interface StudyState {
   /** Metadados v2 do tópico ativo (idioma, objetivo…). */
   topicMeta: TopicRow | null
   focus: WorkspaceFocus | null
+  /** A nota tem alterações ainda não salvas (aplicar sugestão espera o autosave). */
+  noteDirty: boolean
+  setNoteDirty: (v: boolean) => void
   openAt: (topicId: number, nodeId: number | null, target?: CheckpointTarget, refId?: number | null) => Promise<void>
   clearFocus: () => void
   activeTopicId: number | null
@@ -71,6 +74,8 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   topics: [],
   topicMeta: null,
   focus: null,
+  noteDirty: false,
+  setNoteDirty: (v) => set({ noteDirty: v }),
   openAt: async (topicId, nodeId, target = 'note', refId = null) => {
     set({ activeTopicId: topicId, selectedNodeId: nodeId, focus: { target, refId }, nodes: [], flashcards: [], note: null })
     saveSel(topicId, nodeId)
