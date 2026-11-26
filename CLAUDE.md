@@ -15,7 +15,7 @@ npm run build:web && npm start           # produção web (dist/ + dist-server/)
 npm run screenshots                      # prints desktop×celular×skins em docs/screenshots/ (exige dev:web rodando)
 ```
 
-* Testes automatizados no monitoramento de passagens, na Central de Mensagens, no parser de transcripts do Prompt Runner, na Memória Pessoal e o guardrail do catálogo de IA: `npm test` (`node:test` via tsx, em `server/flights/__tests__/`, `server/chats/__tests__/`, `server/aiconv/__tests__/`, `server/memory/__tests__/` e `server/ia/__tests__/`). Extração da memória com LLM real: `npm run memory:evals` (sob demanda). No resto, a verificação é typecheck + uso real.
+* Testes automatizados no monitoramento de passagens, na Central de Mensagens, no parser de transcripts do Prompt Runner, na Memória Pessoal, em Estudos e o guardrail do catálogo de IA: `npm test` (`node:test` via tsx, em `server/flights/__tests__/`, `server/chats/__tests__/`, `server/aiconv/__tests__/`, `server/memory/__tests__/`, `server/estudos/__tests__/` e `server/ia/__tests__/`). Extração da memória com LLM real: `npm run memory:evals`; prompts pedagógicos de Estudos com o Codex real: `npm run estudos:evals` (sob demanda). No resto, a verificação é typecheck + uso real.
 * **Nunca** use `tsc -b` nem `tsc` sem `--noEmit`: ele gera `.js` ao lado dos fontes.
 * Mudou `server/` ou `electron/`? Reinicie o `npm run dev`. O `dev:web` recarrega o servidor sozinho.
 
@@ -42,6 +42,7 @@ UI React → store Zustand → window.api.<ns>.<ação>()   src/api/createApi.ts
 | `server/flights/` | monitoramento de passagens: geo, planejador, restrições/ranking, executor de jobs, provedores, IA (ver `docs/passagens.md`) |
 | `server/chats/` | Central de Mensagens: contrato `ChatProvider`, Beeper/demonstração, sincronização, classificação, IA, agente local (ver `docs/mensagens.md`) |
 | `server/aiconv/` | Prompt Runner: conversas com o Claude CLI (`--resume`, ramificação com `--fork-session`), permissões/perguntas via `--permission-prompt-tool stdio`, fila, imagens, worktree por conversa e mudanças/commit/PR (`git.ts`), importação de sessões do terminal (`~/.claude*/projects`), skills/comandos do Claude Code do usuário e dos projetos (`claudeSkills.ts`) |
+| `server/estudos/` | **Estudos**: biblioteca/Continuar/SRS por direção sem IA (`repo.ts`), anexos, exportação/restauração e Sincronizar com Git (`bundle.ts`, `git.ts`, `adopt.ts`), tutor no Codex (`tutor.ts`, `material.ts`; prompts A–E em `shared/prompts/estudos/pedagogia/`) (ver `docs/estudos.md`) |
 | `server/memory/` | **Memória Pessoal**: memórias atômicas, Inbox de sugestões, Memory Agent, `getMemoryContext` (única saída de memória para IA) e política deny-by-default em `policy.ts` (ver `docs/memoria/README.md`) |
 | `shared/` | tipos/helpers puros compartilhados entre servidor e front (incluído nos dois tsconfigs) |
 | `server/ia/` | **gateway de IA**: `executarChamada(id, dados)` lê a config da chamada no banco (`ai_chamadas`: prompt sobrescrito), monta o prompt e executa pelo motor certo (`motores/`: factory `criarMotor` com Claude Code e Codex) |
@@ -118,6 +119,7 @@ Molde simples para copiar: `todos` / `habits`.
 
 * `README.md`: visão geral, uso diário, celular/VPS, variáveis de ambiente.
 * `docs/ia.md`: catálogo detalhado de features para brainstorm. Pode estar desatualizado; o código manda.
+* `docs/estudos.md`: módulo Estudos (arquitetura, Codex, repositório/Sincronizar, cenários, revisão dos prompts).
 * `docs/passagens.md`: arquitetura, fontes e configuração do monitoramento de passagens.
 * `docs/mensagens.md`: Central de Mensagens (Beeper, agente local, dados, classificação, IA, novo provedor).
 * `docs/memoria/`: Memória Pessoal (guia, arquitetura, inventário de IA, matriz de integração, tracker).
