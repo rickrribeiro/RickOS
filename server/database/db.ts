@@ -660,6 +660,33 @@ function runMigrations(database: Database): void {
   database.run(`PRAGMA user_version = ${target}`)
 }
 
+/**
+ * Categorias padrão de Finanças. Antes ficavam no SCHEMA com INSERT OR IGNORE e voltavam a cada
+ * boot depois de apagadas. Agora: banco novo (sem categorias) recebe as padrão uma vez e grava a
+ * marca `finance_categories_seeded`; banco existente só ganha a marca. "Outros" (id 6) é a
+ * exceção: é a categoria padrão das importações e das regras (FALLBACK_CATEGORY_ID), então
+ * continua garantida.
+ */
+function seedFinanceCategories(database: Database): void {
+  const flag = database.exec("SELECT 1 FROM settings WHERE key = 'finance_categories_seeded'")
+  if (!flag[0]?.values?.length) {
+    const any = database.exec('SELECT 1 FROM categories LIMIT 1')
+    if (!any[0]?.values?.length) {
+      database.run(`
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (1, 'Salário', 'income', '#22c55e');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (2, 'Alimentação', 'expense', '#f59e0b');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (3, 'Transporte', 'expense', '#3b82f6');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (4, 'Moradia', 'expense', '#8b5cf6');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (5, 'Lazer', 'expense', '#ec4899');
+      `)
+      // banco novo: o Salário semeado já nasce como receita fixa (como a migração faz nos antigos)
+      database.run("UPDATE categories SET fixedIncome = 1 WHERE id = 1 AND type = 'income'")
+    }
+    database.run("INSERT OR IGNORE INTO settings (key, value) VALUES ('finance_categories_seeded', '1')")
+  }
+  database.run("INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (6, 'Outros', 'expense', '#6b7280')")
+}
+
 // Abertura em andamento: chamadas simultâneas na primeira vez esperam a MESMA abertura.
 // (Sem isso, cada uma criava sua própria instância e as escritas de uma se perdiam.)
 let opening: Promise<Database> | null = null
@@ -692,6 +719,7 @@ async function openDb(): Promise<Database> {
   registerFunctions(fresh)
   fresh.run(SCHEMA)
   runMigrations(fresh)
+  seedFinanceCategories(fresh)
   seedAiLibrary(fresh)
 
   db = fresh
