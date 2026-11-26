@@ -185,9 +185,11 @@ export function comparableInvestmentDelta(
   let entered = 0
   let left = 0
   const both: number[] = []
+  // valor 0 (zerado sem "encerrar") conta como fora do registro, não como queda de 100%
+  const held = (v: number | null): number | null => (v != null && Math.abs(v) > 0.004 ? v : null)
   for (const id of ids) {
-    const a = investmentValueAtMonth(history, id, month)
-    const b = investmentValueAtMonth(history, id, prevMonth)
+    const a = held(investmentValueAtMonth(history, id, month))
+    const b = held(investmentValueAtMonth(history, id, prevMonth))
     if (a != null && b != null) {
       now += a
       prev += b
