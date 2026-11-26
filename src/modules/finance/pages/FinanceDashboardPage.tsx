@@ -94,7 +94,7 @@ function ReservedLine({
 }
 
 export function FinanceDashboardPage(): React.ReactElement {
-  const { accounts, accountBalances, accountReserved, setAccountReserved, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor } =
+  const { accounts, accountBalances, accountReserved, setAccountReserved, categories, transactions, allTransactions, investmentMoves, budgets, investments, investmentHistory, month, base, rates, refresh, categoryName, categoryColor, recurringSuggestions } =
     useFinanceStore()
 
   useEffect(() => {
@@ -166,6 +166,11 @@ export function FinanceDashboardPage(): React.ReactElement {
   // sem extras = só o salário fixo
   const fixedBase = sumInBase(fixedIncome, base, rates)
   const netFixedBase = fixedBase - expenseBase
+
+  // Recorrentes (detecção automática + confirmadas): o "custo fixo" do mês
+  const recurringExpense = expense.filter((t) => !!t.recurring)
+  const recurringExpenseBase = sumInBase(recurringExpense, base, rates)
+  const recurringIncomeBase = sumInBase(income.filter((t) => !!t.recurring), base, rates)
 
   // Fatura inicial: parcelas de compras anteriores que já caem neste mês (e no próximo)
   const startingBill = startingBillInBase(transactions, base, rates)
@@ -272,6 +277,28 @@ export function FinanceDashboardPage(): React.ReactElement {
             {formatMoney(netFixedBase, base)}
           </div>
           <div className="stat-card-sub">{tr('finance.semExtrasSalarioGastos', { p0: formatMoney(fixedBase, base) })} {formatMoney(expenseBase, base)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">{tr('finance.recorrentesDoMes')}</div>
+          <div className="stat-card-value" style={{ fontSize: 16, color: recurringExpenseBase > 0 ? 'var(--danger)' : undefined }}>
+            {formatMoney(recurringExpenseBase, base)}
+          </div>
+          {recurringExpense.length > 0 && (
+            <div className="stat-card-sub">
+              {tr('finance.recorrentesGastosSub', { count: recurringExpense.length })}
+              {expenseBase > 0 && tr('finance.recorrentesPctGastos', { p0: Math.round((recurringExpenseBase / expenseBase) * 100) })}
+            </div>
+          )}
+          {recurringIncomeBase > 0 && (
+            <div className="stat-card-sub" style={{ color: 'var(--success)' }}>
+              {tr('finance.recorrentesReceitas', { p0: formatMoney(recurringIncomeBase, base) })}
+            </div>
+          )}
+          {recurringSuggestions.length > 0 && (
+            <div className="stat-card-sub" style={{ color: 'var(--warning)' }}>
+              {tr('finance.recorrentesSugestoes', { count: recurringSuggestions.length })}
+            </div>
+          )}
         </div>
         <div className="stat-card">
           <div className="stat-card-label">{tr('finance.faturaInicialDoMes')}</div>

@@ -357,5 +357,10 @@ export const finance = {
   'finance.ignorarTransacao': 'Ignorar transacción',
   'finance.ignorarTransacaoConfirm': '¿Ignorar esta transacción? Sale de ingresos, gastos, presupuesto y de todos los cálculos.\n\nSe puede deshacer con "marcar como transacción válida" en la lista.',
   'finance.ignorarTransacaoHint': 'Sale de todos los cálculos y aparece atenuada en la lista, con el motivo.',
-  'finance.tirarDaLista': 'Quitar de la lista (no categorizar esta)'
+  'finance.tirarDaLista': 'Quitar de la lista (no categorizar esta)',
+  'finance.recorrentesDoMes': 'Recurrentes del mes',
+  'finance.recorrentesGastosSub': '{count} gasto recurrente|{count} gastos recurrentes',
+  'finance.recorrentesPctGastos': ' · {p0}% de los gastos',
+  'finance.recorrentesReceitas': 'Ingresos recurrentes: {p0}',
+  'finance.recorrentesSugestoes': '{count} posible recurrente por confirmar|{count} posibles recurrentes por confirmar'
 }

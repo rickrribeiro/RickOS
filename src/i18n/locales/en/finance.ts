@@ -357,5 +357,10 @@ export const finance = {
   'finance.ignorarTransacao': 'Ignore transaction',
   'finance.ignorarTransacaoConfirm': 'Ignore this transaction? It leaves income, expenses, budget and every calculation.\n\nYou can undo it with "mark as valid transaction" in the list.',
   'finance.ignorarTransacaoHint': 'Leaves every calculation and shows dimmed in the list, with the reason.',
-  'finance.tirarDaLista': 'Remove from list (don\'t categorize this one)'
+  'finance.tirarDaLista': 'Remove from list (don\'t categorize this one)',
+  'finance.recorrentesDoMes': 'Recurring this month',
+  'finance.recorrentesGastosSub': '{count} recurring expense|{count} recurring expenses',
+  'finance.recorrentesPctGastos': ' · {p0}% of expenses',
+  'finance.recorrentesReceitas': 'Recurring income: {p0}',
+  'finance.recorrentesSugestoes': '{count} possible recurring to confirm|{count} possible recurring to confirm'
 }
