@@ -6,8 +6,13 @@ import * as gitSync from './git'
 import { applyAdopt, previewAdopt, type AdoptApply } from './adopt'
 import { listAttachments, storeAttachment } from './attachments'
 import { exportAll } from './bundle'
-import { StudyError } from './sql'
+import * as tutor from './tutor'
+import { diagnosticoCodex } from '../ia/motores/codex'
+import { EFFORTS_DO_MOTOR, modeloValido } from '../../shared/prompts/motores'
+import { PERFIS_ESTUDOS, type PerfilEstudos } from '../../shared/prompts/estudos/perfis'
+import { getSetting, setSetting } from '../database/queries'
 import { tt } from '../i18n'
+import { StudyError } from './sql'
 
 /**
  * Canais `estudos:*` (Estudos v2). Nenhum deles chama IA: abrir, filtrar, revisar, aprovar,
@@ -209,5 +214,63 @@ export function registerEstudosRpc(handle: Handle): void {
     const r = await applyAdopt({ ...input, topicId: optId(input?.topicId), mode: input?.mode === 'source' ? 'source' : 'note', decisions: input?.decisions ?? {} })
     changed('topics', r.topicId)
     return r
+  })
+
+  // ── Tutor (Codex): só por ação explícita; tudo o mais lê o que está salvo ──
+  void tutor.recoverStaleRuns()
+  handle('estudos:iaPerfis', async () => {
+    const out: Record<string, { modelo: string; effort: string; padraoModelo: string; padraoEffort: string }> = {}
+    for (const [k, p] of Object.entries(PERFIS_ESTUDOS)) {
+      out[k] = {
+        modelo: ((await getSetting(p.modelo.setting!)) ?? '').trim() || p.modelo.padrao,
+        effort: ((await getSetting(p.effort.setting!)) ?? '').trim() || p.effort.padrao,
+        padraoModelo: p.modelo.padrao,
+        padraoEffort: p.effort.padrao
+      }
+    }
+    return { perfis: out, efforts: EFFORTS_DO_MOTOR.codex }
+  })
+  handle('estudos:setIaPerfil', async (_e, perfil: PerfilEstudos, modelo: string, effort: string) => {
+    const p = PERFIS_ESTUDOS[perfil]
+    if (!p) throw new StudyError(tt('estudos.perfilInvalido'))
+    if (modelo && !modeloValido(modelo)) throw new StudyError(tt('estudos.modeloInvalido'))
+    if (effort && !EFFORTS_DO_MOTOR.codex.includes(effort)) throw new StudyError(tt('estudos.effortInvalido'))
+    await setSetting(p.modelo.setting!, (modelo ?? '').trim())
+    await setSetting(p.effort.setting!, (effort ?? '').trim())
+    changed('iaPerfis')
+  })
+  // diagnóstico local (versão, login, modelos no catálogo do CLI) — não envia contexto
+  handle('estudos:iaDiagnostico', async () => {
+    const modelos: string[] = []
+    for (const p of Object.values(PERFIS_ESTUDOS)) modelos.push(((await getSetting(p.modelo.setting!)) ?? '').trim() || p.modelo.padrao)
+    return diagnosticoCodex([...new Set(modelos)])
+  })
+  handle('estudos:iaRuns', (_e, f?: { topicId?: number | null; nodeId?: number | null; limit?: number }) => tutor.listRuns(f ?? {}))
+  handle('estudos:iaCancel', (_e, runId: number) => tutor.cancelRun(id(runId)))
+  handle('estudos:masterclass', (_e, topicId: number, pedido: string) => tutor.startMasterclass(id(topicId), String(pedido ?? '')))
+  handle('estudos:plans', (_e, topicId: number) => tutor.listPlans(id(topicId)))
+  handle('estudos:masterclassContext', (_e, topicId: number) => tutor.previewMasterclassContext(id(topicId)))
+  handle('estudos:editPlan', async (_e, planId: number, content: unknown) => {
+    const p = await tutor.editPlan(id(planId), content)
+    changed('plans', p.topicId)
+    return p
+  })
+  handle('estudos:discardPlan', async (_e, planId: number) => {
+    await tutor.discardPlan(id(planId))
+    changed('plans')
+  })
+  handle('estudos:approvePlan', async (_e, planId: number, content?: unknown) => {
+    const r = await tutor.approvePlan(id(planId), content)
+    changed('plans')
+    return r
+  })
+  handle('estudos:lessons', (_e, topicId: number) => tutor.listLessons(id(topicId)))
+  handle('estudos:openLesson', (_e, topicId: number, nodeId: number | null) => tutor.openLesson(id(topicId), optId(nodeId)))
+  handle('estudos:lesson', (_e, lessonId: number) => tutor.getLesson(id(lessonId)))
+  handle('estudos:sendTurn', (_e, lessonId: number, text: string, clientKey: string) => tutor.sendTurn(id(lessonId), String(text ?? ''), String(clientKey ?? '')))
+  handle('estudos:retryTurn', (_e, lessonId: number) => tutor.runLessonTurn(id(lessonId)))
+  handle('estudos:appendToNote', async (_e, topicId: number, nodeId: number | null, text: string) => {
+    await tutor.appendToNote(id(topicId), optId(nodeId), String(text ?? ''))
+    changed('notes', id(topicId))
   })
 }

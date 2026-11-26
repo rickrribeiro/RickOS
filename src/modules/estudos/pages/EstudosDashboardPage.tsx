@@ -6,6 +6,7 @@ import { useStudyStore } from '../store/studyStore'
 import { TopicEditor, TOPIC_STATUS_LABEL } from '../components/TopicEditor'
 import { StudySearch } from '../components/StudySearch'
 import { RepoPanel, SyncButton } from '../components/RepoPanel'
+import { IaSettings } from '../components/IaSettings'
 import { t as tr } from '../../../i18n'
 
 const GROUPS: LibraryGroup[] = ['ativos', 'futuros', 'antigos']
@@ -58,6 +59,7 @@ export function EstudosDashboardPage(): React.ReactElement {
   const [futureName, setFutureName] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [repoOpen, setRepoOpen] = useState(false)
+  const [iaOpen, setIaOpen] = useState(false)
 
   async function load(): Promise<void> {
     const [l, c, q, qs] = await Promise.all([
@@ -312,6 +314,7 @@ export function EstudosDashboardPage(): React.ReactElement {
 
       <div className="study-home-footer">
         <button className="btn btn-secondary btn-sm" onClick={() => setShowSearch(!showSearch)}>{tr('est.buscarConteudo')}</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => setIaOpen(true)}>{tr('est.iaBotao')}</button>
         <button className="btn btn-secondary btn-sm" onClick={() => importTopic('json')} title={tr('estudos.importarBackupJsonDeUm')}>{tr('estudos.json')}</button>
         <button className="btn btn-secondary btn-sm" onClick={() => importTopic('folder')} title={tr('estudos.importarPastaMarkdownObsidian')}>{tr('estudos.pasta')}</button>
       </div>
@@ -342,6 +345,7 @@ export function EstudosDashboardPage(): React.ReactElement {
         </>
       )}
 
+      {iaOpen && <IaSettings onClose={() => setIaOpen(false)} />}
       {repoOpen && <RepoPanel onClose={() => { setRepoOpen(false); load() }} />}
       {(creating || editing) && (
         <TopicEditor

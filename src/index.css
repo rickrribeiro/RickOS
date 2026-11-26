@@ -3480,3 +3480,31 @@ button.todo-divider:hover {
 .repo-modal { max-width: 680px; }
 .repo-summary { font-size: 12px; overflow-wrap: anywhere; }
 .study-col.collapsed { min-height: 0; }
+.reader-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.plan-modal { max-width: 760px; }
+.plan-view { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; font-size: 13px; }
+.plan-part { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.plan-part.excluded, .plan-module.excluded { opacity: 0.45; }
+.plan-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.plan-row input:not([type=checkbox]) { flex: 1; min-width: 160px; }
+.plan-title { font-weight: 600; }
+.plan-module { border-left: 2px solid var(--border); padding-left: 8px; }
+.plan-details { font-size: 12px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.plan-opening { border-color: var(--accent); }
+.privacy-note summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+.privacy-note pre { white-space: pre-wrap; max-height: 200px; overflow: auto; font-size: 11px; background: var(--bg-tertiary); padding: 6px; border-radius: var(--radius-sm); }
+.ia-diag ul { margin: 6px 0 0 16px; font-size: 12px; }
+.ia-row { align-items: flex-end; }
+.lesson-panel { display: flex; flex-direction: column; gap: 8px; }
+.lesson-head { display: flex; flex-direction: column; gap: 2px; }
+.lesson-turns { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.lesson-turn { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; overflow-wrap: anywhere; }
+.lesson-turn.me { background: var(--bg-tertiary); margin-left: 24px; }
+.lesson-turn.pending { font-size: 12px; color: var(--text-secondary); }
+.lesson-turn-role { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.lesson-feedback { font-size: 12px; display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; padding: 6px; border-left: 3px solid var(--accent); }
+.lesson-turn-actions { margin-top: 4px; text-align: right; }
+.lesson-open { font-size: 12px; color: var(--text-secondary); }
+.lesson-input { display: flex; gap: 6px; align-items: flex-end; }
+.lesson-input textarea { flex: 1; }
+.lesson-turn .md-preview-pane { min-height: 0; }

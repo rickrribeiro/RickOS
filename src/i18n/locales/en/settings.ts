@@ -355,6 +355,8 @@ export const settings = {
   'settings.iaChamada.estudos.flashcards': 'Generate flashcards',
   'settings.iaChamada.estudos.lacunas': 'Roadmap gaps',
   'settings.iaChamada.estudos.quiz': 'Topic quiz',
+  'settings.iaChamada.estudos.masterclass': 'Masterclass / topic plan',
+  'settings.iaChamada.estudos.aula': 'Conversational lesson (tutor)',
   'settings.iaChamada.projetos.plano': 'Suggest plan',
   'settings.iaChamada.projetos.proximaAcao': 'Suggest next action',
   'settings.iaChamada.projetos.ondePareiProjeto': 'Where I left off (project page)',

@@ -1,4 +1,10 @@
 import type {
+  DiagnosticoCodex,
+  IaPerfisView,
+  LessonRow,
+  PlanRow,
+  RunRow,
+  TurnRow,
   AdoptApply,
   AdoptPreview,
   GitConfig,
@@ -96,6 +102,24 @@ export interface EstudosApi {
   restoreFromRepo(): Promise<RestoreReport>
   adoptPreview(subpath: string, topicId: number | null): Promise<AdoptPreview>
   adoptApply(input: AdoptApply): Promise<{ topicId: number; created: number; updated: number; skipped: number; images: number }>
+
+  iaPerfis(): Promise<IaPerfisView>
+  setIaPerfil(perfil: 'plano' | 'aula' | 'editorial', modelo: string, effort: string): Promise<void>
+  iaDiagnostico(): Promise<DiagnosticoCodex>
+  iaRuns(f?: { topicId?: number | null; nodeId?: number | null; limit?: number }): Promise<RunRow[]>
+  iaCancel(runId: number): Promise<void>
+  masterclass(topicId: number, pedido: string): Promise<RunRow>
+  masterclassContext(topicId: number): Promise<{ chars: number; contexto: string }>
+  plans(topicId: number): Promise<PlanRow[]>
+  editPlan(planId: number, content: unknown): Promise<PlanRow>
+  discardPlan(planId: number): Promise<void>
+  approvePlan(planId: number, content?: unknown): Promise<{ nodeIds: number[]; lessonId: number | null }>
+  lessons(topicId: number): Promise<LessonRow[]>
+  openLesson(topicId: number, nodeId: number | null): Promise<{ lesson: LessonRow; turns: TurnRow[]; running: RunRow | null }>
+  lesson(lessonId: number): Promise<{ lesson: LessonRow; turns: TurnRow[]; running: RunRow | null }>
+  sendTurn(lessonId: number, text: string, clientKey: string): Promise<RunRow>
+  retryTurn(lessonId: number): Promise<RunRow>
+  appendToNote(topicId: number, nodeId: number | null, text: string): Promise<void>
 }
 
 export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
@@ -146,10 +170,38 @@ export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
   'gitTree',
   'restoreFromRepo',
   'adoptPreview',
-  'adoptApply'
+  'adoptApply',
+  'iaPerfis',
+  'setIaPerfil',
+  'iaDiagnostico',
+  'iaRuns',
+  'iaCancel',
+  'masterclass',
+  'masterclassContext',
+  'plans',
+  'editPlan',
+  'discardPlan',
+  'approvePlan',
+  'lessons',
+  'openLesson',
+  'lesson',
+  'sendTurn',
+  'retryTurn',
+  'appendToNote'
 ]
 
 export interface EstudosWindowApi extends EstudosApi {
   onUpdated(cb: (p: { kind: string; topicId: number | null }) => void): () => void
   onSync(cb: (p: { phase: 'running' | 'done'; result?: SyncResult }) => void): () => void
+  onIa(cb: (p: IaEvent) => void): () => void
+}
+
+export interface IaEvent {
+  runId: number
+  status: RunRow['status']
+  operation: RunRow['operation']
+  topicId: number | null
+  nodeId: number | null
+  section: string | null
+  error?: string
 }

@@ -41,5 +41,17 @@ export const estudos: Record<K, string> = {
   'estudos.pastaOcupada': 'The folder "{pasta}" is already occupied. Choose another destination.',
   'estudos.statusInvalidoValor': 'Invalid status: {status}',
   'estudos.git': 'git {cmd}: {erro}',
-  'estudos.versaoCopia': 'Copy is version {versao}; update rickOS.'
+  'estudos.versaoCopia': 'Copy is version {versao}; update rickOS.',
+  'estudos.respostaInvalida': 'The tutor returned an off-format answer. Nothing was changed; try generating again.',
+  'estudos.pedidoVazio': 'Write what you want to study and why.',
+  'estudos.planoNaoEncontrado': 'Plan not found.',
+  'estudos.planoNaoEditavel': 'This plan is no longer a proposal.',
+  'estudos.planoInvalido': 'Plan in an invalid format.',
+  'estudos.aulaNaoEncontrada': 'Lesson not found.',
+  'estudos.mensagemVazia': 'Empty message.',
+  'estudos.aguardeTutor': 'The tutor is still answering the previous turn.',
+  'estudos.nadaParaResponder': 'There is no turn of mine waiting for an answer.',
+  'estudos.perfilInvalido': 'Invalid AI profile.',
+  'estudos.modeloInvalido': 'Invalid model.',
+  'estudos.effortInvalido': 'Invalid effort for Codex.'
 }

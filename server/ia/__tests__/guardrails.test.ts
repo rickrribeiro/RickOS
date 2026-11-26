@@ -57,6 +57,7 @@ const MANIFESTO: Record<string, IdChamadaIa[]> = {
   'src/modules/estudos/components/FlashcardPanel.tsx': ['estudos.flashcards'],
   'src/modules/estudos/components/GapsModal.tsx': ['estudos.lacunas'],
   'src/modules/estudos/components/QuizModal.tsx': ['estudos.quiz'],
+  'server/estudos/tutor.ts': ['estudos.masterclass', 'estudos.aula'],
   'src/modules/projects/pages/ProjectDetailPage.tsx': ['projetos.plano', 'projetos.ondePareiProjeto'],
   'src/modules/projects/components/NextActionModal.tsx': ['projetos.proximaAcao'],
   'src/modules/projects/components/SaveContextModal.tsx': ['projetos.ondePareiTimer'],

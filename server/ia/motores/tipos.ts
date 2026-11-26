@@ -38,6 +38,10 @@ export interface ExecucaoIa {
   registerChild?: (kill: () => void) => void
   /** Contabilidade de tokens (ai_usage). */
   usage?: { source: string; projectId?: number | null }
+  /** Só Codex: JSON Schema da resposta final (`--output-schema`). */
+  schemaSaida?: Record<string, unknown>
+  /** Só Codex: tokens reportados pelo CLI no fim do turno. */
+  onTokens?: (t: { input: number; output: number; cached: number; reasoning: number }) => void
 }
 
 export interface MotorExecutor {

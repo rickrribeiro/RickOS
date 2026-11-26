@@ -37,5 +37,17 @@ export const estudos = {
   'estudos.pastaOcupada': 'A pasta "{pasta}" já está ocupada. Escolha outro destino.',
   'estudos.statusInvalidoValor': 'Status inválido: {status}',
   'estudos.git': 'git {cmd}: {erro}',
-  'estudos.versaoCopia': 'Cópia na versão {versao}; atualize o rickOS.'
+  'estudos.versaoCopia': 'Cópia na versão {versao}; atualize o rickOS.',
+  'estudos.respostaInvalida': 'O tutor devolveu uma resposta fora do formato. Nada foi alterado; tente gerar de novo.',
+  'estudos.pedidoVazio': 'Escreva o que quer estudar e para quê.',
+  'estudos.planoNaoEncontrado': 'Roteiro não encontrado.',
+  'estudos.planoNaoEditavel': 'Este roteiro não está mais em proposta.',
+  'estudos.planoInvalido': 'Roteiro em formato inválido.',
+  'estudos.aulaNaoEncontrada': 'Aula não encontrada.',
+  'estudos.mensagemVazia': 'Mensagem vazia.',
+  'estudos.aguardeTutor': 'O tutor ainda está respondendo o turno anterior.',
+  'estudos.nadaParaResponder': 'Não há turno meu aguardando resposta.',
+  'estudos.perfilInvalido': 'Perfil de IA inválido.',
+  'estudos.modeloInvalido': 'Modelo inválido.',
+  'estudos.effortInvalido': 'Effort inválido para o Codex.'
 }

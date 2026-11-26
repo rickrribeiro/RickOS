@@ -524,3 +524,77 @@ export interface RestoreReport {
   missingAttachments: string[]
 }
 
+
+// ── Tutor (server/estudos/tutor.ts) ──
+
+export type Operacao = 'masterclass' | 'aula' | 'pacote' | 'secao' | 'revisao' | 'subtopicos'
+
+export interface RunRow {
+  id: number
+  topicId: number | null
+  nodeId: number | null
+  operation: Operacao
+  section: string | null
+  requestKey: string
+  status: 'running' | 'ok' | 'error' | 'invalid' | 'canceled' | 'timeout'
+  model: string | null
+  effort: string | null
+  promptVersion: string | null
+  inputSignature: string | null
+  contextChars: number | null
+  startedAt: string
+  finishedAt: string | null
+  durationMs: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+  error: string | null
+}
+
+export interface PlanRow {
+  id: number
+  topicId: number
+  request: string
+  status: 'proposed' | 'approved' | 'discarded' | 'superseded'
+  content: string
+  runId: number | null
+  edited: number
+  createdAt: string
+  approvedAt: string | null
+}
+
+export interface LessonRow {
+  id: number
+  topicId: number
+  nodeId: number | null
+  planId: number | null
+  title: string
+  openQuestion: string | null
+  returnPoint: string | null
+  resumePhrase: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TurnRow {
+  id: number
+  lessonId: number
+  role: 'me' | 'tutor'
+  content: string
+  payload: string | null
+  clientKey: string | null
+  runId: number | null
+  createdAt: string
+}
+
+export interface DiagnosticoCodex {
+  instalado: boolean
+  versao: string | null
+  logado: boolean | null
+  modelos: { slug: string; disponivel: boolean; efforts: string[] }[]
+  erro: string | null
+}
+
+export interface IaPerfisView {
+  perfis: Record<'plano' | 'aula' | 'editorial', { modelo: string; effort: string; padraoModelo: string; padraoEffort: string }>
+  efforts: string[]
+}

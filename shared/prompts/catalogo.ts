@@ -15,6 +15,8 @@ import { estudosFlashcards } from './estudos/flashcards'
 import { estudosLacunas } from './estudos/lacunasRoadmap'
 import { estudosQuiz } from './estudos/quiz'
 import { estudosTutor } from './estudos/tutor'
+import { estudosMasterclass } from './estudos/masterclass'
+import { estudosAula } from './estudos/aula'
 import { githubCriarIssue } from './github/criarIssue'
 import { homeBriefing } from './home/briefingMatinal'
 import { homeRevisaoSemanal } from './home/revisaoSemanal'
@@ -70,6 +72,8 @@ export const DEFINICOES = {
   'estudos.flashcards': estudosFlashcards,
   'estudos.lacunas': estudosLacunas,
   'estudos.quiz': estudosQuiz,
+  'estudos.masterclass': estudosMasterclass,
+  'estudos.aula': estudosAula,
   'projetos.plano': projetosPlano,
   'projetos.proximaAcao': projetosProximaAcao,
   'projetos.ondePareiProjeto': projetosOndePareiProjeto,

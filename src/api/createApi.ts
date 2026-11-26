@@ -30,6 +30,7 @@ function estudosApi(): EstudosWindowApi {
   for (const m of ESTUDOS_METHODS) out[m] = (...args: unknown[]) => invoke(`estudos:${m}`, ...args)
   out.onUpdated = (cb: (p: { kind: string; topicId: number | null }) => void) => subscribe('estudos:updated', (p) => cb(p as { kind: string; topicId: number | null }))
   out.onSync = (cb: Parameters<EstudosWindowApi['onSync']>[0]) => subscribe('estudos:sync', (p) => cb(p as Parameters<typeof cb>[0]))
+  out.onIa = (cb: Parameters<EstudosWindowApi['onIa']>[0]) => subscribe('estudos:ia', (p) => cb(p as Parameters<typeof cb>[0]))
   return out as unknown as EstudosWindowApi
 }
 

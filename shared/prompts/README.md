@@ -48,6 +48,11 @@ Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs a
 | `flashcards.ts` | Gerar flashcards de uma anotação | `src/modules/estudos/components/FlashcardPanel.tsx` |
 | `lacunasRoadmap.ts` | Pré-requisitos que faltam no roadmap do tópico | `src/modules/estudos/components/GapsModal.tsx` |
 | `quiz.ts` | Quiz de múltipla escolha | `src/modules/estudos/components/QuizModal.tsx` |
+| `pedagogia/textos.ts` | **Textos-base A–E** (masterclass, aula, material do nó, revisão editorial, subtópicos) + camada comum + blocos de seção; `VERSAO_PEDAGOGIA` | (assets, montados pelos arquivos abaixo) |
+| `pedagogia/schemas.ts` | Contratos de saída (JSON Schema estrito, `--output-schema` do Codex) | `server/estudos/tutor.ts` |
+| `perfis.ts` | Perfis de modelo/effort só de Estudos (`study_ai_*`) | (padrões das chamadas abaixo) |
+| `masterclass.ts` | A: "quero estudar X para Y" → mapa completo + abertura da 1ª aula (Codex, astra/high) | `server/estudos/tutor.ts` |
+| `aula.ts` | B: aula conversacional, um turno por vez (Codex, sol/medium) | `server/estudos/tutor.ts` |
 | **github/** | | |
 | `criarIssue.ts` | Cria no GitHub (via `gh`) uma issue local | `server/services/github.ts` |
 | **home/** | | |

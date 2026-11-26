@@ -41,5 +41,17 @@ export const estudos: Record<K, string> = {
   'estudos.pastaOcupada': 'La carpeta "{pasta}" ya está ocupada. Elige otro destino.',
   'estudos.statusInvalidoValor': 'Estado no válido: {status}',
   'estudos.git': 'git {cmd}: {erro}',
-  'estudos.versaoCopia': 'Copia en la versión {versao}; actualiza rickOS.'
+  'estudos.versaoCopia': 'Copia en la versión {versao}; actualiza rickOS.',
+  'estudos.respostaInvalida': 'El tutor devolvió una respuesta fuera de formato. No se cambió nada; intenta generar de nuevo.',
+  'estudos.pedidoVazio': 'Escribe qué quieres estudiar y para qué.',
+  'estudos.planoNaoEncontrado': 'Plan no encontrado.',
+  'estudos.planoNaoEditavel': 'Este plan ya no es una propuesta.',
+  'estudos.planoInvalido': 'Plan con formato no válido.',
+  'estudos.aulaNaoEncontrada': 'Clase no encontrada.',
+  'estudos.mensagemVazia': 'Mensaje vacío.',
+  'estudos.aguardeTutor': 'El tutor aún está respondiendo el turno anterior.',
+  'estudos.nadaParaResponder': 'No hay ningún turno mío esperando respuesta.',
+  'estudos.perfilInvalido': 'Perfil de IA no válido.',
+  'estudos.modeloInvalido': 'Modelo no válido.',
+  'estudos.effortInvalido': 'Effort no válido para Codex.'
 }

@@ -6,6 +6,8 @@ import { NoteEditor } from '../components/NoteEditor'
 import { FlashcardPanel } from '../components/FlashcardPanel'
 import { QuestionsPanel } from '../components/QuestionsPanel'
 import { SourcePanel } from '../components/SourcePanel'
+import { LessonPanel } from '../components/LessonPanel'
+import { PlanPanel } from '../components/PlanPanel'
 import { QuizModal } from '../components/QuizModal'
 import { GapsModal } from '../components/GapsModal'
 import { TopicEditor } from '../components/TopicEditor'
@@ -37,7 +39,7 @@ function savePref(key: string, v: string): void {
  */
 export function TopicWorkspacePage(): React.ReactElement {
   const { setPage } = useUIStore()
-  const { topics, activeTopicId, nodes, selectedNodeId, refreshActive, refreshTopics, topicMeta, focus, clearFocus } = useStudyStore()
+  const { topics, activeTopicId, nodes, selectedNodeId, refreshActive, refreshTopics, topicMeta, focus, clearFocus, selectNode } = useStudyStore()
   const [tab, setTab] = useState<Tab>('caderno')
   const [pane, setPane] = useState<Pane>(() => loadPref<Pane>(PANE_KEY, 'notas', ['leitura', 'notas']))
   const [reader, setReader] = useState<'on' | 'off'>(() => loadPref<'on' | 'off'>(READER_KEY, 'on', ['on', 'off']))
@@ -45,6 +47,8 @@ export function TopicWorkspacePage(): React.ReactElement {
   const [quizOpen, setQuizOpen] = useState(false)
   const [gapsOpen, setGapsOpen] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [planOpen, setPlanOpen] = useState(false)
+  const [readerTab, setReaderTab] = useState<'fontes' | 'aula'>('fontes')
   const [pinned, setPinned] = useState<PinnedAction | null>(null)
   const topic = topics.find((x) => x.id === activeTopicId) ?? null
 
@@ -68,10 +72,19 @@ export function TopicWorkspacePage(): React.ReactElement {
     } else if (focus.target === 'test') {
       setTab('perguntas')
       clearFocus()
+    } else if (focus.target === 'lesson') {
+      setTab('caderno')
+      setReader('on')
+      setReaderTab('aula')
+      setPane('leitura')
+      clearFocus()
     } else if (focus.target === 'note') {
       setTab('caderno')
       setPane('notas')
-      if (focus.refId === -1) setRoadmapOpen(true)
+      if (focus.refId === -1) {
+        setRoadmapOpen(true)
+        setPlanOpen(true)
+      }
       clearFocus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,6 +149,7 @@ export function TopicWorkspacePage(): React.ReactElement {
           <button className={`btn btn-sm ${isPinned ? 'btn-primary' : 'btn-secondary'}`} onClick={togglePin} title={tr('est.fixarDica')}>
             {isPinned ? tr('est.fixado') : tr('est.fixar')}
           </button>
+          <button className="btn btn-primary btn-sm" onClick={() => setPlanOpen(true)} title={tr('est.roteiroDica')}>{tr('est.roteiroBotao')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>{tr('estudos.editar')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setQuizOpen(true)} title={tr('estudos.gerarUmQuizAPartir')}>{tr('estudos.quiz2')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setGapsOpen(true)} title={tr('estudos.detectarPreRequisitosItensFaltando')}>{tr('estudos.lacunas')}</button>
@@ -173,8 +187,14 @@ export function TopicWorkspacePage(): React.ReactElement {
           </div>
           {/* no desktop "ocultar leitura" esconde a coluna; no celular a alternância manda */}
           <div className={`study-col study-col-reader ${pane === 'leitura' ? 'pane-on' : 'pane-off'} ${reader === 'off' ? 'reader-off' : ''}`}>
-            <div className="chart-title">{tr('est.leituraAba')}</div>
-            <SourcePanel />
+            <div className="reader-tabs">
+              <button className={`study-tab ${readerTab === 'fontes' ? 'active' : ''}`} onClick={() => setReaderTab('fontes')}>{tr('est.fontes')}</button>
+              <button className={`study-tab ${readerTab === 'aula' ? 'active' : ''}`} onClick={() => setReaderTab('aula')}>{tr('est.aula')}</button>
+            </div>
+            <div style={{ display: readerTab === 'fontes' ? 'block' : 'none' }}>
+              <SourcePanel />
+            </div>
+            {readerTab === 'aula' && <LessonPanel />}
           </div>
           <div className={`study-col study-col-note ${pane === 'notas' ? 'pane-on' : 'pane-off'}`}>
             <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -190,6 +210,24 @@ export function TopicWorkspacePage(): React.ReactElement {
 
       {quizOpen && <QuizModal topic={topic} onClose={() => setQuizOpen(false)} />}
       {gapsOpen && <GapsModal topic={topic} onClose={() => setGapsOpen(false)} />}
+      {planOpen && (
+        <PlanPanel
+          topic={topicMeta}
+          onClose={() => setPlanOpen(false)}
+          onApproved={async (lessonId) => {
+            setPlanOpen(false)
+            await refreshActive()
+            // abre a primeira aula (a abertura do roteiro já está lá, sem nova chamada)
+            if (lessonId != null) {
+              const l = await window.api.estudos.lesson(lessonId)
+              await selectNode(l.lesson.nodeId)
+            }
+            setReader('on')
+            setReaderTab('aula')
+            setPane('leitura')
+          }}
+        />
+      )}
       {editing && <TopicEditor topic={topicMeta} onClose={() => setEditing(false)} onSaved={() => { refreshTopics(); refreshActive() }} />}
     </div>
   )

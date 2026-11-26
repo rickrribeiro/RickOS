@@ -658,6 +658,66 @@ export const SCHEMA = `
     createdAt TEXT NOT NULL
   );
 
+  -- Tutor de Estudos (Codex): cada execução, com perfil, versão dos prompts e assinatura das entradas
+  CREATE TABLE IF NOT EXISTS study_ai_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER,
+    operation TEXT NOT NULL,             -- masterclass | aula | pacote | secao | revisao | subtopicos
+    section TEXT,
+    requestKey TEXT NOT NULL,            -- dedupe (clique duplo / duas abas)
+    status TEXT NOT NULL DEFAULT 'running', -- running | ok | error | invalid | canceled | timeout
+    model TEXT,
+    effort TEXT,
+    promptVersion TEXT,
+    inputSignature TEXT,
+    contextChars INTEGER,
+    startedAt TEXT NOT NULL,
+    finishedAt TEXT,
+    durationMs INTEGER,
+    inputTokens INTEGER,
+    outputTokens INTEGER,
+    error TEXT
+  );
+
+  -- Roteiros (masterclass): proposta editável → aprovado (vira nós origin='plan')
+  CREATE TABLE IF NOT EXISTS study_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    request TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed', -- proposed | approved | discarded | superseded
+    content TEXT NOT NULL,               -- JSON (SCHEMA_MASTERCLASS, com as minhas edições)
+    runId INTEGER,
+    edited INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    approvedAt TEXT
+  );
+
+  -- Aula conversacional (prompt B): turnos meus e do tutor, separados da nota autoral
+  CREATE TABLE IF NOT EXISTS study_lessons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE SET NULL,
+    planId INTEGER,
+    title TEXT NOT NULL,
+    openQuestion TEXT,
+    returnPoint TEXT,
+    resumePhrase TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS study_lesson_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lessonId INTEGER NOT NULL REFERENCES study_lessons(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,                  -- me | tutor
+    content TEXT NOT NULL,
+    payload TEXT,                        -- JSON do turno do tutor (SCHEMA_AULA)
+    clientKey TEXT UNIQUE,               -- idempotência do envio
+    runId INTEGER,
+    createdAt TEXT NOT NULL
+  );
+
   -- Origem de conteúdo importado (repositório/pasta): reconhece reimportações sem duplicar
   CREATE TABLE IF NOT EXISTS study_origins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

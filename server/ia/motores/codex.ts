@@ -1,5 +1,7 @@
-import { spawn } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { getSetting, recordAiUsage } from '../../database/queries'
 import { buildPath } from '../../services/claude'
 import type { ExecucaoIa, MotorExecutor } from './tipos'
@@ -16,6 +18,14 @@ export const motorCodex: MotorExecutor = {
     const bin = ((await getSetting('codex_command')) || 'codex').trim()
     const sandbox = req.ferramentas === 'agentic' ? 'workspace-write' : 'read-only'
     const cwd = req.cwd && fs.existsSync(req.cwd) ? req.cwd : undefined
+    let schemaFile: string | null = null
+    if (req.schemaSaida) {
+      schemaFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rickos-codex-')), 'schema.json')
+      fs.writeFileSync(schemaFile, JSON.stringify(req.schemaSaida))
+    }
+    const limpar = (): void => {
+      if (schemaFile) fs.rmSync(path.dirname(schemaFile), { recursive: true, force: true })
+    }
     const args = [
       'exec',
       '--json',
@@ -26,6 +36,7 @@ export const motorCodex: MotorExecutor = {
       ...(req.modelo ? ['-m', req.modelo] : []),
       ...(req.effort ? ['-c', `model_reasoning_effort="${req.effort.replace(/[^a-z]/gi, '')}"`] : []),
       ...(cwd ? ['-C', cwd] : []),
+      ...(schemaFile ? ['--output-schema', schemaFile] : []),
       '-'
     ]
     const entrada = req.sistema ? `${req.sistema}\n\n---\n\n${req.prompt}` : req.prompt
@@ -67,7 +78,11 @@ export const motorCodex: MotorExecutor = {
           ultima = ev.item.text
           req.onChunk?.((textoTotal ? '\n\n' : '') + ev.item.text)
           textoTotal += ev.item.text
-        } else if (ev.type === 'turn.completed' && ev.usage && req.usage) {
+        } else if (ev.type === 'turn.completed' && ev.usage && req.onTokens) {
+          const u = ev.usage
+          req.onTokens({ input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cached: u.cached_input_tokens ?? 0, reasoning: u.reasoning_output_tokens ?? 0 })
+        }
+        if (ev.type === 'turn.completed' && ev.usage && req.usage) {
           const u = ev.usage
           const cache = u.cached_input_tokens ?? 0
           recordAiUsage({
@@ -98,12 +113,14 @@ export const motorCodex: MotorExecutor = {
         stderr += d.toString()
       })
       child.on('error', (e: NodeJS.ErrnoException) => {
+        limpar()
         if (terminou) return
         terminou = true
         if (timer) clearTimeout(timer)
         reject(new Error(e.code === 'ENOENT' ? `Codex CLI não encontrado ("${bin}"). Instale ou ajuste em Configurações.` : e.message))
       })
       child.on('close', (code) => {
+        limpar()
         if (terminou) return
         terminou = true
         if (timer) clearTimeout(timer)
@@ -114,5 +131,47 @@ export const motorCodex: MotorExecutor = {
       })
       child.stdin.end(entrada)
     })
+  }
+}
+
+/**
+ * Diagnóstico LOCAL do Codex CLI (não envia prompt nem contexto ao provedor): versão, login e se
+ * os modelos pedidos existem no catálogo local (`codex debug models`). Para mensagens acionáveis.
+ */
+export interface DiagnosticoCodex {
+  instalado: boolean
+  versao: string | null
+  logado: boolean | null
+  modelos: { slug: string; disponivel: boolean; efforts: string[] }[]
+  erro: string | null
+}
+
+export async function diagnosticoCodex(modelos: string[]): Promise<DiagnosticoCodex> {
+  const bin = ((await getSetting('codex_command')) || 'codex').trim()
+  const rodar = (args: string[]): Promise<{ ok: boolean; out: string; err: string; enoent: boolean }> =>
+    new Promise((resolve) => {
+      execFile(bin, args, { timeout: 20_000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, PATH: buildPath() } }, (e, out, err) => {
+        resolve({ ok: !e, out: String(out), err: String(err), enoent: (e as NodeJS.ErrnoException | null)?.code === 'ENOENT' })
+      })
+    })
+  const v = await rodar(['--version'])
+  if (v.enoent) return { instalado: false, versao: null, logado: null, modelos: [], erro: `Codex CLI não encontrado ("${bin}").` }
+  const login = await rodar(['login', 'status'])
+  const cat = await rodar(['debug', 'models'])
+  let lista: { slug: string; efforts: string[] }[] = []
+  try {
+    const j = JSON.parse(cat.out)
+    const arr = (Array.isArray(j) ? j : j.models ?? []) as { slug?: string; id?: string; supported_reasoning_levels?: ({ effort?: string } | string)[] }[]
+    lista = arr.map((m) => ({ slug: String(m.slug ?? m.id ?? ''), efforts: (m.supported_reasoning_levels ?? []).map((e) => (typeof e === 'string' ? e : String(e.effort ?? ''))) }))
+  } catch { /* versão sem catálogo */ }
+  return {
+    instalado: true,
+    versao: v.out.trim() || null,
+    logado: login.ok ? !/not logged in/i.test(login.out + login.err) : null,
+    modelos: modelos.map((slug) => {
+      const m = lista.find((x) => x.slug === slug)
+      return { slug, disponivel: lista.length ? !!m : true, efforts: m?.efforts ?? [] }
+    }),
+    erro: null
   }
 }
