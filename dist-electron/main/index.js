@@ -3018,6 +3018,20 @@ const db$2 = {
 const estudos$2 = {
   "estudos.fonteSemTitulo": "A fonte precisa de um título.",
   "estudos.frenteVazia": "A frente do cartão está vazia.",
+  "estudos.modeloIlegivel": "Arquivo ilegível: não é um JSON válido.",
+  "estudos.modeloNaoE": "Este arquivo não é um modelo de roadmap do rickOS.",
+  "estudos.modeloVersao": "Modelo de uma versão mais nova do rickOS ({versao}). Atualize o app para importar.",
+  "estudos.modeloAulaInvalida": "Aula inválida em {onde}",
+  "estudos.modeloItensInvalidos": "Lista de itens inválida em {onde}",
+  "estudos.modeloProfundo": "O roteiro tem níveis demais.",
+  "estudos.modeloItemSemTitulo": "Item sem título em {onde}",
+  "estudos.modeloGrande": "O modelo passa de {max} itens; o restante foi ignorado.",
+  "estudos.modeloGeral": "tópico inteiro",
+  "estudos.modeloVazio": "O modelo não tem nenhum item.",
+  "estudos.modeloComErros": "O modelo tem problemas e nada foi importado: {erros}",
+  "estudos.modeloAulaGeralExiste": "O tópico já tem uma aula geral: a do modelo não será importada.",
+  "estudos.modeloNotaGeralAnexada": "A nota geral do modelo será acrescentada ao fim da nota geral do tópico.",
+  "estudos.modeloRoteiroVigente": "O roteiro do modelo passa a ser o vigente; o atual continua no histórico e os itens dele ficam onde estão.",
   "estudos.semCopiaParaRestaurar": "A pasta gerenciada ainda não tem cópia para restaurar.",
   "estudos.perguntaVazia": "A pergunta está vazia.",
   "estudos.arquivoVazio": "Arquivo vazio.",
@@ -3309,6 +3323,20 @@ const db$1 = {
 const estudos$1 = {
   "estudos.fonteSemTitulo": "The source needs a title.",
   "estudos.frenteVazia": "The card's front is empty.",
+  "estudos.modeloIlegivel": "Unreadable file: not valid JSON.",
+  "estudos.modeloNaoE": "This file is not a rickOS roadmap template.",
+  "estudos.modeloVersao": "Template from a newer rickOS version ({versao}). Update the app to import it.",
+  "estudos.modeloAulaInvalida": "Invalid lesson at {onde}",
+  "estudos.modeloItensInvalidos": "Invalid item list at {onde}",
+  "estudos.modeloProfundo": "The roadmap has too many levels.",
+  "estudos.modeloItemSemTitulo": "Item without a title at {onde}",
+  "estudos.modeloGrande": "The template has more than {max} items; the rest was ignored.",
+  "estudos.modeloGeral": "whole topic",
+  "estudos.modeloVazio": "The template has no items.",
+  "estudos.modeloComErros": "The template has problems and nothing was imported: {erros}",
+  "estudos.modeloAulaGeralExiste": "The topic already has a general lesson: the template one will not be imported.",
+  "estudos.modeloNotaGeralAnexada": "The template general note will be appended to the topic general note.",
+  "estudos.modeloRoteiroVigente": "The template roadmap becomes the current one; the existing one stays in history and its items stay where they are.",
   "estudos.semCopiaParaRestaurar": "The managed folder has no copy to restore yet.",
   "estudos.perguntaVazia": "The question is empty.",
   "estudos.arquivoVazio": "Empty file.",
@@ -3617,6 +3645,20 @@ const db = {
 const estudos = {
   "estudos.fonteSemTitulo": "La fuente necesita un título.",
   "estudos.frenteVazia": "El anverso de la tarjeta está vacío.",
+  "estudos.modeloIlegivel": "Archivo ilegible: no es un JSON válido.",
+  "estudos.modeloNaoE": "Este archivo no es una plantilla de itinerario de rickOS.",
+  "estudos.modeloVersao": "Plantilla de una versión más nueva de rickOS ({versao}). Actualiza la app para importarla.",
+  "estudos.modeloAulaInvalida": "Clase no válida en {onde}",
+  "estudos.modeloItensInvalidos": "Lista de ítems no válida en {onde}",
+  "estudos.modeloProfundo": "El itinerario tiene demasiados niveles.",
+  "estudos.modeloItemSemTitulo": "Ítem sin título en {onde}",
+  "estudos.modeloGrande": "La plantilla supera los {max} ítems; el resto se ignoró.",
+  "estudos.modeloGeral": "tema entero",
+  "estudos.modeloVazio": "La plantilla no tiene ningún ítem.",
+  "estudos.modeloComErros": "La plantilla tiene problemas y no se importó nada: {erros}",
+  "estudos.modeloAulaGeralExiste": "El tema ya tiene una clase general: la de la plantilla no se importará.",
+  "estudos.modeloNotaGeralAnexada": "La nota general de la plantilla se añadirá al final de la nota general del tema.",
+  "estudos.modeloRoteiroVigente": "El itinerario de la plantilla pasa a ser el vigente; el actual queda en el historial y sus ítems se quedan donde están.",
   "estudos.semCopiaParaRestaurar": "La carpeta gestionada aún no tiene copia para restaurar.",
   "estudos.perguntaVazia": "La pregunta está vacía.",
   "estudos.arquivoVazio": "Archivo vacío.",
@@ -6432,7 +6474,7 @@ JSON: resposta (o seu turno, em Markdown), tipo, minhaResposta ({entendi, corrig
   preparar: prepararTutor,
   exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("módulo + turnos"), pedido: ex("minha mensagem") }
 });
-const str$1 = (description) => ({ type: "string", ...description ? { description } : {} });
+const str$2 = (description) => ({ type: "string", ...description ? { description } : {} });
 const strOrNull = (description) => ({ type: ["string", "null"], ...description ? { description } : {} });
 const num$1 = () => ({ type: ["number", "null"] });
 const bool$2 = () => ({ type: "boolean" });
@@ -6441,49 +6483,49 @@ function obj(props, description) {
   return { type: "object", properties: props, required: Object.keys(props), additionalProperties: false, ...{} };
 }
 const MODULO = obj({
-  titulo: str$1(),
-  perguntaCentral: str$1("pergunta central específica do módulo"),
-  conceitos: arr$1(str$1()),
-  relacoes: str$1("como os conceitos se relacionam"),
-  exemplo: str$1("exemplo ligado à minha situação"),
-  atividade: str$1(),
-  perguntaDiagnostica: str$1(),
-  criterioAvanco: str$1("critério observável para avançar"),
+  titulo: str$2(),
+  perguntaCentral: str$2("pergunta central específica do módulo"),
+  conceitos: arr$1(str$2()),
+  relacoes: str$2("como os conceitos se relacionam"),
+  exemplo: str$2("exemplo ligado à minha situação"),
+  atividade: str$2(),
+  perguntaDiagnostica: str$2(),
+  criterioAvanco: str$2("critério observável para avançar"),
   opcional: bool$2(),
   minutos: num$1(),
-  prerequisitos: arr$1(str$1())
+  prerequisitos: arr$1(str$2())
 });
 const SCHEMA_MASTERCLASS = obj({
-  perguntas: arr$1(str$1(), "até duas perguntas curtas, só se a resposta mudar profundamente a trilha; senão []"),
-  suposicoes: arr$1(str$1()),
-  situacao: str$1("situação em que vou usar o que aprender"),
-  jaSei: str$1("o que eu disse que já sei, com as minhas palavras"),
-  restricoes: arr$1(str$1(), "restrições que declarei (plataforma, escala, prazo, tecnologia…); [] se nenhuma"),
-  preferenciasEnsino: arr$1(str$1(), "como pedi para ser ensinado; [] se não disse"),
-  decisoesEmAberto: arr$1(str$1(), "decisões que deixei em aberto e que a trilha NÃO deve tomar por mim"),
-  fundamentos: arr$1(str$1()),
-  demonstracaoFinal: str$1(),
-  partes: arr$1(obj({ titulo: str$1(), porque: str$1(), modulos: arr$1(MODULO) })),
-  ordemJustificativa: str$1(),
-  aprofundamentosOpcionais: arr$1(str$1()),
-  workshops: arr$1(obj({ titulo: str$1(), entrega: str$1(), experimento: str$1() })),
-  coberturaReversa: str$1("teste de trás para frente a partir da entrega final"),
+  perguntas: arr$1(str$2(), "até duas perguntas curtas, só se a resposta mudar profundamente a trilha; senão []"),
+  suposicoes: arr$1(str$2()),
+  situacao: str$2("situação em que vou usar o que aprender"),
+  jaSei: str$2("o que eu disse que já sei, com as minhas palavras"),
+  restricoes: arr$1(str$2(), "restrições que declarei (plataforma, escala, prazo, tecnologia…); [] se nenhuma"),
+  preferenciasEnsino: arr$1(str$2(), "como pedi para ser ensinado; [] se não disse"),
+  decisoesEmAberto: arr$1(str$2(), "decisões que deixei em aberto e que a trilha NÃO deve tomar por mim"),
+  fundamentos: arr$1(str$2()),
+  demonstracaoFinal: str$2(),
+  partes: arr$1(obj({ titulo: str$2(), porque: str$2(), modulos: arr$1(MODULO) })),
+  ordemJustificativa: str$2(),
+  aprofundamentosOpcionais: arr$1(str$2()),
+  workshops: arr$1(obj({ titulo: str$2(), entrega: str$2(), experimento: str$2() })),
+  coberturaReversa: str$2("teste de trás para frente a partir da entrega final"),
   aberturaPrimeiraAula: obj({
-    titulo: str$1(),
-    situacao: str$1("a situação concreta, em 1–2 frases"),
-    aula: str$1("a primeira aula começando de verdade, em Markdown: ensina antes de perguntar (ver instrução A)"),
-    primeiroPasso: str$1("o que posso fazer hoje"),
-    pergunta: str$1("a pergunta que fecha a abertura e aproveita o que ela acabou de explicar")
+    titulo: str$2(),
+    situacao: str$2("a situação concreta, em 1–2 frases"),
+    aula: str$2("a primeira aula começando de verdade, em Markdown: ensina antes de perguntar (ver instrução A)"),
+    primeiroPasso: str$2("o que posso fazer hoje"),
+    pergunta: str$2("a pergunta que fecha a abertura e aproveita o que ela acabou de explicar")
   }),
-  aConferir: arr$1(str$1(), "fatos que dependem de versão/preço/disponibilidade sem fonte acessível")
+  aConferir: arr$1(str$2(), "fatos que dependem de versão/preço/disponibilidade sem fonte acessível")
 });
 const SCHEMA_AULA = obj({
-  resposta: str$1("o turno do tutor em Markdown"),
+  resposta: str$2("o turno do tutor em Markdown"),
   tipo: { type: "string", enum: ["explicacao", "pergunta", "feedback", "lateral", "encerramento"] },
   minhaResposta: {
-    anyOf: [obj({ entendi: str$1(), corrigir: str$1(), proximaTentativa: str$1() }), { type: "null" }]
+    anyOf: [obj({ entendi: str$2(), corrigir: str$2(), proximaTentativa: str$2() }), { type: "null" }]
   },
-  hipoteses: arr$1(str$1(), "o que ainda é hipótese"),
+  hipoteses: arr$1(str$2(), "o que ainda é hipótese"),
   perguntaAberta: strOrNull("pergunta que deixei para responder"),
   pontoDeRetorno: strOrNull("onde retomar depois de uma pergunta lateral"),
   fraseDeRetomada: strOrNull()
@@ -6491,30 +6533,30 @@ const SCHEMA_AULA = obj({
 const SECOES = ["explicacao", "resumo", "exercicios", "socraticas", "revisaoAtiva", "revisaoEditorial", "subtopicos", "cartoes"];
 const VAZIO = strOrNull("se a seção ficou vazia, justificativa curta; senão null");
 const SCHEMA_EDITORIAL_ITEM = obj({
-  trecho: str$1("menor trecho EXATO da minha nota que ancora a proposta"),
-  motivo: str$1("uma frase"),
+  trecho: str$2("menor trecho EXATO da minha nota que ancora a proposta"),
+  motivo: str$2("uma frase"),
   tipo: { type: "string", enum: ["acrescimo", "ajuste", "pergunta", "ressalva", "erro-factual"] },
-  sugestao: str$1("o menor acréscimo/ajuste; para pergunta, a pergunta"),
+  sugestao: str$2("o menor acréscimo/ajuste; para pergunta, a pergunta"),
   substituicao: strOrNull("texto que substitui o trecho (null = só acrescentar depois do trecho)")
 });
 const SCHEMA_SUBTOPICO_ITEM = obj({
   parentId: { type: ["integer", "null"], description: "ID do pai existente (null = raiz)" },
   posicao: { type: ["integer", "null"] },
-  titulo: str$1(),
-  motivo: str$1("capacidade comprometida sem ele"),
-  conexaoObjetivo: str$1(),
+  titulo: str$2(),
+  motivo: str$2("capacidade comprometida sem ele"),
+  conexaoObjetivo: str$2(),
   tipo: { type: "string", enum: ["pre-requisito", "aprofundamento"] },
   prerequisito: strOrNull()
 });
 const SCHEMAS_SECAO = {
-  explicacao: obj({ conteudo: str$1(), vazio: VAZIO }),
-  resumo: obj({ conteudo: str$1(), vazio: VAZIO }),
-  exercicios: obj({ itens: arr$1(obj({ enunciado: str$1(), pista: strOrNull(), solucao: str$1(), criterios: strOrNull() })), vazio: VAZIO }),
-  socraticas: obj({ itens: arr$1(obj({ pergunta: str$1(), referencia: strOrNull() })), vazio: VAZIO }),
-  revisaoAtiva: obj({ itens: arr$1(obj({ pedido: str$1(), referencia: str$1() })), vazio: VAZIO }),
+  explicacao: obj({ conteudo: str$2(), vazio: VAZIO }),
+  resumo: obj({ conteudo: str$2(), vazio: VAZIO }),
+  exercicios: obj({ itens: arr$1(obj({ enunciado: str$2(), pista: strOrNull(), solucao: str$2(), criterios: strOrNull() })), vazio: VAZIO }),
+  socraticas: obj({ itens: arr$1(obj({ pergunta: str$2(), referencia: strOrNull() })), vazio: VAZIO }),
+  revisaoAtiva: obj({ itens: arr$1(obj({ pedido: str$2(), referencia: str$2() })), vazio: VAZIO }),
   revisaoEditorial: obj({ itens: arr$1(SCHEMA_EDITORIAL_ITEM), vazio: VAZIO }),
   subtopicos: obj({ itens: arr$1(SCHEMA_SUBTOPICO_ITEM), vazio: VAZIO }),
-  cartoes: obj({ itens: arr$1(obj({ front: str$1(), back: str$1(), exemplo: strOrNull(), leitura: strOrNull() })), vazio: VAZIO })
+  cartoes: obj({ itens: arr$1(obj({ front: str$2(), back: str$2(), exemplo: strOrNull(), leitura: strOrNull() })), vazio: VAZIO })
 };
 const SCHEMA_PACOTE = obj(Object.fromEntries(SECOES.map((s2) => [s2, SCHEMAS_SECAO[s2]])));
 const SCHEMA_SECAO = (s2) => obj({ [s2]: SCHEMAS_SECAO[s2] });
@@ -75271,7 +75313,7 @@ function adaptiveHours(firstDepart, today2) {
 }
 const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 const arr = (v) => Array.isArray(v) ? v : [];
-const str = (v, d = "") => typeof v === "string" ? v : d;
+const str$1 = (v, d = "") => typeof v === "string" ? v : d;
 const int$1 = (v, d, min, max) => {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
   return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : d;
@@ -75279,9 +75321,9 @@ const int$1 = (v, d, min, max) => {
 const intOrNull = (v, min, max) => v == null || v === "" ? null : int$1(v, min, min, max);
 const bool$1 = (v, d = false) => typeof v === "boolean" ? v : d;
 const need = (v, d = "any") => v === "required" || v === "preferred" || v === "any" ? v : d;
-const codes = (v, len) => [...new Set(arr(v).map((x) => str(x).trim().toUpperCase()).filter((x) => x.length === len && /^[A-Z0-9]+$/.test(x)))];
+const codes = (v, len) => [...new Set(arr(v).map((x) => str$1(x).trim().toUpperCase()).filter((x) => x.length === len && /^[A-Z0-9]+$/.test(x)))];
 const currency = (v, d) => {
-  const c = str(v).trim().toUpperCase();
+  const c = str$1(v).trim().toUpperCase();
   return /^[A-Z]{3}$/.test(c) ? c : d;
 };
 function money(v) {
@@ -75297,9 +75339,9 @@ function normalizeLocationSet(v) {
   const o = isObj(v) ? v : {};
   for (const r of arr(o.include)) {
     if (!isObj(r)) continue;
-    const ref = resolveRef({ kind: str(r.kind), code: str(r.code), label: str(r.label) });
+    const ref = resolveRef({ kind: str$1(r.kind), code: str$1(r.code), label: str$1(r.label) });
     if (!ref) {
-      dropped.push(`${str(r.kind)}:${str(r.code)}`);
+      dropped.push(`${str$1(r.kind)}:${str$1(r.code)}`);
       continue;
     }
     const k = `${ref.kind}:${ref.code}`;
@@ -75314,22 +75356,22 @@ function windows(v) {
   const out = [];
   for (const w of arr(v).slice(0, 6)) {
     if (!isObj(w)) continue;
-    const mode = str(w.mode);
+    const mode = str$1(w.mode);
     if (mode === "exact" && isIsoDate(w.date)) out.push({ mode, date: w.date });
     else if (mode === "flex" && isIsoDate(w.date)) out.push({ mode, date: w.date, flexDays: int$1(w.flexDays, 3, 0, 15) });
     else if (mode === "range" && isIsoDate(w.from) && isIsoDate(w.to)) out.push({ mode, from: w.from, to: w.to });
-    else if (mode === "month" && /^\d{4}-\d{2}$/.test(str(w.month))) out.push({ mode, month: str(w.month) });
+    else if (mode === "month" && /^\d{4}-\d{2}$/.test(str$1(w.month))) out.push({ mode, month: str$1(w.month) });
   }
   return out;
 }
 function ground(v, cur) {
   const out = [];
   for (const g of arr(v).slice(0, 30)) {
-    if (!isObj(g) || !getAirport(str(g.airport))) continue;
-    const src = str(g.source);
+    if (!isObj(g) || !getAirport(str$1(g.airport))) continue;
+    const src = str$1(g.source);
     out.push({
-      airport: str(g.airport).toUpperCase(),
-      toLabel: str(g.toLabel).slice(0, 80),
+      airport: str$1(g.airport).toUpperCase(),
+      toLabel: str$1(g.toLabel).slice(0, 80),
       minutes: intOrNull(g.minutes, 0, 72 * 60),
       costMinor: intOrNull(g.costMinor, 0, 1e9),
       currency: currency(g.currency, cur),
@@ -75354,11 +75396,11 @@ function normalizeConfig(raw, dropped = []) {
   const s2 = isObj(r.schedule) ? r.schedule : {};
   const a = isObj(r.alerts) ? r.alerts : {};
   const cur = currency(r.currency, d.currency);
-  const cabin = str(pax.cabin);
-  const strategy = str(p.strategy);
-  const style = str(p.connectionStyle);
-  const mode = str(s2.mode);
-  const aw = isObj(p.arrivalWindow) && /^\d{2}:\d{2}$/.test(str(p.arrivalWindow.from)) && /^\d{2}:\d{2}$/.test(str(p.arrivalWindow.to)) ? { from: str(p.arrivalWindow.from), to: str(p.arrivalWindow.to) } : null;
+  const cabin = str$1(pax.cabin);
+  const strategy = str$1(p.strategy);
+  const style = str$1(p.connectionStyle);
+  const mode = str$1(s2.mode);
+  const aw = isObj(p.arrivalWindow) && /^\d{2}:\d{2}$/.test(str$1(p.arrivalWindow.from)) && /^\d{2}:\d{2}$/.test(str$1(p.arrivalWindow.to)) ? { from: str$1(p.arrivalWindow.from), to: str$1(p.arrivalWindow.to) } : null;
   const adults = int$1(pax.adults, 1, 1, 9);
   return {
     version: 1,
@@ -75411,7 +75453,7 @@ function normalizeConfig(raw, dropped = []) {
     },
     ground: ground(r.ground, cur),
     currency: cur,
-    providers: arr(r.providers).map((x) => str(x)).filter(Boolean).slice(0, 10),
+    providers: arr(r.providers).map((x) => str$1(x)).filter(Boolean).slice(0, 10),
     budget: {
       maxQueriesPerRun: int$1(b2.maxQueriesPerRun, d.budget.maxQueriesPerRun, 1, 500),
       maxQueriesPerDay: int$1(b2.maxQueriesPerDay, d.budget.maxQueriesPerDay, 1, 2e3),
@@ -75433,7 +75475,7 @@ function normalizeConfig(raw, dropped = []) {
       promoPosts: bool$1(a.promoPosts, true)
     },
     displayTarget: int$1(r.displayTarget, 0, 0, 100),
-    notes: str(r.notes).slice(0, 2e3)
+    notes: str$1(r.notes).slice(0, 2e3)
   };
 }
 function configErrors(cfg, today2) {
@@ -88856,13 +88898,16 @@ function emit(run2, extra = {}) {
   broadcast("estudos:ia", { runId: run2.id, status: run2.status, operation: run2.operation, topicId: run2.topicId, nodeId: run2.nodeId, section: run2.section, ...extra });
 }
 function parseJson(raw) {
-  let s2 = (raw ?? "").trim();
-  const fence = s2.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) s2 = fence[1].trim();
-  const a = s2.indexOf("{");
-  const b2 = s2.lastIndexOf("}");
-  if (a >= 0 && b2 > a) s2 = s2.slice(a, b2 + 1);
-  return JSON.parse(s2);
+  const s2 = (raw ?? "").trim();
+  try {
+    return JSON.parse(s2);
+  } catch {
+  }
+  const fence = s2.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const body = fence ? fence[1].trim() : s2;
+  const a = body.indexOf("{");
+  const b2 = body.lastIndexOf("}");
+  return JSON.parse(a >= 0 && b2 > a ? body.slice(a, b2 + 1) : body);
 }
 async function startRun(spec) {
   const exec0 = await resolverExecucao(spec.chamada);
@@ -89467,6 +89512,310 @@ async function saveItemAsQuestion(topicId, nodeId, kind, prompt, reference, hint
     return insertQuestion(db2, { topicId, nodeId, kind, prompt, reference, hint, origin: "tutor" });
   });
 }
+const MODELO_FORMATO = "rickos-roteiro";
+const MODELO_VERSAO = 1;
+const LIM = { itens: 600, profundidade: 12, texto: 2e5, turnos: 400 };
+function aulaDe(db2, topicId, nodeId) {
+  const l = one(
+    db2,
+    "SELECT id, title, openQuestion, resumePhrase FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1",
+    [topicId, nodeId]
+  );
+  if (!l) return null;
+  const turnos = all(db2, "SELECT role, content, payload FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [l.id]);
+  if (!turnos.length) return null;
+  return {
+    titulo: l.title,
+    perguntaAberta: l.openQuestion,
+    fraseDeRetomada: l.resumePhrase,
+    turnos: turnos.map((x) => {
+      let extra = null;
+      try {
+        extra = x.payload ? JSON.parse(x.payload) : null;
+      } catch {
+      }
+      return { papel: x.role === "me" ? "eu" : "tutor", conteudo: x.content, ...extra ? { extra } : {} };
+    })
+  };
+}
+async function exportarModelo(topicId, opts = {}) {
+  const aulas = opts.aulas !== false;
+  const notas = opts.notas === true;
+  return read((db2) => {
+    const t = one(db2, "SELECT * FROM study_topics WHERE id = ?", [topicId]);
+    if (!t) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+    const nodes = treeOrder(all(db2, "SELECT * FROM study_nodes WHERE topicId = ?", [topicId]));
+    const nota = (nodeId) => (nodeId == null ? one(db2, "SELECT content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [topicId]) : one(db2, "SELECT content FROM study_notes WHERE nodeId = ?", [nodeId]))?.content.trim() ?? "";
+    const filhos = (parentId) => nodes.filter((n) => (n.parentId ?? null) === parentId).map((n) => {
+      const item = { titulo: n.title };
+      if (n.description) item.descricao = n.description;
+      if (n.estimatedHours) item.horas = n.estimatedHours;
+      const a = aulas ? aulaDe(db2, topicId, n.id) : null;
+      if (a) item.aula = a;
+      const nt = notas ? nota(n.id) : "";
+      if (nt) item.nota = nt;
+      const f = filhos(n.id);
+      if (f.length) item.itens = f;
+      return item;
+    });
+    const plano = one(db2, "SELECT request, content FROM study_plans WHERE topicId = ? AND status = 'approved' ORDER BY approvedAt DESC LIMIT 1", [topicId]);
+    let planoJson = null;
+    try {
+      planoJson = plano ? JSON.parse(plano.content) : null;
+    } catch {
+    }
+    const modelo = {
+      formato: MODELO_FORMATO,
+      versao: MODELO_VERSAO,
+      topico: {
+        nome: t.name,
+        tipo: t.kind === "language" ? "idioma" : "tema",
+        ...t.targetLanguage ? { idiomaAlvo: t.targetLanguage } : {},
+        ...t.explanationLanguage ? { idiomaExplicacao: t.explanationLanguage } : {},
+        ...t.goal ? { objetivo: t.goal } : {},
+        ...t.category ? { categoria: t.category } : {}
+      },
+      ...plano ? { roteiro: { pedido: plano.request, ...planoJson ? { plano: planoJson } : {} } } : {},
+      itens: filhos(null)
+    };
+    const geral = aulas ? aulaDe(db2, topicId, null) : null;
+    if (geral) modelo.aulaGeral = geral;
+    const ng = notas ? nota(null) : "";
+    if (ng) modelo.notaGeral = ng;
+    const slug = t.name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "roteiro";
+    return { nome: `${slug}.roteiro.json`, conteudo: JSON.stringify(modelo, null, 2) };
+  });
+}
+const str = (v, max = LIM.texto) => typeof v === "string" ? v.slice(0, max) : null;
+function validarAula(a, onde, erros) {
+  if (a == null) return null;
+  const x = a;
+  if (typeof x !== "object" || !Array.isArray(x.turnos)) {
+    erros.push(tt("estudos.modeloAulaInvalida", { onde }));
+    return null;
+  }
+  const turnos = x.turnos.slice(0, LIM.turnos).flatMap((tr) => {
+    const r = tr;
+    const conteudo = str(r?.conteudo);
+    if (!conteudo?.trim()) return [];
+    const extra = r.extra && typeof r.extra === "object" ? r.extra : void 0;
+    return [{ papel: r.papel === "eu" ? "eu" : "tutor", conteudo, ...extra ? { extra } : {} }];
+  });
+  if (!turnos.length) return null;
+  return { titulo: str(x.titulo, 300) ?? "", perguntaAberta: str(x.perguntaAberta, 2e3), fraseDeRetomada: str(x.fraseDeRetomada, 2e3), turnos };
+}
+function validarModelo(raw) {
+  const erros = [];
+  let m;
+  try {
+    m = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    throw new StudyError(tt("estudos.modeloIlegivel"));
+  }
+  if (!m || typeof m !== "object" || m.formato !== MODELO_FORMATO) throw new StudyError(tt("estudos.modeloNaoE"));
+  if (Number(m.versao) > MODELO_VERSAO) throw new StudyError(tt("estudos.modeloVersao", { versao: String(m.versao) }));
+  const tp = m.topico ?? {};
+  let itens = 0;
+  let aulas = 0;
+  let turnos = 0;
+  let notas = 0;
+  const normItens = (lista2, prof, onde) => {
+    if (lista2 == null) return [];
+    if (!Array.isArray(lista2)) {
+      erros.push(tt("estudos.modeloItensInvalidos", { onde }));
+      return [];
+    }
+    if (prof > LIM.profundidade) {
+      erros.push(tt("estudos.modeloProfundo"));
+      return [];
+    }
+    return lista2.flatMap((it, i) => {
+      const x = it;
+      const titulo = str(x?.titulo, 300)?.trim();
+      const aqui = `${onde} › ${titulo || `#${i + 1}`}`;
+      if (!titulo) {
+        erros.push(tt("estudos.modeloItemSemTitulo", { onde: aqui }));
+        return [];
+      }
+      if (++itens > LIM.itens) {
+        if (itens === LIM.itens + 1) erros.push(tt("estudos.modeloGrande", { max: LIM.itens }));
+        return [];
+      }
+      const item = { titulo };
+      const d = str(x.descricao);
+      if (d) item.descricao = d;
+      if (typeof x.horas === "number" && x.horas > 0) item.horas = Math.min(x.horas, 1e3);
+      const a = validarAula(x.aula, aqui, erros);
+      if (a) {
+        item.aula = a;
+        aulas++;
+        turnos += a.turnos.length;
+      }
+      const n = str(x.nota);
+      if (n?.trim()) {
+        item.nota = n;
+        notas++;
+      }
+      const f = normItens(x.itens, prof + 1, aqui);
+      if (f.length) item.itens = f;
+      return [item];
+    });
+  };
+  const lista = normItens(m.itens, 1, "");
+  const geral = validarAula(m.aulaGeral, tt("estudos.modeloGeral"), erros);
+  if (geral) {
+    aulas++;
+    turnos += geral.turnos.length;
+  }
+  const rot = m.roteiro ?? null;
+  const modelo = {
+    formato: MODELO_FORMATO,
+    versao: MODELO_VERSAO,
+    topico: {
+      nome: str(tp.nome, 200)?.trim() || "Roteiro importado",
+      tipo: tp.tipo === "idioma" ? "idioma" : "tema",
+      ...str(tp.idiomaAlvo, 20) ? { idiomaAlvo: str(tp.idiomaAlvo, 20) } : {},
+      ...str(tp.idiomaExplicacao, 20) ? { idiomaExplicacao: str(tp.idiomaExplicacao, 20) } : {},
+      ...str(tp.objetivo, 2e3) ? { objetivo: str(tp.objetivo, 2e3) } : {},
+      ...str(tp.categoria, 100) ? { categoria: str(tp.categoria, 100) } : {}
+    },
+    ...rot && str(rot.pedido)?.trim() ? { roteiro: { pedido: str(rot.pedido), ...rot.plano && typeof rot.plano === "object" ? { plano: rot.plano } : {} } } : {},
+    itens: lista,
+    ...geral ? { aulaGeral: geral } : {},
+    ...str(m.notaGeral)?.trim() ? { notaGeral: str(m.notaGeral) } : {}
+  };
+  if (modelo.notaGeral) notas++;
+  if (!lista.length) erros.push(tt("estudos.modeloVazio"));
+  return { modelo, erros, itens: Math.min(itens, LIM.itens), aulas, turnos, notas };
+}
+async function previaModelo(raw, destinoTopicId) {
+  const v = validarModelo(raw);
+  const avisos = [];
+  if (destinoTopicId != null) {
+    await read((db2) => {
+      if (!one(db2, "SELECT 1 FROM study_topics WHERE id = ?", [destinoTopicId])) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+      if (v.modelo.aulaGeral && one(db2, "SELECT 1 FROM study_lessons WHERE topicId = ? AND nodeId IS NULL", [destinoTopicId])) avisos.push(tt("estudos.modeloAulaGeralExiste"));
+      if (v.modelo.notaGeral && one(db2, "SELECT 1 FROM study_notes WHERE topicId = ? AND nodeId IS NULL AND TRIM(content) <> ''", [destinoTopicId])) avisos.push(tt("estudos.modeloNotaGeralAnexada"));
+      if (v.modelo.roteiro && one(db2, "SELECT 1 FROM study_plans WHERE topicId = ? AND status = 'approved'", [destinoTopicId])) avisos.push(tt("estudos.modeloRoteiroVigente"));
+    });
+  }
+  const resumo = (lista) => lista.map((it) => {
+    let n = 0;
+    let a = it.aula ? 1 : 0;
+    const conta = (l) => l?.forEach((x) => {
+      n++;
+      if (x.aula) a++;
+      conta(x.itens);
+    });
+    conta(it.itens);
+    return { titulo: it.titulo, subitens: n, aulas: a };
+  });
+  return {
+    nome: v.modelo.topico.nome,
+    tipo: v.modelo.topico.tipo,
+    objetivo: v.modelo.topico.objetivo ?? null,
+    pedido: v.modelo.roteiro?.pedido ?? null,
+    itens: v.itens,
+    aulas: v.aulas,
+    turnos: v.turnos,
+    notas: v.notas,
+    raiz: resumo(v.modelo.itens),
+    erros: v.erros,
+    avisos
+  };
+}
+async function importarModelo(raw, opts) {
+  const v = validarModelo(raw);
+  if (v.erros.length) throw new StudyError(tt("estudos.modeloComErros", { erros: v.erros.slice(0, 5).join("; ") }));
+  const m = v.modelo;
+  const incluirAulas = opts.aulas !== false;
+  const incluirNotas = opts.notas !== false;
+  return tx((db2) => {
+    const now = nowIso();
+    let topicId;
+    if (opts.topicId != null) {
+      if (!one(db2, "SELECT 1 FROM study_topics WHERE id = ?", [opts.topicId])) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+      topicId = opts.topicId;
+    } else {
+      const nome = (opts.nome ?? m.topico.nome).trim() || m.topico.nome;
+      topicId = exec(
+        db2,
+        `INSERT INTO study_topics (name, category, status, priority, color, createdAt, kind, targetLanguage, explanationLanguage, goal, reviewWhenArchived, readingMode, uid)
+         VALUES (?, ?, 'studying', 0, '#6366f1', ?, ?, ?, ?, ?, 0, 'hidden', lower(hex(randomblob(8))))`,
+        [nome, m.topico.categoria ?? null, now, m.topico.tipo === "idioma" ? "language" : "general", m.topico.idiomaAlvo ?? null, m.topico.idiomaExplicacao ?? null, m.topico.objetivo ?? null]
+      );
+    }
+    let planId = null;
+    if (m.roteiro) {
+      exec(db2, "UPDATE study_plans SET status = 'superseded' WHERE topicId = ? AND status = 'approved'", [topicId]);
+      planId = exec(db2, "INSERT INTO study_plans (topicId, request, status, content, runId, edited, createdAt, approvedAt) VALUES (?, ?, 'approved', ?, NULL, 0, ?, ?)", [
+        topicId,
+        m.roteiro.pedido,
+        JSON.stringify(m.roteiro.plano ?? { partes: [] }),
+        now,
+        now
+      ]);
+    }
+    let itens = 0;
+    let aulas = 0;
+    let notas = 0;
+    let primeiraAulaNodeId = null;
+    const salvarAula = (nodeId, a, tituloPadrao) => {
+      const lessonId = exec(db2, "INSERT INTO study_lessons (topicId, nodeId, planId, title, openQuestion, resumePhrase, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
+        topicId,
+        nodeId,
+        planId,
+        a.titulo || tituloPadrao,
+        a.perguntaAberta ?? null,
+        a.fraseDeRetomada ?? null,
+        now,
+        now
+      ]);
+      for (const tr of a.turnos) {
+        exec(db2, "INSERT INTO study_lesson_turns (lessonId, role, content, payload, createdAt) VALUES (?, ?, ?, ?, ?)", [
+          lessonId,
+          tr.papel === "eu" ? "me" : "tutor",
+          tr.conteudo,
+          tr.extra ? JSON.stringify(tr.extra) : null,
+          now
+        ]);
+      }
+      aulas++;
+    };
+    const salvarNota = (nodeId, texto) => {
+      const cur = nodeId == null ? one(db2, "SELECT id, content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [topicId]) : null;
+      if (cur) exec(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [cur.content.trim() ? `${cur.content.trimEnd()}
+
+${texto.trim()}
+` : `${texto.trim()}
+`, now, cur.id]);
+      else exec(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [topicId, nodeId, `${texto.trim()}
+`, now]);
+      notas++;
+    };
+    const inserir = (lista, parentId) => {
+      let ordem = parentId == null ? one(db2, "SELECT COALESCE(MAX(orderIndex), -1) + 1 AS n FROM study_nodes WHERE topicId = ? AND parentId IS NULL", [topicId]).n : 0;
+      for (const it of lista) {
+        const id2 = exec(
+          db2,
+          "INSERT INTO study_nodes (topicId, parentId, title, description, status, orderIndex, estimatedHours, createdAt, origin, planId) VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?)",
+          [topicId, parentId, it.titulo, it.descricao ?? null, ordem++, it.horas ?? null, now, planId != null ? "plan" : "manual", planId]
+        );
+        itens++;
+        if (incluirAulas && it.aula) {
+          salvarAula(id2, it.aula, it.titulo);
+          primeiraAulaNodeId ??= id2;
+        }
+        if (incluirNotas && it.nota) salvarNota(id2, it.nota);
+        if (it.itens?.length) inserir(it.itens, id2);
+      }
+    };
+    inserir(m.itens, null);
+    if (incluirAulas && m.aulaGeral && !one(db2, "SELECT 1 FROM study_lessons WHERE topicId = ? AND nodeId IS NULL", [topicId])) salvarAula(null, m.aulaGeral, m.topico.nome);
+    if (incluirNotas && m.notaGeral) salvarNota(null, m.notaGeral);
+    return { topicId, itens, aulas, notas, primeiraAulaNodeId };
+  });
+}
 const changed$1 = (kind, topicId) => broadcast("estudos:updated", { kind, topicId: topicId ?? null });
 const id = (v) => {
   const n = Number(v);
@@ -89682,6 +90031,13 @@ function registerEstudosRpc(handle) {
   handle("estudos:discardPlan", async (_e, planId) => {
     await discardPlan(id(planId));
     changed$1("plans");
+  });
+  handle("estudos:modeloExport", (_e, topicId, opts) => exportarModelo(id(topicId), { aulas: opts?.aulas !== false, notas: opts?.notas === true }));
+  handle("estudos:modeloPreview", (_e, json2, topicId) => previaModelo(String(json2 ?? ""), optId(topicId)));
+  handle("estudos:modeloImport", async (_e, json2, opts) => {
+    const r = await importarModelo(String(json2 ?? ""), { topicId: optId(opts?.topicId), nome: opts?.nome ?? null, aulas: opts?.aulas !== false, notas: opts?.notas !== false });
+    changed$1("topics", r.topicId);
+    return r;
   });
   handle("estudos:approvePlan", async (_e, planId, content) => {
     const r = await approvePlan(id(planId), content);
