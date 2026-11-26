@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import type { NewsDigest, NewsState } from '../../../shared/news'
-import { useUIStore } from '../../store/uiStore'
 import { localDateStr } from '../../utils/dates'
 import { openExternal } from '../../api/createApi'
 import './news.css'
+import { openSettings } from '../settings/tabs'
 import { t as tr, getLocale } from '../../i18n'
 
 const fmtWhen = (iso: string): string =>
@@ -155,7 +155,7 @@ function NewsModal({
 
   function goToSettings(): void {
     onClose()
-    useUIStore.getState().setPage('settings')
+    openSettings('integracoes', 'noticias')
   }
 
   const groups = digest

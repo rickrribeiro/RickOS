@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react'
-import { useUIStore } from '../../../store/uiStore'
 import { ChatDetails } from '../components/ChatDetails'
 import { ChatFilters } from '../components/ChatFilters'
 import { ChatList } from '../components/ChatList'
@@ -9,6 +8,7 @@ import { TriageView } from '../components/TriageView'
 import { StatusBadge } from '../components/StatusBadge'
 import { useChatsStore } from '../store/chatsStore'
 import '../chats.css'
+import { openSettings } from '../../settings/tabs'
 import { t, getLocale } from '../../../i18n'
 
 /** Central de Mensagens: inbox unificada (WhatsApp, Instagram, LinkedIn… via provedor). */
@@ -57,7 +57,7 @@ export function ChatsPage(): React.ReactElement {
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 460, margin: '8px auto 16px' }}>
             {t('chats.junteWhatsappInstagramLinkedinE')}
           </p>
-          <button className="btn btn-primary" onClick={() => useUIStore.getState().setPage('settings')}>{t('chats.configurarEmConfiguracoesMensagens')}</button>
+          <button className="btn btn-primary" onClick={() => openSettings('integracoes', 'mensagens')}>{t('chats.configurarEmConfiguracoesMensagens')}</button>
         </div>
       </div>
     )
