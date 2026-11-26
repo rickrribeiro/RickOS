@@ -40,7 +40,6 @@ import {
   ReportsPage
 } from './modules/finance/pages'
 import { DestinationsPage, ItineraryPage } from './modules/travel/pages'
-import { ExportDbModal } from './components/ExportDbModal'
 import { SettingsPage } from './modules/settings/pages/SettingsPage'
 import { LinksPage } from './modules/links/pages/LinksPage'
 import { SkillsPage } from './modules/ai/pages/SkillsPage'
@@ -110,7 +109,6 @@ const EXPANDED_TABS_KEY = 'rickos:expandedTabGroups'
 
 export default function App(): React.ReactElement {
   const { currentPage, setPage, selectedProjectId } = useUIStore()
-  const [exportOpen, setExportOpen] = useState(false)
   const hiddenModules = useModuleStore((st) => st.hidden)
   const navGroups = React.useMemo(() => visibleNavGroups(hiddenModules), [hiddenModules])
   const flightId = useFlightStore((st) => st.selectedId)
@@ -386,41 +384,16 @@ export default function App(): React.ReactElement {
         </div>
         <div className="sidebar-footer">
           <button
-            className="nav-btn export-btn"
-            onClick={() => setExportOpen(true)}
-            title={t('shell.exportDbTitle')}
-            style={{ marginTop: '8px' }}
-          >
-            <span className="nav-icon">💾</span>
-            <span className="nav-label">{t('shell.exportDb')}</span>
-          </button>
-          <button
-            className="nav-btn export-btn"
-            onClick={async () => {
-              const confirmed = window.confirm(
-                t('shell.importDbConfirm')
-              )
-              if (!confirmed) return
-              await window.api.app.importDb()
-            }}
-            title={t('shell.importDbTitle')}
-            style={{ marginTop: '4px' }}
-          >
-            <span className="nav-icon">📂</span>
-            <span className="nav-label">{t('shell.importDb')}</span>
-          </button>
-          <button
             className="nav-btn export-btn hide-sidebar-btn"
             onClick={() => toggleSidebar(true)}
             title={t('shell.hideSidebar')}
-            style={{ marginTop: '4px' }}
+            style={{ marginTop: '8px' }}
           >
             <span className="nav-icon">«</span>
             <span className="nav-label">{t('shell.hideSidebar')}</span>
           </button>
         </div>
       </nav>
-      {exportOpen && <ExportDbModal onClose={() => setExportOpen(false)} />}
 
       <main className="main-content">
         <ActiveTask />
