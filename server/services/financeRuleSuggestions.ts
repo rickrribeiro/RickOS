@@ -9,11 +9,12 @@ import {
   getTransactions,
   insertRuleSuggestion,
   setRuleSuggestionStatus,
+  updateFinanceRule,
   updateRuleSuggestion,
   type DbRuleSuggestionRow,
   type DbTransaction
 } from '../database/queries'
-import { countsInTotals, matchFinanceRule, normalizeText, parseKeywords, type FinanceRule, type FinanceRuleSuggestion } from '../../shared/finance'
+import { countsInTotals, matchFinanceRule, normalizeText, parseKeywords, ruleToExtend, type FinanceRule, type FinanceRuleSuggestion } from '../../shared/finance'
 import { executarChamada } from '../ia/gateway'
 import { tt } from '../i18n'
 import { FALLBACK_CATEGORY_ID } from './financeRules'
@@ -59,11 +60,37 @@ function toSuggestion(r: DbRuleSuggestionRow): FinanceRuleSuggestion {
   } catch {
     // exemplos corrompidos: mostra sem
   }
-  return { id: r.id, categoryId: r.categoryId, keywords: r.keywords, reason: r.reason, matches: r.matches, uncategorized: r.uncategorized, examples, createdAt: r.createdAt }
+  return { id: r.id, categoryId: r.categoryId, keywords: r.keywords, reason: r.reason, matches: r.matches, uncategorized: r.uncategorized, examples, createdAt: r.createdAt, targetRuleId: null, targetKeywords: null }
 }
 
+/**
+ * A palavra já existe numa regra: igual a uma palavra de qualquer regra (ativa ou não, de qualquer
+ * categoria), ou contém uma palavra de regra da mesma categoria ("uber trip" quando já há "uber").
+ */
+function existsInRules(rules: FinanceRule[], categoryId: number, k: string): boolean {
+  return rules.some((r) => parseKeywords(r.keywords).some((rk) => rk === k || (r.categoryId === categoryId && k.includes(rk))))
+}
+
+/**
+ * Pendentes, cada uma com a regra que ela incrementa. Palavras que passaram a existir numa regra
+ * (o usuário criou/editou depois da análise) saem da sugestão; se não sobra nada, ela some.
+ */
 export async function listRuleSuggestions(): Promise<FinanceRuleSuggestion[]> {
-  return (await getRuleSuggestions('pending')).map(toSuggestion)
+  const [rows, rules] = await Promise.all([getRuleSuggestions('pending'), getFinanceRules()])
+  const out: FinanceRuleSuggestion[] = []
+  for (const r of rows) {
+    const all = parseKeywords(r.keywords)
+    const keep = all.filter((k) => !existsInRules(rules, r.categoryId, k))
+    if (!keep.length) {
+      await deleteRuleSuggestion(r.id)
+      continue
+    }
+    const s = toSuggestion(keep.length === all.length ? r : { ...r, keywords: keep.join(', ') })
+    if (keep.length !== all.length) await updateRuleSuggestion(r.id, { ...r, keywords: s.keywords })
+    const target = ruleToExtend(rules, r.categoryId)
+    out.push({ ...s, targetRuleId: target?.id ?? null, targetKeywords: target?.keywords ?? null })
+  }
+  return out
 }
 
 let running: Promise<FinanceRuleSuggestion[]> | null = null
@@ -160,7 +187,7 @@ async function analyze(month?: string): Promise<FinanceRuleSuggestion[]> {
     const candidatas = (Array.isArray(p.palavras) ? p.palavras : typeof p.palavras === 'string' ? p.palavras.split(',') : [])
       .filter((k): k is string => typeof k === 'string')
       .map((k) => normalizeText(k))
-      .filter((k) => k.length >= MIN_PALAVRA && !k.includes(',') && !recusadasCat.some((r) => k.includes(r)))
+      .filter((k) => k.length >= MIN_PALAVRA && !k.includes(',') && !recusadasCat.some((r) => k.includes(r)) && !existsInRules(rules, cat.id, k))
     // só fica a palavra que pega alguma transação sem categoria que nada pega ainda; cada palavra
     // aceita entra na cobertura, então a seguinte (ou a próxima regra) não repete o mesmo alvo
     const novas: string[] = []
@@ -195,13 +222,23 @@ async function analyze(month?: string): Promise<FinanceRuleSuggestion[]> {
   return listRuleSuggestions()
 }
 
-/** Aprova (com as edições do usuário): vira regra ativa no fim da lista e a sugestão some. */
+/**
+ * Aprova (com as edições do usuário). Aditiva: se a categoria escolhida já tem regra ativa, as
+ * palavras novas entram NELA (sem repetir as que ela já tem); senão vira regra nova no fim da lista.
+ */
 export async function approveRuleSuggestion(id: number, categoryId: number, keywords: string): Promise<void> {
   const s = await getRuleSuggestion(id)
   if (!s) throw new Error(tt('services.financas.sugestaoNaoEncontrada'))
-  const k = parseKeywords(keywords).join(', ')
-  if (!k || !categoryId) throw new Error(tt('services.financas.regraInvalida'))
-  await createFinanceRule(categoryId, k)
+  const novas = parseKeywords(keywords)
+  if (!novas.length || !categoryId) throw new Error(tt('services.financas.regraInvalida'))
+  const target = ruleToExtend(await getFinanceRules(), categoryId)
+  if (target) {
+    const existentes = parseKeywords(target.keywords)
+    const add = novas.filter((k) => !existentes.includes(k))
+    if (add.length) await updateFinanceRule(target.id, target.categoryId, [target.keywords.trim(), ...add].join(', '), true)
+  } else {
+    await createFinanceRule(categoryId, novas.join(', '))
+  }
   await deleteRuleSuggestion(id)
 }
 

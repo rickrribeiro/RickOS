@@ -35,7 +35,7 @@ Transações, agrupadas por descrição (tipo · quantas vezes · descrição de
 {{transacoes}}
 </transacoes>
 
-Regras que já existem (não repita):
+Regras que já existem (NUNCA sugira uma palavra que já está nelas):
 {{regrasExistentes}}
 
 Sugestões que o usuário já RECUSOU (não sugira de novo a mesma palavra para a mesma categoria):
@@ -43,7 +43,7 @@ Sugestões que o usuário já RECUSOU (não sugira de novo a mesma palavra para 
 
 Tarefa: sugira regras que categorizem as transações "sem categoria" ou em "Outros". Use as transações já categorizadas como pista do que o usuário prefere (ex.: se "IFOOD" está em Alimentação, "IFD*" provavelmente também).
 - Palavras-chave: trechos que APARECEM nas descrições, em minúsculas e sem acento, específicos o bastante para não pegar outra coisa (ex.: "uber", "ifood", "smart fit"). Nunca palavras genéricas como "pix", "compra", "pagamento", "transferencia", "debito", "cartao", "ltda", nomes de pessoas soltos ou números.
-- Junte na mesma regra palavras do mesmo estabelecimento/serviço e da mesma categoria.
+- Uma entrada por categoria, juntando os estabelecimentos dela. Se a categoria já tem regra, mande só as palavras NOVAS: elas serão acrescentadas à regra existente (não crie uma regra paralela).
 - Só sugira quando tiver confiança razoável na categoria. Na dúvida, não sugira.
 - No máximo 25 regras.
 

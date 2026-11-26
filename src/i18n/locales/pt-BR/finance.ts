@@ -366,13 +366,17 @@ export const finance = {
   'finance.analisando': 'Analisando… (pode levar um ou dois minutos)',
   'finance.sugestoesPendentes': '{count} sugestão para revisar|{count} sugestões para revisar',
   'finance.nenhumaSugestaoNova': 'A IA não encontrou regras novas para sugerir.',
-  'finance.sugerida': '✨ sugerida',
   'finance.sugestaoPega': 'pega {count} transação|pega {count} transações',
   'finance.sugestaoSemCategoria': ' ({count} sem categoria)',
   'finance.sugestaoExemplos': 'ex.: {p0}',
-  'finance.aprovarSugestao': 'Aprovar',
   'finance.recusarSugestao': 'Recusar',
-  'finance.aprovarSugestaoTitle': 'Criar esta regra (dá para editar as palavras e a categoria antes)',
+  'finance.aprovarSugestaoTitle': 'Aprovar (dá para editar as palavras e a categoria antes)',
   'finance.recusarSugestaoTitle': 'Recusar: a IA não sugere de novo',
-  'finance.regraCriadaAplique': 'Regra criada. Use "Aplicar nas transações existentes" para categorizar as que já estão aí.'
+  'finance.regraCriadaAplique': 'Regra criada. Use "Aplicar nas transações existentes" para categorizar as que já estão aí.',
+  'finance.sugestaoAdicionar': '➕ adicionar à regra',
+  'finance.sugestaoNova': '✨ regra nova',
+  'finance.sugestaoRegraAtual': 'Regra atual: {p0}',
+  'finance.adicionarARegra': 'Adicionar à regra',
+  'finance.criarRegra': 'Criar regra',
+  'finance.palavrasAdicionadasAplique': 'Palavras adicionadas à regra. Use "Aplicar nas transações existentes" para categorizar as que já estão aí.'
 }

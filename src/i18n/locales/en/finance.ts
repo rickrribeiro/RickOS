@@ -366,13 +366,17 @@ export const finance = {
   'finance.analisando': 'Analyzing… (may take a minute or two)',
   'finance.sugestoesPendentes': '{count} suggestion to review|{count} suggestions to review',
   'finance.nenhumaSugestaoNova': 'The AI found no new rules to suggest.',
-  'finance.sugerida': '✨ suggested',
   'finance.sugestaoPega': 'matches {count} transaction|matches {count} transactions',
   'finance.sugestaoSemCategoria': ' ({count} uncategorized)',
   'finance.sugestaoExemplos': 'e.g.: {p0}',
-  'finance.aprovarSugestao': 'Approve',
   'finance.recusarSugestao': 'Reject',
-  'finance.aprovarSugestaoTitle': 'Create this rule (you can edit the keywords and category first)',
+  'finance.aprovarSugestaoTitle': 'Approve (you can edit the keywords and category first)',
   'finance.recusarSugestaoTitle': 'Reject: the AI will not suggest it again',
-  'finance.regraCriadaAplique': 'Rule created. Use "Apply to existing transactions" to categorize the ones already there.'
+  'finance.regraCriadaAplique': 'Rule created. Use "Apply to existing transactions" to categorize the ones already there.',
+  'finance.sugestaoAdicionar': '➕ add to rule',
+  'finance.sugestaoNova': '✨ new rule',
+  'finance.sugestaoRegraAtual': 'Current rule: {p0}',
+  'finance.adicionarARegra': 'Add to rule',
+  'finance.criarRegra': 'Create rule',
+  'finance.palavrasAdicionadasAplique': 'Keywords added to the rule. Use "Apply to existing transactions" to categorize the ones already there.'
 }

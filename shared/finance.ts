@@ -65,6 +65,9 @@ export interface FinanceRuleSuggestion {
   uncategorized: number // dessas, quantas estão sem categoria ou em "Outros"
   examples: string[] // até 3 descrições de exemplo
   createdAt: string
+  /** Regra existente que a sugestão incrementa (primeira ativa da categoria); null = vira regra nova. */
+  targetRuleId: number | null
+  targetKeywords: string | null
 }
 
 /** minúsculas, sem acentos e com espaços colapsados — para comparar descrições. */
@@ -103,6 +106,11 @@ export function matchFinanceRule<R extends FinanceRule>(
     if (parseKeywords(r.keywords).some((k) => d.includes(k))) return r
   }
   return null
+}
+
+/** Regra que uma sugestão de mesma categoria incrementa: a primeira ATIVA da categoria (null = regra nova). */
+export function ruleToExtend<R extends FinanceRule>(rules: R[], categoryId: number): R | null {
+  return [...rules].sort((a, b) => a.position - b.position || a.id - b.id).find((r) => !!r.active && r.categoryId === categoryId) ?? null
 }
 
 // ── Natureza da transação ──────────────────────────────────────────────────────

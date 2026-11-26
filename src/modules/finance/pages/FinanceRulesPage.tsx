@@ -3,7 +3,7 @@ import { Category, FinanceRule, FinanceRuleSuggestion, RulePreviewItem } from '.
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney, monthLabel } from '../util'
-import { parseKeywords } from '../../../../shared/finance'
+import { parseKeywords, ruleToExtend } from '../../../../shared/finance'
 import { t } from '../../../i18n'
 
 /** Select de categoria agrupado por tipo. */
@@ -108,22 +108,26 @@ function RuleRow({
 function SuggestionRow({
   suggestion: s,
   categories,
+  rules,
   onApprove,
   onReject
 }: {
   suggestion: FinanceRuleSuggestion
   categories: Category[]
-  onApprove: (categoryId: number, keywords: string) => void
+  rules: FinanceRule[]
+  onApprove: (categoryId: number, keywords: string, extends_: boolean) => void
   onReject: () => void
 }): React.ReactElement {
   const [keywords, setKeywords] = useState(s.keywords)
   const [categoryId, setCategoryId] = useState<number | ''>(s.categoryId)
   const cat = categories.find((c) => c.id === categoryId)
   const valid = categoryId !== '' && parseKeywords(keywords).length > 0
+  // aditiva: a categoria escolhida já tem regra ativa → as palavras entram nela (o servidor decide igual)
+  const target = categoryId === '' ? null : ruleToExtend(rules, categoryId)
 
   return (
     <div className="list-row" style={{ flexWrap: 'wrap', gap: 6, borderStyle: 'dashed', borderColor: 'var(--accent)' }}>
-      <span className="project-chip" style={{ color: 'var(--accent)' }}>{t('finance.sugerida')}</span>
+      <span className="project-chip" style={{ color: 'var(--accent)' }}>{target ? t('finance.sugestaoAdicionar') : t('finance.sugestaoNova')}</span>
       <input
         value={keywords}
         onChange={(e) => setKeywords(e.target.value)}
@@ -138,14 +142,15 @@ function SuggestionRow({
         className="btn btn-primary btn-sm"
         disabled={!valid}
         title={t('finance.aprovarSugestaoTitle')}
-        onClick={() => categoryId !== '' && onApprove(categoryId, keywords)}
+        onClick={() => categoryId !== '' && onApprove(categoryId, keywords, !!target)}
       >
-        ✓ {t('finance.aprovarSugestao')}
+        ✓ {target ? t('finance.adicionarARegra') : t('finance.criarRegra')}
       </button>
       <button className="btn btn-secondary btn-sm" title={t('finance.recusarSugestaoTitle')} onClick={onReject}>
         ✕ {t('finance.recusarSugestao')}
       </button>
       <div style={{ flexBasis: '100%', fontSize: 11, color: 'var(--text-muted)' }}>
+        {target && <span style={{ display: 'block', color: 'var(--text-secondary)' }}>{t('finance.sugestaoRegraAtual', { p0: target.keywords })}</span>}
         {t('finance.sugestaoPega', { count: s.matches })}
         {s.uncategorized > 0 && t('finance.sugestaoSemCategoria', { count: s.uncategorized })}
         {s.examples.length > 0 && ` · ${t('finance.sugestaoExemplos', { p0: s.examples.join(' · ') })}`}
@@ -191,9 +196,9 @@ export function FinanceRulesPage(): React.ReactElement {
     }
   }
 
-  async function approve(id: number, categoryId: number, keywords: string): Promise<void> {
+  async function approve(id: number, categoryId: number, keywords: string, extends_: boolean): Promise<void> {
     await window.api.financeRules.approveSuggestion(id, categoryId, keywords)
-    setAiMsg({ text: t('finance.regraCriadaAplique') })
+    setAiMsg({ text: extends_ ? t('finance.palavrasAdicionadasAplique') : t('finance.regraCriadaAplique') })
     await load()
   }
 
@@ -298,7 +303,8 @@ export function FinanceRulesPage(): React.ReactElement {
             key={s.id}
             suggestion={s}
             categories={categories}
-            onApprove={(categoryId, keywords) => approve(s.id, categoryId, keywords)}
+            rules={rules}
+            onApprove={(categoryId, keywords, extends_) => approve(s.id, categoryId, keywords, extends_)}
             onReject={() => reject(s.id)}
           />
         ))}
