@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import type { Transaction } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { convertToBase, currentMonth, formatMoney, formatMoneyCompact, monthLabel, shiftMonth, splitIncome, startingBillInBase, isStartingBillItem } from '../util'
 import { t as tr } from '../../../i18n'
@@ -13,6 +14,32 @@ export function DailySpending(): React.ReactElement {
   const { transactions, allTransactions, categories, month, base, rates } = useFinanceStore()
   const [hover, setHover] = useState<number | null>(null)
   const [showTable, setShowTable] = useState(false)
+  // clique numa coluna de gasto: lista as transações do dia junto do ponteiro
+  const [picked, setPicked] = useState<{ d: number; x: number; y: number } | null>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!picked) return
+    const close = (e: Event): void => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !popRef.current?.contains(e.target as Node)) setPicked(null)
+    }
+    // rolar a página fecha (a posição é fixa); rolar a própria lista não
+    const onScroll = (e: Event): void => {
+      if (!popRef.current?.contains(e.target as Node)) setPicked(null)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
+    document.addEventListener('keydown', close)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
+      document.removeEventListener('keydown', close)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [picked])
+
+  useEffect(() => setPicked(null), [month])
 
   const data = useMemo(() => {
     const [y, m] = month.split('-').map(Number)
@@ -37,17 +64,22 @@ export function DailySpending(): React.ReactElement {
     const allowance = available / daysInMonth
 
     const spent = new Array<number>(daysInMonth + 1).fill(0)
+    const dayTxs: Transaction[][] = Array.from({ length: daysInMonth + 1 }, () => [])
     for (const t of transactions) {
       // parcelas da fatura inicial já saíram da cota — não contam de novo como gasto do dia
       if (t.type !== 'expense' || isStartingBillItem(t)) continue
       const d = Number(t.date.slice(8, 10))
-      if (d >= 1 && d <= daysInMonth) spent[d] += toBase(t)
+      if (d >= 1 && d <= daysInMonth) {
+        spent[d] += toBase(t)
+        dayTxs[d].push(t)
+      }
     }
+    for (const list of dayTxs) list.sort((a, b) => toBase(b) - toBase(a))
     const days = []
     let cum = 0
     for (let d = 1; d <= daysInMonth; d++) {
       cum += spent[d]
-      days.push({ d, spent: spent[d], cum, quota: allowance * d, balance: allowance * d - cum, future: d > refDay })
+      days.push({ d, txs: dayTxs[d], spent: spent[d], cum, quota: allowance * d, balance: allowance * d - cum, future: d > refDay })
     }
     const today = refDay > 0 ? days[refDay - 1] : null
     const remainingDays = daysInMonth - refDay
@@ -108,12 +140,34 @@ export function DailySpending(): React.ReactElement {
             height: '100%',
             background: isHover ? 'var(--bg-hover)' : undefined,
             borderRadius: 3,
-            cursor: 'default'
+            cursor: kind === 'spent' && !x.future && x.txs.length > 0 ? 'pointer' : 'default'
           }
           if (kind === 'spent') {
             const over = data.allowance > 0 && x.spent > data.allowance
             return (
-              <div key={x.d} style={{ ...common, alignItems: 'flex-end' }} onMouseEnter={() => setHover(x.d)} tabIndex={0} onFocus={() => setHover(x.d)} aria-label={tr('finance.gasto3', { p0: dayLabel(x.d), p1: formatMoney(x.spent, base) })}>
+              <div
+                key={x.d}
+                style={{ ...common, alignItems: 'flex-end' }}
+                onMouseEnter={() => setHover(x.d)}
+                tabIndex={0}
+                onFocus={() => setHover(x.d)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  if (x.future) return
+                  const r = e.currentTarget.getBoundingClientRect()
+                  // teclado (Enter) chega com clientX/Y = 0: ancora na coluna
+                  const px = e.clientX || r.left + r.width / 2
+                  const py = e.clientY || r.top
+                  setPicked((p) => (p?.d === x.d ? null : { d: x.d, x: px, y: py }))
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    e.currentTarget.click()
+                  }
+                }}
+                aria-label={tr('finance.gasto3', { p0: dayLabel(x.d), p1: formatMoney(x.spent, base) })}>
                 {!x.future && x.spent > 0 && (
                   <div style={{ width: '70%', maxWidth: 14, height: Math.max(2, (x.spent / spentMax) * PLOT_H), background: over ? 'var(--danger)' : 'var(--text-secondary)', borderRadius: '3px 3px 0 0' }} />
                 )}
@@ -222,6 +276,7 @@ export function DailySpending(): React.ReactElement {
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--danger)' }} /> {tr('finance.acimaDaCota')}
             </span>
+            <span style={{ color: 'var(--text-muted)' }}>· {tr('finance.daily.cliqueVerGastos')}</span>
           </div>
           {columns('spent')}
           {dayAxis}
@@ -229,7 +284,7 @@ export function DailySpending(): React.ReactElement {
           {columns('balance')}
           {dayAxis}
 
-          {hovered && !hovered.future && (
+          {hovered && !hovered.future && !picked && (
             <div
               role="tooltip"
               style={{
@@ -268,6 +323,80 @@ export function DailySpending(): React.ReactElement {
           )}
         </div>
       )}
+
+      {picked && !showTable && <DayTxsPopover ref={popRef} picked={picked} day={data.days[picked.d - 1]} label={dayLabel(picked.d)} />}
     </div>
   )
 }
+
+const POP_W = 300
+const POP_MAX_H = 320
+
+/** Lista de gastos do dia, posicionada junto do ponteiro e mantida dentro da janela. */
+const DayTxsPopover = React.forwardRef<
+  HTMLDivElement,
+  { picked: { x: number; y: number }; day: { txs: Transaction[]; spent: number }; label: string }
+>(function DayTxsPopover({ picked, day, label }, ref) {
+  const { categories, accounts, base } = useFinanceStore()
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const width = Math.min(POP_W, vw - 16)
+  const left = Math.min(Math.max(8, picked.x + 12), vw - width - 8)
+  const below = picked.y + 12 + POP_MAX_H <= vh - 8
+  const pos: React.CSSProperties = below ? { top: picked.y + 12 } : { bottom: Math.max(8, vh - picked.y + 12) }
+  const catOf = (id: number | null) => categories.find((c) => c.id === id)
+  const accOf = (id: number | null) => accounts.find((a) => a.id === id)
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={tr('finance.daily.gastosDoDia', { dia: label })}
+      style={{
+        position: 'fixed',
+        left,
+        ...pos,
+        width,
+        maxHeight: POP_MAX_H,
+        overflowY: 'auto',
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        padding: '8px 10px',
+        fontSize: 12,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+        zIndex: 1000
+      }}
+    >
+      <div style={{ display: 'flex', gap: 8, marginBottom: 6, color: 'var(--text-secondary)' }}>
+        <span style={{ flex: 1 }}>{tr('finance.daily.gastosDoDia', { dia: label })}</span>
+        <strong style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(day.spent, base)}</strong>
+      </div>
+      {day.txs.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)' }}>{tr('finance.daily.semGastos')}</div>
+      ) : (
+        day.txs.map((t) => {
+          const cat = catOf(t.categoryId)
+          const acc = accOf(t.accountId)
+          return (
+            <div key={t.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '4px 0', borderTop: '1px solid var(--border)' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: cat?.color ?? 'var(--text-muted)', alignSelf: 'center' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.description ?? undefined}>
+                  {t.description || tr('finance.daily.semDescricao')}
+                  {t.installmentNumber && t.installmentTotal ? ` (${t.installmentNumber}/${t.installmentTotal})` : ''}
+                </div>
+                {(cat || acc) && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {[cat?.name, acc?.name].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+              </div>
+              <strong style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{formatMoney(t.amount, t.currency)}</strong>
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+})
