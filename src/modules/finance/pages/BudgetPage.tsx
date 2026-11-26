@@ -3,7 +3,7 @@ import { Category } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney } from '../util'
-import { t as tr } from '../../../i18n'
+import { t as tr, getLocale } from '../../../i18n'
 
 /** "Outros": destino padrão das importações (Open Finance/CSV); não pode ser excluída. */
 const FALLBACK_CATEGORY_ID = 6
@@ -124,8 +124,10 @@ export function BudgetPage(): React.ReactElement {
     setColor(PALETTE.find((p) => !used.has(p)) ?? PALETTE[0])
   }, [categories.length])
 
-  const expenseCats = categories.filter((c) => c.type === 'expense')
-  const incomeCats = categories.filter((c) => c.type === 'income')
+  // ordem alfabética (ignora maiúsculas/acentos, no idioma da interface)
+  const byName = (a: Category, b: Category): number => a.name.localeCompare(b.name, getLocale(), { sensitivity: 'base' })
+  const expenseCats = categories.filter((c) => c.type === 'expense').sort(byName)
+  const incomeCats = categories.filter((c) => c.type === 'income').sort(byName)
   const budgetFor = (catId: number): number => budgets.find((b) => b.categoryId === catId)?.amount ?? 0
   const txOf = (catId: number, t: string): typeof transactions => transactions.filter((x) => x.type === t && x.categoryId === catId)
   const sum = (xs: typeof transactions): number => xs.reduce((s, t) => s + t.amount, 0)
