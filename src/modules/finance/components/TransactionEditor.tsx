@@ -7,7 +7,7 @@ import { t } from '../../../i18n'
 const CURRENCIES = ['BRL', 'USD', 'JPY', 'EUR']
 
 export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: () => void }): React.ReactElement {
-  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod, setRecurring, recurringSuggestions } = useFinanceStore()
+  const { categories, accounts, updateTransaction, setTransactionKind, setTransactionPaymentMethod, setRecurring, recurringSuggestions, ignoreTransaction } = useFinanceStore()
   // recorrência é por estabelecimento: '' = automático, '1' = sempre, '0' = nunca
   const key = recurringKey(tx.description, tx.type)
   const suggested = recurringSuggestions.some((s) => s.key === key)
@@ -50,6 +50,14 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
     if (kind !== transactionKind(tx)) await setTransactionKind(tx.id, kind)
     if (payment !== (tx.paymentMethod ?? '')) await setTransactionPaymentMethod(tx.id, payment || null)
     if (key && recurringMode !== recurringLoaded) await setRecurring(key, recurringMode === '' ? null : recurringMode === '1')
+    onClose()
+  }
+
+  // motivo gravado no banco: fica em pt como os automáticos ("Pagamento de fatura do cartão")
+  const [ignoreReason, setIgnoreReason] = useState('')
+  async function ignore(): Promise<void> {
+    if (!confirm(t('finance.ignorarTransacaoConfirm'))) return
+    await ignoreTransaction(tx.id, ignoreReason.trim() || 'Ignorada à mão')
     onClose()
   }
 
@@ -133,6 +141,19 @@ export function TransactionEditor({ tx, onClose }: { tx: Transaction; onClose: (
               {kind === 'investment' ? t('finance.apareceAParteNoDashboard') : t('finance.oDinheiroSoMudouDe')}
             </span>
           )}
+        </div>
+        <div className="editor-field">
+          <label>{t('finance.ignorarNosCalculos')}</label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <input
+              placeholder={t('finance.motivoOpcional')}
+              value={ignoreReason}
+              onChange={(e) => setIgnoreReason(e.target.value)}
+              style={{ flex: 1, minWidth: 160 }}
+            />
+            <button className="btn btn-secondary btn-sm" onClick={ignore}>{t('finance.ignorarTransacao')}</button>
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('finance.ignorarTransacaoHint')}</span>
         </div>
         <div className="modal-actions">
           <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('finance.cancelar')}</button>

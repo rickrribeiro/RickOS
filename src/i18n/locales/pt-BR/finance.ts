@@ -351,5 +351,10 @@ export const finance = {
   'finance.desmarcarInvestimentoGasto': 'Desmarcar como investimento? Ela volta a contar como gasto.',
   'finance.desmarcarTransferenciaReceita': 'Desmarcar como transferência? Ela volta a contar como receita.',
   'finance.desmarcarTransferenciaGasto': 'Desmarcar como transferência? Ela volta a contar como gasto.',
-  'finance.todosOsMesesParen': ' (todos os meses)'
+  'finance.todosOsMesesParen': ' (todos os meses)',
+  'finance.ignorarNosCalculos': 'Ignorar nos cálculos',
+  'finance.motivoOpcional': 'Motivo (opcional)',
+  'finance.ignorarTransacao': 'Ignorar transação',
+  'finance.ignorarTransacaoConfirm': 'Ignorar esta transação? Ela sai de receitas, gastos, orçamento e de todos os cálculos.\n\nDá para desfazer com "marcar como transação válida" na lista.',
+  'finance.ignorarTransacaoHint': 'Sai de todos os cálculos e aparece apagada na lista, com o motivo.'
 }

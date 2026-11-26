@@ -351,5 +351,10 @@ export const finance = {
   'finance.aplicarEm': 'Aplicar en {p0}',
   'finance.aplicarEmTodosOsMeses': 'Aplicar en todos los meses',
   'finance.categorizarTransacaoOes': '¿Categorizar {count} transacción(es)?',
-  'finance.aplicar': 'Aplicar'
+  'finance.aplicar': 'Aplicar',
+  'finance.ignorarNosCalculos': 'Ignorar en los cálculos',
+  'finance.motivoOpcional': 'Motivo (opcional)',
+  'finance.ignorarTransacao': 'Ignorar transacción',
+  'finance.ignorarTransacaoConfirm': '¿Ignorar esta transacción? Sale de ingresos, gastos, presupuesto y de todos los cálculos.\n\nSe puede deshacer con "marcar como transacción válida" en la lista.',
+  'finance.ignorarTransacaoHint': 'Sale de todos los cálculos y aparece atenuada en la lista, con el motivo.'
 }

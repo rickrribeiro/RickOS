@@ -351,5 +351,10 @@ export const finance = {
   'finance.aplicarEm': 'Apply to {p0}',
   'finance.aplicarEmTodosOsMeses': 'Apply to all months',
   'finance.categorizarTransacaoOes': 'Categorize {count} transaction(s)?',
-  'finance.aplicar': 'Apply'
+  'finance.aplicar': 'Apply',
+  'finance.ignorarNosCalculos': 'Ignore in calculations',
+  'finance.motivoOpcional': 'Reason (optional)',
+  'finance.ignorarTransacao': 'Ignore transaction',
+  'finance.ignorarTransacaoConfirm': 'Ignore this transaction? It leaves income, expenses, budget and every calculation.\n\nYou can undo it with "mark as valid transaction" in the list.',
+  'finance.ignorarTransacaoHint': 'Leaves every calculation and shows dimmed in the list, with the reason.'
 }
