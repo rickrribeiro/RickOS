@@ -175,3 +175,19 @@ export function visibleNavGroups(hidden: string[]): NavGroup[] {
 export function isToggleable(g: NavGroup): boolean {
   return !g.items.some((i) => i.id === 'settings')
 }
+
+/** Teclas do atalho Ctrl+<tecla>: a N-ésima entrada da sidebar (1…9, depois 0 para a 10ª). */
+export const QUICK_NAV_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+
+/**
+ * Atalho Ctrl+1…9/0: a N-ésima entrada visível da sidebar (módulo ou item solto). Num módulo,
+ * vai para a última página aberta dele; se você já está nele, passa para a próxima página.
+ */
+export function quickNavTarget(key: string, current: Page, groups: NavGroup[]): Page | null {
+  const i = QUICK_NAV_KEYS.indexOf(key)
+  const g = i >= 0 ? groups[i] : undefined
+  if (!g) return null
+  const at = g.items.findIndex((it) => it.id === current)
+  if (at >= 0) return g.items.length > 1 ? g.items[(at + 1) % g.items.length].id : null
+  return g.key ? lastTab(g) : g.items[0].id
+}

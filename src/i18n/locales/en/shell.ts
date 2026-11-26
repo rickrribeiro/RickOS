@@ -10,7 +10,7 @@ export const shell = {
   'shell.hidePages': 'Hide pages',
   'shell.shortcut.stop': 'Stop',
   'shell.shortcut.capture': 'Capture',
-  'shell.shortcut.navigate': 'Navigate',
+  'shell.shortcut.navigate': 'Modules (again: next page)',
   'shell.exportDb': 'Export DB',
   'shell.importDb': 'Import DB',
   'shell.importDbConfirm': 'This will replace ALL current data with the imported snapshot. Continue?',

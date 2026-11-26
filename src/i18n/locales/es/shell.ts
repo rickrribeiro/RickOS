@@ -10,7 +10,7 @@ export const shell = {
   'shell.hidePages': 'Ocultar páginas',
   'shell.shortcut.stop': 'Detener',
   'shell.shortcut.capture': 'Capturar',
-  'shell.shortcut.navigate': 'Navegar',
+  'shell.shortcut.navigate': 'Módulos (otra vez: página siguiente)',
   'shell.exportDb': 'Exportar BD',
   'shell.importDb': 'Importar BD',
   'shell.importDbConfirm': 'Esto reemplazará TODOS los datos actuales por el snapshot importado. ¿Continuar?',

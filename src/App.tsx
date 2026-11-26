@@ -51,7 +51,7 @@ import { JarvisPage } from './modules/jarvis/pages/JarvisPage'
 import { Page } from './types'
 import { AuthGate } from './components/AuthGate'
 import { NotificationBell, UnreadDot } from './components/NotificationBell'
-import { groupLabel, itemLabel, lastTab, rememberTab, tabGroupOf, visibleNavGroups } from './navigation'
+import { QUICK_NAV_KEYS, groupLabel, itemLabel, lastTab, quickNavTarget, rememberTab, tabGroupOf, visibleNavGroups } from './navigation'
 import { t } from './i18n'
 import { useModuleStore } from './store/moduleStore'
 import { useNavStyleStore } from './store/navStyleStore'
@@ -99,9 +99,6 @@ const PAGES: Record<Page, React.ComponentType> = {
   settings: SettingsPage,
   links: LinksPage
 }
-
-// Ctrl+1..4 quick nav to the most-used pages
-const QUICK_NAV: Page[] = ['home', 'timeline', 'inbox', 'projects']
 
 const COLLAPSED_KEY = 'rickos:collapsedGroups'
 const SIDEBAR_HIDDEN_KEY = 'rickos:sidebarHidden'
@@ -155,10 +152,12 @@ export default function App(): React.ReactElement {
   const labeledGroups = navGroups.filter((g) => g.key).map((g) => g.key)
   const tabGroup = tabsMode ? tabGroupOf(currentPage, navGroups) : undefined
   useEffect(() => {
-    if (tabGroup) rememberTab(tabGroup, currentPage)
+    // última página de cada módulo (abas e atalho Ctrl+N), nos dois estilos de navegação
+    const group = tabGroupOf(currentPage, navGroups)
+    if (group) rememberTab(group, currentPage)
     // celular: traz a aba ativa para a área visível da barra rolável
     document.querySelector('.module-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [currentPage, tabGroup])
+  }, [currentPage, navGroups])
   const allCollapsed = labeledGroups.every((l) => collapsed[l])
 
   const toggleAll = useCallback(() => {
@@ -184,12 +183,16 @@ export default function App(): React.ReactElement {
         e.preventDefault()
         if (activeTask) stopActiveTask()
       }
-      // Ctrl+1..4 = navigate to the most-used pages
-      if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
-        setPage(QUICK_NAV[parseInt(e.key) - 1])
+      // Ctrl+1…9/0 = N-ésimo módulo da sidebar (de novo no mesmo módulo: próxima página dele)
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && QUICK_NAV_KEYS.includes(e.key)) {
+        const target = quickNavTarget(e.key, useUIStore.getState().currentPage, navGroups)
+        if (target) {
+          e.preventDefault()
+          setPage(target)
+        }
       }
     },
-    [activeTask, stopActiveTask, setPage]
+    [activeTask, stopActiveTask, setPage, navGroups]
   )
 
   useEffect(() => {
@@ -380,7 +383,7 @@ export default function App(): React.ReactElement {
         <div className="sidebar-shortcuts">
           <div className="shortcut-hint">Ctrl+Space: {t('shell.shortcut.stop')}</div>
           <div className="shortcut-hint">Ctrl+Shift+Space: {t('shell.shortcut.capture')}</div>
-          <div className="shortcut-hint">Ctrl+1-4: {t('shell.shortcut.navigate')}</div>
+          <div className="shortcut-hint">Ctrl+1-9: {t('shell.shortcut.navigate')}</div>
         </div>
         <div className="sidebar-footer">
           <button
