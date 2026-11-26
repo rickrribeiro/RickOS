@@ -57,14 +57,20 @@ function emit(run: RunRow, extra: Record<string, unknown> = {}): void {
   broadcast('estudos:ia', { runId: run.id, status: run.status, operation: run.operation, topicId: run.topicId, nodeId: run.nodeId, section: run.section, ...extra })
 }
 
+/**
+ * JSON da resposta. O conteúdo pode trazer Markdown com blocos ``` DENTRO das strings (abertura da
+ * aula, explicações), então a cerca só é removida quando envolve a resposta inteira.
+ */
 export function parseJson(raw: string): unknown {
-  let s = (raw ?? '').trim()
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fence) s = fence[1].trim()
-  const a = s.indexOf('{')
-  const b = s.lastIndexOf('}')
-  if (a >= 0 && b > a) s = s.slice(a, b + 1)
-  return JSON.parse(s)
+  const s = (raw ?? '').trim()
+  try {
+    return JSON.parse(s)
+  } catch { /* tenta os formatos tolerados abaixo */ }
+  const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  const body = fence ? fence[1].trim() : s
+  const a = body.indexOf('{')
+  const b = body.lastIndexOf('}')
+  return JSON.parse(a >= 0 && b > a ? body.slice(a, b + 1) : body)
 }
 
 /** Inicia (ou reaproveita) uma execução. Devolve logo; o resultado chega pelo SSE. */

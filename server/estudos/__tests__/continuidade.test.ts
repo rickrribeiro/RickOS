@@ -164,3 +164,23 @@ describe('recorte dos turnos', () => {
     assert.ok(ctx.length < 26000, `contexto previsível: ${ctx.length}`)
   })
 })
+
+describe('leitura da resposta do tutor', () => {
+  it('Markdown com bloco de código dentro do JSON não vira "fora do formato"', async () => {
+    const obj = { aberturaPrimeiraAula: { aula: 'Veja:\n\n```csharp\nvar cmd = new Pegar(17);\n```\n\nE ```json {"x":1}``` também.' }, partes: [] }
+    const raw = JSON.stringify(obj)
+    assert.deepEqual(tutor.parseJson(raw), obj)
+    assert.deepEqual(tutor.parseJson(`\`\`\`json\n${raw}\n\`\`\``), obj, 'cerca envolvendo a resposta inteira')
+    assert.deepEqual(tutor.parseJson(`Aqui está:\n${raw}`), obj, 'texto antes do JSON')
+    assert.throws(() => tutor.parseJson('não é json'))
+  })
+
+  it('roteiro real com código na abertura é aceito e aprovado', async () => {
+    const t = await repo.createTopic({ name: 'Backend multiplayer' })
+    const plano = JSON.parse(JSON.stringify(MASTERCLASS_BACKEND))
+    plano.aberturaPrimeiraAula.aula = 'O cliente envia:\n\n```csharp\nnet.Send(new Pegar { Id = "A17" });\n```\n\nQuem decide?'
+    const { lessonId } = await aprovar(t.id, TRAMA, plano)
+    const l = await tutor.getLesson(lessonId!)
+    assert.ok(l.turns[0].content.includes('net.Send(new Pegar'))
+  })
+})
