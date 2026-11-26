@@ -356,5 +356,6 @@ export const finance = {
   'finance.motivoOpcional': 'Motivo (opcional)',
   'finance.ignorarTransacao': 'Ignorar transacción',
   'finance.ignorarTransacaoConfirm': '¿Ignorar esta transacción? Sale de ingresos, gastos, presupuesto y de todos los cálculos.\n\nSe puede deshacer con "marcar como transacción válida" en la lista.',
-  'finance.ignorarTransacaoHint': 'Sale de todos los cálculos y aparece atenuada en la lista, con el motivo.'
+  'finance.ignorarTransacaoHint': 'Sale de todos los cálculos y aparece atenuada en la lista, con el motivo.',
+  'finance.tirarDaLista': 'Quitar de la lista (no categorizar esta)'
 }

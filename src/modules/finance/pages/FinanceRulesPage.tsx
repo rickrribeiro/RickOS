@@ -238,12 +238,21 @@ export function FinanceRulesPage(): React.ReactElement {
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.description}</span>
                   <span>{formatMoney(i.amount, i.currency)}</span>
                   <span style={{ color: 'var(--accent)' }}>→ {categoryName(i.toCategoryId)}</span>
+                  <button
+                    className="btn btn-sm"
+                    style={{ padding: '0 4px', lineHeight: 1.2, background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
+                    title={t('finance.tirarDaLista')}
+                    aria-label={t('finance.tirarDaLista')}
+                    onClick={() => setPreview({ ...preview, items: preview.items.filter((x) => x.id !== i.id) })}
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
             <div className="modal-actions">
               <button className="btn btn-secondary btn-sm" onClick={() => setPreview(null)}>{t('finance.cancelar')}</button>
-              <button className="btn btn-primary btn-sm" onClick={confirmApply} disabled={busy}>{t('finance.aplicar')}</button>
+              <button className="btn btn-primary btn-sm" onClick={confirmApply} disabled={busy || !preview.items.length}>{t('finance.aplicar')}</button>
             </div>
           </div>
         </div>

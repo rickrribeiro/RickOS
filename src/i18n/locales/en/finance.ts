@@ -356,5 +356,6 @@ export const finance = {
   'finance.motivoOpcional': 'Reason (optional)',
   'finance.ignorarTransacao': 'Ignore transaction',
   'finance.ignorarTransacaoConfirm': 'Ignore this transaction? It leaves income, expenses, budget and every calculation.\n\nYou can undo it with "mark as valid transaction" in the list.',
-  'finance.ignorarTransacaoHint': 'Leaves every calculation and shows dimmed in the list, with the reason.'
+  'finance.ignorarTransacaoHint': 'Leaves every calculation and shows dimmed in the list, with the reason.',
+  'finance.tirarDaLista': 'Remove from list (don\'t categorize this one)'
 }
