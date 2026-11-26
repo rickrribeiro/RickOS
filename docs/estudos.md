@@ -105,6 +105,21 @@ de método e de escala.
 de mandarim: masterclass → aprovar → abertura → uma dúvida → um follow-up que cita o fim da resposta
 anterior, com rubricas e o tamanho do contexto de cada turno (`evals/ultimo-relatorio-continuidade.md`).
 
+## Modelo de roadmap (exportar/importar a trilha)
+
+Tópico → **Exportar → 🗺️ Modelo de roadmap** baixa `<tópico>.roteiro.json`: árvore do roadmap, o
+briefing do roteiro aprovado (`roteiro.pedido` + `roteiro.plano`) e, opcionalmente, o conteúdo das
+aulas (todos os turnos) e as minhas notas. **Não** vão progresso, cartões/agenda, perguntas nem
+imagens anexadas. Home → **🗺️ Importar modelo**: prévia (itens, aulas, avisos), destino (tópico novo
+ou existente, com os itens depois dos que já estão lá) e importação numa transação só. As aulas
+abrem prontas (zero chamadas) e o briefing continua acompanhando cada aula. Código:
+`server/estudos/modelo.ts`; formato: `ModeloRoadmap` em `shared/estudos.ts`. Escrito à mão, o mínimo é:
+
+```json
+{ "formato": "rickos-roteiro", "versao": 1, "topico": { "nome": "Mandarim", "tipo": "idioma", "idiomaAlvo": "zh" },
+  "itens": [{ "titulo": "Dias e horas", "itens": [{ "titulo": "几点", "aula": { "titulo": "", "turnos": [{ "papel": "tutor", "conteudo": "明天几点见面？" }] } }] }] }
+```
+
 ## Pedir ao Codex uma segunda revisão editorial dos prompts
 
 Sem mexer no provedor nem no resto: edite **só** `shared/prompts/estudos/pedagogia/textos.ts`, suba

@@ -4,6 +4,8 @@ import type {
   IaPerfisView,
   LessonRow,
   LessonView,
+  ModeloImportOpts,
+  ModeloPreview,
   PlanRow,
   RunRow,
   TurnRow,
@@ -102,6 +104,9 @@ export interface EstudosApi {
   sync(): Promise<SyncResult>
   gitTree(): Promise<string[]>
   restoreFromRepo(): Promise<RestoreReport>
+  modeloExport(topicId: number, opts?: { aulas?: boolean; notas?: boolean }): Promise<{ nome: string; conteudo: string }>
+  modeloPreview(json: string, topicId?: number | null): Promise<ModeloPreview>
+  modeloImport(json: string, opts: ModeloImportOpts): Promise<{ topicId: number; itens: number; aulas: number; notas: number; primeiraAulaNodeId: number | null }>
   adoptPreview(subpath: string, topicId: number | null): Promise<AdoptPreview>
   adoptApply(input: AdoptApply): Promise<{ topicId: number; created: number; updated: number; skipped: number; images: number }>
 
@@ -181,6 +186,9 @@ export const ESTUDOS_METHODS: (keyof EstudosApi)[] = [
   'sync',
   'gitTree',
   'restoreFromRepo',
+  'modeloExport',
+  'modeloPreview',
+  'modeloImport',
   'adoptPreview',
   'adoptApply',
   'iaPerfis',

@@ -644,3 +644,62 @@ export interface MaterialView {
   suggestions: SuggestionRow[]
   noteSignature: string
 }
+
+// ── Modelo de roadmap (exportar/importar a trilha com aulas) ──
+
+export interface ModeloTurno {
+  papel: 'tutor' | 'eu'
+  conteudo: string
+  /** Dados do turno do tutor (feedback, pergunta aberta…), opcionais. */
+  extra?: Record<string, unknown>
+}
+
+export interface ModeloAula {
+  titulo: string
+  perguntaAberta?: string | null
+  fraseDeRetomada?: string | null
+  turnos: ModeloTurno[]
+}
+
+export interface ModeloItem {
+  titulo: string
+  descricao?: string
+  horas?: number
+  aula?: ModeloAula
+  nota?: string
+  itens?: ModeloItem[]
+}
+
+export interface ModeloRoadmap {
+  formato: 'rickos-roteiro'
+  versao: number
+  topico: { nome: string; tipo: 'tema' | 'idioma'; idiomaAlvo?: string; idiomaExplicacao?: string; objetivo?: string; categoria?: string }
+  /** Briefing que gerou a trilha: acompanha as aulas importadas. */
+  roteiro?: { pedido: string; plano?: Record<string, unknown> }
+  itens: ModeloItem[]
+  aulaGeral?: ModeloAula
+  notaGeral?: string
+}
+
+export interface ModeloPreview {
+  nome: string
+  tipo: 'tema' | 'idioma'
+  objetivo: string | null
+  pedido: string | null
+  itens: number
+  aulas: number
+  turnos: number
+  notas: number
+  raiz: { titulo: string; subitens: number; aulas: number }[]
+  erros: string[]
+  avisos: string[]
+}
+
+export interface ModeloImportOpts {
+  /** null = tópico novo. */
+  topicId: number | null
+  /** Nome do tópico novo (padrão: o do modelo). */
+  nome?: string | null
+  aulas?: boolean
+  notas?: boolean
+}

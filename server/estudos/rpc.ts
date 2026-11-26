@@ -8,6 +8,8 @@ import { listAttachments, storeAttachment } from './attachments'
 import { exportAll } from './bundle'
 import * as tutor from './tutor'
 import * as material from './material'
+import { exportarModelo, importarModelo, previaModelo } from './modelo'
+import type { ModeloImportOpts } from '../../shared/estudos'
 import { SECOES, type Secao } from '../../shared/prompts/estudos/pedagogia/schemas'
 import { diagnosticoCodex } from '../ia/motores/codex'
 import { EFFORTS_DO_MOTOR, modeloValido } from '../../shared/prompts/motores'
@@ -260,6 +262,14 @@ export function registerEstudosRpc(handle: Handle): void {
   handle('estudos:discardPlan', async (_e, planId: number) => {
     await tutor.discardPlan(id(planId))
     changed('plans')
+  })
+  // modelo de roadmap: zero chamadas de IA
+  handle('estudos:modeloExport', (_e, topicId: number, opts?: { aulas?: boolean; notas?: boolean }) => exportarModelo(id(topicId), { aulas: opts?.aulas !== false, notas: opts?.notas === true }))
+  handle('estudos:modeloPreview', (_e, json: string, topicId?: number | null) => previaModelo(String(json ?? ''), optId(topicId)))
+  handle('estudos:modeloImport', async (_e, json: string, opts: ModeloImportOpts) => {
+    const r = await importarModelo(String(json ?? ''), { topicId: optId(opts?.topicId), nome: opts?.nome ?? null, aulas: opts?.aulas !== false, notas: opts?.notas !== false })
+    changed('topics', r.topicId)
+    return r
   })
   handle('estudos:approvePlan', async (_e, planId: number, content?: unknown) => {
     const r = await tutor.approvePlan(id(planId), content)

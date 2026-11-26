@@ -7,6 +7,7 @@ import { TopicEditor, TOPIC_STATUS_LABEL } from '../components/TopicEditor'
 import { StudySearch } from '../components/StudySearch'
 import { RepoPanel, SyncButton } from '../components/RepoPanel'
 import { IaSettings } from '../components/IaSettings'
+import { ModeloImportModal, escolherModelo } from '../components/ModeloRoadmap'
 import { t as tr } from '../../../i18n'
 
 const GROUPS: LibraryGroup[] = ['ativos', 'futuros', 'antigos']
@@ -60,6 +61,7 @@ export function EstudosDashboardPage(): React.ReactElement {
   const [showSearch, setShowSearch] = useState(false)
   const [repoOpen, setRepoOpen] = useState(false)
   const [iaOpen, setIaOpen] = useState(false)
+  const [modelo, setModelo] = useState<{ arquivo: string; json: string } | null>(null)
 
   async function load(): Promise<void> {
     const [l, c, q, qs] = await Promise.all([
@@ -315,10 +317,26 @@ export function EstudosDashboardPage(): React.ReactElement {
       <div className="study-home-footer">
         <button className="btn btn-secondary btn-sm" onClick={() => setShowSearch(!showSearch)}>{tr('est.buscarConteudo')}</button>
         <button className="btn btn-secondary btn-sm" onClick={() => setIaOpen(true)}>{tr('est.iaBotao')}</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => escolherModelo().then((r) => r && setModelo(r))} title={tr('est.modeloImportDica')}>{tr('est.modeloImportBotao')}</button>
         <button className="btn btn-secondary btn-sm" onClick={() => importTopic('json')} title={tr('estudos.importarBackupJsonDeUm')}>{tr('estudos.json')}</button>
         <button className="btn btn-secondary btn-sm" onClick={() => importTopic('folder')} title={tr('estudos.importarPastaMarkdownObsidian')}>{tr('estudos.pasta')}</button>
       </div>
       {showSearch && <StudySearch />}
+      {modelo && (
+        <ModeloImportModal
+          inicial={modelo}
+          topics={lib.filter((x) => x.group !== 'antigos')}
+          onClose={() => setModelo(null)}
+          onImported={async (id, nodeId) => {
+            setModelo(null)
+            // com aula importada, cai direto nela (como ao aprovar um roteiro); senão, na visão geral
+            if (nodeId != null) {
+              await openAt(id, nodeId, 'lesson', null)
+              setPage('estudos-topic')
+            } else await openTopic(id)
+          }}
+        />
+      )}
 
       {hours.length > 0 && (
         <>

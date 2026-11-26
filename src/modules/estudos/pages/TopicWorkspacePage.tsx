@@ -8,6 +8,7 @@ import { QuestionsPanel } from '../components/QuestionsPanel'
 import { SourcePanel } from '../components/SourcePanel'
 import { LessonPanel } from '../components/LessonPanel'
 import { PlanPanel } from '../components/PlanPanel'
+import { ModeloExportModal } from '../components/ModeloRoadmap'
 import { QuizModal } from '../components/QuizModal'
 import { MaterialPanel, NoteReview } from '../components/MaterialPanel'
 import { TopicEditor } from '../components/TopicEditor'
@@ -49,6 +50,7 @@ export function TopicWorkspacePage(): React.ReactElement {
   const [planOpen, setPlanOpen] = useState(false)
   const [readerTab, setReaderTab] = useState<'fontes' | 'aula' | 'material'>('fontes')
   const [subBusy, setSubBusy] = useState(false)
+  const [modeloOpen, setModeloOpen] = useState(false)
   const [pinned, setPinned] = useState<PinnedAction | null>(null)
   const topic = topics.find((x) => x.id === activeTopicId) ?? null
 
@@ -176,6 +178,7 @@ export function TopicWorkspacePage(): React.ReactElement {
           <details className="study-more">
             <summary className="btn btn-secondary btn-sm">{tr('est.exportar')}</summary>
             <div className="study-more-menu">
+              <button className="btn btn-secondary btn-sm" onClick={() => setModeloOpen(true)} title={tr('est.modeloExportDica')}>{tr('est.modeloExportBotao')}</button>
               <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportMarkdown(topic.id))}>{tr('estudos.cadernoMd')}</button>
               <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportJson(topic.id))}>{tr('estudos.json2')}</button>
               <button className="btn btn-secondary btn-sm" onClick={() => runExport(() => window.api.study.exportFolder(topic.id))}>{tr('estudos.pasta2')}</button>
@@ -232,6 +235,7 @@ export function TopicWorkspacePage(): React.ReactElement {
       {tab === 'perguntas' && <QuestionsPanel key={selectedNodeId ?? 'topic'} />}
 
       {quizOpen && <QuizModal topic={topic} onClose={() => setQuizOpen(false)} />}
+      {modeloOpen && <ModeloExportModal topicId={topic.id} onClose={() => setModeloOpen(false)} />}
       {planOpen && (
         <PlanPanel
           topic={topicMeta}
