@@ -37,12 +37,27 @@ export function ActiveTask(): React.ReactElement {
   // Phone: the switch form is collapsed behind a "Trocar" button (CSS < 900px only).
   const [switchOpen, setSwitchOpen] = useState(false)
 
-  // Load "Tópico › Nó" options for optionally linking a focus session to a study node.
+  // One option per study topic. The session still links to a node (tasks.studyNodeId): the
+  // topic's first top-level node, so the time counts toward the topic like before.
   useEffect(() => {
     if (!projects.length) void refreshProjects()
     Promise.all([window.api.study.topics(), window.api.study.allNodes()]).then(([topics, nodes]) => {
-      const topicName = (id: number): string => topics.find((t) => t.id === id)?.name ?? '—'
-      setStudyOptions(nodes.map((n) => ({ id: n.id, label: `${topicName(n.topicId)} › ${n.title}` })).sort((a, b) => a.label.localeCompare(b.label)))
+      const rank = (n: { parentId: number | null; orderIndex: number; id: number }): [number, number, number] => [n.parentId == null ? 0 : 1, n.orderIndex, n.id]
+      const before = (a: (typeof nodes)[number], b: (typeof nodes)[number]): boolean => {
+        const ra = rank(a), rb = rank(b)
+        return ra[0] !== rb[0] ? ra[0] < rb[0] : ra[1] !== rb[1] ? ra[1] < rb[1] : ra[2] < rb[2]
+      }
+      const firstNode = new Map<number, (typeof nodes)[number]>()
+      for (const n of nodes) {
+        const cur = firstNode.get(n.topicId)
+        if (!cur || before(n, cur)) firstNode.set(n.topicId, n)
+      }
+      setStudyOptions(
+        topics
+          .filter((tp) => firstNode.has(tp.id))
+          .map((tp) => ({ id: firstNode.get(tp.id)!.id, label: tp.name }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      )
     })
   }, [])
 
