@@ -298,6 +298,19 @@ const SCHEMA = `
     createdAt TEXT NOT NULL
   );
 
+  -- regras sugeridas pela IA: 'pending' até o usuário decidir; 'rejected' fica para não sugerir de novo
+  CREATE TABLE IF NOT EXISTS finance_rule_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoryId INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    keywords TEXT NOT NULL,
+    reason TEXT,
+    matches INTEGER NOT NULL DEFAULT 0,
+    uncategorized INTEGER NOT NULL DEFAULT 0,
+    examples TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pending',
+    createdAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     categoryId INTEGER REFERENCES categories(id) ON DELETE CASCADE,
@@ -325,12 +338,7 @@ const SCHEMA = `
     closed INTEGER NOT NULL DEFAULT 0 -- 1 = encerrado a partir deste mês (carry-forward para aqui)
   );
 
-  INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (1, 'Salário', 'income', '#22c55e');
-  INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (2, 'Alimentação', 'expense', '#f59e0b');
-  INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (3, 'Transporte', 'expense', '#3b82f6');
-  INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (4, 'Moradia', 'expense', '#8b5cf6');
-  INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (5, 'Lazer', 'expense', '#ec4899');
-  INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (6, 'Outros', 'expense', '#6b7280');
+  -- categorias padrão: semeadas uma vez só, em seedFinanceCategories (db.ts) — aqui voltariam a cada boot
 
   -- ── RickOS: Viagens ──────────────────────────────────────────────────
   CREATE TABLE IF NOT EXISTS trips (
@@ -1541,6 +1549,9 @@ function matchFinanceRule(rules, categories, description, type) {
   }
   return null;
 }
+function ruleToExtend(rules, categoryId) {
+  return [...rules].sort((a, b2) => a.position - b2.position || a.id - b2.id).find((r) => !!r.active && r.categoryId === categoryId) ?? null;
+}
 function countsInTotals(t) {
   return !t.ignoredReason && !t.investment && !t.transfer;
 }
@@ -2520,6 +2531,24 @@ function runMigrations(database) {
   }
   database.run(`PRAGMA user_version = ${target}`);
 }
+function seedFinanceCategories(database) {
+  const flag = database.exec("SELECT 1 FROM settings WHERE key = 'finance_categories_seeded'");
+  if (!flag[0]?.values?.length) {
+    const any = database.exec("SELECT 1 FROM categories LIMIT 1");
+    if (!any[0]?.values?.length) {
+      database.run(`
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (1, 'Salário', 'income', '#22c55e');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (2, 'Alimentação', 'expense', '#f59e0b');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (3, 'Transporte', 'expense', '#3b82f6');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (4, 'Moradia', 'expense', '#8b5cf6');
+        INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (5, 'Lazer', 'expense', '#ec4899');
+      `);
+      database.run("UPDATE categories SET fixedIncome = 1 WHERE id = 1 AND type = 'income'");
+    }
+    database.run("INSERT OR IGNORE INTO settings (key, value) VALUES ('finance_categories_seeded', '1')");
+  }
+  database.run("INSERT OR IGNORE INTO categories (id, name, type, color) VALUES (6, 'Outros', 'expense', '#6b7280')");
+}
 let opening = null;
 async function getDb() {
   if (db$3) return db$3;
@@ -2542,6 +2571,7 @@ async function openDb() {
   registerFunctions(fresh);
   fresh.run(SCHEMA);
   runMigrations(fresh);
+  seedFinanceCategories(fresh);
   seedAiLibrary(fresh);
   db$3 = fresh;
   saveDb();
@@ -2765,6 +2795,10 @@ const rpc$3 = {
   "rpc.notFound": "not found"
 };
 const services$2 = {
+  "services.financas.semTransacoes": "Nenhuma transação para analisar neste período.",
+  "services.financas.iaSemJson": "A IA não devolveu uma resposta válida. Tente de novo.",
+  "services.financas.sugestaoNaoEncontrada": "Sugestão não encontrada.",
+  "services.financas.regraInvalida": "Escolha uma categoria e ao menos uma palavra-chave.",
   "services.abraAlgumasNoticiasEmLer": 'Abra algumas notícias em "Ler mais" (ou cadastre categorias próprias) antes de sugerir memórias.',
   "services.googleNewsRespondeu": "Google News respondeu {status}",
   "services.projetoNaoEncontrado": "Projeto não encontrado",
@@ -3052,6 +3086,10 @@ const common$1 = {
   "common.unknownError": "unknown error"
 };
 const services$1 = {
+  "services.financas.semTransacoes": "No transactions to analyze in this period.",
+  "services.financas.iaSemJson": "The AI did not return a valid answer. Try again.",
+  "services.financas.sugestaoNaoEncontrada": "Suggestion not found.",
+  "services.financas.regraInvalida": "Pick a category and at least one keyword.",
   "services.alert.noNextAction": "In focus with no next action",
   "services.alert.blocked": "Blocked: {blocker}",
   "services.alert.pauseDue": "Pause ended on {date} — resume or decide",
@@ -3356,6 +3394,10 @@ const common = {
   "common.unknownError": "error desconocido"
 };
 const services = {
+  "services.financas.semTransacoes": "No hay transacciones para analizar en este período.",
+  "services.financas.iaSemJson": "La IA no devolvió una respuesta válida. Inténtalo de nuevo.",
+  "services.financas.sugestaoNaoEncontrada": "Sugerencia no encontrada.",
+  "services.financas.regraInvalida": "Elige una categoría y al menos una palabra clave.",
   "services.alert.noNextAction": "En foco sin próxima acción",
   "services.alert.blocked": "Bloqueado: {blocker}",
   "services.alert.pauseDue": "La pausa venció el {date} — retomar o decidir",
@@ -4460,6 +4502,47 @@ async function moveFinanceRule(id2, dir) {
   [rules[i], rules[j]] = [rules[j], rules[i]];
   rules.forEach((r, pos) => run$2(db2, "UPDATE finance_rules SET position = ? WHERE id = ?", [pos, r.id]));
 }
+async function getRuleSuggestions(status2) {
+  const db2 = await getDb();
+  return status2 ? getAll(db2, "SELECT * FROM finance_rule_suggestions WHERE status = ? ORDER BY uncategorized DESC, matches DESC, id", [status2]) : getAll(db2, "SELECT * FROM finance_rule_suggestions ORDER BY id");
+}
+async function insertRuleSuggestion(r) {
+  const db2 = await getDb();
+  run$2(db2, "INSERT INTO finance_rule_suggestions (categoryId, keywords, reason, matches, uncategorized, examples, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
+    r.categoryId,
+    r.keywords,
+    r.reason,
+    r.matches,
+    r.uncategorized,
+    r.examples,
+    "pending",
+    (/* @__PURE__ */ new Date()).toISOString()
+  ]);
+  return getOne(db2, "SELECT MAX(id) AS id FROM finance_rule_suggestions")?.id ?? 0;
+}
+async function updateRuleSuggestion(id2, r) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE finance_rule_suggestions SET keywords = ?, reason = ?, matches = ?, uncategorized = ?, examples = ? WHERE id = ?", [
+    r.keywords,
+    r.reason,
+    r.matches,
+    r.uncategorized,
+    r.examples,
+    id2
+  ]);
+}
+async function getRuleSuggestion(id2) {
+  const db2 = await getDb();
+  return getOne(db2, "SELECT * FROM finance_rule_suggestions WHERE id = ?", [id2]) ?? null;
+}
+async function setRuleSuggestionStatus(id2, status2) {
+  const db2 = await getDb();
+  run$2(db2, "UPDATE finance_rule_suggestions SET status = ? WHERE id = ?", [status2, id2]);
+}
+async function deleteRuleSuggestion(id2) {
+  const db2 = await getDb();
+  run$2(db2, "DELETE FROM finance_rule_suggestions WHERE id = ?", [id2]);
+}
 async function setTransactionsCategory(changes) {
   const db2 = await getDb();
   for (const c of changes) run$2(db2, "UPDATE transactions SET categoryId = ?, transfer = 0 WHERE id = ?", [c.categoryId, c.id]);
@@ -4681,9 +4764,9 @@ async function getInvestmentHistory() {
   const db2 = await getDb();
   return getAll(db2, "SELECT * FROM investment_history ORDER BY month");
 }
-async function createInvestment(name, type, amount, currency2, month, groupKey) {
+async function createInvestment(name, type, amount, currency2, month, groupKey2) {
   const db2 = await getDb();
-  run$2(db2, "INSERT INTO investments (name, type, amount, currency, groupKey) VALUES (?, ?, ?, ?, ?)", [name, type, amount, currency2, groupKey ?? null]);
+  run$2(db2, "INSERT INTO investments (name, type, amount, currency, groupKey) VALUES (?, ?, ?, ?, ?)", [name, type, amount, currency2, groupKey2 ?? null]);
   const id2 = lastInsertId(db2);
   run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id2, month || currentMonthKey(), amount]);
   return getOne(db2, "SELECT * FROM investments WHERE id = ?", [id2]);
@@ -4717,9 +4800,9 @@ async function renameInvestment(id2, name) {
   const db2 = await getDb();
   run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id2]);
 }
-async function setInvestmentGroup(id2, groupKey) {
+async function setInvestmentGroup(id2, groupKey2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE investments SET groupKey = ? WHERE id = ?", [groupKey, id2]);
+  run$2(db2, "UPDATE investments SET groupKey = ? WHERE id = ?", [groupKey2, id2]);
 }
 async function getInvestmentGroups() {
   const db2 = await getDb();
@@ -6136,6 +6219,57 @@ Contexto: {{contexto}}`,
   preparar: (p) => ({ nome: p.nome, local: p.local || "—", interesses: p.interesses ?? "—", ultimaConversa: p.ultimaConversa ?? "—", contexto: p.contexto ?? "—" }),
   exemplo: { nome: ex("nome"), local: ex("local"), interesses: ex("interesses"), ultimaConversa: ex("data"), contexto: ex("contexto") }
 });
+const financasSugerirRegras = definirChamada({
+  id: "financas.sugerirRegras",
+  modulo: "financas",
+  tipo: "executa",
+  motor: "claude-code",
+  modelo: CLAUDE_MODEL,
+  effort: null,
+  alternativas: ALT_CODEX,
+  arquivo: "financas/sugerirRegras.ts",
+  usadoEm: "server/services/financeRuleSuggestions.ts",
+  template: `Você ajuda a categorizar automaticamente transações bancárias. Uma REGRA é uma lista de palavras-chave + uma categoria: se a descrição da transação (em minúsculas, sem acentos) CONTÉM qualquer uma das palavras, ela recebe a categoria. Regras só mexem em transações sem categoria ou em "Outros".
+
+Período analisado: {{periodo}}
+
+Categorias disponíveis (use o nome EXATO e respeite o tipo — gasto só com categoria de gasto, receita só com de receita):
+{{categorias}}
+
+Transações, agrupadas por descrição (tipo · quantas vezes · descrição de exemplo → categoria atual):
+<transacoes>
+{{transacoes}}
+</transacoes>
+
+Regras que já existem (NUNCA sugira uma palavra que já está nelas):
+{{regrasExistentes}}
+
+Sugestões que o usuário já RECUSOU (não sugira de novo a mesma palavra para a mesma categoria):
+{{recusadas}}
+
+Tarefa: sugira regras que categorizem as transações "sem categoria" ou em "Outros". Use as transações já categorizadas como pista do que o usuário prefere (ex.: se "IFOOD" está em Alimentação, "IFD*" provavelmente também).
+- Palavras-chave: trechos que APARECEM nas descrições, em minúsculas e sem acento, específicos o bastante para não pegar outra coisa (ex.: "uber", "ifood", "smart fit"). Nunca palavras genéricas como "pix", "compra", "pagamento", "transferencia", "debito", "cartao", "ltda", nomes de pessoas soltos ou números.
+- Uma entrada por categoria, juntando os estabelecimentos dela. Se a categoria já tem regra, mande só as palavras NOVAS: elas serão acrescentadas à regra existente (não crie uma regra paralela).
+- Só sugira quando tiver confiança razoável na categoria. Na dúvida, não sugira.
+- No máximo 25 regras.
+
+Responda SÓ com JSON, sem texto antes ou depois:
+{"regras":[{"palavras":["uber","99app"],"categoria":"Transporte","tipo":"gasto","motivo":"frase curta"}]}`,
+  preparar: (p) => ({
+    periodo: p.periodo,
+    categorias: p.categorias,
+    transacoes: p.transacoes,
+    regrasExistentes: p.regrasExistentes || "(nenhuma)",
+    recusadas: p.recusadas || "(nenhuma)"
+  }),
+  exemplo: {
+    periodo: ex("mês ou todos os meses"),
+    categorias: ex("gasto: Alimentação, Transporte… / receita: Salário…"),
+    transacoes: ex('gasto · 4× · "UBER *TRIP" → sem categoria'),
+    regrasExistentes: ex("ifood → Alimentação"),
+    recusadas: ex("amazon → Lazer")
+  }
+});
 const estudosFlashcards = definirChamada({
   id: "estudos.flashcards",
   modulo: "estudos",
@@ -6174,12 +6308,22 @@ const estudosQuiz = definirChamada({
   alternativas: ALT_CLAUDE,
   arquivo: "estudos/quiz.ts",
   usadoEm: "src/modules/estudos/components/QuizModal.tsx",
-  template: `Crie um quiz de múltipla escolha para testar meu conhecimento sobre "{{topico}}", com base APENAS no material abaixo.
+  template: `Crie um quiz de múltipla escolha para testar se eu APRENDI o conteúdo de "{{topico}}", com base APENAS no material abaixo (minhas anotações).
 
 Responda APENAS com JSON válido (sem markdown, sem texto fora do JSON), um array no formato:
 [{ "question": "…", "options": ["a","b","c","d"], "answerIndex": 0 }]
 
-Regras: 5 a 8 questões; 4 alternativas cada; uma única correta (answerIndex 0-based); perguntas claras e sem ambiguidade.
+O que perguntar:
+- Só sobre o CONTEÚDO estudado: conceitos, fatos, relações, causas e consequências, aplicação num caso, diferença entre ideias parecidas, vocabulário/estruturas (se for idioma).
+- Prefira perguntas que exijam entender ou aplicar, não só reconhecer uma frase copiada da nota.
+- As linhas "## …" são só os títulos das seções onde as anotações estão guardadas: use-as como contexto, NUNCA como assunto da pergunta.
+
+Nunca pergunte:
+- sobre a estrutura do material (título, nome ou ordem de seção, quantos itens há, formatação, o que "o texto/a nota/o material" diz ou menciona);
+- sobre metadados (autor, data, fonte, nome do tópico);
+- algo que não esteja no material ou que dependa de decorar a redação exata.
+
+Regras: de 3 a 8 questões, conforme o material render (com pouco conteúdo, menos questões; nunca encha com perguntas fracas); 4 alternativas plausíveis do mesmo tipo, sem "todas/nenhuma das anteriores"; uma única correta (answerIndex 0-based, varie a posição); enunciado claro, autossuficiente e sem ambiguidade.
 
 Material:
 """
@@ -6188,19 +6332,21 @@ Material:
   preparar: (p) => ({ topico: p.topico, material: p.material }),
   exemplo: { topico: ex("tópico"), material: ex("anotações do tópico") }
 });
-const VERSAO_PEDAGOGIA = "estudos-pedagogia-2026-11-26.1";
+const VERSAO_PEDAGOGIA = "estudos-pedagogia-2026-11-27.1";
 const A_MASTERCLASS = `Você é meu mentor neste assunto. A entrada pode ser tão curta quanto “quero estudar X para conseguir Y”. Transforme isso em uma formação que me dê condições de fazer Y com autonomia. Comece identificando a situação na qual vou usar o que aprender, o que já sei, quais fundamentos ainda preciso construir e qual demonstração final revelará que aprendi. Aproveite meus materiais e contexto autorizado. Se faltar algo que mude profundamente a trilha, faça até duas perguntas curtas. Caso contrário, declare a suposição, entregue a proposta e deixe que eu a edite.
 
 Desenhe primeiro o mapa completo, em partes e módulos progressivos. Escolha a quantidade pela dificuldade do objetivo. Uma formação de engenharia pode justificar 12 módulos e workshops; um objetivo delimitado merece uma trilha menor. O mapa precisa revelar o conteúdo de verdade: dê a cada módulo uma pergunta central específica, os conceitos e relações que devo compreender, um exemplo ligado à minha situação, uma atividade, uma pergunta diagnóstica e um critério observável para avançar. Mostre por que a ordem faz sentido e quais aprofundamentos são opcionais. Teste a cobertura caminhando de trás para frente a partir da entrega final. Se um passo indispensável ficou implícito, inclua-o.
 
 Para engenharia, progrida do panorama ponta a ponta para mecanismos, alternativas, condições de falha, custos, experimentos e decisões. Aproveite sistemas que já conheço para construir analogias e indique onde elas deixam de funcionar. Preserve as decisões ainda abertas até eu conhecer os critérios. Termine em workshops que produzam a entrega desejada, por exemplo uma decisão documentada e um experimento que possa contrariá-la. Para idiomas, parta de uma situação comunicativa e distribua compreensão, produção, vocabulário, estruturas, registro e revisão em contextos diferentes. Escolha o que treinar conforme a habilidade final. Se a meta for conversar, inclua turnos de diálogo e situações inesperadas; se for ler, trabalhe leitura de material adequado e inferência pelo contexto.
 
-Na proposta inicial, entregue o mapa e uma abertura concreta da primeira aula. Torne visível o primeiro passo que posso fazer hoje. Ao aceitar o plano e abrir a primeira aula, reutilize essa abertura. Avance de módulo quando eu pedir. Fatos que dependem de versão, preço ou disponibilidade precisam de fonte verificável; se não há fonte acessível, registre o que falta conferir. Não invente links, resultados de testes ou conhecimentos meus.
+Registre com as minhas palavras o que já sei, as restrições que declarei, como prefiro aprender e as decisões que deixei em aberto: elas acompanham todas as aulas da trilha, e as decisões em aberto continuam abertas até eu ter os critérios.
+
+Na proposta inicial, entregue o mapa e a primeira aula já começando. A abertura não anuncia o que vou estudar: ela ensina. Em engenharia, abra por dentro um mecanismo central do primeiro módulo, percorra um exemplo da minha situação com começo, meio e fim (quem envia o quê, em que ordem, o que cada parte sabe em cada instante, o que dá errado) e, quando eu tiver experiência próxima, parta dela e diga onde ela deixa de valer. Só então faça uma pergunta que eu consiga responder usando o que acabou de ser explicado. Em idioma, comece por um diálogo curto da situação no idioma-alvo, com leitura e tradução, explique só o necessário das estruturas para eu produzir a minha fala e termine me dando a vez no diálogo. A profundidade acompanha o objetivo: uma decisão de arquitetura merece uma explicação densa; um objetivo delimitado, uma abertura curta. Torne visível também o primeiro passo que posso fazer hoje. Ao aceitar o plano e abrir a primeira aula, reutilize essa abertura sem gerar outra. Avance de módulo quando eu pedir. Fatos que dependem de versão, preço ou disponibilidade precisam de fonte verificável; se não há fonte acessível, registre o que falta conferir. Não invente links, resultados de testes ou conhecimentos meus.
 
 Teste de qualidade antes de responder: se eu trocar o assunto no título, a maior parte deste roteiro ainda serviria? Se sim, substitua os módulos genéricos por perguntas, casos e entregas que só façam sentido para meu objetivo.`;
-const B_AULA = `Retome a pergunta aberta, o módulo, minhas tentativas e a última dúvida. Comece por uma situação concreta em que o conceito faz diferença. Construa um modelo mental, abra o mecanismo por dentro e percorra um exemplo do começo ao fim. Escolha um segundo exemplo em que uma premissa muda e peça que eu preveja o efeito. Quando existirem alternativas plausíveis, mostre em que circunstância cada uma serve e que custo implica. Use diagrama, código, tabela, frase ou diálogo só quando isso realmente facilitar entender. Para idiomas, ajuste o idioma-alvo, o nível de apoio e o registro; aceite formulações válidas alternativas.
+const B_AULA = `Retome a pergunta aberta, o módulo, minhas tentativas e a última dúvida. Use o briefing do roteiro: parta do que já sei (aproveite essa experiência e diga onde ela deixa de valer), respeite minhas restrições e preferências e não feche por mim as decisões em aberto. Comece por uma situação concreta em que o conceito faz diferença. Construa um modelo mental, abra o mecanismo por dentro e percorra um exemplo do começo ao fim. Escolha um segundo exemplo em que uma premissa muda e peça que eu preveja o efeito. Quando existirem alternativas plausíveis, mostre em que circunstância cada uma serve e que custo implica. Use diagrama, código, tabela, frase ou diálogo só quando isso realmente facilitar entender. Para idiomas, ajuste o idioma-alvo, o nível de apoio e o registro; aceite formulações válidas alternativas.
 
-Conduza um turno de cada vez. Se eu fizer uma pergunta lateral, responda-a, marque o ponto de retorno e continue dali. Se eu disser que não entendi, mude a representação ou construa um exemplo menor. Quando eu responder, identifique o que entendi, o ponto específico a corrigir e uma próxima tentativa. Se eu pedir diretamente a explicação ou solução, forneça-a. Separe minha resposta, sua explicação e o que ainda é hipótese. Antes de encerrar, ofereça uma frase de retomada. Decisões, notas e cartões só são incorporados por ação minha.`;
+Conduza um turno de cada vez. Se eu fizer uma pergunta lateral, responda-a de verdade, ligue a resposta ao que está sendo ensinado, marque o ponto de retorno e termine retomando a pergunta da aula. Se eu me referir a um detalhe da sua resposta anterior, use o texto dela, que vem completo no contexto. Se eu disser que não entendi, mude a representação ou construa um exemplo menor. Quando eu responder, identifique o que entendi, o ponto específico a corrigir e uma próxima tentativa. Se eu pedir diretamente a explicação ou solução, forneça-a. Separe minha resposta, sua explicação e o que ainda é hipótese. Antes de encerrar, ofereça uma frase de retomada. Decisões, notas e cartões só são incorporados por ação minha.`;
 const C_PACOTE = `Leia o objetivo, o módulo, a nota ou aula selecionada e as tentativas relevantes. Cada seção tem uma finalidade própria. Na explicação, use um exemplo que esclareça o mecanismo. No resumo, preserve o fio da ideia. Nos exercícios, dê um problema solucionável, uma pista opcional e critérios ou solução em campos separados. Nas perguntas socráticas, desenhe uma progressão do exemplo concreto ao princípio. Na revisão ativa, peça que eu recupere de memória algo importante; guarde a referência para depois da tentativa. Nos cartões, priorize conceitos que preciso distinguir e erros que já cometi. Se eu escolher cobertura de vocabulário, cubra o conjunto selecionado e evite duplicatas. Para a revisão da nota e os subtópicos, aplique as regras D e E. Não repita a mesma pergunta em cinco formatos. Se houver apenas nota externa, trabalhe com ela; se houver apenas aula gerada, prepare prática sobre a aula e deixe a revisão autoral vazia.`;
 const D_REVISAO = `Leia como um colega que quer entender exatamente o que eu quis dizer. Preserve meu português, minhas abreviações, analogias, exemplos, informalidade e ordem de raciocínio. Procure apenas intervenções com ganho real: conceito importante que ficou implícito, ambiguidade que muda o sentido, relação causal ausente, afirmação que precisa de ressalva ou exemplo que torna uma explicação utilizável. Cite o menor trecho exato que ancora a proposta. Explique o motivo em uma frase e proponha o menor acréscimo ou ajuste possível. Uma dúvida sobre a minha intenção deve virar uma pergunta. Diferencie simplificação aceitável de erro factual. Se a anotação já cumpre seu papel, devolva zero propostas. Toda sugestão editorial fica fora da nota até eu aprová-la.`;
 const E_SUBTOPICOS = `Compare o objetivo, o mapa completo e as notas selecionadas. Para cada lacuna real, diga qual capacidade fica comprometida, onde o novo subtópico entra e por que vale um nó próprio. Use o ID do pai existente e a posição sugerida. Se cabe em uma linha da nota, prefira uma sugestão editorial. Respeite sinônimos, nós concluídos e recusas anteriores. Diferencie pré-requisito essencial de aprofundamento opcional. Retorne zero itens quando houver cobertura suficiente.`;
@@ -6258,7 +6404,7 @@ ${A_MASTERCLASS}
 {{contexto}}
 
 ## Contrato de saída
-JSON conforme o schema: perguntas (0 a 2; preencha só se a resposta mudar profundamente a trilha — mesmo assim entregue o mapa com as suposições declaradas), suposicoes, situacao, jaSei, fundamentos, demonstracaoFinal, partes[{titulo, porque, modulos[...]}], ordemJustificativa, aprofundamentosOpcionais, workshops, coberturaReversa, aberturaPrimeiraAula, aConferir.`,
+JSON conforme o schema: perguntas (0 a 2; preencha só se a resposta mudar profundamente a trilha — mesmo assim entregue o mapa com as suposições declaradas), suposicoes, situacao, jaSei, restricoes, preferenciasEnsino, decisoesEmAberto, fundamentos, demonstracaoFinal, partes[{titulo, porque, modulos[...]}], ordemJustificativa, aprofundamentosOpcionais, workshops, coberturaReversa, aberturaPrimeiraAula ({titulo, situacao, aula — a primeira aula em Markdown, que ensina antes de perguntar —, primeiroPasso, pergunta}), aConferir.`,
   preparar: prepararTutor,
   exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("objetivo, mapa atual, notas"), pedido: ex("quero estudar X para conseguir Y") }
 });
@@ -6311,7 +6457,10 @@ const SCHEMA_MASTERCLASS = obj({
   perguntas: arr$1(str$1(), "até duas perguntas curtas, só se a resposta mudar profundamente a trilha; senão []"),
   suposicoes: arr$1(str$1()),
   situacao: str$1("situação em que vou usar o que aprender"),
-  jaSei: str$1(),
+  jaSei: str$1("o que eu disse que já sei, com as minhas palavras"),
+  restricoes: arr$1(str$1(), "restrições que declarei (plataforma, escala, prazo, tecnologia…); [] se nenhuma"),
+  preferenciasEnsino: arr$1(str$1(), "como pedi para ser ensinado; [] se não disse"),
+  decisoesEmAberto: arr$1(str$1(), "decisões que deixei em aberto e que a trilha NÃO deve tomar por mim"),
   fundamentos: arr$1(str$1()),
   demonstracaoFinal: str$1(),
   partes: arr$1(obj({ titulo: str$1(), porque: str$1(), modulos: arr$1(MODULO) })),
@@ -6319,7 +6468,13 @@ const SCHEMA_MASTERCLASS = obj({
   aprofundamentosOpcionais: arr$1(str$1()),
   workshops: arr$1(obj({ titulo: str$1(), entrega: str$1(), experimento: str$1() })),
   coberturaReversa: str$1("teste de trás para frente a partir da entrega final"),
-  aberturaPrimeiraAula: obj({ titulo: str$1(), situacao: str$1(), primeiroPasso: str$1("o que posso fazer hoje"), pergunta: str$1() }),
+  aberturaPrimeiraAula: obj({
+    titulo: str$1(),
+    situacao: str$1("a situação concreta, em 1–2 frases"),
+    aula: str$1("a primeira aula começando de verdade, em Markdown: ensina antes de perguntar (ver instrução A)"),
+    primeiroPasso: str$1("o que posso fazer hoje"),
+    pergunta: str$1("a pergunta que fecha a abertura e aproveita o que ela acabou de explicar")
+  }),
   aConferir: arr$1(str$1(), "fatos que dependem de versão/preço/disponibilidade sem fonte acessível")
 });
 const SCHEMA_AULA = obj({
@@ -7602,6 +7757,7 @@ const DEFINICOES = {
   "passagens.skyscanner": passagensSkyscanner,
   "viagens.hospedagem": viagensHospedagem,
   "crm.retomarContato": crmRetomarContato,
+  "financas.sugerirRegras": financasSugerirRegras,
   "noticias.resumo": noticiasResumo
 };
 Object.values(DEFINICOES);
@@ -78362,13 +78518,13 @@ async function deleteRecurringBlock(eventId, email) {
   }
 }
 const FALLBACK_CATEGORY_ID = 6;
-const uncategorized = (t) => t.categoryId == null || t.categoryId === FALLBACK_CATEGORY_ID;
+const uncategorized$1 = (t) => t.categoryId == null || t.categoryId === FALLBACK_CATEGORY_ID;
 async function categorizeNew(rows) {
   const rules = await getFinanceRules();
   if (!rules.some((r) => r.active)) return rows;
   const categories = await getCategories();
   return rows.map((r) => {
-    if (!uncategorized(r)) return r;
+    if (!uncategorized$1(r)) return r;
     const rule = matchFinanceRule(rules, categories, r.description, r.type);
     return rule ? { ...r, categoryId: rule.categoryId, transfer: 0 } : r;
   });
@@ -78377,7 +78533,7 @@ async function previewFinanceRules(month) {
   const [rules, categories, txs] = await Promise.all([getFinanceRules(), getCategories(), getTransactions(month)]);
   const out = [];
   for (const t of txs) {
-    if (!uncategorized(t) || t.ignoredReason) continue;
+    if (!uncategorized$1(t) || t.ignoredReason) continue;
     const rule = matchFinanceRule(rules, categories, t.description, t.type);
     if (rule && rule.categoryId !== t.categoryId) {
       out.push({ id: t.id, date: t.date, description: t.description, amount: t.amount, currency: t.currency, type: t.type, toCategoryId: rule.categoryId, ruleId: rule.id });
@@ -78730,6 +78886,166 @@ async function reclassifyInvestmentFlags() {
     (want ? toInvestment : fromInvestment).push(`${t.date} ${t.type === "income" ? "+" : "-"}${t.amount} ${t.description ?? ""}`);
   }
   return { checked, toInvestment, fromInvestment };
+}
+const MAX_GRUPOS = 300;
+const MAX_REGRAS = 25;
+const MIN_PALAVRA = 3;
+const uncategorized = (categoryId) => categoryId == null || categoryId === FALLBACK_CATEGORY_ID;
+function groupKey(description) {
+  return normalizeText(description).replace(/[0-9]+/g, " ").replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function firstJson$2(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error(tt("services.financas.iaSemJson"));
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    throw new Error(tt("services.financas.iaSemJson"));
+  }
+}
+function toSuggestion$2(r) {
+  let examples = [];
+  try {
+    const v = JSON.parse(r.examples);
+    if (Array.isArray(v)) examples = v.filter((x) => typeof x === "string");
+  } catch {
+  }
+  return { id: r.id, categoryId: r.categoryId, keywords: r.keywords, reason: r.reason, matches: r.matches, uncategorized: r.uncategorized, examples, createdAt: r.createdAt, targetRuleId: null, targetKeywords: null };
+}
+function existsInRules(rules, categoryId, k) {
+  return rules.some((r) => parseKeywords(r.keywords).some((rk) => rk === k || r.categoryId === categoryId && k.includes(rk)));
+}
+async function listRuleSuggestions() {
+  const [rows, rules] = await Promise.all([getRuleSuggestions("pending"), getFinanceRules()]);
+  const out = [];
+  for (const r of rows) {
+    const all2 = parseKeywords(r.keywords);
+    const keep = all2.filter((k) => !existsInRules(rules, r.categoryId, k));
+    if (!keep.length) {
+      await deleteRuleSuggestion(r.id);
+      continue;
+    }
+    const s2 = toSuggestion$2(keep.length === all2.length ? r : { ...r, keywords: keep.join(", ") });
+    if (keep.length !== all2.length) await updateRuleSuggestion(r.id, { ...r, keywords: s2.keywords });
+    const target = ruleToExtend(rules, r.categoryId);
+    out.push({ ...s2, targetRuleId: target?.id ?? null, targetKeywords: target?.keywords ?? null });
+  }
+  return out;
+}
+let running$4 = null;
+function isAnalyzingRules() {
+  return running$4 != null;
+}
+function suggestFinanceRules(month) {
+  if (!running$4) running$4 = analyze(month).finally(() => running$4 = null);
+  return running$4;
+}
+async function analyze(month) {
+  const [categories, rules, all2, previous] = await Promise.all([getCategories(), getFinanceRules(), getTransactions(month), getRuleSuggestions()]);
+  const txs = all2.filter((t) => countsInTotals(t) && (t.description ?? "").trim());
+  if (!txs.length) throw new Error(tt("services.financas.semTransacoes"));
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const tipo = (type) => type === "income" ? "receita" : "gasto";
+  const pendingRows = previous.filter((p) => p.status === "pending");
+  const asRule = (p, i) => ({ id: -p.id, categoryId: p.categoryId, keywords: p.keywords, active: 1, position: 1e6 + i });
+  const cobertura = [...rules, ...pendingRows.map(asRule)];
+  const groups = /* @__PURE__ */ new Map();
+  for (const t of txs) {
+    if (matchFinanceRule(cobertura, categories, t.description, t.type)) continue;
+    const key = `${t.type}|${groupKey(t.description)}`;
+    const g = groups.get(key) ?? { type: t.type, sample: t.description.trim(), count: 0, cats: /* @__PURE__ */ new Map(), pending: false };
+    g.count++;
+    const cat = uncategorized(t.categoryId) ? "sem categoria" : catById.get(t.categoryId)?.name ?? "sem categoria";
+    if (cat === "sem categoria") g.pending = true;
+    g.cats.set(cat, (g.cats.get(cat) ?? 0) + 1);
+    groups.set(key, g);
+  }
+  const lista = [...groups.values()].sort((a, b2) => Number(b2.pending) - Number(a.pending) || b2.count - a.count).slice(0, MAX_GRUPOS);
+  if (!lista.some((g) => g.pending)) return listRuleSuggestions();
+  const transacoes = lista.map((g) => {
+    const cats = [...g.cats.entries()].sort((a, b2) => b2[1] - a[1]).map(([n]) => n).join(" / ");
+    return `${tipo(g.type)} · ${g.count}× · "${g.sample.slice(0, 80)}" → ${cats}`;
+  }).join("\n");
+  const porTipo = (type) => categories.filter((c) => c.type === type && c.id !== FALLBACK_CATEGORY_ID).map((c) => c.name).join(", ") || "(nenhuma)";
+  const categoriasTxt = `gasto: ${porTipo("expense")}
+receita: ${porTipo("income")}`;
+  const regraTxt = (keywords, categoryId) => `${keywords} → ${catById.get(categoryId)?.name ?? "?"}`;
+  const regrasExistentes = [
+    ...rules.filter((r) => r.active).map((r) => regraTxt(r.keywords, r.categoryId)),
+    ...pendingRows.map((p) => `${regraTxt(p.keywords, p.categoryId)} (sugestão pendente)`)
+  ].join("\n");
+  const rejected = previous.filter((p) => p.status === "rejected");
+  const recusadas = rejected.map((p) => regraTxt(p.keywords, p.categoryId)).join("\n");
+  const command = await getSetting("claude_command") || "claude";
+  const resposta = await executarChamada(
+    "financas.sugerirRegras",
+    { periodo: month ?? "todos os meses", categorias: categoriasTxt, transacoes, regrasExistentes, recusadas },
+    { claudeCommand: command, timeoutMs: 24e4, usage: { source: "financas" } }
+  );
+  const json2 = firstJson$2(resposta);
+  const propostas = Array.isArray(json2.regras) ? json2.regras.slice(0, MAX_REGRAS) : [];
+  const recusadasPorCat = /* @__PURE__ */ new Map();
+  for (const p of rejected) recusadasPorCat.set(p.categoryId, [...recusadasPorCat.get(p.categoryId) ?? [], ...parseKeywords(p.keywords)]);
+  const catByName = new Map(categories.map((c) => [`${c.type}|${normalizeText(c.name)}`, c]));
+  const descs = txs.map((t) => ({ t, d: normalizeText(t.description) }));
+  const livre = ({ t }) => uncategorized(t.categoryId) && !matchFinanceRule(cobertura, categories, t.description, t.type);
+  const porCategoria = /* @__PURE__ */ new Map();
+  for (const p of pendingRows) if (!porCategoria.has(p.categoryId)) porCategoria.set(p.categoryId, { id: p.id, keywords: parseKeywords(p.keywords), reason: p.reason });
+  for (const raw of propostas) {
+    if (!raw || typeof raw !== "object") continue;
+    const p = raw;
+    const type = p.tipo === "receita" ? "income" : "expense";
+    const cat = typeof p.categoria === "string" ? catByName.get(`${type}|${normalizeText(p.categoria)}`) : void 0;
+    if (!cat || cat.id === FALLBACK_CATEGORY_ID) continue;
+    const recusadasCat = recusadasPorCat.get(cat.id) ?? [];
+    const candidatas = (Array.isArray(p.palavras) ? p.palavras : typeof p.palavras === "string" ? p.palavras.split(",") : []).filter((k) => typeof k === "string").map((k) => normalizeText(k)).filter((k) => k.length >= MIN_PALAVRA && !k.includes(",") && !recusadasCat.some((r) => k.includes(r)) && !existsInRules(rules, cat.id, k));
+    const novas = [];
+    for (const k of [...new Set(candidatas)]) {
+      const alvo = descs.filter((x) => x.t.type === type && x.d.includes(k) && livre(x));
+      if (!alvo.length) continue;
+      novas.push(k);
+      cobertura.push({ id: -1, categoryId: cat.id, keywords: k, active: 1, position: 2e6 + cobertura.length });
+    }
+    if (!novas.length) continue;
+    const atual = porCategoria.get(cat.id);
+    const keywords = [...atual?.keywords ?? [], ...novas];
+    const hits = descs.filter(({ t, d }) => t.type === type && keywords.some((k) => d.includes(k)));
+    const pendentes = hits.filter(({ t }) => uncategorized(t.categoryId) && !matchFinanceRule(rules, categories, t.description, t.type));
+    const row = {
+      keywords: keywords.join(", "),
+      reason: atual?.reason ?? (typeof p.motivo === "string" ? p.motivo.trim().slice(0, 200) || null : null),
+      matches: hits.length,
+      uncategorized: pendentes.length,
+      examples: JSON.stringify([...new Set(pendentes.map(({ t }) => t.description.trim()))].slice(0, 3))
+    };
+    if (atual) {
+      await updateRuleSuggestion(atual.id, row);
+      atual.keywords = keywords;
+    } else {
+      const id2 = await insertRuleSuggestion({ categoryId: cat.id, ...row });
+      porCategoria.set(cat.id, { id: id2, keywords, reason: row.reason });
+    }
+  }
+  return listRuleSuggestions();
+}
+async function approveRuleSuggestion(id2, categoryId, keywords) {
+  const s2 = await getRuleSuggestion(id2);
+  if (!s2) throw new Error(tt("services.financas.sugestaoNaoEncontrada"));
+  const novas = parseKeywords(keywords);
+  if (!novas.length || !categoryId) throw new Error(tt("services.financas.regraInvalida"));
+  const target = ruleToExtend(await getFinanceRules(), categoryId);
+  if (target) {
+    const existentes = parseKeywords(target.keywords);
+    const add = novas.filter((k) => !existentes.includes(k));
+    if (add.length) await updateFinanceRule(target.id, target.categoryId, [target.keywords.trim(), ...add].join(", "), true);
+  } else {
+    await createFinanceRule(categoryId, novas.join(", "));
+  }
+  await deleteRuleSuggestion(id2);
+}
+async function rejectRuleSuggestion(id2) {
+  await setRuleSuggestionStatus(id2, "rejected");
 }
 async function recomputeRecurring() {
   const [txs, overrides] = await Promise.all([getTransactions(), getRecurringOverrides()]);
@@ -88236,10 +88552,35 @@ ${content}`, nowIso(), n.id]);
     return { topicId: tid, created, updated, skipped, images };
   });
 }
-const ORCAMENTO = { notas: 9e3, fontes: 4e3, notaNo: 6e3, turnos: 9e3 };
+const ORCAMENTO = {
+  notas: 9e3,
+  fontes: 4e3,
+  notaNo: 6e3,
+  tentativas: 1500,
+  /** Turnos da aula (fora a abertura e o último turno do tutor, que têm cota própria). */
+  turnos: 9e3,
+  /** Pedido original do roteiro (um briefing colado pode ser longo). */
+  briefing: 4e3,
+  /** Abertura didática da aula (1º turno, vindo do roteiro). */
+  abertura: 4e3,
+  /** Último turno do tutor: vai inteiro (até aqui), porque o follow-up costuma citar o fim dele. */
+  ultimoTutor: 6e3,
+  /** Cada turno antigo dentro de `turnos`. */
+  turnoAntigo: 1800,
+  /** Linhas-resumo dos turnos que não couberam (sem IA: a partir do que já está salvo). */
+  omitidos: 1500
+};
 const assinatura = (...partes) => crypto.createHash("sha1").update(partes.join("")).digest("hex").slice(0, 16);
 const corta = (s2, n) => s2.length > n ? `${s2.slice(0, n)}
 […cortado: ${s2.length - n} caracteres]` : s2;
+function cortaMeio(s2, n) {
+  if (s2.length <= n) return s2;
+  const cab = Math.floor(n * 0.55);
+  const pe = n - cab;
+  return `${s2.slice(0, cab)}
+[…${s2.length - n} caracteres omitidos no meio…]
+${s2.slice(s2.length - pe)}`;
+}
 function idiomaDe(t) {
   return { idioma: t.explanationLanguage || "pt-BR", idiomaAlvo: t.kind === "language" ? t.targetLanguage || "—" : "—" };
 }
@@ -88310,6 +88651,112 @@ function resumoPlano(json2) {
     return "";
   }
 }
+const linha1 = (s2, n) => {
+  const l = s2.replace(/\s+/g, " ").trim();
+  return l.length > n ? `${l.slice(0, n)}…` : l;
+};
+function turnosParaContexto(turnos, orc = ORCAMENTO) {
+  if (!turnos.length) return { texto: "", completos: 0, total: 0 };
+  const rot = (tr) => tr.role === "me" ? "EU" : "TUTOR";
+  const payload = (tr) => {
+    try {
+      return tr.payload ? JSON.parse(tr.payload) : {};
+    } catch {
+      return {};
+    }
+  };
+  const out = /* @__PURE__ */ new Map();
+  const aberturaIdx = turnos[0].role === "tutor" && payload(turnos[0]).doPlano ? 0 : -1;
+  if (aberturaIdx === 0) out.set(0, `TUTOR (abertura do roteiro): ${cortaMeio(turnos[0].content.trim(), orc.abertura)}`);
+  let ultimoTutor = -1;
+  for (let i = turnos.length - 1; i >= 0; i--) if (turnos[i].role === "tutor") {
+    ultimoTutor = i;
+    break;
+  }
+  if (ultimoTutor > 0) out.set(ultimoTutor, `TUTOR (último turno, completo): ${cortaMeio(turnos[ultimoTutor].content.trim(), orc.ultimoTutor)}`);
+  let budget = orc.turnos;
+  let parou = false;
+  for (let i = turnos.length - 1; i >= 0; i--) {
+    if (out.has(i)) continue;
+    const piece = `${rot(turnos[i])}: ${cortaMeio(turnos[i].content.trim(), orc.turnoAntigo)}`;
+    if (parou || budget - piece.length < 0) {
+      parou = true;
+      continue;
+    }
+    budget -= piece.length;
+    out.set(i, piece);
+  }
+  let ob = orc.omitidos;
+  const resumo = [];
+  turnos.forEach((tr, i) => {
+    if (out.has(i)) return;
+    const p = payload(tr);
+    const l = tr.role === "me" ? `- EU perguntei/respondi: ${linha1(tr.content, 160)}` : `- TUTOR: ${linha1(String(p.perguntaAberta || p.fraseDeRetomada || tr.content), 160)}`;
+    if (ob - l.length < 0) return;
+    ob -= l.length;
+    resumo.push(l);
+  });
+  const corpo = [];
+  let resumoPosto = false;
+  turnos.forEach((_, i) => {
+    if (out.has(i)) corpo.push(out.get(i));
+    else if (!resumoPosto && resumo.length) {
+      corpo.push(`[turnos mais antigos resumidos, sem IA]
+${resumo.join("\n")}`);
+      resumoPosto = true;
+    }
+  });
+  return { texto: corpo.join("\n\n"), completos: out.size, total: turnos.length };
+}
+function planoDoNo(db2, nodeId) {
+  let cur = nodeId;
+  for (let guard = 0; cur != null && guard < 20; guard++) {
+    const n = one(db2, "SELECT parentId, planId FROM study_nodes WHERE id = ?", [cur]);
+    if (!n) return null;
+    if (n.planId != null) return n.planId;
+    cur = n.parentId;
+  }
+  return null;
+}
+function planoDaAula(db2, topicId, lesson) {
+  const byId = (id2) => id2 == null ? null : one(db2, "SELECT id, request, content, status FROM study_plans WHERE id = ?", [id2]);
+  return byId(lesson.planId) ?? byId(planoDoNo(db2, lesson.nodeId)) ?? one(db2, "SELECT id, request, content, status FROM study_plans WHERE topicId = ? AND status = 'approved' ORDER BY approvedAt DESC LIMIT 1", [topicId]);
+}
+function briefingDoPlano(plano) {
+  let c = {};
+  try {
+    c = JSON.parse(plano.content);
+  } catch {
+  }
+  const lista = (k) => Array.isArray(c[k]) ? c[k].map(String).filter((x) => x.trim()) : [];
+  const txt = (k) => typeof c[k] === "string" ? String(c[k]).trim() : "";
+  const linhas = [
+    txt("situacao") && `- Situação: ${txt("situacao")}`,
+    txt("jaSei") && `- Já sei: ${txt("jaSei")}`,
+    lista("restricoes").length ? `- Restrições: ${lista("restricoes").join("; ")}` : "",
+    lista("preferenciasEnsino").length ? `- Preferências de ensino: ${lista("preferenciasEnsino").join("; ")}` : "",
+    lista("decisoesEmAberto").length ? `- Decisões em aberto (não decida por mim): ${lista("decisoesEmAberto").join("; ")}` : "",
+    lista("suposicoes").length ? `- Suposições do roteiro: ${lista("suposicoes").join("; ")}` : "",
+    txt("demonstracaoFinal") && `- Entrega final: ${txt("demonstracaoFinal")}`
+  ].filter(Boolean);
+  return [`### Meu pedido original
+${cortaMeio(plano.request.trim(), ORCAMENTO.briefing)}`, linhas.length ? `### O que o roteiro registrou
+${linhas.join("\n")}` : ""].filter(Boolean).join("\n\n");
+}
+function posicaoNoRoteiro(db2, planId, nodeId) {
+  if (nodeId == null) return "";
+  const nodes = all(db2, "SELECT * FROM study_nodes WHERE planId = ?", [planId]);
+  const ordem = treeOrder(nodes);
+  const modulos = ordem.filter((n) => n.parentId != null);
+  const i = modulos.findIndex((n) => n.id === nodeId);
+  if (i < 0) return "";
+  const parte = nodes.find((n) => n.id === modulos[i].parentId);
+  return [
+    `${parte ? `${parte.title} › ` : ""}${modulos[i].title} (${i + 1} de ${modulos.length})`,
+    i > 0 ? `Anterior: ${modulos[i - 1].title}${modulos[i - 1].status === "done" ? " (concluído)" : ""}` : "",
+    i < modulos.length - 1 ? `Próximo: ${modulos[i + 1].title}` : ""
+  ].filter(Boolean).join("\n");
+}
 function contextoAula(db2, t, lesson, turnos) {
   const node = lesson.nodeId != null ? one(db2, "SELECT * FROM study_nodes WHERE id = ?", [lesson.nodeId]) : null;
   const nota = lesson.nodeId != null ? one(db2, "SELECT content FROM study_notes WHERE nodeId = ?", [lesson.nodeId])?.content ?? "" : "";
@@ -88319,25 +88766,24 @@ function contextoAula(db2, t, lesson, turnos) {
          WHERE q.nodeId = ? ORDER BY a.createdAt DESC LIMIT 5`,
     [lesson.nodeId]
   ) : [];
-  let budget = ORCAMENTO.turnos;
-  const recentes = [];
-  for (const tr of [...turnos].reverse()) {
-    const piece = `${tr.role === "me" ? "EU" : "TUTOR"}: ${corta(tr.content.trim(), 1800)}`;
-    if (budget - piece.length < 0 && recentes.length) break;
-    budget -= piece.length;
-    recentes.unshift(piece);
-  }
+  const plano = planoDaAula(db2, t.id, lesson);
+  const posicao = plano ? posicaoNoRoteiro(db2, plano.id, lesson.nodeId) : "";
+  const tr = turnosParaContexto(turnos);
   return [
     cabecalhoTopico(t),
+    plano ? `## Briefing do roteiro
+${briefingDoPlano(plano)}` : "",
     `## Módulo
 ${lesson.title}${node?.description ? `
 ${node.description}` : ""}`,
-    lesson.openQuestion ? `## Pergunta aberta
+    posicao ? `## Onde esta aula está no roteiro
+${posicao}` : "",
+    lesson.openQuestion ? `## Pergunta aberta da aula
 ${lesson.openQuestion}` : "",
     lesson.returnPoint ? `## Ponto de retorno
 ${lesson.returnPoint}` : "",
-    recentes.length ? `## Turnos anteriores (${recentes.length} de ${turnos.length})
-${recentes.join("\n\n")}` : "## Turnos anteriores\n(início da aula)",
+    tr.total ? `## Turnos anteriores (${tr.completos} de ${tr.total} no texto)
+${tr.texto}` : "## Turnos anteriores\n(início da aula)",
     tentativas.length ? `## Minhas tentativas recentes neste item
 ${tentativas.map((a) => `- ${a.prompt} → ${a.answer ?? "(sem resposta)"} [${a.outcome}]`).join("\n")}` : "",
     nota.trim() ? `## Minha nota deste item (recorte)
@@ -88354,7 +88800,7 @@ function contextoNo(db2, t, nodeId, opts = {}) {
     [t.id, nodeId]
   );
   const lesson = one(db2, "SELECT id FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1", [t.id, nodeId]);
-  const turnos = lesson ? all(db2, "SELECT role, content FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [lesson.id]) : [];
+  const turnos = lesson ? all(db2, "SELECT role, content, payload FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [lesson.id]) : [];
   const tentativas = all(
     db2,
     `SELECT q.prompt, a.answer, a.outcome FROM study_attempts a JOIN study_questions q ON q.id = a.questionId
@@ -88371,14 +88817,7 @@ function contextoNo(db2, t, nodeId, opts = {}) {
       return "";
     }
   }).filter(Boolean);
-  let budget = ORCAMENTO.turnos;
-  const aula = [];
-  for (const tr of [...turnos].reverse()) {
-    const piece = `${tr.role === "me" ? "EU" : "TUTOR"}: ${corta(tr.content.trim(), 1500)}`;
-    if (budget - piece.length < 0 && aula.length) break;
-    budget -= piece.length;
-    aula.unshift(piece);
-  }
+  const aula = turnosParaContexto(turnos, { ...ORCAMENTO, turnos: 5e3, abertura: 2e3, ultimoTutor: 2e3, turnoAntigo: 1500, omitidos: 800 });
   const fontesTxt = fontes.slice(0, 4).map((f) => `### ${f.title}${f.locator ? ` (${f.locator})` : ""}
 ${corta(f.content.trim(), 1500)}`);
   const temNotaAutoral = !!nota.trim();
@@ -88393,8 +88832,8 @@ ${node.description}` : ""}` : "Tópico inteiro (visão geral)"}`,
 ${corta(nota.trim(), ORCAMENTO.notaNo)}` : "## Minha nota (autoral)\n(vazia — deixe a revisão editorial vazia)",
     fontesTxt.length ? `## Material externo deste item
 ${fontesTxt.join("\n\n")}` : "",
-    aula.length ? `## Aula gerada (turnos recentes)
-${aula.join("\n\n")}` : "",
+    aula.total ? `## Aula gerada (turnos recentes)
+${aula.texto}` : "",
     tentativas.length ? `## Minhas tentativas recentes
 ${tentativas.map((a) => `- ${a.prompt} → ${a.answer ?? "(sem resposta)"} [${a.outcome}]`).join("\n")}` : "",
     cartoes.length ? `## Cartões que já existem (não duplicar)
@@ -88636,7 +89075,7 @@ async function approvePlan(planId, edited) {
     let lessonId = null;
     const ab = content.aberturaPrimeiraAula;
     const fm = firstModule;
-    if (fm && ab && (ab.situacao || ab.primeiroPasso || ab.pergunta)) {
+    if (fm && ab && (ab.aula || ab.situacao || ab.primeiroPasso || ab.pergunta)) {
       lessonId = exec(db2, "INSERT INTO study_lessons (topicId, nodeId, planId, title, openQuestion, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
         p.topicId,
         fm.id,
@@ -88646,7 +89085,7 @@ async function approvePlan(planId, edited) {
         now,
         now
       ]);
-      const abertura = [ab.titulo && `### ${ab.titulo}`, ab.situacao, ab.primeiroPasso && `**Primeiro passo hoje:** ${ab.primeiroPasso}`, ab.pergunta && `**Pergunta:** ${ab.pergunta}`].filter(Boolean).join("\n\n");
+      const abertura = textoAbertura(ab);
       exec(db2, "INSERT INTO study_lesson_turns (lessonId, role, content, payload, createdAt) VALUES (?, 'tutor', ?, ?, ?)", [
         lessonId,
         abertura,
@@ -88657,6 +89096,18 @@ async function approvePlan(planId, edited) {
     return { nodeIds, lessonId };
   });
 }
+function textoAbertura(ab) {
+  const aula = ab.aula?.trim() ?? "";
+  const pergunta = ab.pergunta?.trim() ?? "";
+  const perguntaJaNaAula = !!pergunta && aula.replace(/\s+/g, " ").includes(pergunta.replace(/\s+/g, " ").slice(0, 60));
+  return [
+    ab.titulo && `### ${ab.titulo}`,
+    aula ? "" : ab.situacao,
+    aula,
+    ab.primeiroPasso && `**Primeiro passo hoje:** ${ab.primeiroPasso}`,
+    pergunta && !perguntaJaNaAula && `**Pergunta:** ${pergunta}`
+  ].filter(Boolean).join("\n\n");
+}
 async function listLessons(topicId) {
   return read((db2) => all(db2, "SELECT * FROM study_lessons WHERE topicId = ? ORDER BY updatedAt DESC, id DESC", [topicId]));
 }
@@ -88666,7 +89117,8 @@ async function openLesson(topicId, nodeId) {
     const ex2 = one(db2, "SELECT * FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1", [topicId, nodeId]);
     if (ex2) return ex2.id;
     const title = nodeId != null ? one(db2, "SELECT title FROM study_nodes WHERE id = ?", [nodeId])?.title ?? t.name : t.name;
-    return exec(db2, "INSERT INTO study_lessons (topicId, nodeId, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)", [topicId, nodeId, title, nowIso(), nowIso()]);
+    const planId = planoDoNo(db2, nodeId);
+    return exec(db2, "INSERT INTO study_lessons (topicId, nodeId, planId, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [topicId, nodeId, planId, title, nowIso(), nowIso()]);
   });
   return getLesson(id2);
 }
@@ -88674,8 +89126,10 @@ async function getLesson(lessonId) {
   return read((db2) => {
     const lesson = one(db2, "SELECT * FROM study_lessons WHERE id = ?", [lessonId]);
     if (!lesson) throw new StudyError(tt("estudos.aulaNaoEncontrada"));
+    const plano = planoDaAula(db2, lesson.topicId, lesson);
     return {
       lesson,
+      briefing: plano ? { planId: plano.id, request: plano.request } : null,
       turns: all(db2, "SELECT * FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [lessonId]),
       running: one(db2, "SELECT * FROM study_ai_runs WHERE requestKey = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [`aula:${lessonId}`])
     };
@@ -92300,15 +92754,20 @@ ipcMain.handle("financeRules:delete", (_, id2) => deleteFinanceRule(id2));
 ipcMain.handle("financeRules:move", (_, id2, dir) => moveFinanceRule(id2, dir));
 ipcMain.handle("financeRules:preview", (_, month) => previewFinanceRules(month));
 ipcMain.handle("financeRules:apply", (_, changes) => setTransactionsCategory(changes));
+ipcMain.handle("financeRules:suggestions", () => listRuleSuggestions());
+ipcMain.handle("financeRules:analyzing", () => isAnalyzingRules());
+ipcMain.handle("financeRules:suggest", (_, month) => suggestFinanceRules(month));
+ipcMain.handle("financeRules:approveSuggestion", (_, id2, categoryId, keywords) => approveRuleSuggestion(id2, categoryId, keywords));
+ipcMain.handle("financeRules:rejectSuggestion", (_, id2) => rejectRuleSuggestion(id2));
 ipcMain.handle("budgets:getForMonth", (_, month) => getBudgets(month));
 ipcMain.handle("budgets:set", (_, categoryId, month, amount) => setBudget(categoryId, month, amount));
 ipcMain.handle("investments:getAll", () => getInvestments());
 ipcMain.handle("investments:history", () => getInvestmentHistory());
 ipcMain.handle(
   "investments:create",
-  (_, name, type, amount, currency2, month, groupKey) => createInvestment(name, type, amount, currency2, month, groupKey)
+  (_, name, type, amount, currency2, month, groupKey2) => createInvestment(name, type, amount, currency2, month, groupKey2)
 );
-ipcMain.handle("investments:setGroup", (_, id2, groupKey) => setInvestmentGroup(id2, groupKey));
+ipcMain.handle("investments:setGroup", (_, id2, groupKey2) => setInvestmentGroup(id2, groupKey2));
 ipcMain.handle("investmentGroups:getAll", () => getInvestmentGroups());
 ipcMain.handle("investmentGroups:create", (_, label, icon) => createInvestmentGroup(label, icon));
 ipcMain.handle("investmentGroups:update", (_, key, label, icon) => updateInvestmentGroup(key, label, icon));
