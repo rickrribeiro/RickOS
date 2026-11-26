@@ -43,4 +43,8 @@ export interface NewsState {
   digest: NewsDigest | null
   /** Notícias abertas em "Ler mais" guardadas como evidência para sugerir memórias. */
   readsCount: number
+  /** Busca rodando no servidor (segundo plano); `only` = só essas categorias. null = parado. */
+  generating: { only: string[] | null; startedAt: string } | null
+  /** Erro da última busca (some quando outra começa). */
+  lastError: string | null
 }

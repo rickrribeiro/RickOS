@@ -94,7 +94,13 @@ export async function getNewsDigest(): Promise<NewsDigest | null> {
 }
 
 export async function getNewsState(): Promise<NewsState> {
-  return { config: await getNewsConfig(), digest: await getNewsDigest(), readsCount: (await getReads()).length }
+  return {
+    config: await getNewsConfig(),
+    digest: await getNewsDigest(),
+    readsCount: (await getReads()).length,
+    generating: runInfo,
+    lastError
+  }
 }
 
 // ─── Leituras (evidência para a Memória Pessoal) ──────────────────────────────
@@ -287,6 +293,9 @@ async function summarize(
 // ─── Busca completa ───────────────────────────────────────────────────────────
 
 let running: Promise<NewsDigest> | null = null
+/** O que está rodando agora e o erro da última busca: entram no `news:state` para o card/modal acompanharem a busca em segundo plano. */
+let runInfo: NewsState['generating'] = null
+let lastError: string | null = null
 
 /** Chamadas simultâneas ao Gemini: o plano gratuito tem limite baixo por minuto. */
 const GEMINI_CONCURRENCY = 2
@@ -332,6 +341,9 @@ function limiter(limit: number): <T>(fn: () => Promise<T>) => Promise<T> {
  */
 export function generateNewsDigest(targetDate: string, tzOffsetMin: number, only?: string[]): Promise<NewsDigest> {
   if (running) return running
+  runInfo = { only: Array.isArray(only) && only.length ? only : null, startedAt: new Date().toISOString() }
+  lastError = null
+  broadcast('news:updated', { kind: 'running' })
   running = (async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) throw new Error('Data inválida.')
     const key = await geminiKey()
@@ -374,11 +386,17 @@ export function generateNewsDigest(targetDate: string, tzOffsetMin: number, only
 
     const digest: NewsDigest = { generatedAt: new Date().toISOString(), targetDate, model: MODEL, categories: merged }
     await setSetting(DIGEST_SETTING, JSON.stringify(digest))
-    broadcast('news:updated', { kind: 'digest' })
     return digest
-  })().finally(() => {
-    running = null
-  })
+  })()
+    .catch((e: unknown) => {
+      lastError = e instanceof Error ? e.message : String(e)
+      throw e
+    })
+    .finally(() => {
+      running = null
+      runInfo = null
+      broadcast('news:updated', { kind: 'digest' })
+    })
   return running
 }
 

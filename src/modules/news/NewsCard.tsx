@@ -20,6 +20,16 @@ function yesterdayStr(): string {
   return localDateStr(d)
 }
 
+/**
+ * Dispara a busca no servidor e NÃO espera: ela roda em segundo plano e o progresso/erro volta
+ * por `news:updated` (`state.generating` / `state.lastError`), então card e modal podem fechar.
+ */
+function startGenerate(state: NewsState, onChange: (s: NewsState) => void, only?: string[]): void {
+  const day = only && state.digest ? state.digest.targetDate : yesterdayStr()
+  onChange({ ...state, generating: { only: only ?? null, startedAt: new Date().toISOString() }, lastError: null })
+  window.api.news.generate(day, new Date().getTimezoneOffset(), only).catch(() => undefined)
+}
+
 const generatedToday = (digest: NewsDigest | null): boolean =>
   !!digest && localDateStr(new Date(digest.generatedAt)) === localDateStr(new Date())
 
@@ -39,25 +49,50 @@ export function NewsCard(): React.ReactElement {
 
   const digest = state?.digest ?? null
   const done = generatedToday(digest)
+  const generating = !!state?.generating
+
+  function refresh(): void {
+    if (!state) return
+    // sem chave: abre o modal, que mostra o aviso e o atalho para Configurações
+    if (!state.config.hasGeminiKey) return setOpen(true)
+    startGenerate(state, setState)
+  }
 
   return (
     <>
       <div className="chart-section" style={{ marginTop: 16 }}>
         <div className="chart-title">{tr('misc.resumoDeNoticias')}</div>
         <div className="news-card-row">
-          <span className={`news-card-status ${done ? '' : 'pending'}`}>
-            {done
-              ? tr('misc.atualizadoEm', { p0: fmtWhen(digest!.generatedAt) })
-              : tr('misc.resumoDeHojeAindaNao')}
-            {!done && digest && (
+          <span className={`news-card-status ${done || generating ? '' : 'pending'}`}>
+            {generating
+              ? tr('misc.atualizandoEmSegundoPlano')
+              : done
+                ? tr('misc.atualizadoEm', { p0: fmtWhen(digest!.generatedAt) })
+                : tr('misc.resumoDeHojeAindaNao')}
+            {state?.lastError && !generating && (
+              <span style={{ display: 'block', fontWeight: 400, fontSize: 12, color: 'var(--danger)' }}>
+                {state.lastError}
+              </span>
+            )}
+            {!done && !generating && digest && (
               <span style={{ display: 'block', fontWeight: 400, fontSize: 12, color: 'var(--text-muted)' }}>
                 {tr('misc.ultimo', { p0: fmtWhen(digest.generatedAt) })}
               </span>
             )}
           </span>
-          <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>
-            {tr('misc.abrirResumo')}
-          </button>
+          <div className="news-card-actions">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={refresh}
+              disabled={!state || generating || !state.config.categories.length}
+              title={tr('misc.atualizarTitulo')}
+            >
+              {generating ? tr('misc.atualizando') : tr('misc.atualizar')}
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>
+              {tr('misc.abrirResumo')}
+            </button>
+          </div>
         </div>
       </div>
       {open && state && <NewsModal state={state} onChange={setState} onClose={() => setOpen(false)} />}
@@ -77,11 +112,12 @@ function NewsModal({
   const { config, digest } = state
   const [selected, setSelected] = useState<string>('__all')
   const [newCat, setNewCat] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [noKeyWarn, setNoKeyWarn] = useState(false)
+  // A busca roda no servidor: o modal só reflete o estado e pode fechar a qualquer momento.
+  const busy = !!state.generating
   /** Categorias sendo refeitas (busca parcial); null = busca completa ou parado. */
-  const [retrying, setRetrying] = useState<string[] | null>(null)
+  const retrying = state.generating?.only ?? null
+  const error = busy ? null : state.lastError
   const [memMsg, setMemMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   function readMore(url: string): void {
@@ -105,11 +141,11 @@ function NewsModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !busy) onClose()
+      if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, onClose])
+  }, [onClose])
 
   async function saveCategories(list: string[]): Promise<void> {
     const categories = await window.api.news.setCategories(list)
@@ -133,24 +169,12 @@ function NewsModal({
   }
 
   /** Sem `only`: busca completa do dia anterior. Com `only`: refaz só essas categorias do resumo salvo. */
-  async function generate(only?: string[]): Promise<void> {
-    setError(null)
+  function generate(only?: string[]): void {
     if (!config.hasGeminiKey) {
       setNoKeyWarn(true)
       return
     }
-    setBusy(true)
-    setRetrying(only ?? null)
-    try {
-      const day = only && digest ? digest.targetDate : yesterdayStr()
-      const d = await window.api.news.generate(day, new Date().getTimezoneOffset(), only)
-      onChange({ ...state, digest: d })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-      setRetrying(null)
-    }
+    startGenerate(state, onChange, only)
   }
 
   function goToSettings(): void {
@@ -175,7 +199,7 @@ function NewsModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={() => !busy && onClose()}>
+    <div className="modal-overlay" onClick={onClose}>
       <div className="modal news-modal" onClick={(e) => e.stopPropagation()}>
         <h2>{tr('misc.resumoDeNoticias')}</h2>
         <div className="news-meta">
@@ -245,13 +269,13 @@ function NewsModal({
         )}
 
         <div className="news-toolbar">
-          <button className="btn btn-primary btn-sm" onClick={() => void generate()} disabled={busy || !config.categories.length}>
+          <button className="btn btn-primary btn-sm" onClick={() => generate()} disabled={busy || !config.categories.length}>
             {fullBusy ? tr('misc.buscandoEResumindo') : tr('misc.buscarNoticiasDiaAnterior')}
           </button>
           {pending.length > 0 && (
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => void generate(pending)}
+              onClick={() => generate(pending)}
               disabled={busy}
               title={tr('misc.refazSoORestoDo', { p0: pending.join(', ') })}
             >
@@ -307,7 +331,7 @@ function NewsModal({
                   ) : (
                     <div className="news-group-error">
                       {tr('misc.falhou')} {g.error}{' '}
-                      <button className="news-readmore" onClick={() => void generate([g.categoria])} disabled={busy}>
+                      <button className="news-readmore" onClick={() => generate([g.categoria])} disabled={busy}>
                         {tr('misc.tentarDeNovo')}
                       </button>
                     </div>
@@ -336,7 +360,7 @@ function NewsModal({
               ) : (
                 <>
                   {tr('misc.categoriaNovaAindaForaDo')}{' '}
-                  <button className="news-readmore" onClick={() => void generate([selected])} disabled={busy}>
+                  <button className="news-readmore" onClick={() => generate([selected])} disabled={busy}>
                     {tr('misc.buscarSoEsta')}
                   </button>
                 </>
@@ -346,7 +370,8 @@ function NewsModal({
         </div>
 
         <div className="modal-actions">
-          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>
+          {busy && <span className="news-bg-hint">{tr('misc.podeFecharRodaEmSegundoPlano')}</span>}
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>
             {tr('misc.fechar')}
           </button>
         </div>
