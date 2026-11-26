@@ -23,6 +23,10 @@ export function ReviewHeatmap(): React.ReactElement {
     const startStr = localDayStartISO(localDateStr(new Date(year, month, 1)))
     const endStr = localDayStartISO(localDateStr(new Date(year, month + 1, 1)))
     refreshReviewCounts(startStr, endStr)
+    // cada revisão (nesta tela ou em outro cliente) atualiza o mês na hora
+    return window.api.estudos.onUpdated((p) => {
+      if (p.kind === 'review') refreshReviewCounts(startStr, endStr)
+    })
   }, [year, month, refreshReviewCounts])
 
   const prevMonth = (): void => {
