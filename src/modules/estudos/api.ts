@@ -3,6 +3,7 @@ import type {
   DiagnosticoCodex,
   IaPerfisView,
   LessonRow,
+  LessonView,
   PlanRow,
   RunRow,
   TurnRow,
@@ -116,8 +117,8 @@ export interface EstudosApi {
   discardPlan(planId: number): Promise<void>
   approvePlan(planId: number, content?: unknown): Promise<{ nodeIds: number[]; lessonId: number | null }>
   lessons(topicId: number): Promise<LessonRow[]>
-  openLesson(topicId: number, nodeId: number | null): Promise<{ lesson: LessonRow; turns: TurnRow[]; running: RunRow | null }>
-  lesson(lessonId: number): Promise<{ lesson: LessonRow; turns: TurnRow[]; running: RunRow | null }>
+  openLesson(topicId: number, nodeId: number | null): Promise<LessonView>
+  lesson(lessonId: number): Promise<LessonView>
   sendTurn(lessonId: number, text: string, clientKey: string): Promise<RunRow>
   retryTurn(lessonId: number): Promise<RunRow>
   appendToNote(topicId: number, nodeId: number | null, text: string): Promise<void>

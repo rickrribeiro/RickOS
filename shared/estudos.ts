@@ -575,6 +575,14 @@ export interface LessonRow {
   updatedAt: string
 }
 
+/** Aula aberta: o que está salvo + o briefing do roteiro que a originou (zero chamadas). */
+export interface LessonView {
+  lesson: LessonRow
+  briefing: { planId: number; request: string } | null
+  turns: TurnRow[]
+  running: RunRow | null
+}
+
 export interface TurnRow {
   id: number
   lessonId: number

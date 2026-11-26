@@ -42,7 +42,7 @@ ${A_MASTERCLASS}
 {{contexto}}
 
 ## Contrato de saída
-JSON conforme o schema: perguntas (0 a 2; preencha só se a resposta mudar profundamente a trilha — mesmo assim entregue o mapa com as suposições declaradas), suposicoes, situacao, jaSei, fundamentos, demonstracaoFinal, partes[{titulo, porque, modulos[...]}], ordemJustificativa, aprofundamentosOpcionais, workshops, coberturaReversa, aberturaPrimeiraAula, aConferir.`,
+JSON conforme o schema: perguntas (0 a 2; preencha só se a resposta mudar profundamente a trilha — mesmo assim entregue o mapa com as suposições declaradas), suposicoes, situacao, jaSei, restricoes, preferenciasEnsino, decisoesEmAberto, fundamentos, demonstracaoFinal, partes[{titulo, porque, modulos[...]}], ordemJustificativa, aprofundamentosOpcionais, workshops, coberturaReversa, aberturaPrimeiraAula ({titulo, situacao, aula — a primeira aula em Markdown, que ensina antes de perguntar —, primeiroPasso, pergunta}), aConferir.`,
   preparar: prepararTutor,
   exemplo: { idioma: 'pt-BR', idiomaAlvo: '—', contexto: ex('objetivo, mapa atual, notas'), pedido: ex('quero estudar X para conseguir Y') }
 })

@@ -32,7 +32,10 @@ export const SCHEMA_MASTERCLASS = obj({
   perguntas: arr(str(), 'até duas perguntas curtas, só se a resposta mudar profundamente a trilha; senão []'),
   suposicoes: arr(str()),
   situacao: str('situação em que vou usar o que aprender'),
-  jaSei: str(),
+  jaSei: str('o que eu disse que já sei, com as minhas palavras'),
+  restricoes: arr(str(), 'restrições que declarei (plataforma, escala, prazo, tecnologia…); [] se nenhuma'),
+  preferenciasEnsino: arr(str(), 'como pedi para ser ensinado; [] se não disse'),
+  decisoesEmAberto: arr(str(), 'decisões que deixei em aberto e que a trilha NÃO deve tomar por mim'),
   fundamentos: arr(str()),
   demonstracaoFinal: str(),
   partes: arr(obj({ titulo: str(), porque: str(), modulos: arr(MODULO) })),
@@ -40,7 +43,13 @@ export const SCHEMA_MASTERCLASS = obj({
   aprofundamentosOpcionais: arr(str()),
   workshops: arr(obj({ titulo: str(), entrega: str(), experimento: str() })),
   coberturaReversa: str('teste de trás para frente a partir da entrega final'),
-  aberturaPrimeiraAula: obj({ titulo: str(), situacao: str(), primeiroPasso: str('o que posso fazer hoje'), pergunta: str() }),
+  aberturaPrimeiraAula: obj({
+    titulo: str(),
+    situacao: str('a situação concreta, em 1–2 frases'),
+    aula: str('a primeira aula começando de verdade, em Markdown: ensina antes de perguntar (ver instrução A)'),
+    primeiroPasso: str('o que posso fazer hoje'),
+    pergunta: str('a pergunta que fecha a abertura e aproveita o que ela acabou de explicar')
+  }),
   aConferir: arr(str(), 'fatos que dependem de versão/preço/disponibilidade sem fonte acessível')
 })
 

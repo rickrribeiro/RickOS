@@ -7,6 +7,9 @@ export const MASTERCLASS_BACKEND = {
   suposicoes: ['Jogo Unity multiplayer com até 8 jogadores por partida; você conhece Unity e HTTP, não netcode.'],
   situacao: 'Decidir a arquitetura de backend do seu jogo Unity multiplayer antes de escrever o netcode.',
   jaSei: 'Unity, C#, APIs HTTP.',
+  restricoes: ['mobile', 'até 8 jogadores por partida'],
+  preferenciasEnsino: ['critérios antes da escolha'],
+  decisoesEmAberto: ['servidor dedicado vs host-cliente'],
   fundamentos: ['modelo de autoridade', 'tick rate e latência', 'replicação de estado'],
   demonstracaoFinal: 'Uma decisão de arquitetura documentada (ADR) e um experimento de latência que pode contrariá-la.',
   partes: [
@@ -69,6 +72,7 @@ export const MASTERCLASS_BACKEND = {
   aberturaPrimeiraAula: {
     titulo: 'Do input ao estado compartilhado',
     situacao: 'Você aperta "atirar" no seu jogo Unity. Outros 7 jogadores precisam ver o mesmo resultado.',
+    aula: 'Num servidor autoritativo, o seu **input** viaja até o servidor (40 ms), ele valida e aplica no tick seguinte, e o **snapshot** volta para os 8 (mais 40 ms).\n\n1. t=0: você aperta.\n2. t=40: o servidor valida.\n3. t=80: todos recebem o snapshot.\n\nEm qual máquina o tiro "acontece de verdade"?',
     primeiroPasso: 'Hoje: escreva em 5 linhas o caminho que você imagina para esse tiro.',
     pergunta: 'Em qual máquina o tiro "acontece de verdade"?'
   },

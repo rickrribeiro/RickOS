@@ -9,11 +9,11 @@ import type { IdChamadaIa } from '../../shared/prompts/catalogo'
 import { VERSAO_PEDAGOGIA } from '../../shared/prompts/estudos/pedagogia/textos'
 import { SCHEMA_AULA, SCHEMA_MASTERCLASS } from '../../shared/prompts/estudos/pedagogia/schemas'
 import type { ParamsTutor } from '../../shared/prompts/estudos/masterclass'
-import { assinatura, contextoAula, contextoMasterclass, idiomaDe } from './contexto'
+import { assinatura, contextoAula, contextoMasterclass, idiomaDe, planoDaAula, planoDoNo } from './contexto'
 import type { TopicRow } from './repo'
 import { all, exec, nowIso, one, read, StudyError, tx } from './sql'
-import type { RunRow, PlanRow, LessonRow, TurnRow, Operacao } from '../../shared/estudos'
-export type { RunRow, PlanRow, LessonRow, TurnRow, Operacao }
+import type { RunRow, PlanRow, LessonRow, LessonView, TurnRow, Operacao } from '../../shared/estudos'
+export type { RunRow, PlanRow, LessonRow, LessonView, TurnRow, Operacao }
 
 
 /**
@@ -251,7 +251,8 @@ interface ModuloPlano {
 interface ConteudoPlano {
   partes: { titulo: string; porque?: string; modulos: ModuloPlano[]; excluir?: boolean }[]
   workshops?: { titulo: string; entrega?: string; experimento?: string; excluir?: boolean }[]
-  aberturaPrimeiraAula?: { titulo?: string; situacao?: string; primeiroPasso?: string; pergunta?: string }
+  /** `aula` (Markdown didático) existe desde estudos-pedagogia-2026-11-27; planos antigos só têm os outros campos. */
+  aberturaPrimeiraAula?: { titulo?: string; situacao?: string; aula?: string; primeiroPasso?: string; pergunta?: string }
 }
 
 function validPlanContent(c: unknown): asserts c is ConteudoPlano {
@@ -324,7 +325,7 @@ export async function approvePlan(planId: number, edited?: unknown): Promise<{ n
     let lessonId: number | null = null
     const ab = content.aberturaPrimeiraAula
     const fm = firstModule as { id: number; title: string } | null
-    if (fm && ab && (ab.situacao || ab.primeiroPasso || ab.pergunta)) {
+    if (fm && ab && (ab.aula || ab.situacao || ab.primeiroPasso || ab.pergunta)) {
       lessonId = exec(db, 'INSERT INTO study_lessons (topicId, nodeId, planId, title, openQuestion, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)', [
         p.topicId,
         fm.id,
@@ -334,7 +335,7 @@ export async function approvePlan(planId: number, edited?: unknown): Promise<{ n
         now,
         now
       ])
-      const abertura = [ab.titulo && `### ${ab.titulo}`, ab.situacao, ab.primeiroPasso && `**Primeiro passo hoje:** ${ab.primeiroPasso}`, ab.pergunta && `**Pergunta:** ${ab.pergunta}`].filter(Boolean).join('\n\n')
+      const abertura = textoAbertura(ab)
       exec(db, "INSERT INTO study_lesson_turns (lessonId, role, content, payload, createdAt) VALUES (?, 'tutor', ?, ?, ?)", [
         lessonId,
         abertura,
@@ -346,6 +347,26 @@ export async function approvePlan(planId: number, edited?: unknown): Promise<{ n
   })
 }
 
+/**
+ * Texto do 1º turno da aula a partir da abertura do roteiro. Com `aula` (contrato novo) a explicação
+ * vem primeiro; planos antigos continuam legíveis só com situação/primeiro passo/pergunta.
+ */
+export function textoAbertura(ab: NonNullable<ConteudoPlano['aberturaPrimeiraAula']>): string {
+  const aula = ab.aula?.trim() ?? ''
+  const pergunta = ab.pergunta?.trim() ?? ''
+  // a abertura nova costuma terminar com a própria pergunta: não repete
+  const perguntaJaNaAula = !!pergunta && aula.replace(/\s+/g, ' ').includes(pergunta.replace(/\s+/g, ' ').slice(0, 60))
+  return [
+    ab.titulo && `### ${ab.titulo}`,
+    aula ? '' : ab.situacao,
+    aula,
+    ab.primeiroPasso && `**Primeiro passo hoje:** ${ab.primeiroPasso}`,
+    pergunta && !perguntaJaNaAula && `**Pergunta:** ${pergunta}`
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 // ── B. Aula conversacional ───────────────────────────────────────────────────
 
 
@@ -354,23 +375,27 @@ export async function listLessons(topicId: number): Promise<LessonRow[]> {
 }
 
 /** Abre a aula do item (cria se não existir) — sem IA. */
-export async function openLesson(topicId: number, nodeId: number | null): Promise<{ lesson: LessonRow; turns: TurnRow[]; running: RunRow | null }> {
+export async function openLesson(topicId: number, nodeId: number | null): Promise<LessonView> {
   const id = await tx((db) => {
     const t = topicOrThrow(db, topicId)
     const ex = one<LessonRow>(db, 'SELECT * FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1', [topicId, nodeId])
     if (ex) return ex.id
     const title = nodeId != null ? one<{ title: string }>(db, 'SELECT title FROM study_nodes WHERE id = ?', [nodeId])?.title ?? t.name : t.name
-    return exec(db, 'INSERT INTO study_lessons (topicId, nodeId, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)', [topicId, nodeId, title, nowIso(), nowIso()])
+    // aula de um módulo do roteiro nasce ligada ao plano daquele módulo (o briefing certo, mesmo com vários planos)
+    const planId = planoDoNo(db, nodeId)
+    return exec(db, 'INSERT INTO study_lessons (topicId, nodeId, planId, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)', [topicId, nodeId, planId, title, nowIso(), nowIso()])
   })
   return getLesson(id)
 }
 
-export async function getLesson(lessonId: number): Promise<{ lesson: LessonRow; turns: TurnRow[]; running: RunRow | null }> {
+export async function getLesson(lessonId: number): Promise<LessonView> {
   return read((db) => {
     const lesson = one<LessonRow>(db, 'SELECT * FROM study_lessons WHERE id = ?', [lessonId])
     if (!lesson) throw new StudyError(tt('estudos.aulaNaoEncontrada'))
+    const plano = planoDaAula(db, lesson.topicId, lesson)
     return {
       lesson,
+      briefing: plano ? { planId: plano.id, request: plano.request } : null,
       turns: all<TurnRow>(db, 'SELECT * FROM study_lesson_turns WHERE lessonId = ? ORDER BY id', [lessonId]),
       running: one<RunRow>(db, "SELECT * FROM study_ai_runs WHERE requestKey = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [`aula:${lessonId}`])
     }
