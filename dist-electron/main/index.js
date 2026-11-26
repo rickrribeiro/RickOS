@@ -50,7 +50,7 @@ const config = {
   publicUrl: (process.env.RICKOS_PUBLIC_URL || "").replace(/\/+$/, ""),
   staticDir: process.env.RICKOS_STATIC_DIR || null
 };
-function getConfig() {
+function getConfig$1() {
   return config;
 }
 function setConfig(patch) {
@@ -641,6 +641,198 @@ const SCHEMA = `
     score INTEGER NOT NULL DEFAULT 0,
     total INTEGER NOT NULL DEFAULT 0,
     durationMs INTEGER,
+    createdAt TEXT NOT NULL
+  );
+
+  -- Estudos v2 (colunas novas das tabelas antigas ficam na migração 45 de db.ts)
+  CREATE TABLE IF NOT EXISTS study_card_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL
+  );
+
+  -- Agenda SM-2 por direção (forward = reconhecimento/frente→verso; reverse = produção/verso→frente)
+  CREATE TABLE IF NOT EXISTS study_card_states (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cardId INTEGER NOT NULL REFERENCES study_flashcards(id) ON DELETE CASCADE,
+    direction TEXT NOT NULL DEFAULT 'forward',
+    easeFactor REAL NOT NULL DEFAULT 2.5,
+    intervalDays INTEGER NOT NULL DEFAULT 0,
+    repetitions INTEGER NOT NULL DEFAULT 0,
+    nextReviewAt TEXT,
+    lastReviewedAt TEXT,
+    introducedAt TEXT,
+    suspended INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (cardId, direction)
+  );
+
+  -- Fontes externas (texto colado, TXT/MD importado, link com página/trecho/timestamp)
+  CREATE TABLE IF NOT EXISTS study_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL DEFAULT 'text',     -- text | file | link
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    url TEXT,
+    locator TEXT,                          -- página, trecho ou timestamp
+    originPath TEXT,                       -- arquivo de origem (importação)
+    originHash TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  -- Onde parei (um por tópico/nó/alvo/ref; o mais recente vale para "Continuar")
+  CREATE TABLE IF NOT EXISTS study_checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER,
+    target TEXT NOT NULL DEFAULT 'note',   -- note | source | lesson | cards | test
+    refId INTEGER,
+    position TEXT,
+    whereStopped TEXT,
+    updatedAt TEXT NOT NULL
+  );
+
+  -- Perguntas salvas (revisão ativa, exercícios, socráticas, erros do quiz) e minhas tentativas
+  CREATE TABLE IF NOT EXISTS study_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL DEFAULT 'recall',   -- recall | exercise | socratic | quiz
+    prompt TEXT NOT NULL,
+    reference TEXT,
+    hint TEXT,
+    origin TEXT NOT NULL DEFAULT 'manual', -- manual | tutor | quiz
+    status TEXT NOT NULL DEFAULT 'active', -- active | archived
+    revisit INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  -- Anexos do caderno (imagens). Arquivo em <dataDir>/estudos/anexos/<fileName>; a nota guarda
+  -- o link relativo estável "anexos/<fileName>" (o mesmo da exportação/Git).
+  CREATE TABLE IF NOT EXISTS study_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sha256 TEXT NOT NULL UNIQUE,
+    fileName TEXT NOT NULL UNIQUE,
+    originalName TEXT,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
+  -- Tutor de Estudos (Codex): cada execução, com perfil, versão dos prompts e assinatura das entradas
+  CREATE TABLE IF NOT EXISTS study_ai_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER,
+    operation TEXT NOT NULL,             -- masterclass | aula | pacote | secao | revisao | subtopicos
+    section TEXT,
+    requestKey TEXT NOT NULL,            -- dedupe (clique duplo / duas abas)
+    status TEXT NOT NULL DEFAULT 'running', -- running | ok | error | invalid | canceled | timeout
+    model TEXT,
+    effort TEXT,
+    promptVersion TEXT,
+    inputSignature TEXT,
+    contextChars INTEGER,
+    startedAt TEXT NOT NULL,
+    finishedAt TEXT,
+    durationMs INTEGER,
+    inputTokens INTEGER,
+    outputTokens INTEGER,
+    error TEXT
+  );
+
+  -- Roteiros (masterclass): proposta editável → aprovado (vira nós origin='plan')
+  CREATE TABLE IF NOT EXISTS study_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    request TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed', -- proposed | approved | discarded | superseded
+    content TEXT NOT NULL,               -- JSON (SCHEMA_MASTERCLASS, com as minhas edições)
+    runId INTEGER,
+    edited INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    approvedAt TEXT
+  );
+
+  -- Aula conversacional (prompt B): turnos meus e do tutor, separados da nota autoral
+  CREATE TABLE IF NOT EXISTS study_lessons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE SET NULL,
+    planId INTEGER,
+    title TEXT NOT NULL,
+    openQuestion TEXT,
+    returnPoint TEXT,
+    resumePhrase TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS study_lesson_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lessonId INTEGER NOT NULL REFERENCES study_lessons(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,                  -- me | tutor
+    content TEXT NOT NULL,
+    payload TEXT,                        -- JSON do turno do tutor (SCHEMA_AULA)
+    clientKey TEXT UNIQUE,               -- idempotência do envio
+    runId INTEGER,
+    createdAt TEXT NOT NULL
+  );
+
+  -- Material do nó (pacote C): última geração VÁLIDA por tópico/nó/seção. nodeKey 0 = tópico inteiro.
+  CREATE TABLE IF NOT EXISTS study_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeKey INTEGER NOT NULL DEFAULT 0,
+    nodeId INTEGER,
+    section TEXT NOT NULL,
+    content TEXT NOT NULL,               -- JSON da seção (schema da seção)
+    runId INTEGER NOT NULL,
+    model TEXT,
+    effort TEXT,
+    promptVersion TEXT,
+    inputSignature TEXT,
+    noteSignature TEXT,                  -- assinatura da nota quando gerou (detecta "anterior à última edição")
+    createdAt TEXT NOT NULL,
+    UNIQUE (topicId, nodeKey, section)
+  );
+
+  -- Sugestões do tutor que dependem de decisão minha (revisão editorial, subtópicos)
+  CREATE TABLE IF NOT EXISTS study_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER,
+    kind TEXT NOT NULL,                  -- editorial | subtopic
+    fingerprint TEXT NOT NULL,
+    payload TEXT NOT NULL,               -- JSON do item
+    status TEXT NOT NULL DEFAULT 'pending', -- pending | accepted | rejected | comment | superseded
+    runId INTEGER,
+    baseSignature TEXT,                  -- versão do material (nota/mapa) sobre a qual foi gerada
+    createdAt TEXT NOT NULL,
+    decidedAt TEXT
+  );
+
+  -- Origem de conteúdo importado (repositório/pasta): reconhece reimportações sem duplicar
+  CREATE TABLE IF NOT EXISTS study_origins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    originKey TEXT NOT NULL UNIQUE,      -- ex.: repo:notas/mandarim/aula-1.md
+    hash TEXT NOT NULL,
+    topicId INTEGER NOT NULL REFERENCES study_topics(id) ON DELETE CASCADE,
+    nodeId INTEGER REFERENCES study_nodes(id) ON DELETE CASCADE,
+    importedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS study_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    questionId INTEGER NOT NULL REFERENCES study_questions(id) ON DELETE CASCADE,
+    topicId INTEGER NOT NULL,
+    answer TEXT,
+    helpUsed TEXT,                         -- hint | reference | null
+    outcome TEXT NOT NULL,                 -- ok | partial | miss | skipped
     createdAt TEXT NOT NULL
   );
 
@@ -2072,7 +2264,7 @@ const MIGRATIONS = [
           if (detectPaymentMethod(r.description) !== "deposito") ids2.push(r.id);
         }
         sel.free();
-        for (const id of ids2) db2.run("UPDATE transactions SET paymentMethod = NULL WHERE id = ?", [id]);
+        for (const id2 of ids2) db2.run("UPDATE transactions SET paymentMethod = NULL WHERE id = ?", [id2]);
       } catch {
       }
     }
@@ -2259,6 +2451,58 @@ const MIGRATIONS = [
         db2.run("ALTER TABLE ai_chamadas ADD COLUMN effort TEXT");
       } catch {
       }
+    }
+  },
+  {
+    version: 45,
+    label: "Estudos v2: idiomas, cartões por direção, categorias, origem dos nós",
+    run: (db2) => {
+      const add = (sql) => {
+        try {
+          db2.run(sql);
+        } catch {
+        }
+      };
+      add("ALTER TABLE study_topics ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'");
+      add("ALTER TABLE study_topics ADD COLUMN targetLanguage TEXT");
+      add("ALTER TABLE study_topics ADD COLUMN explanationLanguage TEXT");
+      add("ALTER TABLE study_topics ADD COLUMN goal TEXT");
+      add("ALTER TABLE study_topics ADD COLUMN reviewWhenArchived INTEGER NOT NULL DEFAULT 0");
+      add("ALTER TABLE study_topics ADD COLUMN readingMode TEXT NOT NULL DEFAULT 'hidden'");
+      add("ALTER TABLE study_nodes ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'");
+      add("ALTER TABLE study_nodes ADD COLUMN planId INTEGER");
+      add("ALTER TABLE study_flashcards ADD COLUMN cardType TEXT NOT NULL DEFAULT 'basic'");
+      add("ALTER TABLE study_flashcards ADD COLUMN categoryId INTEGER");
+      add("ALTER TABLE study_flashcards ADD COLUMN language TEXT");
+      add("ALTER TABLE study_flashcards ADD COLUMN example TEXT");
+      add("ALTER TABLE study_flashcards ADD COLUMN reading TEXT");
+      add("ALTER TABLE study_flashcards ADD COLUMN variants TEXT");
+      add("ALTER TABLE study_flashcards ADD COLUMN drill TEXT");
+      add("ALTER TABLE study_flashcards ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+      add("ALTER TABLE study_review_log ADD COLUMN direction TEXT");
+      add("ALTER TABLE study_review_log ADD COLUMN stateId INTEGER");
+      db2.run(`INSERT OR IGNORE INTO study_card_states
+        (cardId, direction, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, introducedAt, suspended)
+        SELECT id, 'forward', easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, lastReviewedAt, 0
+        FROM study_flashcards`);
+      db2.run("UPDATE study_review_log SET direction = 'forward' WHERE direction IS NULL");
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      ["vocabulário", "expressão", "gramática", "escrita", "pronúncia", "conceito"].forEach((name, i) => {
+        const st2 = db2.prepare("INSERT OR IGNORE INTO study_card_categories (name, sortOrder, createdAt) VALUES (?, ?, ?)");
+        st2.run([name, (i + 1) * 10, now]);
+        st2.free();
+      });
+    }
+  },
+  {
+    version: 46,
+    label: "Estudos: uid estável do tópico (pasta na exportação/Git e restauração sem duplicar)",
+    run: (db2) => {
+      try {
+        db2.run("ALTER TABLE study_topics ADD COLUMN uid TEXT");
+      } catch {
+      }
+      db2.run("UPDATE study_topics SET uid = lower(hex(randomblob(8))) WHERE uid IS NULL OR uid = ''");
     }
   }
 ];
@@ -2737,6 +2981,63 @@ const db$2 = {
   "db.projetoNaoEncontrado2": "Projeto não encontrado",
   "db.situacaoInvalida": "Situação inválida: {status}"
 };
+const estudos$2 = {
+  "estudos.fonteSemTitulo": "A fonte precisa de um título.",
+  "estudos.frenteVazia": "A frente do cartão está vazia.",
+  "estudos.semCopiaParaRestaurar": "A pasta gerenciada ainda não tem cópia para restaurar.",
+  "estudos.perguntaVazia": "A pergunta está vazia.",
+  "estudos.arquivoVazio": "Arquivo vazio.",
+  "estudos.avaliacaoInvalida": "Avaliação inválida.",
+  "estudos.branchInvalido": "Branch inválido.",
+  "estudos.cartaoNaoEncontrado": "Cartão não encontrado.",
+  "estudos.fonteNaoEncontrada": "Fonte não encontrada.",
+  "estudos.imagemNaoSuportada": "Formato de imagem não suportado (use PNG, JPG, GIF, WebP ou AVIF).",
+  "estudos.pendenteAntesDesvincular": "Há commit aguardando envio. Sincronize antes de desvincular.",
+  "estudos.idInvalido": "Identificador inválido.",
+  "estudos.imagemGrande": "Imagem maior que 15 MB.",
+  "estudos.informeLink": "Informe o link.",
+  "estudos.limiteNovosInvalido": "Limite de novos inválido.",
+  "estudos.marqueLacuna": "Marque a lacuna com {{trecho}}.",
+  "estudos.categoriaVazia": "Nome da categoria vazio.",
+  "estudos.pendenteAntesTrocar": "O repositório atual tem commit aguardando envio. Sincronize antes de trocar.",
+  "estudos.topicoSemTitulo": "O tópico precisa de um título.",
+  "estudos.versoVazio": "O verso do cartão está vazio.",
+  "estudos.pastaForaRepo": "Pasta fora do repositório.",
+  "estudos.pastaGerenciadaInvalida": "Pasta gerenciada inválida.",
+  "estudos.pastaNaoEncontrada": "Pasta não encontrada.",
+  "estudos.perguntaNaoEncontrada": "Pergunta não encontrada.",
+  "estudos.previaExpirada": "Prévia expirada. Gere de novo.",
+  "estudos.previaInvalida": "Prévia inválida.",
+  "estudos.remotoInvalido": "Remoto inválido.",
+  "estudos.repoNaoVinculado": "Repositório não vinculado.",
+  "estudos.resultadoInvalido": "Resultado inválido.",
+  "estudos.statusInvalido": "Status inválido.",
+  "estudos.tempoInvalido": "Tempo inválido.",
+  "estudos.topicoNaoEncontrado": "Tópico não encontrado.",
+  "estudos.manifestoNaoEncontrado": "manifest.json não encontrado.",
+  "estudos.naoECopia": "Pasta não é uma cópia do rickOS Estudos.",
+  "estudos.categoriaExiste": 'A categoria "{nome}" já existe.',
+  "estudos.pastaOcupada": 'A pasta "{pasta}" já está ocupada. Escolha outro destino.',
+  "estudos.statusInvalidoValor": "Status inválido: {status}",
+  "estudos.git": "git {cmd}: {erro}",
+  "estudos.versaoCopia": "Cópia na versão {versao}; atualize o rickOS.",
+  "estudos.respostaInvalida": "O tutor devolveu uma resposta fora do formato. Nada foi alterado; tente gerar de novo.",
+  "estudos.pedidoVazio": "Escreva o que quer estudar e para quê.",
+  "estudos.planoNaoEncontrado": "Roteiro não encontrado.",
+  "estudos.planoNaoEditavel": "Este roteiro não está mais em proposta.",
+  "estudos.planoInvalido": "Roteiro em formato inválido.",
+  "estudos.aulaNaoEncontrada": "Aula não encontrada.",
+  "estudos.mensagemVazia": "Mensagem vazia.",
+  "estudos.aguardeTutor": "O tutor ainda está respondendo o turno anterior.",
+  "estudos.nadaParaResponder": "Não há turno meu aguardando resposta.",
+  "estudos.perfilInvalido": "Perfil de IA inválido.",
+  "estudos.modeloInvalido": "Modelo inválido.",
+  "estudos.effortInvalido": "Effort inválido para o Codex.",
+  "estudos.secaoInvalida": "Seção inválida.",
+  "estudos.notaVaziaParaRevisar": "A nota deste item está vazia: não há o que revisar.",
+  "estudos.sugestaoNaoEncontrada": "Sugestão não encontrada.",
+  "estudos.paiInvalido": "O item pai escolhido não existe neste tópico."
+};
 const ptBR = {
   ...common$2,
   ...rpc$3,
@@ -2744,7 +3045,8 @@ const ptBR = {
   ...flights$2,
   ...chats$2,
   ...aiconv$2,
-  ...db$2
+  ...db$2,
+  ...estudos$2
 };
 const common$1 = {
   "common.unknownError": "unknown error"
@@ -2966,6 +3268,63 @@ const db$1 = {
   "db.projetoNaoEncontrado2": "Project not found",
   "db.situacaoInvalida": "Invalid status: {status}"
 };
+const estudos$1 = {
+  "estudos.fonteSemTitulo": "The source needs a title.",
+  "estudos.frenteVazia": "The card's front is empty.",
+  "estudos.semCopiaParaRestaurar": "The managed folder has no copy to restore yet.",
+  "estudos.perguntaVazia": "The question is empty.",
+  "estudos.arquivoVazio": "Empty file.",
+  "estudos.avaliacaoInvalida": "Invalid rating.",
+  "estudos.branchInvalido": "Invalid branch.",
+  "estudos.cartaoNaoEncontrado": "Card not found.",
+  "estudos.fonteNaoEncontrada": "Source not found.",
+  "estudos.imagemNaoSuportada": "Unsupported image format (use PNG, JPG, GIF, WebP or AVIF).",
+  "estudos.pendenteAntesDesvincular": "A commit is waiting to be pushed. Sync before unlinking.",
+  "estudos.idInvalido": "Invalid identifier.",
+  "estudos.imagemGrande": "Image larger than 15 MB.",
+  "estudos.informeLink": "Enter the link.",
+  "estudos.limiteNovosInvalido": "Invalid new-card limit.",
+  "estudos.marqueLacuna": "Mark the gap with {{text}}.",
+  "estudos.categoriaVazia": "Empty category name.",
+  "estudos.pendenteAntesTrocar": "The current repository has a commit waiting to be pushed. Sync before switching.",
+  "estudos.topicoSemTitulo": "The topic needs a title.",
+  "estudos.versoVazio": "The card's back is empty.",
+  "estudos.pastaForaRepo": "Folder outside the repository.",
+  "estudos.pastaGerenciadaInvalida": "Invalid managed folder.",
+  "estudos.pastaNaoEncontrada": "Folder not found.",
+  "estudos.perguntaNaoEncontrada": "Question not found.",
+  "estudos.previaExpirada": "Preview expired. Generate it again.",
+  "estudos.previaInvalida": "Invalid preview.",
+  "estudos.remotoInvalido": "Invalid remote.",
+  "estudos.repoNaoVinculado": "Repository not linked.",
+  "estudos.resultadoInvalido": "Invalid result.",
+  "estudos.statusInvalido": "Invalid status.",
+  "estudos.tempoInvalido": "Invalid time.",
+  "estudos.topicoNaoEncontrado": "Topic not found.",
+  "estudos.manifestoNaoEncontrado": "manifest.json not found.",
+  "estudos.naoECopia": "This folder isn't a rickOS Studies copy.",
+  "estudos.categoriaExiste": 'The category "{nome}" already exists.',
+  "estudos.pastaOcupada": 'The folder "{pasta}" is already occupied. Choose another destination.',
+  "estudos.statusInvalidoValor": "Invalid status: {status}",
+  "estudos.git": "git {cmd}: {erro}",
+  "estudos.versaoCopia": "Copy is version {versao}; update rickOS.",
+  "estudos.respostaInvalida": "The tutor returned an off-format answer. Nothing was changed; try generating again.",
+  "estudos.pedidoVazio": "Write what you want to study and why.",
+  "estudos.planoNaoEncontrado": "Plan not found.",
+  "estudos.planoNaoEditavel": "This plan is no longer a proposal.",
+  "estudos.planoInvalido": "Plan in an invalid format.",
+  "estudos.aulaNaoEncontrada": "Lesson not found.",
+  "estudos.mensagemVazia": "Empty message.",
+  "estudos.aguardeTutor": "The tutor is still answering the previous turn.",
+  "estudos.nadaParaResponder": "There is no turn of mine waiting for an answer.",
+  "estudos.perfilInvalido": "Invalid AI profile.",
+  "estudos.modeloInvalido": "Invalid model.",
+  "estudos.effortInvalido": "Invalid effort for Codex.",
+  "estudos.secaoInvalida": "Invalid section.",
+  "estudos.notaVaziaParaRevisar": "This item's note is empty: nothing to review.",
+  "estudos.sugestaoNaoEncontrada": "Suggestion not found.",
+  "estudos.paiInvalido": "The chosen parent item doesn't exist in this topic."
+};
 const rpc$2 = {
   "rpc.canalRpcDesconhecido": "Unknown RPC channel: {channel}",
   "rpc.falhaAoSincronizarOGoogle": "📅 Failed to sync Google Calendar",
@@ -2990,7 +3349,8 @@ const en = {
   ...chats$1,
   ...aiconv$1,
   ...db$1,
-  ...rpc$2
+  ...rpc$2,
+  ...estudos$1
 };
 const common = {
   "common.unknownError": "error desconocido"
@@ -3212,6 +3572,63 @@ const db = {
   "db.projetoNaoEncontrado2": "Proyecto no encontrado",
   "db.situacaoInvalida": "Situación no válida: {status}"
 };
+const estudos = {
+  "estudos.fonteSemTitulo": "La fuente necesita un título.",
+  "estudos.frenteVazia": "El anverso de la tarjeta está vacío.",
+  "estudos.semCopiaParaRestaurar": "La carpeta gestionada aún no tiene copia para restaurar.",
+  "estudos.perguntaVazia": "La pregunta está vacía.",
+  "estudos.arquivoVazio": "Archivo vacío.",
+  "estudos.avaliacaoInvalida": "Valoración no válida.",
+  "estudos.branchInvalido": "Rama no válida.",
+  "estudos.cartaoNaoEncontrado": "Tarjeta no encontrada.",
+  "estudos.fonteNaoEncontrada": "Fuente no encontrada.",
+  "estudos.imagemNaoSuportada": "Formato de imagen no soportado (usa PNG, JPG, GIF, WebP o AVIF).",
+  "estudos.pendenteAntesDesvincular": "Hay un commit pendiente de envío. Sincroniza antes de desvincular.",
+  "estudos.idInvalido": "Identificador no válido.",
+  "estudos.imagemGrande": "Imagen mayor de 15 MB.",
+  "estudos.informeLink": "Indica el enlace.",
+  "estudos.limiteNovosInvalido": "Límite de nuevas no válido.",
+  "estudos.marqueLacuna": "Marca el hueco con {{texto}}.",
+  "estudos.categoriaVazia": "Nombre de categoría vacío.",
+  "estudos.pendenteAntesTrocar": "El repositorio actual tiene un commit pendiente. Sincroniza antes de cambiar.",
+  "estudos.topicoSemTitulo": "El tema necesita un título.",
+  "estudos.versoVazio": "El reverso de la tarjeta está vacío.",
+  "estudos.pastaForaRepo": "Carpeta fuera del repositorio.",
+  "estudos.pastaGerenciadaInvalida": "Carpeta gestionada no válida.",
+  "estudos.pastaNaoEncontrada": "Carpeta no encontrada.",
+  "estudos.perguntaNaoEncontrada": "Pregunta no encontrada.",
+  "estudos.previaExpirada": "Vista previa caducada. Genérala de nuevo.",
+  "estudos.previaInvalida": "Vista previa no válida.",
+  "estudos.remotoInvalido": "Remoto no válido.",
+  "estudos.repoNaoVinculado": "Repositorio no vinculado.",
+  "estudos.resultadoInvalido": "Resultado no válido.",
+  "estudos.statusInvalido": "Estado no válido.",
+  "estudos.tempoInvalido": "Tiempo no válido.",
+  "estudos.topicoNaoEncontrado": "Tema no encontrado.",
+  "estudos.manifestoNaoEncontrado": "manifest.json no encontrado.",
+  "estudos.naoECopia": "La carpeta no es una copia de rickOS Estudios.",
+  "estudos.categoriaExiste": 'La categoría "{nome}" ya existe.',
+  "estudos.pastaOcupada": 'La carpeta "{pasta}" ya está ocupada. Elige otro destino.',
+  "estudos.statusInvalidoValor": "Estado no válido: {status}",
+  "estudos.git": "git {cmd}: {erro}",
+  "estudos.versaoCopia": "Copia en la versión {versao}; actualiza rickOS.",
+  "estudos.respostaInvalida": "El tutor devolvió una respuesta fuera de formato. No se cambió nada; intenta generar de nuevo.",
+  "estudos.pedidoVazio": "Escribe qué quieres estudiar y para qué.",
+  "estudos.planoNaoEncontrado": "Plan no encontrado.",
+  "estudos.planoNaoEditavel": "Este plan ya no es una propuesta.",
+  "estudos.planoInvalido": "Plan con formato no válido.",
+  "estudos.aulaNaoEncontrada": "Clase no encontrada.",
+  "estudos.mensagemVazia": "Mensaje vacío.",
+  "estudos.aguardeTutor": "El tutor aún está respondiendo el turno anterior.",
+  "estudos.nadaParaResponder": "No hay ningún turno mío esperando respuesta.",
+  "estudos.perfilInvalido": "Perfil de IA no válido.",
+  "estudos.modeloInvalido": "Modelo no válido.",
+  "estudos.effortInvalido": "Effort no válido para Codex.",
+  "estudos.secaoInvalida": "Sección no válida.",
+  "estudos.notaVaziaParaRevisar": "La nota de este ítem está vacía: no hay nada que revisar.",
+  "estudos.sugestaoNaoEncontrada": "Sugerencia no encontrada.",
+  "estudos.paiInvalido": "El ítem padre elegido no existe en este tema."
+};
 const rpc$1 = {
   "rpc.canalRpcDesconhecido": "Canal RPC desconocido: {channel}",
   "rpc.falhaAoSincronizarOGoogle": "📅 Error al sincronizar Google Calendar",
@@ -3236,7 +3653,8 @@ const es = {
   ...chats,
   ...aiconv,
   ...db,
-  ...rpc$1
+  ...rpc$1,
+  ...estudos
 };
 const DICTS = { "pt-BR": ptBR, en, es };
 let current = "pt-BR";
@@ -3260,9 +3678,9 @@ function getOne(db2, sql, params = []) {
   const stmt = db2.prepare(sql);
   if (params.length) stmt.bind(params);
   if (stmt.step()) {
-    const obj = stmt.getAsObject();
+    const obj2 = stmt.getAsObject();
     stmt.free();
-    return obj;
+    return obj2;
   }
   stmt.free();
   return null;
@@ -3281,9 +3699,9 @@ let lastRowId = 0;
 function readLastRowId(db2) {
   const stmt = db2.prepare("SELECT last_insert_rowid() as id");
   stmt.step();
-  const id = stmt.getAsObject().id;
+  const id2 = stmt.getAsObject().id;
   stmt.free();
-  return id;
+  return id2;
 }
 function run$2(db2, sql, params = []) {
   const stmt = db2.prepare(sql);
@@ -3306,23 +3724,23 @@ async function createTag(name, color, isProductive) {
     color,
     isProductive
   ]);
-  const id = lastInsertId(db2);
-  return getOne(db2, "SELECT * FROM tags WHERE id = ?", [id]);
+  const id2 = lastInsertId(db2);
+  return getOne(db2, "SELECT * FROM tags WHERE id = ?", [id2]);
 }
-async function updateTag(id, name, color, isProductive) {
+async function updateTag(id2, name, color, isProductive) {
   const db2 = await getDb();
   run$2(db2, "UPDATE tags SET name = ?, color = ?, isProductive = ? WHERE id = ?", [
     name,
     color,
     isProductive,
-    id
+    id2
   ]);
-  return getOne(db2, "SELECT * FROM tags WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM tags WHERE id = ?", [id2]);
 }
-async function deleteTag(id) {
+async function deleteTag(id2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE tasks SET tagId = 1 WHERE tagId = ?", [id]);
-  run$2(db2, "DELETE FROM tags WHERE id = ?", [id]);
+  run$2(db2, "UPDATE tasks SET tagId = 1 WHERE tagId = ?", [id2]);
+  run$2(db2, "DELETE FROM tags WHERE id = ?", [id2]);
 }
 const TASK_WITH_TAG_SQL = `
   SELECT t.id, t.title, t.tagId, t.secondaryTagId, t.startTime, t.endTime, t.studyNodeId,
@@ -3375,8 +3793,8 @@ async function createTask(title, tagId, secondaryTagId, startTime, endTime = nul
     studyNodeId,
     projectId
   ]);
-  const id = lastInsertId(db2);
-  return { id, title, tagId, secondaryTagId, startTime, endTime, studyNodeId, projectId };
+  const id2 = lastInsertId(db2);
+  return { id: id2, title, tagId, secondaryTagId, startTime, endTime, studyNodeId, projectId };
 }
 async function getStudyHoursByTopic() {
   const db2 = await getDb();
@@ -3392,22 +3810,22 @@ async function getStudyHoursByTopic() {
      ORDER BY minutes DESC`
   );
 }
-async function updateTask(id, title, tagId, secondaryTagId, startTime, endTime) {
+async function updateTask(id2, title, tagId, secondaryTagId, startTime, endTime) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE tasks SET title = ?, tagId = ?, secondaryTagId = ?, startTime = ?, endTime = ? WHERE id = ?",
-    [title, tagId, secondaryTagId, startTime, endTime, id]
+    [title, tagId, secondaryTagId, startTime, endTime, id2]
   );
-  return getOne(db2, "SELECT id, title, tagId, secondaryTagId, startTime, endTime, studyNodeId FROM tasks WHERE id = ?", [id]);
+  return getOne(db2, "SELECT id, title, tagId, secondaryTagId, startTime, endTime, studyNodeId FROM tasks WHERE id = ?", [id2]);
 }
-async function stopTask(id, endTime) {
+async function stopTask(id2, endTime) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE tasks SET endTime = ? WHERE id = ?", [endTime, id]);
+  run$2(db2, "UPDATE tasks SET endTime = ? WHERE id = ?", [endTime, id2]);
 }
-async function deleteTask(id) {
+async function deleteTask(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM tasks WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM tasks WHERE id = ?", [id2]);
 }
 async function stopAllActiveTasks(endTime) {
   const db2 = await getDb();
@@ -3577,12 +3995,12 @@ async function createTodo(title, notes, status2, source, priority = 0, dueDate =
     "INSERT INTO todos (title, notes, status, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [title, notes, status2, priority, dueDate, projectId, source, aiGenerated, recurrence, type, createdAt]
   );
-  const id = lastInsertId(db2);
-  return getOne(db2, "SELECT * FROM todos WHERE id = ?", [id]);
+  const id2 = lastInsertId(db2);
+  return getOne(db2, "SELECT * FROM todos WHERE id = ?", [id2]);
 }
-async function updateTodo(id, title, notes, status2, priority, dueDate, projectId, recurrence, type) {
+async function updateTodo(id2, title, notes, status2, priority, dueDate, projectId, recurrence, type) {
   const db2 = await getDb();
-  const prev = getOne(db2, "SELECT status FROM todos WHERE id = ?", [id]);
+  const prev = getOne(db2, "SELECT status FROM todos WHERE id = ?", [id2]);
   const cols = ["title = ?", "notes = ?", "status = ?", "priority = ?", "dueDate = ?", "projectId = ?"];
   const params = [title, notes, status2, priority, dueDate, projectId];
   if (recurrence !== void 0) {
@@ -3599,10 +4017,10 @@ async function updateTodo(id, title, notes, status2, priority, dueDate, projectI
   } else if (status2 !== "done" && prev?.status === "done") {
     cols.push("doneAt = NULL");
   }
-  params.push(id);
+  params.push(id2);
   run$2(db2, `UPDATE todos SET ${cols.join(", ")} WHERE id = ?`, params);
-  if (status2 === "done" && prev?.status !== "done") spawnRecurrenceIfNeeded(db2, id);
-  return getOne(db2, "SELECT * FROM todos WHERE id = ?", [id]);
+  if (status2 === "done" && prev?.status !== "done") spawnRecurrenceIfNeeded(db2, id2);
+  return getOne(db2, "SELECT * FROM todos WHERE id = ?", [id2]);
 }
 function nextDueDate(rec, fromDue) {
   const today2 = /* @__PURE__ */ new Date();
@@ -3621,8 +4039,8 @@ function nextDueDate(rec, fromDue) {
   const d = new Date(today2.getFullYear(), today2.getMonth() + 1, day, 12);
   return iso2(d);
 }
-function spawnRecurrenceIfNeeded(db2, id) {
-  const t = getOne(db2, "SELECT * FROM todos WHERE id = ?", [id]);
+function spawnRecurrenceIfNeeded(db2, id2) {
+  const t = getOne(db2, "SELECT * FROM todos WHERE id = ?", [id2]);
   if (!t || !t.recurrence) return;
   let rec;
   try {
@@ -3638,9 +4056,9 @@ function spawnRecurrenceIfNeeded(db2, id) {
     [t.title, t.notes, "todo", t.priority, nextDue, t.projectId, "recurring", 0, t.recurrence, t.type, (/* @__PURE__ */ new Date()).toISOString()]
   );
 }
-async function deleteTodo(id) {
+async function deleteTodo(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM todos WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM todos WHERE id = ?", [id2]);
 }
 async function getProjects() {
   const db2 = await getDb();
@@ -3653,17 +4071,17 @@ async function createProject(name, description, githubRepoUrl, color, claudeComm
     "INSERT INTO projects (name, description, githubRepoUrl, color, claudeCommand, localPath, stage, businessModel, pricing, audience, status, createdAt, statusChangedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [name, description, githubRepoUrl, color, claudeCommand, localPath, stage, businessModel, pricing, audience, "incubadora", (/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString()]
   );
-  const id = lastInsertId(db2);
-  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  const id2 = lastInsertId(db2);
+  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
 }
-async function updateProject(id, name, description, githubRepoUrl, color, archived, claudeCommand = null, localPath = null, stage = "ideia", businessModel = null, pricing = null, audience = null) {
+async function updateProject(id2, name, description, githubRepoUrl, color, archived, claudeCommand = null, localPath = null, stage = "ideia", businessModel = null, pricing = null, audience = null) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE projects SET name = ?, description = ?, githubRepoUrl = ?, color = ?, archived = ?, claudeCommand = ?, localPath = ?, stage = ?, businessModel = ?, pricing = ?, audience = ? WHERE id = ?",
-    [name, description, githubRepoUrl, color, archived, claudeCommand, localPath, stage, businessModel, pricing, audience, id]
+    [name, description, githubRepoUrl, color, archived, claudeCommand, localPath, stage, businessModel, pricing, audience, id2]
   );
-  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
 }
 async function getProjectRepos(projectId) {
   const db2 = await getDb();
@@ -3773,9 +4191,9 @@ async function absorbProject(targetId, sourceId) {
   }
   saveDb();
 }
-async function setProjectStage(id, stage) {
+async function setProjectStage(id2, stage) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE projects SET stage = ? WHERE id = ?", [stage, id]);
+  run$2(db2, "UPDATE projects SET stage = ? WHERE id = ?", [stage, id2]);
 }
 async function getProjectMilestones() {
   const db2 = await getDb();
@@ -3786,18 +4204,18 @@ async function createProjectMilestone(projectId, title, targetDate) {
   run$2(db2, "INSERT INTO project_milestones (projectId, title, targetDate, createdAt) VALUES (?, ?, ?, ?)", [projectId, title, targetDate, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM project_milestones WHERE id = ?", [lastInsertId(db2)]);
 }
-async function toggleProjectMilestone(id, done) {
+async function toggleProjectMilestone(id2, done) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE project_milestones SET doneAt = ? WHERE id = ?", [done ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
+  run$2(db2, "UPDATE project_milestones SET doneAt = ? WHERE id = ?", [done ? (/* @__PURE__ */ new Date()).toISOString() : null, id2]);
 }
-async function deleteProjectMilestone(id) {
+async function deleteProjectMilestone(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM project_milestones WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM project_milestones WHERE id = ?", [id2]);
 }
-async function deleteProject(id) {
+async function deleteProject(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM project_repos WHERE projectId = ?", [id]);
-  run$2(db2, "DELETE FROM projects WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM project_repos WHERE projectId = ?", [id2]);
+  run$2(db2, "DELETE FROM projects WHERE id = ?", [id2]);
 }
 async function getHabits() {
   const db2 = await getDb();
@@ -3810,23 +4228,23 @@ async function createHabit(name, frequency, target) {
     frequency,
     target
   ]);
-  const id = lastInsertId(db2);
-  return getOne(db2, "SELECT * FROM habits WHERE id = ?", [id]);
+  const id2 = lastInsertId(db2);
+  return getOne(db2, "SELECT * FROM habits WHERE id = ?", [id2]);
 }
-async function updateHabit(id, name, frequency, target, active) {
+async function updateHabit(id2, name, frequency, target, active) {
   const db2 = await getDb();
   run$2(db2, "UPDATE habits SET name = ?, frequency = ?, target = ?, active = ? WHERE id = ?", [
     name,
     frequency,
     target,
     active,
-    id
+    id2
   ]);
-  return getOne(db2, "SELECT * FROM habits WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM habits WHERE id = ?", [id2]);
 }
-async function deleteHabit(id) {
+async function deleteHabit(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM habits WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM habits WHERE id = ?", [id2]);
 }
 async function getHabitEntries(date) {
   const db2 = await getDb();
@@ -3866,7 +4284,7 @@ async function getSetting(key) {
   const row = getOne(db2, "SELECT value FROM settings WHERE key = ?", [key]);
   return row ? row.value : null;
 }
-async function setSetting(key, value) {
+async function setSetting$1(key, value) {
   const db2 = await getDb();
   run$2(
     db2,
@@ -3886,25 +4304,25 @@ async function getGithubIssues() {
   const db2 = await getDb();
   return getAll(db2, "SELECT * FROM github_issues ORDER BY local DESC, updatedAt DESC");
 }
-async function createLocalIssue(repo, title, body) {
+async function createLocalIssue(repo2, title, body) {
   const db2 = await getDb();
   const minRow = getOne(db2, "SELECT MIN(id) as m FROM github_issues WHERE id < 0");
-  const id = (minRow?.m ?? 0) - 1;
+  const id2 = (minRow?.m ?? 0) - 1;
   run$2(
     db2,
     `INSERT INTO github_issues (id, number, title, state, repo, url, labels, milestone, updatedAt, local, body)
      VALUES (?, 0, ?, 'open', ?, NULL, '[]', NULL, ?, 1, ?)`,
-    [id, title, repo, (/* @__PURE__ */ new Date()).toISOString(), body]
+    [id2, title, repo2, (/* @__PURE__ */ new Date()).toISOString(), body]
   );
-  return getOne(db2, "SELECT * FROM github_issues WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM github_issues WHERE id = ?", [id2]);
 }
-async function markIssueOnGithub(id, url2, number) {
+async function markIssueOnGithub(id2, url2, number) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE github_issues SET url = ?, number = ? WHERE id = ?", [url2, number, id]);
+  run$2(db2, "UPDATE github_issues SET url = ?, number = ? WHERE id = ?", [url2, number, id2]);
 }
-async function deleteGithubIssue(id) {
+async function deleteGithubIssue(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM github_issues WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM github_issues WHERE id = ?", [id2]);
 }
 async function replaceGithubIssues(issues) {
   const db2 = await getDb();
@@ -3952,12 +4370,12 @@ async function createCalendarEvent(title, startTime, endTime, location) {
     "INSERT INTO calendar_events (title, startTime, endTime, location, source) VALUES (?, ?, ?, ?, 'manual')",
     [title, startTime, endTime, location]
   );
-  const id = lastInsertId(db2);
-  return getOne(db2, "SELECT * FROM calendar_events WHERE id = ?", [id]);
+  const id2 = lastInsertId(db2);
+  return getOne(db2, "SELECT * FROM calendar_events WHERE id = ?", [id2]);
 }
-async function deleteCalendarEvent(id) {
+async function deleteCalendarEvent(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM calendar_events WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM calendar_events WHERE id = ?", [id2]);
 }
 async function replaceGoogleEvents(events) {
   const db2 = await getDb();
@@ -3979,37 +4397,37 @@ async function createAccount(name, currency2, balance) {
   run$2(db2, "INSERT INTO accounts (name, currency, balance) VALUES (?, ?, ?)", [name, currency2, balance]);
   return getOne(db2, "SELECT * FROM accounts WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateAccount(id, name, currency2, balance) {
+async function updateAccount(id2, name, currency2, balance) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE accounts SET name = ?, currency = ?, balance = ? WHERE id = ?", [name, currency2, balance, id]);
+  run$2(db2, "UPDATE accounts SET name = ?, currency = ?, balance = ? WHERE id = ?", [name, currency2, balance, id2]);
 }
-async function deleteAccount(id) {
+async function deleteAccount(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM accounts WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM accounts WHERE id = ?", [id2]);
 }
 async function getCategories() {
   const db2 = await getDb();
   return getAll(db2, "SELECT * FROM categories ORDER BY type DESC, name");
 }
-async function createCategory$1(name, type, color) {
+async function createCategory$2(name, type, color) {
   const db2 = await getDb();
   run$2(db2, "INSERT INTO categories (name, type, color) VALUES (?, ?, ?)", [name, type, color]);
   return getOne(db2, "SELECT * FROM categories WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateCategory$1(id, name, color) {
+async function updateCategory$1(id2, name, color) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE categories SET name = ?, color = ? WHERE id = ?", [name, color, id]);
+  run$2(db2, "UPDATE categories SET name = ?, color = ? WHERE id = ?", [name, color, id2]);
 }
-async function setCategoryFixedIncome(id, fixed) {
+async function setCategoryFixedIncome(id2, fixed) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE categories SET fixedIncome = ? WHERE id = ?", [fixed ? 1 : 0, id]);
+  run$2(db2, "UPDATE categories SET fixedIncome = ? WHERE id = ?", [fixed ? 1 : 0, id2]);
 }
-async function deleteCategory(id) {
+async function deleteCategory$1(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM finance_rules WHERE categoryId = ?", [id]);
-  run$2(db2, "UPDATE transactions SET categoryId = NULL WHERE categoryId = ?", [id]);
-  run$2(db2, "DELETE FROM budgets WHERE categoryId = ?", [id]);
-  run$2(db2, "DELETE FROM categories WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM finance_rules WHERE categoryId = ?", [id2]);
+  run$2(db2, "UPDATE transactions SET categoryId = NULL WHERE categoryId = ?", [id2]);
+  run$2(db2, "DELETE FROM budgets WHERE categoryId = ?", [id2]);
+  run$2(db2, "DELETE FROM categories WHERE id = ?", [id2]);
 }
 async function getFinanceRules() {
   const db2 = await getDb();
@@ -4025,18 +4443,18 @@ async function createFinanceRule(categoryId, keywords) {
     (/* @__PURE__ */ new Date()).toISOString()
   ]);
 }
-async function updateFinanceRule(id, categoryId, keywords, active) {
+async function updateFinanceRule(id2, categoryId, keywords, active) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE finance_rules SET categoryId = ?, keywords = ?, active = ? WHERE id = ?", [categoryId, keywords, active ? 1 : 0, id]);
+  run$2(db2, "UPDATE finance_rules SET categoryId = ?, keywords = ?, active = ? WHERE id = ?", [categoryId, keywords, active ? 1 : 0, id2]);
 }
-async function deleteFinanceRule(id) {
+async function deleteFinanceRule(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM finance_rules WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM finance_rules WHERE id = ?", [id2]);
 }
-async function moveFinanceRule(id, dir) {
+async function moveFinanceRule(id2, dir) {
   const db2 = await getDb();
   const rules = getAll(db2, "SELECT id, categoryId, keywords, active, position FROM finance_rules ORDER BY position, id");
-  const i = rules.findIndex((r) => r.id === id);
+  const i = rules.findIndex((r) => r.id === id2);
   const j = i + dir;
   if (i < 0 || j < 0 || j >= rules.length) return;
   [rules[i], rules[j]] = [rules[j], rules[i]];
@@ -4051,10 +4469,10 @@ async function upsertExternalAccount(externalId, name, currency2, balance) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const cur = getOne(db2, "SELECT * FROM accounts WHERE externalId = ?", [externalId]);
   const month = `${(/* @__PURE__ */ new Date()).getFullYear()}-${String((/* @__PURE__ */ new Date()).getMonth() + 1).padStart(2, "0")}`;
-  const record = (id2) => run$2(
+  const record = (id22) => run$2(
     db2,
     "INSERT INTO account_balance_history (accountId, month, balance, syncedAt) VALUES (?, ?, ?, ?) ON CONFLICT(accountId, month) DO UPDATE SET balance = excluded.balance, syncedAt = excluded.syncedAt",
-    [id2, month, balance, now]
+    [id22, month, balance, now]
   );
   if (cur) {
     run$2(db2, "UPDATE accounts SET balance = ?, currency = ?, syncedAt = ? WHERE id = ?", [balance, currency2, now, cur.id]);
@@ -4062,9 +4480,9 @@ async function upsertExternalAccount(externalId, name, currency2, balance) {
     return { id: cur.id, created: false };
   }
   run$2(db2, "INSERT INTO accounts (name, currency, balance, externalId, syncedAt) VALUES (?, ?, ?, ?, ?)", [name, currency2, balance, externalId, now]);
-  const id = lastInsertId(db2);
-  record(id);
-  return { id, created: true };
+  const id2 = lastInsertId(db2);
+  record(id2);
+  return { id: id2, created: true };
 }
 async function upsertInvestmentMovements(rows) {
   const db2 = await getDb();
@@ -4139,15 +4557,15 @@ async function createTransaction(accountId, categoryId, amount, currency2, type,
   );
   return getOne(db2, "SELECT * FROM transactions WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateTransaction(id, accountId, categoryId, amount, currency2, type, description, date) {
+async function updateTransaction(id2, accountId, categoryId, amount, currency2, type, description, date) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE transactions SET accountId = ?, categoryId = ?, amount = ?, currency = ?, type = ?, description = ?, date = ? WHERE id = ?",
-    [accountId, categoryId, amount, currency2, type, description, date, id]
+    [accountId, categoryId, amount, currency2, type, description, date, id2]
   );
 }
-async function applyExternalTransactionUpdate(id, fields, externalId, externalSig, pending2) {
+async function applyExternalTransactionUpdate(id2, fields, externalId, externalSig, pending2) {
   const db2 = await getDb();
   const sets = ["externalId = ?", "externalSig = ?", "pending = ?"];
   const vals = [externalId, externalSig, pending2];
@@ -4157,7 +4575,7 @@ async function applyExternalTransactionUpdate(id, fields, externalId, externalSi
       vals.push(fields[k] ?? null);
     }
   }
-  run$2(db2, `UPDATE transactions SET ${sets.join(", ")} WHERE id = ?`, [...vals, id]);
+  run$2(db2, `UPDATE transactions SET ${sets.join(", ")} WHERE id = ?`, [...vals, id2]);
 }
 async function getRecurringOverrides() {
   const db2 = await getDb();
@@ -4181,32 +4599,32 @@ async function setTransactionsRecurring(recurringIds) {
   }
   return changed2;
 }
-async function setTransactionPaymentMethod(id, method) {
+async function setTransactionPaymentMethod(id2, method) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE transactions SET paymentMethod = ? WHERE id = ?", [method, id]);
+  run$2(db2, "UPDATE transactions SET paymentMethod = ? WHERE id = ?", [method, id2]);
 }
-async function setTransactionInvestmentFlag(id, investment) {
+async function setTransactionInvestmentFlag(id2, investment) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE transactions SET investment = ? WHERE id = ?", [investment ? 1 : 0, id]);
+  run$2(db2, "UPDATE transactions SET investment = ? WHERE id = ?", [investment ? 1 : 0, id2]);
 }
-async function setTransactionKind(id, kind) {
+async function setTransactionKind(id2, kind) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE transactions SET investment = ?, transfer = ? WHERE id = ?", [kind === "investment" ? 1 : 0, kind === "transfer" ? 1 : 0, id]);
+  run$2(db2, "UPDATE transactions SET investment = ?, transfer = ? WHERE id = ?", [kind === "investment" ? 1 : 0, kind === "transfer" ? 1 : 0, id2]);
 }
-async function setTransactionIgnored(id, reason) {
+async function setTransactionIgnored(id2, reason) {
   const db2 = await getDb();
   if (reason == null) {
-    const t = getOne(db2, "SELECT id, refundOf FROM transactions WHERE id = ?", [id]);
-    const refund = t?.refundOf && t.refundOf > 0 ? t : getOne(db2, "SELECT id, refundOf FROM transactions WHERE refundOf = ?", [id]);
+    const t = getOne(db2, "SELECT id, refundOf FROM transactions WHERE id = ?", [id2]);
+    const refund = t?.refundOf && t.refundOf > 0 ? t : getOne(db2, "SELECT id, refundOf FROM transactions WHERE refundOf = ?", [id2]);
     if (refund && refund.refundOf && refund.refundOf > 0) {
       run$2(db2, "UPDATE transactions SET ignoredReason = NULL WHERE id IN (?, ?)", [refund.id, refund.refundOf]);
       run$2(db2, "UPDATE transactions SET refundOf = -1 WHERE id = ?", [refund.id]);
       return;
     }
   } else if (reason) {
-    run$2(db2, "UPDATE transactions SET refundOf = COALESCE(refundOf, -1) WHERE id = ? AND type = ?", [id, "income"]);
+    run$2(db2, "UPDATE transactions SET refundOf = COALESCE(refundOf, -1) WHERE id = ? AND type = ?", [id2, "income"]);
   }
-  run$2(db2, "UPDATE transactions SET ignoredReason = ? WHERE id = ?", [reason, id]);
+  run$2(db2, "UPDATE transactions SET ignoredReason = ? WHERE id = ?", [reason, id2]);
 }
 async function applyRefundPairs(pairs, refundReason, refundedReason) {
   const db2 = await getDb();
@@ -4215,9 +4633,9 @@ async function applyRefundPairs(pairs, refundReason, refundedReason) {
     run$2(db2, "UPDATE transactions SET ignoredReason = ? WHERE id = ?", [refundedReason, purchaseId]);
   }
 }
-async function deleteTransaction(id) {
+async function deleteTransaction(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM transactions WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM transactions WHERE id = ?", [id2]);
 }
 async function bulkInsertTransactions(rows) {
   const db2 = await getDb();
@@ -4266,9 +4684,9 @@ async function getInvestmentHistory() {
 async function createInvestment(name, type, amount, currency2, month, groupKey) {
   const db2 = await getDb();
   run$2(db2, "INSERT INTO investments (name, type, amount, currency, groupKey) VALUES (?, ?, ?, ?, ?)", [name, type, amount, currency2, groupKey ?? null]);
-  const id = lastInsertId(db2);
-  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id, month || currentMonthKey(), amount]);
-  return getOne(db2, "SELECT * FROM investments WHERE id = ?", [id]);
+  const id2 = lastInsertId(db2);
+  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount) VALUES (?, ?, ?)", [id2, month || currentMonthKey(), amount]);
+  return getOne(db2, "SELECT * FROM investments WHERE id = ?", [id2]);
 }
 async function setInvestmentValue(investmentId, month, amount) {
   const db2 = await getDb();
@@ -4284,24 +4702,24 @@ async function setInvestmentValue(investmentId, month, amount) {
   }
   syncInvestmentLatest(db2, investmentId);
 }
-async function closeInvestment(id, month) {
+async function closeInvestment(id2, month) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM investment_history WHERE investmentId = ? AND month >= ?", [id, month]);
-  const before = getOne(db2, "SELECT COUNT(*) AS n FROM investment_history WHERE investmentId = ?", [id]);
+  run$2(db2, "DELETE FROM investment_history WHERE investmentId = ? AND month >= ?", [id2, month]);
+  const before = getOne(db2, "SELECT COUNT(*) AS n FROM investment_history WHERE investmentId = ?", [id2]);
   if (!before?.n) {
-    run$2(db2, "DELETE FROM investments WHERE id = ?", [id]);
+    run$2(db2, "DELETE FROM investments WHERE id = ?", [id2]);
     return;
   }
-  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount, closed) VALUES (?, ?, 0, 1)", [id, month]);
-  syncInvestmentLatest(db2, id);
+  run$2(db2, "INSERT INTO investment_history (investmentId, month, amount, closed) VALUES (?, ?, 0, 1)", [id2, month]);
+  syncInvestmentLatest(db2, id2);
 }
-async function renameInvestment(id, name) {
+async function renameInvestment(id2, name) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id]);
+  run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id2]);
 }
-async function setInvestmentGroup(id, groupKey) {
+async function setInvestmentGroup(id2, groupKey) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE investments SET groupKey = ? WHERE id = ?", [groupKey, id]);
+  run$2(db2, "UPDATE investments SET groupKey = ? WHERE id = ?", [groupKey, id2]);
 }
 async function getInvestmentGroups() {
   const db2 = await getDb();
@@ -4340,19 +4758,19 @@ async function moveInvestmentGroup(key, dir) {
   [order[i], order[j]] = [order[j], order[i]];
   order.forEach((k, idx) => run$2(db2, "UPDATE investment_groups SET sortOrder = ? WHERE key = ?", [(idx + 1) * 10, k]));
 }
-async function setInvestmentExternal(id, externalId, externalName, details, type, name) {
+async function setInvestmentExternal(id2, externalId, externalName, details, type, name) {
   const db2 = await getDb();
-  if (name) run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id]);
-  run$2(db2, "UPDATE investments SET externalId = ?, externalName = ?, details = ?, type = ? WHERE id = ?", [externalId, externalName, details, type, id]);
+  if (name) run$2(db2, "UPDATE investments SET name = ? WHERE id = ?", [name, id2]);
+  run$2(db2, "UPDATE investments SET externalId = ?, externalName = ?, details = ?, type = ? WHERE id = ?", [externalId, externalName, details, type, id2]);
 }
-async function getInvestmentLatest(id) {
+async function getInvestmentLatest(id2) {
   const db2 = await getDb();
-  return getOne(db2, "SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1", [id]) ?? null;
+  return getOne(db2, "SELECT * FROM investment_history WHERE investmentId = ? ORDER BY month DESC LIMIT 1", [id2]) ?? null;
 }
-async function deleteInvestment(id) {
+async function deleteInvestment(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM investment_history WHERE investmentId = ?", [id]);
-  run$2(db2, "DELETE FROM investments WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM investment_history WHERE investmentId = ?", [id2]);
+  run$2(db2, "DELETE FROM investments WHERE id = ?", [id2]);
 }
 async function getTrips() {
   const db2 = await getDb();
@@ -4367,17 +4785,17 @@ async function createTrip(origin, destination, startDate, endDate, budget, curre
   );
   return getOne(db2, "SELECT * FROM trips WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateTrip(id, origin, destination, startDate, endDate, budget, currency2, status2) {
+async function updateTrip(id2, origin, destination, startDate, endDate, budget, currency2, status2) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE trips SET origin = ?, destination = ?, startDate = ?, endDate = ?, budget = ?, currency = ?, status = ? WHERE id = ?",
-    [origin, destination, startDate, endDate, budget, currency2, status2, id]
+    [origin, destination, startDate, endDate, budget, currency2, status2, id2]
   );
 }
-async function deleteTrip(id) {
+async function deleteTrip(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM trips WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM trips WHERE id = ?", [id2]);
 }
 async function getTripDocuments(tripId) {
   const db2 = await getDb();
@@ -4399,43 +4817,43 @@ async function getSkills() {
 async function createSkill(name, description, category, tags, content) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const id = crypto.randomUUID();
+  const id2 = crypto.randomUUID();
   run$2(
     db2,
     `INSERT INTO skills (id, name, description, category, tags, content, isFavorite, usageCount, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
-    [id, name, description, category, tags, content, now, now]
+    [id2, name, description, category, tags, content, now, now]
   );
-  return getOne(db2, "SELECT * FROM skills WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM skills WHERE id = ?", [id2]);
 }
-async function updateSkill(id, name, description, category, tags, content) {
+async function updateSkill(id2, name, description, category, tags, content) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE skills SET name = ?, description = ?, category = ?, tags = ?, content = ?, updatedAt = ? WHERE id = ?",
-    [name, description, category, tags, content, (/* @__PURE__ */ new Date()).toISOString(), id]
+    [name, description, category, tags, content, (/* @__PURE__ */ new Date()).toISOString(), id2]
   );
-  return getOne(db2, "SELECT * FROM skills WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM skills WHERE id = ?", [id2]);
 }
-async function deleteSkill(id) {
+async function deleteSkill(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM skills WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM skills WHERE id = ?", [id2]);
 }
-async function toggleSkillFavorite(id) {
+async function toggleSkillFavorite(id2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE skills SET isFavorite = 1 - isFavorite WHERE id = ?", [id]);
+  run$2(db2, "UPDATE skills SET isFavorite = 1 - isFavorite WHERE id = ?", [id2]);
 }
 async function importSkill(s2) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const exists = s2.id ? getOne(db2, "SELECT id FROM skills WHERE id = ?", [s2.id]) : null;
-  const id = exists || !s2.id ? crypto.randomUUID() : s2.id;
+  const id2 = exists || !s2.id ? crypto.randomUUID() : s2.id;
   run$2(
     db2,
     `INSERT INTO skills (id, name, description, category, tags, content, isFavorite, usageCount, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     [
-      id,
+      id2,
       s2.name,
       s2.description ?? null,
       s2.category ?? null,
@@ -4446,7 +4864,7 @@ async function importSkill(s2) {
       now
     ]
   );
-  return getOne(db2, "SELECT * FROM skills WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM skills WHERE id = ?", [id2]);
 }
 async function getAgents() {
   const db2 = await getDb();
@@ -4455,43 +4873,43 @@ async function getAgents() {
 async function createAgent(name, description, role, systemPrompt, defaultSkillIds, tags) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const id = crypto.randomUUID();
+  const id2 = crypto.randomUUID();
   run$2(
     db2,
     `INSERT INTO agents (id, name, description, role, systemPrompt, defaultSkillIds, tags, isFavorite, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-    [id, name, description, role, systemPrompt, defaultSkillIds, tags, now, now]
+    [id2, name, description, role, systemPrompt, defaultSkillIds, tags, now, now]
   );
-  return getOne(db2, "SELECT * FROM agents WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM agents WHERE id = ?", [id2]);
 }
-async function updateAgent(id, name, description, role, systemPrompt, defaultSkillIds, tags) {
+async function updateAgent(id2, name, description, role, systemPrompt, defaultSkillIds, tags) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE agents SET name = ?, description = ?, role = ?, systemPrompt = ?, defaultSkillIds = ?, tags = ?, updatedAt = ? WHERE id = ?",
-    [name, description, role, systemPrompt, defaultSkillIds, tags, (/* @__PURE__ */ new Date()).toISOString(), id]
+    [name, description, role, systemPrompt, defaultSkillIds, tags, (/* @__PURE__ */ new Date()).toISOString(), id2]
   );
-  return getOne(db2, "SELECT * FROM agents WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM agents WHERE id = ?", [id2]);
 }
-async function deleteAgent(id) {
+async function deleteAgent(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM agents WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM agents WHERE id = ?", [id2]);
 }
-async function toggleAgentFavorite(id) {
+async function toggleAgentFavorite(id2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE agents SET isFavorite = 1 - isFavorite WHERE id = ?", [id]);
+  run$2(db2, "UPDATE agents SET isFavorite = 1 - isFavorite WHERE id = ?", [id2]);
 }
 async function importAgent(a) {
   const db2 = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const exists = a.id ? getOne(db2, "SELECT id FROM agents WHERE id = ?", [a.id]) : null;
-  const id = exists || !a.id ? crypto.randomUUID() : a.id;
+  const id2 = exists || !a.id ? crypto.randomUUID() : a.id;
   run$2(
     db2,
     `INSERT INTO agents (id, name, description, role, systemPrompt, defaultSkillIds, tags, isFavorite, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id,
+      id2,
       a.name,
       a.description ?? null,
       a.role ?? null,
@@ -4503,7 +4921,7 @@ async function importAgent(a) {
       now
     ]
   );
-  return getOne(db2, "SELECT * FROM agents WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM agents WHERE id = ?", [id2]);
 }
 async function getExecutions() {
   const db2 = await getDb();
@@ -4511,23 +4929,23 @@ async function getExecutions() {
 }
 async function createExecution(agentId, skillIds, userPrompt, finalPrompt, response) {
   const db2 = await getDb();
-  const id = crypto.randomUUID();
+  const id2 = crypto.randomUUID();
   run$2(
     db2,
     `INSERT INTO prompt_executions (id, createdAt, agentId, skillIds, userPrompt, finalPrompt, response)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, (/* @__PURE__ */ new Date()).toISOString(), agentId, skillIds, userPrompt, finalPrompt, response]
+    [id2, (/* @__PURE__ */ new Date()).toISOString(), agentId, skillIds, userPrompt, finalPrompt, response]
   );
   try {
     const ids2 = JSON.parse(skillIds);
     for (const sid of ids2) run$2(db2, "UPDATE skills SET usageCount = usageCount + 1 WHERE id = ?", [sid]);
   } catch {
   }
-  return getOne(db2, "SELECT * FROM prompt_executions WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM prompt_executions WHERE id = ?", [id2]);
 }
-async function deleteExecution(id) {
+async function deleteExecution(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM prompt_executions WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM prompt_executions WHERE id = ?", [id2]);
 }
 async function getLinks() {
   const db2 = await getDb();
@@ -4543,21 +4961,21 @@ async function createLink(title, url2, tags = "[]") {
   ]);
   return getOne(db2, "SELECT * FROM links WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateLink(id, title, url2, tags = "[]") {
+async function updateLink(id2, title, url2, tags = "[]") {
   const db2 = await getDb();
-  run$2(db2, "UPDATE links SET title = ?, url = ?, tags = ? WHERE id = ?", [title, url2, tags, id]);
+  run$2(db2, "UPDATE links SET title = ?, url = ?, tags = ? WHERE id = ?", [title, url2, tags, id2]);
 }
-async function setLinkChecked(id, checked) {
+async function setLinkChecked(id2, checked) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE links SET checked = ? WHERE id = ?", [checked, id]);
+  run$2(db2, "UPDATE links SET checked = ? WHERE id = ?", [checked, id2]);
 }
-async function setLinkOpened(id) {
+async function setLinkOpened(id2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE links SET lastOpenedAt = ? WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id]);
+  run$2(db2, "UPDATE links SET lastOpenedAt = ? WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id2]);
 }
-async function deleteLink(id) {
+async function deleteLink(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM links WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM links WHERE id = ?", [id2]);
 }
 async function getStayFavorites() {
   const db2 = await getDb();
@@ -4571,9 +4989,9 @@ async function addStayFavorite(f) {
     [f.id, f.tripId, f.provider, f.listingUrl, f.title, f.pricePerNight, f.currency, f.data, f.createdAt || (/* @__PURE__ */ new Date()).toISOString()]
   );
 }
-async function removeStayFavorite(id) {
+async function removeStayFavorite(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM travel_stay_favorites WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM travel_stay_favorites WHERE id = ?", [id2]);
 }
 async function getStayWatches() {
   const db2 = await getDb();
@@ -4587,14 +5005,14 @@ async function addStayWatch(w) {
     [w.id, w.city, w.filters, w.currentPrice, w.bestPrice, w.currency, w.lastCheckedAt, w.createdAt || (/* @__PURE__ */ new Date()).toISOString()]
   );
 }
-async function updateStayWatchPrice(id, currentPrice, bestPrice, checkedAt) {
+async function updateStayWatchPrice(id2, currentPrice, bestPrice, checkedAt) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE travel_stay_watches SET currentPrice = ?, bestPrice = ?, lastCheckedAt = ? WHERE id = ?", [currentPrice, bestPrice, checkedAt, id]);
+  run$2(db2, "UPDATE travel_stay_watches SET currentPrice = ?, bestPrice = ?, lastCheckedAt = ? WHERE id = ?", [currentPrice, bestPrice, checkedAt, id2]);
 }
-async function removeStayWatch(id) {
+async function removeStayWatch(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM travel_stay_watches WHERE id = ?", [id]);
-  run$2(db2, "DELETE FROM travel_stay_price_history WHERE watchId = ?", [id]);
+  run$2(db2, "DELETE FROM travel_stay_watches WHERE id = ?", [id2]);
+  run$2(db2, "DELETE FROM travel_stay_price_history WHERE watchId = ?", [id2]);
 }
 async function getStayPriceHistory(watchId) {
   const db2 = await getDb();
@@ -4626,23 +5044,23 @@ async function createContact(name, location, country, state, birthday, interests
   );
   return getOne(db2, "SELECT * FROM contacts WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateContact(id, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp) {
+async function updateContact(id2, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE contacts SET name = ?, location = ?, country = ?, state = ?, birthday = ?, interests = ?, context = ?, lastContactAt = ?, nextFollowUp = ? WHERE id = ?",
-    [name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp, id]
+    [name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp, id2]
   );
-  return getOne(db2, "SELECT * FROM contacts WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM contacts WHERE id = ?", [id2]);
 }
-async function logContact(id) {
+async function logContact(id2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE contacts SET lastContactAt = ?, nextFollowUp = NULL WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id]);
-  return getOne(db2, "SELECT * FROM contacts WHERE id = ?", [id]);
+  run$2(db2, "UPDATE contacts SET lastContactAt = ?, nextFollowUp = NULL WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), id2]);
+  return getOne(db2, "SELECT * FROM contacts WHERE id = ?", [id2]);
 }
-async function deleteContact(id) {
+async function deleteContact(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM contacts WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM contacts WHERE id = ?", [id2]);
 }
 async function getRules() {
   const db2 = await getDb();
@@ -4653,17 +5071,17 @@ async function createRule(type, params) {
   run$2(db2, "INSERT INTO rules (type, enabled, params, createdAt) VALUES (?, 1, ?, ?)", [type, params, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM rules WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateRule(id, enabled, params) {
+async function updateRule(id2, enabled, params) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE rules SET enabled = ?, params = ? WHERE id = ?", [enabled, params, id]);
+  run$2(db2, "UPDATE rules SET enabled = ?, params = ? WHERE id = ?", [enabled, params, id2]);
 }
-async function setRuleFired(id, at) {
+async function setRuleFired(id2, at) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE rules SET lastFiredAt = ? WHERE id = ?", [at, id]);
+  run$2(db2, "UPDATE rules SET lastFiredAt = ? WHERE id = ?", [at, id2]);
 }
-async function deleteRule(id) {
+async function deleteRule(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM rules WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM rules WHERE id = ?", [id2]);
 }
 async function getScheduledJobs() {
   const db2 = await getDb();
@@ -4674,17 +5092,17 @@ async function createScheduledJob(name, prompt, hour) {
   run$2(db2, "INSERT INTO scheduled_jobs (name, prompt, hour, enabled, createdAt) VALUES (?, ?, ?, 1, ?)", [name, prompt, hour, (/* @__PURE__ */ new Date()).toISOString()]);
   return getOne(db2, "SELECT * FROM scheduled_jobs WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateScheduledJob(id, name, prompt, hour, enabled) {
+async function updateScheduledJob(id2, name, prompt, hour, enabled) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE scheduled_jobs SET name = ?, prompt = ?, hour = ?, enabled = ? WHERE id = ?", [name, prompt, hour, enabled, id]);
+  run$2(db2, "UPDATE scheduled_jobs SET name = ?, prompt = ?, hour = ?, enabled = ? WHERE id = ?", [name, prompt, hour, enabled, id2]);
 }
-async function setJobRan(id, at) {
+async function setJobRan(id2, at) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE scheduled_jobs SET lastRunAt = ? WHERE id = ?", [at, id]);
+  run$2(db2, "UPDATE scheduled_jobs SET lastRunAt = ? WHERE id = ?", [at, id2]);
 }
-async function deleteScheduledJob(id) {
+async function deleteScheduledJob(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM scheduled_jobs WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM scheduled_jobs WHERE id = ?", [id2]);
 }
 async function getGoals(month) {
   const db2 = await getDb();
@@ -4699,14 +5117,14 @@ async function createGoal(month, title, kind, refId, target, unit) {
   );
   return getOne(db2, "SELECT * FROM goals WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateGoal(id, title, target, current2, unit, done) {
+async function updateGoal(id2, title, target, current2, unit, done) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE goals SET title = ?, target = ?, current = ?, unit = ?, done = ? WHERE id = ?", [title, target, current2, unit, done, id]);
-  return getOne(db2, "SELECT * FROM goals WHERE id = ?", [id]);
+  run$2(db2, "UPDATE goals SET title = ?, target = ?, current = ?, unit = ?, done = ? WHERE id = ?", [title, target, current2, unit, done, id2]);
+  return getOne(db2, "SELECT * FROM goals WHERE id = ?", [id2]);
 }
-async function deleteGoal(id) {
+async function deleteGoal(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM goals WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM goals WHERE id = ?", [id2]);
 }
 async function getStudyTopics() {
   const db2 = await getDb();
@@ -4721,18 +5139,18 @@ async function createStudyTopic(name, category, status2, targetDate, priority, c
   );
   return getOne(db2, "SELECT * FROM study_topics WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateStudyTopic(id, name, category, status2, targetDate, priority, color) {
+async function updateStudyTopic(id2, name, category, status2, targetDate, priority, color) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE study_topics SET name = ?, category = ?, status = ?, targetDate = ?, priority = ?, color = ? WHERE id = ?",
-    [name, category, status2, targetDate, priority, color, id]
+    [name, category, status2, targetDate, priority, color, id2]
   );
-  return getOne(db2, "SELECT * FROM study_topics WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM study_topics WHERE id = ?", [id2]);
 }
-async function deleteStudyTopic(id) {
+async function deleteStudyTopic(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM study_topics WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM study_topics WHERE id = ?", [id2]);
 }
 async function getStudyNodes(topicId) {
   const db2 = await getDb();
@@ -4761,20 +5179,20 @@ async function createStudyNode(topicId, parentId, title, description, estimatedH
   );
   return getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateStudyNode(id, title, description, status2, estimatedHours) {
+async function updateStudyNode(id2, title, description, status2, estimatedHours) {
   const db2 = await getDb();
   const completedAt = status2 === "done" ? (/* @__PURE__ */ new Date()).toISOString() : null;
   run$2(
     db2,
     "UPDATE study_nodes SET title = ?, description = ?, status = ?, estimatedHours = ?, completedAt = ? WHERE id = ?",
-    [title, description, status2, estimatedHours, completedAt, id]
+    [title, description, status2, estimatedHours, completedAt, id2]
   );
-  return getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [id2]);
 }
-async function deleteStudyNode(id) {
+async function deleteStudyNode(id2) {
   const db2 = await getDb();
   const all2 = getAll(db2, "SELECT id, parentId FROM study_nodes");
-  const toDelete = /* @__PURE__ */ new Set([id]);
+  const toDelete = /* @__PURE__ */ new Set([id2]);
   let grew = true;
   while (grew) {
     grew = false;
@@ -4787,13 +5205,13 @@ async function deleteStudyNode(id) {
   }
   for (const nid of toDelete) run$2(db2, "DELETE FROM study_nodes WHERE id = ?", [nid]);
 }
-async function reorderStudyNode(id, newParentId, newIndex) {
+async function reorderStudyNode(id2, newParentId, newIndex) {
   const db2 = await getDb();
-  const n = getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [id]);
+  const n = getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [id2]);
   if (!n) return;
   if (newParentId != null) {
     const all2 = getAll(db2, "SELECT id, parentId FROM study_nodes WHERE topicId = ?", [n.topicId]);
-    const desc = /* @__PURE__ */ new Set([id]);
+    const desc = /* @__PURE__ */ new Set([id2]);
     let grew = true;
     while (grew) {
       grew = false;
@@ -4809,23 +5227,23 @@ async function reorderStudyNode(id, newParentId, newIndex) {
   const siblings = getAll(
     db2,
     "SELECT * FROM study_nodes WHERE topicId = ? AND IFNULL(parentId, -1) = IFNULL(?, -1) AND id <> ? ORDER BY orderIndex ASC, id ASC",
-    [n.topicId, newParentId, id]
+    [n.topicId, newParentId, id2]
   );
   const clamped = Math.max(0, Math.min(newIndex, siblings.length));
   siblings.splice(clamped, 0, n);
-  run$2(db2, "UPDATE study_nodes SET parentId = ? WHERE id = ?", [newParentId, id]);
+  run$2(db2, "UPDATE study_nodes SET parentId = ? WHERE id = ?", [newParentId, id2]);
   siblings.forEach((s2, i) => run$2(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [i, s2.id]));
 }
-async function moveStudyNode(id, dir) {
+async function moveStudyNode(id2, dir) {
   const db2 = await getDb();
-  const node = getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [id]);
+  const node = getOne(db2, "SELECT * FROM study_nodes WHERE id = ?", [id2]);
   if (!node) return;
   const siblings = getAll(
     db2,
     "SELECT * FROM study_nodes WHERE topicId = ? AND IFNULL(parentId, -1) = IFNULL(?, -1) ORDER BY orderIndex ASC, id ASC",
     [node.topicId, node.parentId]
   );
-  const idx = siblings.findIndex((s2) => s2.id === id);
+  const idx = siblings.findIndex((s2) => s2.id === id2);
   const swapWith = dir === "up" ? siblings[idx - 1] : siblings[idx + 1];
   if (!swapWith) return;
   run$2(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [swapWith.orderIndex, node.id]);
@@ -4850,13 +5268,17 @@ async function getStudyFlashcards(topicId) {
   const db2 = await getDb();
   return topicId == null ? getAll(db2, "SELECT * FROM study_flashcards ORDER BY id DESC") : getAll(db2, "SELECT * FROM study_flashcards WHERE topicId = ? ORDER BY id DESC", [topicId]);
 }
-async function getDueFlashcards(nowISO) {
-  const db2 = await getDb();
-  return getAll(
-    db2,
-    "SELECT * FROM study_flashcards WHERE nextReviewAt IS NULL OR nextReviewAt <= ? ORDER BY nextReviewAt ASC, id ASC",
-    [nowISO]
-  );
+async function getDueFlashcards(_nowISO) {
+  const { getReviewQueue: getReviewQueue2 } = await Promise.resolve().then(() => repo);
+  const q2 = await getReviewQueue2({});
+  return q2.items.map((i) => ({
+    ...i.card,
+    easeFactor: i.state.easeFactor,
+    intervalDays: i.state.intervalDays,
+    repetitions: i.state.repetitions,
+    nextReviewAt: i.state.nextReviewAt,
+    lastReviewedAt: i.state.lastReviewedAt
+  }));
 }
 async function createStudyFlashcard(topicId, nodeId, front, back) {
   const db2 = await getDb();
@@ -4865,29 +5287,36 @@ async function createStudyFlashcard(topicId, nodeId, front, back) {
     "INSERT INTO study_flashcards (topicId, nodeId, front, back, createdAt) VALUES (?, ?, ?, ?, ?)",
     [topicId, nodeId, front, back, (/* @__PURE__ */ new Date()).toISOString()]
   );
-  return getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [lastInsertId(db2)]);
+  const cardId = lastInsertId(db2);
+  run$2(db2, "INSERT OR IGNORE INTO study_card_states (cardId, direction) VALUES (?, 'forward')", [cardId]);
+  return getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [cardId]);
 }
-async function updateStudyFlashcard(id, front, back) {
+async function updateStudyFlashcard(id2, front, back) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE study_flashcards SET front = ?, back = ? WHERE id = ?", [front, back, id]);
-  return getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id]);
+  run$2(db2, "UPDATE study_flashcards SET front = ?, back = ? WHERE id = ?", [front, back, id2]);
+  return getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id2]);
 }
-async function deleteStudyFlashcard(id) {
+async function deleteStudyFlashcard(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM study_flashcards WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM study_flashcards WHERE id = ?", [id2]);
 }
-async function reviewStudyFlashcard(id, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating) {
+async function reviewStudyFlashcard(id2, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating) {
   const db2 = await getDb();
   run$2(
     db2,
     "UPDATE study_flashcards SET easeFactor = ?, intervalDays = ?, repetitions = ?, nextReviewAt = ?, lastReviewedAt = ? WHERE id = ?",
-    [easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, id]
+    [easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, id2]
   );
-  const card = getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id]);
+  const card = getOne(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id2]);
   run$2(
     db2,
-    "INSERT INTO study_review_log (flashcardId, topicId, rating, reviewedAt) VALUES (?, ?, ?, ?)",
-    [id, card.topicId, rating ?? null, lastReviewedAt]
+    "UPDATE study_card_states SET easeFactor = ?, intervalDays = ?, repetitions = ?, nextReviewAt = ?, lastReviewedAt = ?, introducedAt = COALESCE(introducedAt, ?) WHERE cardId = ? AND direction = 'forward'",
+    [easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, lastReviewedAt, id2]
+  );
+  run$2(
+    db2,
+    "INSERT INTO study_review_log (flashcardId, topicId, rating, reviewedAt, direction) VALUES (?, ?, ?, ?, 'forward')",
+    [id2, card.topicId, rating ?? null, lastReviewedAt]
   );
   return card;
 }
@@ -4968,6 +5397,11 @@ async function importStudyBundle(bundle) {
       "INSERT INTO study_flashcards (topicId, nodeId, front, back, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [newTopicId, mappedNode, fc.front, fc.back, fc.easeFactor ?? 2.5, fc.intervalDays ?? 0, fc.repetitions ?? 0, fc.nextReviewAt ?? null, fc.lastReviewedAt ?? null, fc.createdAt ?? now]
     );
+    run$2(
+      db2,
+      "INSERT OR IGNORE INTO study_card_states (cardId, direction, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, introducedAt) VALUES (?, 'forward', ?, ?, ?, ?, ?, ?)",
+      [lastInsertId(db2), fc.easeFactor ?? 2.5, fc.intervalDays ?? 0, fc.repetitions ?? 0, fc.nextReviewAt ?? null, fc.lastReviewedAt ?? null, fc.lastReviewedAt ?? null]
+    );
   }
   return newTopicId;
 }
@@ -5007,34 +5441,34 @@ async function getAiUsage(from, to) {
 async function getAiChamadas() {
   return getAll(await getDb(), "SELECT * FROM ai_chamadas");
 }
-async function getAiChamada(id) {
-  return getOne(await getDb(), "SELECT * FROM ai_chamadas WHERE id = ?", [id]);
+async function getAiChamada(id2) {
+  return getOne(await getDb(), "SELECT * FROM ai_chamadas WHERE id = ?", [id2]);
 }
-async function setAiChamadaMotor(id, motor) {
+async function setAiChamadaMotor(id2, motor) {
   const db2 = await getDb();
   run$2(
     db2,
     `INSERT INTO ai_chamadas (id, motor, modelo, effort, updatedAt) VALUES (?, ?, NULL, NULL, ?)
      ON CONFLICT(id) DO UPDATE SET motor = excluded.motor, modelo = NULL, effort = NULL, updatedAt = excluded.updatedAt`,
-    [id, motor, (/* @__PURE__ */ new Date()).toISOString()]
+    [id2, motor, (/* @__PURE__ */ new Date()).toISOString()]
   );
 }
-async function setAiChamadaModelo(id, modelo, effort) {
+async function setAiChamadaModelo(id2, modelo, effort) {
   const db2 = await getDb();
   run$2(
     db2,
     `INSERT INTO ai_chamadas (id, modelo, effort, updatedAt) VALUES (?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET modelo = excluded.modelo, effort = excluded.effort, updatedAt = excluded.updatedAt`,
-    [id, modelo, effort, (/* @__PURE__ */ new Date()).toISOString()]
+    [id2, modelo, effort, (/* @__PURE__ */ new Date()).toISOString()]
   );
 }
-async function setAiChamadaPrompt(id, template, sistema) {
+async function setAiChamadaPrompt(id2, template, sistema) {
   const db2 = await getDb();
   run$2(
     db2,
     `INSERT INTO ai_chamadas (id, template, sistema, updatedAt) VALUES (?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET template = excluded.template, sistema = excluded.sistema, updatedAt = excluded.updatedAt`,
-    [id, template, sistema, (/* @__PURE__ */ new Date()).toISOString()]
+    [id2, template, sistema, (/* @__PURE__ */ new Date()).toISOString()]
   );
 }
 const NOTIFICATIONS_KEEP = 500;
@@ -5061,9 +5495,9 @@ async function getUnreadNotificationCount() {
   const db2 = await getDb();
   return getOne(db2, "SELECT COUNT(*) AS n FROM notifications WHERE readAt IS NULL")?.n ?? 0;
 }
-async function markNotificationRead(id, read2 = true) {
+async function markNotificationRead(id2, read2 = true) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE notifications SET readAt = ? WHERE id = ?", [read2 ? (/* @__PURE__ */ new Date()).toISOString() : null, id]);
+  run$2(db2, "UPDATE notifications SET readAt = ? WHERE id = ?", [read2 ? (/* @__PURE__ */ new Date()).toISOString() : null, id2]);
 }
 function notificationScopeSql(scope) {
   if (scope === "claude") return " AND (source = 'claude' OR page = 'ai-runner')";
@@ -5074,9 +5508,9 @@ async function markAllNotificationsRead(scope) {
   const db2 = await getDb();
   run$2(db2, `UPDATE notifications SET readAt = ? WHERE readAt IS NULL${notificationScopeSql(scope)}`, [(/* @__PURE__ */ new Date()).toISOString()]);
 }
-async function deleteNotification(id) {
+async function deleteNotification(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM notifications WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM notifications WHERE id = ?", [id2]);
 }
 async function clearNotifications(onlyRead = false, scope) {
   const db2 = await getDb();
@@ -5097,23 +5531,23 @@ function detectProjectMention(db2, title) {
   };
   const bracket = title.match(/^\s*\[([^\]]+)\]\s*/);
   if (bracket) {
-    const id = find(bracket[1]);
-    if (id) return { projectId: id, title: title.slice(bracket[0].length).trim() || title };
+    const id2 = find(bracket[1]);
+    if (id2) return { projectId: id2, title: title.slice(bracket[0].length).trim() || title };
   }
   const hashRe = /(^|\s)#([\p{L}\p{N}_\-/.]+)/gu;
   let m;
   while (m = hashRe.exec(title)) {
-    const id = find(m[2]);
-    if (id) {
-      const clean = (title.slice(0, m.index) + m[1] + title.slice(m.index + m[0].length)).replace(/\s{2,}/g, " ").trim();
-      return { projectId: id, title: clean || title };
+    const id2 = find(m[2]);
+    if (id2) {
+      const clean2 = (title.slice(0, m.index) + m[1] + title.slice(m.index + m[0].length)).replace(/\s{2,}/g, " ").trim();
+      return { projectId: id2, title: clean2 || title };
     }
   }
   return null;
 }
-async function getProject(id) {
+async function getProject(id2) {
   const db2 = await getDb();
-  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
 }
 async function addProjectEvent(projectId, kind, text, fromStatus = null, toStatus = null) {
   const db2 = await getDb();
@@ -5170,9 +5604,9 @@ const PROJECT_PATCHABLE = /* @__PURE__ */ new Set([
   "workTagId",
   "workTagId2"
 ]);
-async function patchProject(id, fields, opts = {}) {
+async function patchProject(id2, fields, opts = {}) {
   const db2 = await getDb();
-  const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
   if (!prev) throw new Error(tt("db.projetoNaoEncontrado2"));
   const cols = [];
   const params = [];
@@ -5189,25 +5623,25 @@ async function patchProject(id, fields, opts = {}) {
     else if (opts.linkTodo) {
       const wanted = typeof fields.nextActionTodoId === "number" ? fields.nextActionTodoId : null;
       cols.push("nextActionTodoId = ?");
-      params.push(ensureNextActionTodo(db2, id, text, wanted));
+      params.push(ensureNextActionTodo(db2, id2, text, wanted));
     } else if (text !== prev.nextAction) cols.push("nextActionTodoId = NULL");
   }
   if ("whereLeftOff" in fields) cols.push(`whereLeftOffAt = '${now}'`);
   if (!cols.length) return prev;
-  params.push(id);
+  params.push(id2);
   run$2(db2, `UPDATE projects SET ${cols.join(", ")} WHERE id = ?`, params);
-  const next = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
-  const log2 = (kind, text) => run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, kind, text, now]);
+  const next = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
+  const log2 = (kind, text) => run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id2, kind, text, now]);
   if ("nextAction" in fields && next.nextAction !== prev.nextAction && next.nextAction) log2("proxima_acao", next.nextAction);
   if ("whereLeftOff" in fields && next.whereLeftOff !== prev.whereLeftOff && next.whereLeftOff) log2("onde_parei", next.whereLeftOff);
   if ("blocker" in fields && next.blocker !== prev.blocker) log2("bloqueio", next.blocker ? `Bloqueado: ${next.blocker}${next.blockerNeed ? ` — precisa: ${next.blockerNeed}` : ""}` : "Bloqueio resolvido");
   if ("finishLine" in fields && next.finishLine !== prev.finishLine && next.finishLine) log2("decisao", `Linha de chegada: ${next.finishLine}`);
   return next;
 }
-async function setProjectStatus(id, status2, payload = {}) {
+async function setProjectStatus(id2, status2, payload = {}) {
   if (!PROJECT_STATUSES.includes(status2)) throw new Error(tt("db.situacaoInvalida", { status: status2 }));
   const db2 = await getDb();
-  const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
   if (!prev) throw new Error(tt("db.projetoNaoEncontrado2"));
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const closed = status2 === "concluido" || status2 === "encerrado";
@@ -5231,13 +5665,13 @@ async function setProjectStatus(id, status2, payload = {}) {
   }
   if (payload.nextAction) {
     sets.push("nextAction = ?", "nextActionAt = ?", "nextActionTodoId = ?");
-    params.push(payload.nextAction, now, ensureNextActionTodo(db2, id, payload.nextAction, null));
+    params.push(payload.nextAction, now, ensureNextActionTodo(db2, id2, payload.nextAction, null));
   }
-  params.push(id);
+  params.push(id2);
   run$2(db2, `UPDATE projects SET ${sets.join(", ")} WHERE id = ?`, params);
   const parts = [payload.reason, payload.resumeAt ? `retomar em ${payload.resumeAt}` : null, payload.resumeCondition ? `retomar quando: ${payload.resumeCondition}` : null, payload.note].filter(Boolean).join(" · ");
   run$2(db2, "INSERT INTO project_events (projectId, kind, fromStatus, toStatus, text, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
-    id,
+    id2,
     "status",
     prev.status,
     status2,
@@ -5245,9 +5679,9 @@ async function setProjectStatus(id, status2, payload = {}) {
     now
   ]);
   if (payload.nextAction && payload.nextAction !== prev.nextAction) {
-    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", payload.nextAction, now]);
+    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id2, "proxima_acao", payload.nextAction, now]);
   }
-  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
 }
 function findNextActionTodo(db2, projectId, text, todoId) {
   if (todoId != null) {
@@ -5271,42 +5705,42 @@ function ensureNextActionTodo(db2, projectId, text, todoId) {
   );
   return lastInsertId(db2);
 }
-async function completeNextAction(id, next, size = null, nextTodoId = null) {
+async function completeNextAction(id2, next, size = null, nextTodoId = null) {
   const db2 = await getDb();
-  const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  const prev = getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
   if (!prev) throw new Error(tt("db.projetoNaoEncontrado2"));
   const now = (/* @__PURE__ */ new Date()).toISOString();
   if (prev.nextAction) {
-    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "acao_concluida", prev.nextAction, now]);
-    const doneId = findNextActionTodo(db2, id, prev.nextAction, prev.nextActionTodoId);
+    run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id2, "acao_concluida", prev.nextAction, now]);
+    const doneId = findNextActionTodo(db2, id2, prev.nextAction, prev.nextActionTodoId);
     if (doneId != null) {
       run$2(db2, "UPDATE todos SET status = 'done', doneAt = ? WHERE id = ?", [now, doneId]);
       spawnRecurrenceIfNeeded(db2, doneId);
     }
   }
   const n = next && next.trim() ? next.trim() : null;
-  const todoId = n ? ensureNextActionTodo(db2, id, n, nextTodoId) : null;
+  const todoId = n ? ensureNextActionTodo(db2, id2, n, nextTodoId) : null;
   run$2(db2, "UPDATE projects SET nextAction = ?, nextActionAt = ?, nextActionSize = ?, nextActionTodoId = ? WHERE id = ?", [
     n,
     now,
     n ? size : null,
     todoId,
-    id
+    id2
   ]);
-  if (n) run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id, "proxima_acao", n, now]);
-  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id]);
+  if (n) run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [id2, "proxima_acao", n, now]);
+  return getOne(db2, "SELECT * FROM projects WHERE id = ?", [id2]);
 }
-async function updateProjectMilestone(id, title, targetDate, cycleId, description) {
+async function updateProjectMilestone(id2, title, targetDate, cycleId, description) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE project_milestones SET title = ?, targetDate = ?, cycleId = ?, description = ? WHERE id = ?", [title, targetDate, cycleId, description, id]);
+  run$2(db2, "UPDATE project_milestones SET title = ?, targetDate = ?, cycleId = ?, description = ? WHERE id = ?", [title, targetDate, cycleId, description, id2]);
 }
-async function setCycleChangelog(id, changelog) {
+async function setCycleChangelog(id2, changelog) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE project_cycles SET changelog = ? WHERE id = ?", [changelog, id]);
+  run$2(db2, "UPDATE project_cycles SET changelog = ? WHERE id = ?", [changelog, id2]);
 }
-async function getProjectCycle(id) {
+async function getProjectCycle(id2) {
   const db2 = await getDb();
-  return getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id2]);
 }
 async function getProjectCycles(projectId) {
   const db2 = await getDb();
@@ -5325,20 +5759,20 @@ async function createProjectCycle(projectId, name, goal, startDate, dueDate) {
     dueDate,
     now
   ]);
-  const id = lastInsertId(db2);
+  const id2 = lastInsertId(db2);
   run$2(db2, "UPDATE projects SET continuous = 1 WHERE id = ?", [projectId]);
   run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [projectId, "ciclo", `Ciclo "${name}" iniciado${dueDate ? ` (prazo ${dueDate})` : ""}`, now]);
-  return getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id2]);
 }
-async function updateProjectCycle(id, name, goal, dueDate) {
+async function updateProjectCycle(id2, name, goal, dueDate) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE project_cycles SET name = ?, goal = ?, dueDate = ?, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [name, goal, dueDate, dueDate, id]);
+  run$2(db2, "UPDATE project_cycles SET name = ?, goal = ?, dueDate = ?, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [name, goal, dueDate, dueDate, id2]);
 }
-async function extendProjectCycle(id, newDueDate, reason) {
+async function extendProjectCycle(id2, newDueDate, reason) {
   const db2 = await getDb();
-  const c = getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
+  const c = getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id2]);
   if (!c) return;
-  run$2(db2, "UPDATE project_cycles SET dueDate = ?, extensions = extensions + 1, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [newDueDate, c.dueDate, id]);
+  run$2(db2, "UPDATE project_cycles SET dueDate = ?, extensions = extensions + 1, originalDueDate = COALESCE(originalDueDate, ?) WHERE id = ?", [newDueDate, c.dueDate, id2]);
   run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [
     c.projectId,
     "ciclo",
@@ -5346,12 +5780,12 @@ async function extendProjectCycle(id, newDueDate, reason) {
     (/* @__PURE__ */ new Date()).toISOString()
   ]);
 }
-async function closeProjectCycle(id, status2, retrospective) {
+async function closeProjectCycle(id2, status2, retrospective) {
   const db2 = await getDb();
-  const c = getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id]);
+  const c = getOne(db2, "SELECT * FROM project_cycles WHERE id = ?", [id2]);
   if (!c) return;
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  run$2(db2, "UPDATE project_cycles SET status = ?, closedAt = ?, retrospective = ? WHERE id = ?", [status2, now, retrospective, id]);
+  run$2(db2, "UPDATE project_cycles SET status = ?, closedAt = ?, retrospective = ? WHERE id = ?", [status2, now, retrospective, id2]);
   run$2(db2, "INSERT INTO project_events (projectId, kind, text, createdAt) VALUES (?, ?, ?, ?)", [
     c.projectId,
     "ciclo",
@@ -5359,10 +5793,10 @@ async function closeProjectCycle(id, status2, retrospective) {
     now
   ]);
 }
-async function deleteProjectCycle(id) {
+async function deleteProjectCycle(id2) {
   const db2 = await getDb();
-  run$2(db2, "UPDATE project_milestones SET cycleId = NULL WHERE cycleId = ?", [id]);
-  run$2(db2, "DELETE FROM project_cycles WHERE id = ?", [id]);
+  run$2(db2, "UPDATE project_milestones SET cycleId = NULL WHERE cycleId = ?", [id2]);
+  run$2(db2, "DELETE FROM project_cycles WHERE id = ?", [id2]);
 }
 async function getProjectNotes(projectId) {
   const db2 = await getDb();
@@ -5389,14 +5823,14 @@ async function saveProjectNote(note) {
   }
   return getOne(db2, "SELECT * FROM project_notes WHERE id = ?", [lastInsertId(db2)]);
 }
-async function deleteProjectNote(id) {
+async function deleteProjectNote(id2) {
   const db2 = await getDb();
-  run$2(db2, "DELETE FROM project_notes WHERE id = ?", [id]);
+  run$2(db2, "DELETE FROM project_notes WHERE id = ?", [id2]);
 }
 async function linkTodosToProject(todoIds, projectId, milestoneId = null) {
   const db2 = await getDb();
-  for (const id of todoIds) {
-    run$2(db2, "UPDATE todos SET projectId = ?, milestoneId = ? WHERE id = ?", [projectId, milestoneId, id]);
+  for (const id2 of todoIds) {
+    run$2(db2, "UPDATE todos SET projectId = ?, milestoneId = ? WHERE id = ?", [projectId, milestoneId, id2]);
   }
 }
 async function setTodoMilestone(todoId, milestoneId) {
@@ -5436,12 +5870,12 @@ async function getProjectNumbers() {
   );
   const events = getAll(db2, "SELECT projectId, MAX(createdAt) as lastAt FROM project_events GROUP BY projectId");
   const ids2 = /* @__PURE__ */ new Set([...hours.map((h) => h.projectId), ...todos.map((t) => t.projectId), ...events.map((e) => e.projectId)]);
-  return [...ids2].map((id) => {
-    const h = hours.find((x) => x.projectId === id);
-    const t = todos.find((x) => x.projectId === id);
-    const e = events.find((x) => x.projectId === id);
+  return [...ids2].map((id2) => {
+    const h = hours.find((x) => x.projectId === id2);
+    const t = todos.find((x) => x.projectId === id2);
+    const e = events.find((x) => x.projectId === id2);
     return {
-      projectId: id,
+      projectId: id2,
       minutesTotal: Math.round(h?.total ?? 0),
       minutes7d: Math.round(h?.m7 ?? 0),
       minutes30d: Math.round(h?.m30 ?? 0),
@@ -5494,15 +5928,15 @@ async function createDelegation(d) {
   ]);
   return getOne(db2, "SELECT * FROM project_delegations WHERE id = ?", [lastInsertId(db2)]);
 }
-async function updateDelegation(id, fields) {
+async function updateDelegation(id2, fields) {
   const db2 = await getDb();
   const keys = Object.keys(fields);
   if (!keys.length) return;
-  run$2(db2, `UPDATE project_delegations SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => fields[k] ?? null), id]);
+  run$2(db2, `UPDATE project_delegations SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => fields[k] ?? null), id2]);
 }
-async function getDelegation(id) {
+async function getDelegation(id2) {
   const db2 = await getDb();
-  return getOne(db2, "SELECT * FROM project_delegations WHERE id = ?", [id]);
+  return getOne(db2, "SELECT * FROM project_delegations WHERE id = ?", [id2]);
 }
 async function getDelegations(projectId) {
   const db2 = await getDb();
@@ -5730,28 +6164,6 @@ Anotação:
   preparar: (p) => ({ anotacao: p.anotacao }),
   exemplo: { anotacao: ex("anotação") }
 });
-const estudosLacunas = definirChamada({
-  id: "estudos.lacunas",
-  modulo: "estudos",
-  tipo: "executa",
-  motor: "codex",
-  modelo: CODEX_MODEL,
-  effort: null,
-  alternativas: ALT_CLAUDE,
-  arquivo: "estudos/lacunasRoadmap.ts",
-  usadoEm: "src/modules/estudos/components/GapsModal.tsx",
-  template: `Você é um mentor de estudos. Abaixo está o roadmap do tópico "{{topico}}".
-Analise a sequência e aponte PRÉ-REQUISITOS ou tópicos importantes que estão FALTANDO (lacunas) para dominar o assunto — coisas que não aparecem no roadmap mas deveriam.
-
-Responda APENAS com JSON válido (sem markdown), um array:
-[{ "title": "item faltando", "reason": "por que é importante / onde encaixa" }]
-Regras: 3 a 8 itens; títulos curtos e acionáveis; não repita itens que já estão no roadmap.
-
-Roadmap atual:
-{{roadmap}}`,
-  preparar: (p) => ({ topico: p.topico, roadmap: p.roadmap }),
-  exemplo: { topico: ex("tópico"), roadmap: ex("roadmap em tópicos") }
-});
 const estudosQuiz = definirChamada({
   id: "estudos.quiz",
   modulo: "estudos",
@@ -5776,27 +6188,293 @@ Material:
   preparar: (p) => ({ topico: p.topico, material: p.material }),
   exemplo: { topico: ex("tópico"), material: ex("anotações do tópico") }
 });
-const INSTRUCOES_TUTOR = {
-  simple: "Explique o conteúdo abaixo de forma simples, como se eu tivesse 12 anos, com analogias.",
-  summary: "Resuma o conteúdo abaixo em no máximo 5 bullets objetivos.",
-  exercise: "Crie 2 a 3 exercícios práticos (com a resposta ao final) sobre o conteúdo abaixo.",
-  gaps: "Aponte lacunas e pontos que eu deveria estudar a seguir a partir do conteúdo abaixo.",
-  socratic: "Aja como um tutor socrático. NÃO dê respostas nem explicações: apenas faça de 4 a 6 perguntas graduais (da mais básica à mais profunda) que me levem a raciocinar e descobrir sozinho o conteúdo abaixo. Numere as perguntas.",
-  recall: 'Gere de 4 a 6 prompts de RECALL ATIVO a partir do conteúdo abaixo — perguntas abertas do tipo "explique sem olhar", "descreva com suas palavras", "reconstrua o raciocínio". Não inclua as respostas. Foque nos conceitos mais importantes para memória de longo prazo.'
+const VERSAO_PEDAGOGIA = "estudos-pedagogia-2026-11-26.1";
+const A_MASTERCLASS = `Você é meu mentor neste assunto. A entrada pode ser tão curta quanto “quero estudar X para conseguir Y”. Transforme isso em uma formação que me dê condições de fazer Y com autonomia. Comece identificando a situação na qual vou usar o que aprender, o que já sei, quais fundamentos ainda preciso construir e qual demonstração final revelará que aprendi. Aproveite meus materiais e contexto autorizado. Se faltar algo que mude profundamente a trilha, faça até duas perguntas curtas. Caso contrário, declare a suposição, entregue a proposta e deixe que eu a edite.
+
+Desenhe primeiro o mapa completo, em partes e módulos progressivos. Escolha a quantidade pela dificuldade do objetivo. Uma formação de engenharia pode justificar 12 módulos e workshops; um objetivo delimitado merece uma trilha menor. O mapa precisa revelar o conteúdo de verdade: dê a cada módulo uma pergunta central específica, os conceitos e relações que devo compreender, um exemplo ligado à minha situação, uma atividade, uma pergunta diagnóstica e um critério observável para avançar. Mostre por que a ordem faz sentido e quais aprofundamentos são opcionais. Teste a cobertura caminhando de trás para frente a partir da entrega final. Se um passo indispensável ficou implícito, inclua-o.
+
+Para engenharia, progrida do panorama ponta a ponta para mecanismos, alternativas, condições de falha, custos, experimentos e decisões. Aproveite sistemas que já conheço para construir analogias e indique onde elas deixam de funcionar. Preserve as decisões ainda abertas até eu conhecer os critérios. Termine em workshops que produzam a entrega desejada, por exemplo uma decisão documentada e um experimento que possa contrariá-la. Para idiomas, parta de uma situação comunicativa e distribua compreensão, produção, vocabulário, estruturas, registro e revisão em contextos diferentes. Escolha o que treinar conforme a habilidade final. Se a meta for conversar, inclua turnos de diálogo e situações inesperadas; se for ler, trabalhe leitura de material adequado e inferência pelo contexto.
+
+Na proposta inicial, entregue o mapa e uma abertura concreta da primeira aula. Torne visível o primeiro passo que posso fazer hoje. Ao aceitar o plano e abrir a primeira aula, reutilize essa abertura. Avance de módulo quando eu pedir. Fatos que dependem de versão, preço ou disponibilidade precisam de fonte verificável; se não há fonte acessível, registre o que falta conferir. Não invente links, resultados de testes ou conhecimentos meus.
+
+Teste de qualidade antes de responder: se eu trocar o assunto no título, a maior parte deste roteiro ainda serviria? Se sim, substitua os módulos genéricos por perguntas, casos e entregas que só façam sentido para meu objetivo.`;
+const B_AULA = `Retome a pergunta aberta, o módulo, minhas tentativas e a última dúvida. Comece por uma situação concreta em que o conceito faz diferença. Construa um modelo mental, abra o mecanismo por dentro e percorra um exemplo do começo ao fim. Escolha um segundo exemplo em que uma premissa muda e peça que eu preveja o efeito. Quando existirem alternativas plausíveis, mostre em que circunstância cada uma serve e que custo implica. Use diagrama, código, tabela, frase ou diálogo só quando isso realmente facilitar entender. Para idiomas, ajuste o idioma-alvo, o nível de apoio e o registro; aceite formulações válidas alternativas.
+
+Conduza um turno de cada vez. Se eu fizer uma pergunta lateral, responda-a, marque o ponto de retorno e continue dali. Se eu disser que não entendi, mude a representação ou construa um exemplo menor. Quando eu responder, identifique o que entendi, o ponto específico a corrigir e uma próxima tentativa. Se eu pedir diretamente a explicação ou solução, forneça-a. Separe minha resposta, sua explicação e o que ainda é hipótese. Antes de encerrar, ofereça uma frase de retomada. Decisões, notas e cartões só são incorporados por ação minha.`;
+const C_PACOTE = `Leia o objetivo, o módulo, a nota ou aula selecionada e as tentativas relevantes. Cada seção tem uma finalidade própria. Na explicação, use um exemplo que esclareça o mecanismo. No resumo, preserve o fio da ideia. Nos exercícios, dê um problema solucionável, uma pista opcional e critérios ou solução em campos separados. Nas perguntas socráticas, desenhe uma progressão do exemplo concreto ao princípio. Na revisão ativa, peça que eu recupere de memória algo importante; guarde a referência para depois da tentativa. Nos cartões, priorize conceitos que preciso distinguir e erros que já cometi. Se eu escolher cobertura de vocabulário, cubra o conjunto selecionado e evite duplicatas. Para a revisão da nota e os subtópicos, aplique as regras D e E. Não repita a mesma pergunta em cinco formatos. Se houver apenas nota externa, trabalhe com ela; se houver apenas aula gerada, prepare prática sobre a aula e deixe a revisão autoral vazia.`;
+const D_REVISAO = `Leia como um colega que quer entender exatamente o que eu quis dizer. Preserve meu português, minhas abreviações, analogias, exemplos, informalidade e ordem de raciocínio. Procure apenas intervenções com ganho real: conceito importante que ficou implícito, ambiguidade que muda o sentido, relação causal ausente, afirmação que precisa de ressalva ou exemplo que torna uma explicação utilizável. Cite o menor trecho exato que ancora a proposta. Explique o motivo em uma frase e proponha o menor acréscimo ou ajuste possível. Uma dúvida sobre a minha intenção deve virar uma pergunta. Diferencie simplificação aceitável de erro factual. Se a anotação já cumpre seu papel, devolva zero propostas. Toda sugestão editorial fica fora da nota até eu aprová-la.`;
+const E_SUBTOPICOS = `Compare o objetivo, o mapa completo e as notas selecionadas. Para cada lacuna real, diga qual capacidade fica comprometida, onde o novo subtópico entra e por que vale um nó próprio. Use o ID do pai existente e a posição sugerida. Se cabe em uma linha da nota, prefira uma sugestão editorial. Respeite sinônimos, nós concluídos e recusas anteriores. Diferencie pré-requisito essencial de aprofundamento opcional. Retorne zero itens quando houver cobertura suficiente.`;
+const INSTRUCOES_COMUNS = `Você é o tutor do módulo Estudos de um app pessoal. Regras gerais:
+- Trabalhe SÓ com o contexto que o app enviou abaixo; não invente links, resultados de testes nem conhecimentos meus.
+- Não edite arquivos, notas, cartões nem repositórios: você só devolve conteúdo estruturado; quem decide incorporar sou eu.
+- Escreva as explicações em {{idioma}}. Em tópicos de idioma, exemplos e frases de prática ficam no idioma-alvo ({{idiomaAlvo}}), com apoio em {{idioma}}.
+- Responda APENAS com o JSON pedido no contrato de saída (sem texto fora dele, sem cercas de código).`;
+const BLOCOS_SECAO = {
+  explicacao: "explicacao: explicação do mecanismo com um exemplo que o esclareça (Markdown).",
+  resumo: "resumo: resumo que preserva o fio da ideia (Markdown curto).",
+  exercicios: "exercicios: problemas solucionáveis, cada um com enunciado, pista opcional e critérios/solução em campos separados.",
+  socraticas: "socraticas: perguntas graduais do exemplo concreto ao princípio, uma por item.",
+  revisaoAtiva: "revisaoAtiva: pedidos para recuperar de memória algo importante, com a referência guardada para depois da tentativa.",
+  revisaoEditorial: "revisaoEditorial: propostas editoriais sobre a MINHA nota, seguindo a regra D (zero propostas é válido; vazio se só houver aula gerada).",
+  subtopicos: "subtopicos: novos subtópicos seguindo a regra E (zero itens é válido).",
+  cartoes: "cartoes: candidatos a flashcard (conceitos que preciso distinguir e erros que já cometi; sem duplicar os existentes)."
 };
-const estudosTutor = definirChamada({
-  id: "estudos.tutor",
+const PERFIL_PLANO = {
+  modelo: { setting: "study_ai_plan_model", padrao: "gpt-6.2-astra" },
+  effort: { setting: "study_ai_plan_effort", padrao: "high" }
+};
+const PERFIL_AULA = {
+  modelo: { setting: "study_ai_lesson_model", padrao: "gpt-6.2-sol" },
+  effort: { setting: "study_ai_lesson_effort", padrao: "medium" }
+};
+const PERFIL_EDITORIAL = {
+  modelo: { setting: "study_ai_edit_model", padrao: "gpt-6.2-sol" },
+  effort: { setting: "study_ai_edit_effort", padrao: "low" }
+};
+const PERFIS_ESTUDOS = { plano: PERFIL_PLANO, aula: PERFIL_AULA, editorial: PERFIL_EDITORIAL };
+const prepararTutor = (p) => ({
+  idioma: p.idioma || "pt-BR",
+  idiomaAlvo: p.idiomaAlvo || "—",
+  contexto: p.contexto,
+  pedido: p.pedido
+});
+const estudosMasterclass = definirChamada({
+  id: "estudos.masterclass",
   modulo: "estudos",
   tipo: "executa",
   motor: "codex",
-  modelo: CODEX_MODEL,
-  effort: null,
-  alternativas: ALT_CLAUDE,
-  arquivo: "estudos/tutor.ts",
-  usadoEm: "src/modules/estudos/components/NoteEditor.tsx",
-  template: '{{instrucao}}\n\nConteúdo (Markdown):\n"""\n{{conteudo}}\n"""',
-  preparar: (p) => ({ instrucao: INSTRUCOES_TUTOR[p.acao] ?? INSTRUCOES_TUTOR.simple, conteudo: p.conteudo }),
-  exemplo: { acao: "simple", conteudo: ex("anotação") }
+  modelo: PERFIL_PLANO.modelo,
+  effort: PERFIL_PLANO.effort,
+  arquivo: "estudos/masterclass.ts + estudos/pedagogia/textos.ts",
+  usadoEm: "server/estudos/tutor.ts",
+  sistema: INSTRUCOES_COMUNS,
+  template: `## Instrução pedagógica (A — masterclass)
+${A_MASTERCLASS}
+
+## Meu pedido
+{{pedido}}
+
+## Contexto autorizado enviado pelo app
+{{contexto}}
+
+## Contrato de saída
+JSON conforme o schema: perguntas (0 a 2; preencha só se a resposta mudar profundamente a trilha — mesmo assim entregue o mapa com as suposições declaradas), suposicoes, situacao, jaSei, fundamentos, demonstracaoFinal, partes[{titulo, porque, modulos[...]}], ordemJustificativa, aprofundamentosOpcionais, workshops, coberturaReversa, aberturaPrimeiraAula, aConferir.`,
+  preparar: prepararTutor,
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("objetivo, mapa atual, notas"), pedido: ex("quero estudar X para conseguir Y") }
+});
+const estudosAula = definirChamada({
+  id: "estudos.aula",
+  modulo: "estudos",
+  tipo: "executa",
+  motor: "codex",
+  modelo: PERFIL_AULA.modelo,
+  effort: PERFIL_AULA.effort,
+  arquivo: "estudos/aula.ts + estudos/pedagogia/textos.ts",
+  usadoEm: "server/estudos/tutor.ts",
+  sistema: INSTRUCOES_COMUNS,
+  template: `## Instrução pedagógica (B — aula)
+${B_AULA}
+
+## Contexto da aula enviado pelo app (módulo, objetivo, turnos anteriores, minhas tentativas)
+{{contexto}}
+
+## Meu turno agora
+{{pedido}}
+
+## Contrato de saída
+JSON: resposta (o seu turno, em Markdown), tipo, minhaResposta ({entendi, corrigir, proximaTentativa} quando eu respondi algo; senão null), hipoteses, perguntaAberta, pontoDeRetorno, fraseDeRetomada.`,
+  preparar: prepararTutor,
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("módulo + turnos"), pedido: ex("minha mensagem") }
+});
+const str$1 = (description) => ({ type: "string", ...description ? { description } : {} });
+const strOrNull = (description) => ({ type: ["string", "null"], ...description ? { description } : {} });
+const num$1 = () => ({ type: ["number", "null"] });
+const bool$2 = () => ({ type: "boolean" });
+const arr$1 = (items, description) => ({ type: "array", items, ...description ? { description } : {} });
+function obj(props, description) {
+  return { type: "object", properties: props, required: Object.keys(props), additionalProperties: false, ...{} };
+}
+const MODULO = obj({
+  titulo: str$1(),
+  perguntaCentral: str$1("pergunta central específica do módulo"),
+  conceitos: arr$1(str$1()),
+  relacoes: str$1("como os conceitos se relacionam"),
+  exemplo: str$1("exemplo ligado à minha situação"),
+  atividade: str$1(),
+  perguntaDiagnostica: str$1(),
+  criterioAvanco: str$1("critério observável para avançar"),
+  opcional: bool$2(),
+  minutos: num$1(),
+  prerequisitos: arr$1(str$1())
+});
+const SCHEMA_MASTERCLASS = obj({
+  perguntas: arr$1(str$1(), "até duas perguntas curtas, só se a resposta mudar profundamente a trilha; senão []"),
+  suposicoes: arr$1(str$1()),
+  situacao: str$1("situação em que vou usar o que aprender"),
+  jaSei: str$1(),
+  fundamentos: arr$1(str$1()),
+  demonstracaoFinal: str$1(),
+  partes: arr$1(obj({ titulo: str$1(), porque: str$1(), modulos: arr$1(MODULO) })),
+  ordemJustificativa: str$1(),
+  aprofundamentosOpcionais: arr$1(str$1()),
+  workshops: arr$1(obj({ titulo: str$1(), entrega: str$1(), experimento: str$1() })),
+  coberturaReversa: str$1("teste de trás para frente a partir da entrega final"),
+  aberturaPrimeiraAula: obj({ titulo: str$1(), situacao: str$1(), primeiroPasso: str$1("o que posso fazer hoje"), pergunta: str$1() }),
+  aConferir: arr$1(str$1(), "fatos que dependem de versão/preço/disponibilidade sem fonte acessível")
+});
+const SCHEMA_AULA = obj({
+  resposta: str$1("o turno do tutor em Markdown"),
+  tipo: { type: "string", enum: ["explicacao", "pergunta", "feedback", "lateral", "encerramento"] },
+  minhaResposta: {
+    anyOf: [obj({ entendi: str$1(), corrigir: str$1(), proximaTentativa: str$1() }), { type: "null" }]
+  },
+  hipoteses: arr$1(str$1(), "o que ainda é hipótese"),
+  perguntaAberta: strOrNull("pergunta que deixei para responder"),
+  pontoDeRetorno: strOrNull("onde retomar depois de uma pergunta lateral"),
+  fraseDeRetomada: strOrNull()
+});
+const SECOES = ["explicacao", "resumo", "exercicios", "socraticas", "revisaoAtiva", "revisaoEditorial", "subtopicos", "cartoes"];
+const VAZIO = strOrNull("se a seção ficou vazia, justificativa curta; senão null");
+const SCHEMA_EDITORIAL_ITEM = obj({
+  trecho: str$1("menor trecho EXATO da minha nota que ancora a proposta"),
+  motivo: str$1("uma frase"),
+  tipo: { type: "string", enum: ["acrescimo", "ajuste", "pergunta", "ressalva", "erro-factual"] },
+  sugestao: str$1("o menor acréscimo/ajuste; para pergunta, a pergunta"),
+  substituicao: strOrNull("texto que substitui o trecho (null = só acrescentar depois do trecho)")
+});
+const SCHEMA_SUBTOPICO_ITEM = obj({
+  parentId: { type: ["integer", "null"], description: "ID do pai existente (null = raiz)" },
+  posicao: { type: ["integer", "null"] },
+  titulo: str$1(),
+  motivo: str$1("capacidade comprometida sem ele"),
+  conexaoObjetivo: str$1(),
+  tipo: { type: "string", enum: ["pre-requisito", "aprofundamento"] },
+  prerequisito: strOrNull()
+});
+const SCHEMAS_SECAO = {
+  explicacao: obj({ conteudo: str$1(), vazio: VAZIO }),
+  resumo: obj({ conteudo: str$1(), vazio: VAZIO }),
+  exercicios: obj({ itens: arr$1(obj({ enunciado: str$1(), pista: strOrNull(), solucao: str$1(), criterios: strOrNull() })), vazio: VAZIO }),
+  socraticas: obj({ itens: arr$1(obj({ pergunta: str$1(), referencia: strOrNull() })), vazio: VAZIO }),
+  revisaoAtiva: obj({ itens: arr$1(obj({ pedido: str$1(), referencia: str$1() })), vazio: VAZIO }),
+  revisaoEditorial: obj({ itens: arr$1(SCHEMA_EDITORIAL_ITEM), vazio: VAZIO }),
+  subtopicos: obj({ itens: arr$1(SCHEMA_SUBTOPICO_ITEM), vazio: VAZIO }),
+  cartoes: obj({ itens: arr$1(obj({ front: str$1(), back: str$1(), exemplo: strOrNull(), leitura: strOrNull() })), vazio: VAZIO })
+};
+const SCHEMA_PACOTE = obj(Object.fromEntries(SECOES.map((s2) => [s2, SCHEMAS_SECAO[s2]])));
+const SCHEMA_SECAO = (s2) => obj({ [s2]: SCHEMAS_SECAO[s2] });
+const SCHEMA_EDITORIAL = obj({ revisaoEditorial: SCHEMAS_SECAO.revisaoEditorial });
+const SCHEMA_SUBTOPICOS = obj({ subtopicos: SCHEMAS_SECAO.subtopicos });
+const REGRAS_D_E = `### Regra D — revisão editorial da minha nota
+${D_REVISAO}
+
+### Regra E — novos subtópicos
+${E_SUBTOPICOS}`;
+const estudosPacoteNo = definirChamada({
+  id: "estudos.pacoteNo",
+  modulo: "estudos",
+  tipo: "executa",
+  motor: "codex",
+  modelo: PERFIL_AULA.modelo,
+  effort: PERFIL_AULA.effort,
+  arquivo: "estudos/pacoteNo.ts + estudos/pedagogia/textos.ts",
+  usadoEm: "server/estudos/tutor.ts",
+  sistema: INSTRUCOES_COMUNS,
+  template: `## Instrução pedagógica (C — material do nó)
+${C_PACOTE}
+
+${REGRAS_D_E}
+
+## Seções (cada uma independente; vazia → itens [] e "vazio" com justificativa curta)
+${SECOES.map((s2) => `- ${BLOCOS_SECAO[s2]}`).join("\n")}
+
+## Pedido
+{{pedido}}
+
+## Contexto enviado pelo app
+{{contexto}}
+
+## Contrato de saída
+JSON com exatamente estas chaves: ${SECOES.join(", ")}. Não gere o curso inteiro: só este nó.`,
+  preparar: prepararTutor,
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("objetivo, nó, nota, tentativas"), pedido: ex("preparar material") }
+});
+const estudosSecaoNo = definirChamada({
+  id: "estudos.secaoNo",
+  modulo: "estudos",
+  tipo: "executa",
+  motor: "codex",
+  modelo: PERFIL_AULA.modelo,
+  effort: PERFIL_AULA.effort,
+  arquivo: "estudos/secaoNo.ts + estudos/pedagogia/textos.ts",
+  usadoEm: "server/estudos/tutor.ts",
+  sistema: INSTRUCOES_COMUNS,
+  template: `## Instrução pedagógica (C — material do nó, uma seção)
+${C_PACOTE}
+
+${REGRAS_D_E}
+
+## Seção pedida
+{{bloco}}
+
+## Pedido
+{{pedido}}
+
+## Contexto enviado pelo app
+{{contexto}}
+
+## Contrato de saída
+JSON com a única chave {{secao}}.`,
+  preparar: (p) => ({ ...prepararTutor(p), secao: p.secao, bloco: BLOCOS_SECAO[p.secao] ?? p.secao }),
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("contexto do nó"), pedido: ex("gerar de novo"), secao: "resumo" }
+});
+const estudosRevisaoEditorial = definirChamada({
+  id: "estudos.revisaoEditorial",
+  modulo: "estudos",
+  tipo: "executa",
+  motor: "codex",
+  modelo: PERFIL_EDITORIAL.modelo,
+  effort: PERFIL_EDITORIAL.effort,
+  arquivo: "estudos/revisaoEditorial.ts + estudos/pedagogia/textos.ts",
+  usadoEm: "server/estudos/tutor.ts",
+  sistema: INSTRUCOES_COMUNS,
+  template: `## Instrução pedagógica (D — revisão editorial)
+${D_REVISAO}
+
+## Contexto enviado pelo app (objetivo, nó e a MINHA nota; recusas anteriores)
+{{contexto}}
+
+## Pedido
+{{pedido}}
+
+## Contrato de saída
+JSON: revisaoEditorial { itens: [{trecho, motivo, tipo, sugestao, substituicao}], vazio }. "trecho" é cópia EXATA de um pedaço da nota. Zero itens é uma resposta válida.`,
+  preparar: prepararTutor,
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("nota"), pedido: ex("revisar") }
+});
+const estudosSubtopicos = definirChamada({
+  id: "estudos.subtopicos",
+  modulo: "estudos",
+  tipo: "executa",
+  motor: "codex",
+  modelo: PERFIL_EDITORIAL.modelo,
+  effort: PERFIL_EDITORIAL.effort,
+  arquivo: "estudos/subtopicos.ts + estudos/pedagogia/textos.ts",
+  usadoEm: "server/estudos/tutor.ts",
+  sistema: INSTRUCOES_COMUNS,
+  template: `## Instrução pedagógica (E — subtópicos)
+${E_SUBTOPICOS}
+
+## Contexto enviado pelo app (objetivo, mapa com IDs, notas selecionadas, recusas anteriores)
+{{contexto}}
+
+## Pedido
+{{pedido}}
+
+## Contrato de saída
+JSON: subtopicos { itens: [{parentId, posicao, titulo, motivo, conexaoObjetivo, tipo, prerequisito}], vazio }. parentId é um ID que existe no mapa (ou null para raiz). Zero itens é uma resposta válida; nota longa não significa roteiro incompleto.`,
+  preparar: prepararTutor,
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("mapa com IDs"), pedido: ex("sugerir") }
 });
 const githubCriarIssue = definirChamada({
   id: "github.criarIssue",
@@ -6890,10 +7568,14 @@ const DEFINICOES = {
   "inbox.ocr": inboxOcr,
   "inbox.classificar": inboxClassificar,
   "braindump.organizar": braindumpOrganizar,
-  "estudos.tutor": estudosTutor,
   "estudos.flashcards": estudosFlashcards,
-  "estudos.lacunas": estudosLacunas,
   "estudos.quiz": estudosQuiz,
+  "estudos.masterclass": estudosMasterclass,
+  "estudos.aula": estudosAula,
+  "estudos.pacoteNo": estudosPacoteNo,
+  "estudos.secaoNo": estudosSecaoNo,
+  "estudos.revisaoEditorial": estudosRevisaoEditorial,
+  "estudos.subtopicos": estudosSubtopicos,
   "projetos.plano": projetosPlano,
   "projetos.proximaAcao": projetosProximaAcao,
   "projetos.ondePareiProjeto": projetosOndePareiProjeto,
@@ -6923,13 +7605,13 @@ const DEFINICOES = {
   "noticias.resumo": noticiasResumo
 };
 Object.values(DEFINICOES);
-function definicao(id) {
-  const d = DEFINICOES[id];
-  if (!d) throw new Error(`Chamada de IA desconhecida: ${id}`);
+function definicao(id2) {
+  const d = DEFINICOES[id2];
+  if (!d) throw new Error(`Chamada de IA desconhecida: ${id2}`);
   return d;
 }
-function ehIdChamada(id) {
-  return Object.prototype.hasOwnProperty.call(DEFINICOES, id);
+function ehIdChamada(id2) {
+  return Object.prototype.hasOwnProperty.call(DEFINICOES, id2);
 }
 const EFFORTS_DO_MOTOR = {
   "claude-code": ["low", "medium", "high", "xhigh", "max"],
@@ -7222,6 +7904,14 @@ const motorCodex = {
     const bin = (await getSetting("codex_command") || "codex").trim();
     const sandbox = req.ferramentas === "agentic" ? "workspace-write" : "read-only";
     const cwd = req.cwd && fs.existsSync(req.cwd) ? req.cwd : void 0;
+    let schemaFile = null;
+    if (req.schemaSaida) {
+      schemaFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rickos-codex-")), "schema.json");
+      fs.writeFileSync(schemaFile, JSON.stringify(req.schemaSaida));
+    }
+    const limpar = () => {
+      if (schemaFile) fs.rmSync(path.dirname(schemaFile), { recursive: true, force: true });
+    };
     const args = [
       "exec",
       "--json",
@@ -7232,6 +7922,7 @@ const motorCodex = {
       ...req.modelo ? ["-m", req.modelo] : [],
       ...req.effort ? ["-c", `model_reasoning_effort="${req.effort.replace(/[^a-z]/gi, "")}"`] : [],
       ...cwd ? ["-C", cwd] : [],
+      ...schemaFile ? ["--output-schema", schemaFile] : [],
       "-"
     ];
     const entrada = req.sistema ? `${req.sistema}
@@ -7274,7 +7965,11 @@ ${req.prompt}` : req.prompt;
           ultima = ev.item.text;
           req.onChunk?.((textoTotal ? "\n\n" : "") + ev.item.text);
           textoTotal += ev.item.text;
-        } else if (ev.type === "turn.completed" && ev.usage && req.usage) {
+        } else if (ev.type === "turn.completed" && ev.usage && req.onTokens) {
+          const u = ev.usage;
+          req.onTokens({ input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cached: u.cached_input_tokens ?? 0, reasoning: u.reasoning_output_tokens ?? 0 });
+        }
+        if (ev.type === "turn.completed" && ev.usage && req.usage) {
           const u = ev.usage;
           const cache2 = u.cached_input_tokens ?? 0;
           recordAiUsage({
@@ -7304,12 +7999,14 @@ ${req.prompt}` : req.prompt;
         stderr += d.toString();
       });
       child.on("error", (e) => {
+        limpar();
         if (terminou) return;
         terminou = true;
         if (timer2) clearTimeout(timer2);
         reject2(new Error(e.code === "ENOENT" ? `Codex CLI não encontrado ("${bin}"). Instale ou ajuste em Configurações.` : e.message));
       });
       child.on("close", (code) => {
+        limpar();
         if (terminou) return;
         terminou = true;
         if (timer2) clearTimeout(timer2);
@@ -7322,6 +8019,35 @@ ${req.prompt}` : req.prompt;
     });
   }
 };
+async function diagnosticoCodex(modelos) {
+  const bin = (await getSetting("codex_command") || "codex").trim();
+  const rodar = (args) => new Promise((resolve) => {
+    child_process.execFile(bin, args, { timeout: 2e4, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, PATH: buildPath() } }, (e, out, err) => {
+      resolve({ ok: !e, out: String(out), err: String(err), enoent: e?.code === "ENOENT" });
+    });
+  });
+  const v = await rodar(["--version"]);
+  if (v.enoent) return { instalado: false, versao: null, logado: null, modelos: [], erro: `Codex CLI não encontrado ("${bin}").` };
+  const login = await rodar(["login", "status"]);
+  const cat = await rodar(["debug", "models"]);
+  let lista = [];
+  try {
+    const j = JSON.parse(cat.out);
+    const arr2 = Array.isArray(j) ? j : j.models ?? [];
+    lista = arr2.map((m) => ({ slug: String(m.slug ?? m.id ?? ""), efforts: (m.supported_reasoning_levels ?? []).map((e) => typeof e === "string" ? e : String(e.effort ?? "")) }));
+  } catch {
+  }
+  return {
+    instalado: true,
+    versao: v.out.trim() || null,
+    logado: login.ok ? !/not logged in/i.test(login.out + login.err) : null,
+    modelos: modelos.map((slug) => {
+      const m = lista.find((x) => x.slug === slug);
+      return { slug, disponivel: lista.length ? !!m : true, efforts: m?.efforts ?? [] };
+    }),
+    erro: null
+  };
+}
 const MOTORES = {
   "claude-code": motorClaudeCode,
   codex: motorCodex
@@ -7336,9 +8062,9 @@ async function valor(cfg) {
   const salvo = cfg.setting ? (await getSetting(cfg.setting) ?? "").trim() : "";
   return salvo || cfg.padrao;
 }
-async function resolverExecucao(id) {
-  const d = definicao(id);
-  const row = await getAiChamada(id);
+async function resolverExecucao(id2) {
+  const d = definicao(id2);
+  const row = await getAiChamada(id2);
   const escolhido = row?.motor;
   const motor = escolhido && motoresPermitidos(d).includes(escolhido) ? escolhido : d.motor;
   const padrao = padraoDoMotor(d, motor) ?? { modelo: d.modelo, effort: d.effort };
@@ -7356,16 +8082,16 @@ function padroesCodex() {
     return { modelo: null, effort: null };
   }
 }
-async function promptSobrescrito(id) {
-  const row = await getAiChamada(id);
+async function promptSobrescrito(id2) {
+  const row = await getAiChamada(id2);
   return row && (row.template != null || row.sistema != null) ? { template: row.template, sistema: row.sistema } : null;
 }
-async function montarChamada(id, params) {
-  const [m, exec2] = await Promise.all([promptSobrescrito(id).then((s2) => definicao(id).montar(params, s2)), resolverExecucao(id)]);
+async function montarChamada(id2, params) {
+  const [m, exec2] = await Promise.all([promptSobrescrito(id2).then((s2) => definicao(id2).montar(params, s2)), resolverExecucao(id2)]);
   return { ...m, ...exec2 };
 }
-async function executarChamada(id, params, opts = {}) {
-  const c = await montarChamada(id, params);
+async function executarChamada(id2, params, opts = {}) {
+  const c = await montarChamada(id2, params);
   const { prefixo, modelo, effort, ...req } = opts;
   return criarMotor(c.motor).executar({
     ...req,
@@ -7375,15 +8101,15 @@ async function executarChamada(id, params, opts = {}) {
     effort: effort || c.effort
   });
 }
-function idValido(id) {
-  if (typeof id !== "string" || !ehIdChamada(id)) throw new Error(`Chamada de IA desconhecida: ${String(id)}`);
-  return id;
+function idValido(id2) {
+  if (typeof id2 !== "string" || !ehIdChamada(id2)) throw new Error(`Chamada de IA desconhecida: ${String(id2)}`);
+  return id2;
 }
 const DAY$1 = 864e5;
 function isIsoDate(s2) {
   return typeof s2 === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s2) && !Number.isNaN(Date.parse(`${s2}T00:00:00Z`));
 }
-function addDays(date, n) {
+function addDays$1(date, n) {
   return new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY$1).toISOString().slice(0, 10);
 }
 function diffDays(a, b2) {
@@ -7400,7 +8126,7 @@ function windowBounds(w) {
     case "flex": {
       if (!isIsoDate(w.date)) return null;
       const n = Math.max(0, Math.min(15, Math.floor(w.flexDays ?? 0)));
-      return { from: addDays(w.date, -n), to: addDays(w.date, n) };
+      return { from: addDays$1(w.date, -n), to: addDays$1(w.date, n) };
     }
     case "range":
       if (!isIsoDate(w.from) || !isIsoDate(w.to)) return null;
@@ -7421,7 +8147,7 @@ function expandWindows(windows2, today2) {
     if (!b2) continue;
     const span = Math.min(diffDays(b2.from, b2.to), MAX_WINDOW_DAYS);
     for (let i = 0; i <= span; i++) {
-      const d = addDays(b2.from, i);
+      const d = addDays$1(b2.from, i);
       if (d >= today2) out.add(d);
     }
   }
@@ -7435,7 +8161,7 @@ function datePairs(dates, today2, maxPairs = 2e3) {
   const returns = dates.returnWindows.length ? expandWindows(dates.returnWindows, today2) : null;
   const out = [];
   for (const d of departs) {
-    const candidates = returns ?? Array.from({ length: Math.min(maxStay, 60) - minStay + 1 }, (_, i) => addDays(d, minStay + i));
+    const candidates = returns ?? Array.from({ length: Math.min(maxStay, 60) - minStay + 1 }, (_, i) => addDays$1(d, minStay + i));
     for (const r of candidates) {
       const stay = diffDays(d, r);
       if (stay < minStay || stay > maxStay) continue;
@@ -73961,8 +74687,8 @@ function fingerprint(offer, paxKey2) {
     const first = s2.segments[0];
     const flight = first ? `${first.marketingCarrier ?? ""}${first.flightNumber ?? ""}` : `${s2.carriers[0] ?? ""}${s2.firstFlightNumber ?? ""}`;
     const stops = Math.max(s2.stops, s2.segments.length - 1);
-    const id = flight || `~${(s2.arriveLocal ?? "").slice(0, 16)}`;
-    return `${s2.from}>${s2.to}@${s2.departLocal.slice(0, 16)}#${id}/${stops}`;
+    const id2 = flight || `~${(s2.arriveLocal ?? "").slice(0, 16)}`;
+    return `${s2.from}>${s2.to}@${s2.departLocal.slice(0, 16)}#${id2}/${stops}`;
   });
   return `${paxKey2}|${legs.join("|")}`;
 }
@@ -74175,8 +74901,8 @@ function parseImport(text, defaults) {
       const back = sliceOf({ depart: r.return_depart, arrive: r.return_arrive, stops: r.return_stops, carrier: r.carrier }, destination, origin, errors, `${ctx} (volta)`);
       if (back) slices.push(back);
     }
-    const link = s(r.link);
-    const validLink = /^https:\/\/[^\s]+$/i.test(link) ? link : null;
+    const link2 = s(r.link);
+    const validLink = /^https:\/\/[^\s]+$/i.test(link2) ? link2 : null;
     const observed = s(r.observed_at);
     offers.push({
       provider: "import",
@@ -74561,7 +75287,7 @@ function configErrors(cfg, today2) {
   errs.push(...validateDates(cfg.dates, today2));
   return errs;
 }
-function all$3(db2, sql, params = []) {
+function all$4(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   if (params.length) st2.bind(params);
   const out = [];
@@ -74569,19 +75295,19 @@ function all$3(db2, sql, params = []) {
   st2.free();
   return out;
 }
-function one$3(db2, sql, params = []) {
-  return all$3(db2, sql, params)[0] ?? null;
+function one$4(db2, sql, params = []) {
+  return all$4(db2, sql, params)[0] ?? null;
 }
-function exec$3(db2, sql, params = []) {
+function exec$4(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   st2.run(params);
   st2.free();
   return db2.getRowsModified();
 }
 function lastId$2(db2) {
-  return Number(one$3(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  return Number(one$4(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
 }
-async function tx$2(fn) {
+async function tx$3(fn) {
   const db2 = await getDb();
   db2.run("BEGIN");
   try {
@@ -74597,10 +75323,10 @@ async function tx$2(fn) {
     throw e;
   }
 }
-async function read$2(fn) {
+async function read$3(fn) {
   return fn(await getDb());
 }
-const nowIso$3 = () => (/* @__PURE__ */ new Date()).toISOString();
+const nowIso$4 = () => (/* @__PURE__ */ new Date()).toISOString();
 function toMonitor(r) {
   let raw = {};
   try {
@@ -74617,18 +75343,18 @@ function toMonitor(r) {
   return { ...r, config: normalizeConfig(raw), extraDisplay: r.extraDisplay ?? 0, legacy };
 }
 async function listMonitors() {
-  return read$2((db2) => all$3(db2, "SELECT * FROM flight_monitors ORDER BY status = 'paused', updatedAt DESC").map(toMonitor));
+  return read$3((db2) => all$4(db2, "SELECT * FROM flight_monitors ORDER BY status = 'paused', updatedAt DESC").map(toMonitor));
 }
-async function getMonitor(id) {
-  return read$2((db2) => {
-    const r = one$3(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
+async function getMonitor(id2) {
+  return read$3((db2) => {
+    const r = one$4(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id2]);
     return r ? toMonitor(r) : null;
   });
 }
 async function createMonitor(name, status2, config2, tripId) {
-  return tx$2((db2) => {
-    const t = nowIso$3();
-    exec$3(db2, "INSERT INTO flight_monitors (name, status, tripId, config, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [
+  return tx$3((db2) => {
+    const t = nowIso$4();
+    exec$4(db2, "INSERT INTO flight_monitors (name, status, tripId, config, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [
       name,
       status2,
       tripId,
@@ -74639,48 +75365,48 @@ async function createMonitor(name, status2, config2, tripId) {
     return lastId$2(db2);
   });
 }
-async function updateMonitor(id, patch) {
-  await tx$2((db2) => {
-    const cur = one$3(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id]);
+async function updateMonitor(id2, patch) {
+  await tx$3((db2) => {
+    const cur = one$4(db2, "SELECT * FROM flight_monitors WHERE id = ?", [id2]);
     if (!cur) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
-    exec$3(db2, "UPDATE flight_monitors SET name = ?, status = ?, tripId = ?, config = ?, updatedAt = ? WHERE id = ?", [
+    exec$4(db2, "UPDATE flight_monitors SET name = ?, status = ?, tripId = ?, config = ?, updatedAt = ? WHERE id = ?", [
       patch.name ?? cur.name,
       patch.status ?? cur.status,
       patch.tripId !== void 0 ? patch.tripId : cur.tripId,
       patch.config ? JSON.stringify(patch.config) : cur.config,
-      nowIso$3(),
-      id
+      nowIso$4(),
+      id2
     ]);
-    if (patch.config) exec$3(db2, "DELETE FROM flight_search_tasks WHERE monitorId = ? AND status IN ('pending', 'failed')", [id]);
+    if (patch.config) exec$4(db2, "DELETE FROM flight_search_tasks WHERE monitorId = ? AND status IN ('pending', 'failed')", [id2]);
   });
 }
-async function setMonitorMeta(id, meta) {
+async function setMonitorMeta(id2, meta) {
   const keys = Object.keys(meta);
   if (!keys.length) return;
-  await tx$2((db2) => {
-    exec$3(db2, `UPDATE flight_monitors SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => meta[k] ?? null), id]);
+  await tx$3((db2) => {
+    exec$4(db2, `UPDATE flight_monitors SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => meta[k] ?? null), id2]);
   });
 }
-async function deleteMonitor(id) {
-  await tx$2((db2) => {
-    exec$3(db2, "DELETE FROM flight_price_observations WHERE monitorId = ?", [id]);
-    for (const t of ["flight_offers", "flight_search_tasks", "flight_runs", "flight_alert_events"]) exec$3(db2, `DELETE FROM ${t} WHERE monitorId = ?`, [id]);
-    const legacy = one$3(db2, "SELECT legacyWatchId FROM flight_monitors WHERE id = ?", [id]);
+async function deleteMonitor(id2) {
+  await tx$3((db2) => {
+    exec$4(db2, "DELETE FROM flight_price_observations WHERE monitorId = ?", [id2]);
+    for (const t of ["flight_offers", "flight_search_tasks", "flight_runs", "flight_alert_events"]) exec$4(db2, `DELETE FROM ${t} WHERE monitorId = ?`, [id2]);
+    const legacy = one$4(db2, "SELECT legacyWatchId FROM flight_monitors WHERE id = ?", [id2]);
     if (legacy?.legacyWatchId != null) {
       try {
-        exec$3(db2, "DELETE FROM flight_watches WHERE id = ?", [legacy.legacyWatchId]);
+        exec$4(db2, "DELETE FROM flight_watches WHERE id = ?", [legacy.legacyWatchId]);
       } catch {
       }
     }
-    exec$3(db2, "DELETE FROM flight_monitors WHERE id = ?", [id]);
+    exec$4(db2, "DELETE FROM flight_monitors WHERE id = ?", [id2]);
   });
 }
 async function migrateLegacyWatches(resolve, base2) {
-  return tx$2((db2) => {
+  return tx$3((db2) => {
     let n = 0;
     let rows = [];
     try {
-      rows = all$3(db2, "SELECT * FROM flight_watches WHERE id NOT IN (SELECT legacyWatchId FROM flight_monitors WHERE legacyWatchId IS NOT NULL)");
+      rows = all$4(db2, "SELECT * FROM flight_watches WHERE id NOT IN (SELECT legacyWatchId FROM flight_monitors WHERE legacyWatchId IS NOT NULL)");
     } catch {
       return 0;
     }
@@ -74692,8 +75418,8 @@ async function migrateLegacyWatches(resolve, base2) {
       if (d) cfg.destinations.include.push(d);
       cfg.currency = (w.currency || "BRL").toUpperCase();
       cfg.notes = "Migrado do monitoramento antigo: defina datas e revise origens/destinos.";
-      const t = nowIso$3();
-      exec$3(
+      const t = nowIso$4();
+      exec$4(
         db2,
         "INSERT INTO flight_monitors (name, status, tripId, config, createdAt, updatedAt, legacyWatchId, legacy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
@@ -74713,41 +75439,41 @@ async function migrateLegacyWatches(resolve, base2) {
   });
 }
 async function createRun(monitorId, trigger) {
-  return tx$2((db2) => {
-    exec$3(db2, "INSERT INTO flight_runs (monitorId, trigger, status, startedAt) VALUES (?, ?, 'running', ?)", [monitorId, trigger, nowIso$3()]);
+  return tx$3((db2) => {
+    exec$4(db2, "INSERT INTO flight_runs (monitorId, trigger, status, startedAt) VALUES (?, ?, 'running', ?)", [monitorId, trigger, nowIso$4()]);
     return lastId$2(db2);
   });
 }
-async function updateRun(id, patch) {
+async function updateRun(id2, patch) {
   const keys = Object.keys(patch);
   if (!keys.length) return;
-  await tx$2((db2) => exec$3(db2, `UPDATE flight_runs SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => patch[k] ?? null), id]));
+  await tx$3((db2) => exec$4(db2, `UPDATE flight_runs SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => patch[k] ?? null), id2]));
 }
-async function getRun(id) {
-  return read$2((db2) => one$3(db2, "SELECT * FROM flight_runs WHERE id = ?", [id]));
+async function getRun(id2) {
+  return read$3((db2) => one$4(db2, "SELECT * FROM flight_runs WHERE id = ?", [id2]));
 }
 async function activeRun(monitorId) {
-  return read$2((db2) => one$3(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
+  return read$3((db2) => one$4(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
 }
 async function lastAssistedRun(monitorId) {
-  return read$2((db2) => one$3(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND trigger = 'assisted' AND status != 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
+  return read$3((db2) => one$4(db2, "SELECT * FROM flight_runs WHERE monitorId = ? AND trigger = 'assisted' AND status != 'running' ORDER BY id DESC LIMIT 1", [monitorId]));
 }
-async function listRuns(monitorId, limit = 15) {
-  return read$2((db2) => all$3(db2, "SELECT * FROM flight_runs WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
+async function listRuns$1(monitorId, limit = 15) {
+  return read$3((db2) => all$4(db2, "SELECT * FROM flight_runs WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
 }
 async function recoverInterrupted() {
-  return tx$2((db2) => {
-    exec$3(db2, "UPDATE flight_search_tasks SET status = 'pending' WHERE status = 'running'");
-    return exec$3(db2, "UPDATE flight_runs SET status = 'interrupted', finishedAt = ?, message = 'Servidor reiniciado durante a busca; continue quando quiser.' WHERE status = 'running'", [nowIso$3()]);
+  return tx$3((db2) => {
+    exec$4(db2, "UPDATE flight_search_tasks SET status = 'pending' WHERE status = 'running'");
+    return exec$4(db2, "UPDATE flight_runs SET status = 'interrupted', finishedAt = ?, message = 'Servidor reiniciado durante a busca; continue quando quiser.' WHERE status = 'running'", [nowIso$4()]);
   });
 }
 async function insertTasks(monitorId, specs) {
   if (!specs.length) return 0;
-  return tx$2((db2) => {
+  return tx$3((db2) => {
     let n = 0;
-    const t = nowIso$3();
+    const t = nowIso$4();
     for (const s2 of specs) {
-      n += exec$3(
+      n += exec$4(
         db2,
         "INSERT OR IGNORE INTO flight_search_tasks (monitorId, key, provider, stage, origin, destination, departDate, returnDate, priority, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [monitorId, s2.key, s2.provider, s2.stage, s2.origin, s2.destination, s2.departDate, s2.returnDate, s2.priority, t]
@@ -74757,38 +75483,38 @@ async function insertTasks(monitorId, specs) {
   });
 }
 async function listTasks(monitorId) {
-  return read$2((db2) => all$3(db2, "SELECT * FROM flight_search_tasks WHERE monitorId = ? ORDER BY priority DESC, id", [monitorId]));
+  return read$3((db2) => all$4(db2, "SELECT * FROM flight_search_tasks WHERE monitorId = ? ORDER BY priority DESC, id", [monitorId]));
 }
 async function nextTasks(monitorId, providers, limit) {
   if (!providers.length) return [];
-  return read$2(
-    (db2) => all$3(
+  return read$3(
+    (db2) => all$4(
       db2,
       `SELECT * FROM flight_search_tasks WHERE monitorId = ? AND status = 'pending' AND provider IN (${providers.map(() => "?").join(",")})
        AND (nextAttemptAt IS NULL OR nextAttemptAt <= ?) ORDER BY priority DESC, id LIMIT ?`,
-      [monitorId, ...providers, nowIso$3(), limit]
+      [monitorId, ...providers, nowIso$4(), limit]
     )
   );
 }
-async function claimTask(id, runId) {
-  return tx$2((db2) => exec$3(db2, "UPDATE flight_search_tasks SET status = 'running', runId = ? WHERE id = ? AND status = 'pending'", [runId, id]) === 1);
+async function claimTask(id2, runId) {
+  return tx$3((db2) => exec$4(db2, "UPDATE flight_search_tasks SET status = 'running', runId = ? WHERE id = ? AND status = 'pending'", [runId, id2]) === 1);
 }
-async function finishTask(id, r) {
-  await tx$2(
-    (db2) => exec$3(
+async function finishTask(id2, r) {
+  await tx$3(
+    (db2) => exec$4(
       db2,
       `UPDATE flight_search_tasks SET status = ?, resultCount = COALESCE(?, resultCount), minPriceMinor = ?, currency = COALESCE(?, currency),
        lastError = ?, nextAttemptAt = ?, attempts = attempts + 1, finishedAt = ? WHERE id = ?`,
-      [r.status, r.resultCount ?? null, r.minPriceMinor ?? null, r.currency ?? null, r.error ?? null, r.retryAt ?? null, nowIso$3(), id]
+      [r.status, r.resultCount ?? null, r.minPriceMinor ?? null, r.currency ?? null, r.error ?? null, r.retryAt ?? null, nowIso$4(), id2]
     )
   );
 }
-async function resetTask(id) {
-  await tx$2((db2) => exec$3(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL, lastError = NULL WHERE id = ? AND status != 'running'", [id]));
+async function resetTask(id2) {
+  await tx$3((db2) => exec$4(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL, lastError = NULL WHERE id = ? AND status != 'running'", [id2]));
 }
 async function requeueStale(monitorId, olderThanIso, limit) {
-  return tx$2(
-    (db2) => exec$3(
+  return tx$3(
+    (db2) => exec$4(
       db2,
       `UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL WHERE id IN (
          SELECT id FROM flight_search_tasks WHERE monitorId = ? AND status = 'done' AND finishedAt < ? ORDER BY priority DESC LIMIT ?)`,
@@ -74797,31 +75523,31 @@ async function requeueStale(monitorId, olderThanIso, limit) {
   );
 }
 async function retryFailed(monitorId) {
-  return tx$2((db2) => exec$3(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL WHERE monitorId = ? AND status = 'failed'", [monitorId]));
+  return tx$3((db2) => exec$4(db2, "UPDATE flight_search_tasks SET status = 'pending', attempts = 0, nextAttemptAt = NULL WHERE monitorId = ? AND status = 'failed'", [monitorId]));
 }
 async function upsertOffers(monitorId, items, paxKey2, runId) {
   if (!items.length) return [];
-  return tx$2((db2) => {
+  return tx$3((db2) => {
     const out = [];
-    for (const { offer, fp } of items) {
+    for (const { offer, fp: fp2 } of items) {
       const s0 = offer.slices[0];
       const s1 = offer.slices[1];
-      const cur = one$3(db2, "SELECT * FROM flight_offers WHERE monitorId = ? AND fingerprint = ?", [monitorId, fp]);
-      let id;
+      const cur = one$4(db2, "SELECT * FROM flight_offers WHERE monitorId = ? AND fingerprint = ?", [monitorId, fp2]);
+      let id2;
       let isNew = false;
       let priceChanged = false;
       let prevMinor = null;
       if (!cur) {
-        exec$3(
+        exec$4(
           db2,
           `INSERT INTO flight_offers (monitorId, fingerprint, provider, origin, destination, departDate, returnDate, priceMinor, currency, verification, data, sources, firstSeenAt, lastSeenAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [monitorId, fp, offer.provider, s0.from, s0.to, s0.departLocal.slice(0, 10), s1 ? s1.departLocal.slice(0, 10) : null, offer.price.amountMinor, offer.price.currency, offer.verification, JSON.stringify(offer), JSON.stringify([offer.provider]), offer.observedAt, offer.observedAt]
+          [monitorId, fp2, offer.provider, s0.from, s0.to, s0.departLocal.slice(0, 10), s1 ? s1.departLocal.slice(0, 10) : null, offer.price.amountMinor, offer.price.currency, offer.verification, JSON.stringify(offer), JSON.stringify([offer.provider]), offer.observedAt, offer.observedAt]
         );
-        id = lastId$2(db2);
+        id2 = lastId$2(db2);
         isNew = true;
       } else {
-        id = cur.id;
+        id2 = cur.id;
         const curRank = VERIFICATION_RANK[cur.verification] ?? 0;
         const newRank = VERIFICATION_RANK[offer.verification] ?? 0;
         const curOld = Date.parse(offer.observedAt) - Date.parse(cur.lastSeenAt) > 24 * 36e5;
@@ -74832,7 +75558,7 @@ async function upsertOffers(monitorId, items, paxKey2, runId) {
         if (replace) {
           priceChanged = !sameReading && (cur.priceMinor !== offer.price.amountMinor || cur.currency !== offer.price.currency);
           prevMinor = sameReading ? cur.prevPriceMinor : cur.priceMinor;
-          exec$3(
+          exec$4(
             db2,
             `UPDATE flight_offers SET provider = ?, priceMinor = ?, currency = ?, prevPriceMinor = ?, prevCurrency = ?, verification = ?, data = ?, sources = ?, lastSeenAt = ?, available = 1 WHERE id = ?`,
             [
@@ -74845,83 +75571,83 @@ async function upsertOffers(monitorId, items, paxKey2, runId) {
               JSON.stringify(offer),
               JSON.stringify([...sources]),
               offer.observedAt,
-              id
+              id2
             ]
           );
         } else {
-          exec$3(db2, "UPDATE flight_offers SET sources = ?, available = 1 WHERE id = ?", [JSON.stringify([...sources]), id]);
+          exec$4(db2, "UPDATE flight_offers SET sources = ?, available = 1 WHERE id = ?", [JSON.stringify([...sources]), id2]);
         }
       }
-      exec$3(
+      exec$4(
         db2,
         `INSERT INTO flight_price_observations (offerId, monitorId, observedAt, priceMinor, currency, provider, verification, paxKey, runId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (offerId, provider, observedAt) DO UPDATE SET priceMinor = MIN(priceMinor, excluded.priceMinor)`,
-        [id, monitorId, offer.observedAt, offer.price.amountMinor, offer.price.currency, offer.provider, offer.verification, paxKey2, runId]
+        [id2, monitorId, offer.observedAt, offer.price.amountMinor, offer.price.currency, offer.provider, offer.verification, paxKey2, runId]
       );
-      out.push({ id, isNew, priceChanged, prevMinor });
+      out.push({ id: id2, isNew, priceChanged, prevMinor });
     }
     return out;
   });
 }
 async function markMissing(monitorId, provider, origin, destination, departDate, seenBefore, keep) {
-  return tx$2((db2) => {
-    const rows = all$3(
+  return tx$3((db2) => {
+    const rows = all$4(
       db2,
       "SELECT id, fingerprint FROM flight_offers WHERE monitorId = ? AND provider = ? AND origin = ? AND destination = ? AND departDate = ? AND available = 1 AND lastSeenAt < ?",
       [monitorId, provider, origin, destination, departDate, seenBefore]
     );
     const gone = rows.filter((r) => !keep.has(r.fingerprint)).map((r) => r.id);
-    for (const id of gone) exec$3(db2, "UPDATE flight_offers SET available = 0 WHERE id = ?", [id]);
+    for (const id2 of gone) exec$4(db2, "UPDATE flight_offers SET available = 0 WHERE id = ?", [id2]);
     return gone;
   });
 }
 async function listOffers(monitorId) {
-  return read$2((db2) => all$3(db2, "SELECT * FROM flight_offers WHERE monitorId = ?", [monitorId]));
+  return read$3((db2) => all$4(db2, "SELECT * FROM flight_offers WHERE monitorId = ?", [monitorId]));
 }
-async function getOffer(id) {
-  return read$2((db2) => one$3(db2, "SELECT * FROM flight_offers WHERE id = ?", [id]));
+async function getOffer(id2) {
+  return read$3((db2) => one$4(db2, "SELECT * FROM flight_offers WHERE id = ?", [id2]));
 }
-async function setFavorite(id, fav) {
-  await tx$2((db2) => exec$3(db2, "UPDATE flight_offers SET favorite = ? WHERE id = ?", [fav ? 1 : 0, id]));
+async function setFavorite(id2, fav) {
+  await tx$3((db2) => exec$4(db2, "UPDATE flight_offers SET favorite = ? WHERE id = ?", [fav ? 1 : 0, id2]));
 }
 async function listObservations(monitorId, sinceIso) {
-  return read$2((db2) => all$3(db2, "SELECT offerId, observedAt, priceMinor, currency, provider, verification, paxKey FROM flight_price_observations WHERE monitorId = ? AND observedAt >= ? ORDER BY observedAt", [monitorId, sinceIso]));
+  return read$3((db2) => all$4(db2, "SELECT offerId, observedAt, priceMinor, currency, provider, verification, paxKey FROM flight_price_observations WHERE monitorId = ? AND observedAt >= ? ORDER BY observedAt", [monitorId, sinceIso]));
 }
 async function listTracked(monitorId) {
-  return read$2((db2) => all$3(db2, "SELECT origin, destination, departDate, returnDate, createdAt FROM flight_tracked_combos WHERE monitorId = ? ORDER BY id", [monitorId]));
+  return read$3((db2) => all$4(db2, "SELECT origin, destination, departDate, returnDate, createdAt FROM flight_tracked_combos WHERE monitorId = ? ORDER BY id", [monitorId]));
 }
 async function addTracked(monitorId, picks) {
   if (!picks.length) return 0;
-  return tx$2((db2) => {
+  return tx$3((db2) => {
     let n = 0;
     for (const p of picks)
-      n += exec$3(db2, "INSERT OR IGNORE INTO flight_tracked_combos (monitorId, origin, destination, departDate, returnDate, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, p.origin, p.destination, p.depart, p.ret ?? "", nowIso$3()]);
+      n += exec$4(db2, "INSERT OR IGNORE INTO flight_tracked_combos (monitorId, origin, destination, departDate, returnDate, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, p.origin, p.destination, p.depart, p.ret ?? "", nowIso$4()]);
     return n;
   });
 }
 async function backfillTrackedFromSkyscanner() {
-  return tx$2(
-    (db2) => exec$3(
+  return tx$3(
+    (db2) => exec$4(
       db2,
       `INSERT OR IGNORE INTO flight_tracked_combos (monitorId, origin, destination, departDate, returnDate, createdAt)
        SELECT monitorId, origin, destination, departDate, COALESCE(returnDate, ''), COALESCE(finishedAt, ?) FROM flight_search_tasks WHERE provider = 'skyscanner_chrome'`,
-      [nowIso$3()]
+      [nowIso$4()]
     )
   );
 }
 async function removeTracked(monitorId, p) {
-  await tx$2((db2) => exec$3(db2, "DELETE FROM flight_tracked_combos WHERE monitorId = ? AND origin = ? AND destination = ? AND departDate = ? AND returnDate = ?", [monitorId, p.origin, p.destination, p.depart, p.ret ?? ""]));
+  await tx$3((db2) => exec$4(db2, "DELETE FROM flight_tracked_combos WHERE monitorId = ? AND origin = ? AND destination = ? AND departDate = ? AND returnDate = ?", [monitorId, p.origin, p.destination, p.depart, p.ret ?? ""]));
 }
 async function recordAlert(monitorId, offerId, kind, dedupeKey, message) {
-  return tx$2((db2) => exec$3(db2, "INSERT OR IGNORE INTO flight_alert_events (monitorId, offerId, kind, dedupeKey, message, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, offerId, kind, dedupeKey, message, nowIso$3()]) === 1);
+  return tx$3((db2) => exec$4(db2, "INSERT OR IGNORE INTO flight_alert_events (monitorId, offerId, kind, dedupeKey, message, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [monitorId, offerId, kind, dedupeKey, message, nowIso$4()]) === 1);
 }
 async function listAlerts(monitorId, limit = 50) {
-  return read$2((db2) => all$3(db2, "SELECT id, monitorId, offerId, kind, message, createdAt FROM flight_alert_events WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
+  return read$3((db2) => all$4(db2, "SELECT id, monitorId, offerId, kind, message, createdAt FROM flight_alert_events WHERE monitorId = ? ORDER BY id DESC LIMIT ?", [monitorId, limit]));
 }
 async function cacheGet(key) {
-  return read$2((db2) => {
-    const r = one$3(db2, "SELECT value, expiresAt FROM flight_cache WHERE key = ?", [key]);
-    if (!r || r.expiresAt < nowIso$3()) return null;
+  return read$3((db2) => {
+    const r = one$4(db2, "SELECT value, expiresAt FROM flight_cache WHERE key = ?", [key]);
+    if (!r || r.expiresAt < nowIso$4()) return null;
     try {
       return JSON.parse(r.value);
     } catch {
@@ -74930,22 +75656,22 @@ async function cacheGet(key) {
   });
 }
 async function cacheSet(key, value, ttlMs) {
-  await tx$2((db2) => {
-    exec$3(db2, "INSERT OR REPLACE INTO flight_cache (key, value, expiresAt) VALUES (?, ?, ?)", [key, JSON.stringify(value), new Date(Date.now() + ttlMs).toISOString()]);
-    exec$3(db2, "DELETE FROM flight_cache WHERE expiresAt < ?", [nowIso$3()]);
+  await tx$3((db2) => {
+    exec$4(db2, "INSERT OR REPLACE INTO flight_cache (key, value, expiresAt) VALUES (?, ?, ?)", [key, JSON.stringify(value), new Date(Date.now() + ttlMs).toISOString()]);
+    exec$4(db2, "DELETE FROM flight_cache WHERE expiresAt < ?", [nowIso$4()]);
   });
 }
 async function incUsage(provider, day) {
-  await tx$2((db2) => {
-    exec$3(db2, "INSERT OR IGNORE INTO flight_provider_usage (provider, day, queries) VALUES (?, ?, 0)", [provider, day]);
-    exec$3(db2, "UPDATE flight_provider_usage SET queries = queries + 1 WHERE provider = ? AND day = ?", [provider, day]);
+  await tx$3((db2) => {
+    exec$4(db2, "INSERT OR IGNORE INTO flight_provider_usage (provider, day, queries) VALUES (?, ?, 0)", [provider, day]);
+    exec$4(db2, "UPDATE flight_provider_usage SET queries = queries + 1 WHERE provider = ? AND day = ?", [provider, day]);
   });
 }
 async function usageOn(provider, day) {
-  return read$2((db2) => Number(one$3(db2, "SELECT queries AS q FROM flight_provider_usage WHERE provider = ? AND day = ?", [provider, day])?.q ?? 0));
+  return read$3((db2) => Number(one$4(db2, "SELECT queries AS q FROM flight_provider_usage WHERE provider = ? AND day = ?", [provider, day])?.q ?? 0));
 }
 async function monitorQueriesSince(monitorId, sinceIso) {
-  return read$2((db2) => Number(one$3(db2, "SELECT COALESCE(SUM(queries), 0) AS q FROM flight_runs WHERE monitorId = ? AND startedAt >= ?", [monitorId, sinceIso])?.q ?? 0));
+  return read$3((db2) => Number(one$4(db2, "SELECT COALESCE(SUM(queries), 0) AS q FROM flight_runs WHERE monitorId = ? AND startedAt >= ?", [monitorId, sinceIso])?.q ?? 0));
 }
 function searchLinks(o, d, depart, ret, currency2, adults = 1) {
   const q2 = `Flights from ${o} to ${d} on ${depart}${ret ? ` through ${ret}` : " oneway"}${adults > 1 ? ` for ${adults} adults` : ""}`;
@@ -75172,7 +75898,7 @@ async function history(m, days2 = 60) {
 }
 async function plan(m) {
   const u = buildUniverse(m.config, todayLocal());
-  const [tasks, runs] = await Promise.all([listTasks(m.id), listRuns(m.id)]);
+  const [tasks, runs] = await Promise.all([listTasks(m.id), listRuns$1(m.id)]);
   const statuses = ["pending", "running", "done", "failed", "skipped"];
   const empty2 = () => Object.fromEntries(statuses.map((s2) => [s2, 0]));
   const byStage = { discovery: empty2(), deepen: empty2(), validate: empty2() };
@@ -75339,7 +76065,7 @@ function jsonObjects(text) {
   const out = [];
   let i = text.indexOf("{");
   while (i >= 0 && i < text.length) {
-    let depth = 0;
+    let depth2 = 0;
     let inStr = false;
     let esc = false;
     let end = -1;
@@ -75350,8 +76076,8 @@ function jsonObjects(text) {
         else if (ch === "\\") esc = true;
         else if (ch === '"') inStr = false;
       } else if (ch === '"') inStr = true;
-      else if (ch === "{") depth++;
-      else if (ch === "}" && --depth === 0) {
+      else if (ch === "{") depth2++;
+      else if (ch === "}" && --depth2 === 0) {
         end = k;
         break;
       }
@@ -75476,9 +76202,9 @@ async function startSkyscanner(monitorId, picks) {
   await insertTasks(monitorId, newSpecs(specs, existing));
   const byKey = new Map((await listTasks(monitorId)).map((t) => [t.key, t]));
   const taskIds = specs.map((s2) => byKey.get(s2.key).id);
-  for (const id of taskIds) {
-    await resetTask(id);
-    await claimTask(id, runId);
+  for (const id2 of taskIds) {
+    await resetTask(id2);
+    await claimTask(id2, runId);
   }
   const sessions = Math.ceil(combos.length / PER_SESSION);
   await updateRun(runId, { planned: combos.length, message: `Claude está pesquisando no seu Chrome… (sessão 1 de ${sessions})` });
@@ -75585,7 +76311,7 @@ async function startSkyscanner(monitorId, picks) {
     } finally {
       if (!stopping) {
         const left = taskIds.filter((_, i) => !settled.has(i));
-        for (const id of left) await finishTask(id, { status: "pending", error: fatal ? fatal.slice(0, 200) : cancelled ? "Cancelado." : "Não pesquisado (sessão interrompida)." });
+        for (const id2 of left) await finishTask(id2, { status: "pending", error: fatal ? fatal.slice(0, 200) : cancelled ? "Cancelado." : "Não pesquisado (sessão interrompida)." });
         const message = [
           fatal,
           cancelled ? "Cancelado por você." : null,
@@ -75750,13 +76476,13 @@ function run$1(cmd, args, cwd, timeoutMs = 3e4) {
     });
   });
 }
-const git$1 = (cwd, args, timeoutMs) => run$1("git", args, cwd, timeoutMs);
-const gitOk$1 = (cwd, args) => git$1(cwd, args).catch(() => null);
+const git$2 = (cwd, args, timeoutMs) => run$1("git", args, cwd, timeoutMs);
+const gitOk$2 = (cwd, args) => git$2(cwd, args).catch(() => null);
 async function repoTop(dir) {
   if (!fs.existsSync(dir)) return null;
-  return (await gitOk$1(dir, ["rev-parse", "--show-toplevel"]))?.trim() || null;
+  return (await gitOk$2(dir, ["rev-parse", "--show-toplevel"]))?.trim() || null;
 }
-function slugify$2(s2) {
+function slugify$3(s2) {
   return s2.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "conversa";
 }
 function stamp$1() {
@@ -75767,15 +76493,15 @@ function stamp$1() {
 async function createWorktree(projectDir, title) {
   const top = await repoTop(projectDir);
   if (!top) throw new Error(tt("aiconv.aPastaDoProjetoNao"));
-  const baseRef = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
-  const name = `rickos-${slugify$2(title)}-${stamp$1()}`;
+  const baseRef = (await gitOk$2(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
+  const name = `rickos-${slugify$3(title)}-${stamp$1()}`;
   const branch = `claude/${name}`;
   const wtDir = path.join(path.dirname(top), ".worktrees", `${path.basename(top)}-${name}`);
   fs.mkdirSync(path.dirname(wtDir), { recursive: true });
-  await git$1(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"], 6e4);
+  await git$2(top, ["worktree", "add", "-b", branch, wtDir, "HEAD"], 6e4);
   if (!fs.existsSync(wtDir)) throw new Error(tt("aiconv.naoConseguiCriarOWorktree"));
-  const rel = path.relative(top, path.resolve(projectDir));
-  const cwd = rel && !rel.startsWith("..") ? path.join(wtDir, rel) : wtDir;
+  const rel2 = path.relative(top, path.resolve(projectDir));
+  const cwd = rel2 && !rel2.startsWith("..") ? path.join(wtDir, rel2) : wtDir;
   return { cwd: fs.existsSync(cwd) ? cwd : wtDir, repoPath: top, branch, baseRef };
 }
 const WORKSPACE_MANIFEST = ".rickos-workspace.json";
@@ -75788,20 +76514,20 @@ function readWorkspaceManifest(wsDir) {
 }
 function mirrorRoot(src, dst, repoRels, prefix, links) {
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
-    const rel = prefix ? `${prefix}/${e.name}` : e.name;
-    if (repoRels.includes(rel)) continue;
-    if (e.isDirectory() && repoRels.some((r) => r.startsWith(rel + "/"))) {
+    const rel2 = prefix ? `${prefix}/${e.name}` : e.name;
+    if (repoRels.includes(rel2)) continue;
+    if (e.isDirectory() && repoRels.some((r) => r.startsWith(rel2 + "/"))) {
       fs.mkdirSync(path.join(dst, e.name), { recursive: true });
-      mirrorRoot(path.join(src, e.name), path.join(dst, e.name), repoRels, rel, links);
+      mirrorRoot(path.join(src, e.name), path.join(dst, e.name), repoRels, rel2, links);
       continue;
     }
     fs.symlinkSync(path.join(src, e.name), path.join(dst, e.name));
-    links.push(rel);
+    links.push(rel2);
   }
 }
 async function createWorkspaceWorktree(rootDir, repos, title) {
   const root = path.resolve(rootDir);
-  const name = `rickos-${slugify$2(title)}-${stamp$1()}`;
+  const name = `rickos-${slugify$3(title)}-${stamp$1()}`;
   const branch = `claude/${name}`;
   const wsDir = path.join(path.dirname(root), ".worktrees", `${path.basename(root)}-${name}`);
   const rels = repos.map((r) => r.rel.replace(/\\/g, "/").replace(/^\.\/|\/$/g, ""));
@@ -75812,10 +76538,10 @@ async function createWorkspaceWorktree(rootDir, repos, title) {
     for (let i = 0; i < repos.length; i++) {
       const top = await repoTop(repos[i].dir);
       if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit", { name: repos[i].name, rel: repos[i].rel }));
-      const baseRef = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
+      const baseRef = (await gitOk$2(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
       const wt = path.join(wsDir, rels[i]);
       fs.mkdirSync(path.dirname(wt), { recursive: true });
-      await git$1(top, ["worktree", "add", "-b", branch, wt, "HEAD"], 6e4);
+      await git$2(top, ["worktree", "add", "-b", branch, wt, "HEAD"], 6e4);
       created.push({ repoPath: top, wt });
       manifest.repos.push({ name: repos[i].name, rel: rels[i], repoPath: top, baseRef });
     }
@@ -75823,8 +76549,8 @@ async function createWorkspaceWorktree(rootDir, repos, title) {
     fs.writeFileSync(path.join(wsDir, WORKSPACE_MANIFEST), JSON.stringify(manifest, null, 2));
   } catch (e) {
     for (const c of created) {
-      await gitOk$1(c.repoPath, ["worktree", "remove", "--force", c.wt]);
-      await gitOk$1(c.repoPath, ["branch", "-D", branch]);
+      await gitOk$2(c.repoPath, ["worktree", "remove", "--force", c.wt]);
+      await gitOk$2(c.repoPath, ["branch", "-D", branch]);
     }
     cleanupWorkspaceDir(wsDir);
     throw e;
@@ -75891,21 +76617,21 @@ async function removeWorkspaceWorktree(wsDir) {
   if (!m) throw new Error(tt("aiconv.manifestoDoWorkspaceNaoEncontrado"));
   for (const r of m.repos) {
     const wt = path.join(wsDir, r.rel);
-    if (fs.existsSync(wt)) await gitOk$1(r.repoPath, ["worktree", "remove", "--force", wt]);
-    await gitOk$1(r.repoPath, ["worktree", "prune"]);
-    await gitOk$1(r.repoPath, ["branch", "-D", m.branch]);
+    if (fs.existsSync(wt)) await gitOk$2(r.repoPath, ["worktree", "remove", "--force", wt]);
+    await gitOk$2(r.repoPath, ["worktree", "prune"]);
+    await gitOk$2(r.repoPath, ["branch", "-D", m.branch]);
   }
   cleanupWorkspaceDir(wsDir);
 }
 async function removeWorktree(repoPath, worktreeDir, branch) {
   if (readWorkspaceManifest(worktreeDir)) return removeWorkspaceWorktree(worktreeDir);
   const top = await repoTop(worktreeDir) ?? worktreeDir;
-  if (fs.existsSync(top)) await gitOk$1(repoPath, ["worktree", "remove", "--force", top]);
-  await gitOk$1(repoPath, ["worktree", "prune"]);
-  if (branch) await gitOk$1(repoPath, ["branch", "-D", branch]);
+  if (fs.existsSync(top)) await gitOk$2(repoPath, ["worktree", "remove", "--force", top]);
+  await gitOk$2(repoPath, ["worktree", "prune"]);
+  if (branch) await gitOk$2(repoPath, ["branch", "-D", branch]);
 }
 async function statusEntries(top) {
-  const raw = await gitOk$1(top, ["status", "--porcelain", "-z", "--untracked-files=all"]) ?? "";
+  const raw = await gitOk$2(top, ["status", "--porcelain", "-z", "--untracked-files=all"]) ?? "";
   const parts = raw.split("\0");
   const out = [];
   for (let i = 0; i < parts.length; i++) {
@@ -75929,10 +76655,10 @@ async function getChanges(dir, baseRef) {
     return { isRepo: false, branch: null, baseRef, files: [], unpushed: 0, hasRemote: false, repos: repos.filter((r) => r.changes.isRepo) };
   }
   const [branchRaw, entries, numstatRaw, remotes] = await Promise.all([
-    gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]),
+    gitOk$2(top, ["rev-parse", "--abbrev-ref", "HEAD"]),
     statusEntries(top),
-    gitOk$1(top, ["diff", "HEAD", "--numstat", "-z"]),
-    gitOk$1(top, ["remote"])
+    gitOk$2(top, ["diff", "HEAD", "--numstat", "-z"]),
+    gitOk$2(top, ["remote"])
   ]);
   const branch = branchRaw?.trim() || null;
   const counts2 = /* @__PURE__ */ new Map();
@@ -75971,9 +76697,9 @@ async function getChanges(dir, baseRef) {
   const hasRemote = !!remotes?.trim();
   let unpushed = 0;
   if (hasRemote && branch && branch !== "HEAD") {
-    const upstream = await gitOk$1(top, ["rev-list", "--count", "@{upstream}..HEAD"]);
+    const upstream = await gitOk$2(top, ["rev-list", "--count", "@{upstream}..HEAD"]);
     if (upstream != null) unpushed = Number(upstream.trim()) || 0;
-    else if (baseRef) unpushed = Number((await gitOk$1(top, ["rev-list", "--count", `${baseRef}..HEAD`]))?.trim() ?? 0) || 0;
+    else if (baseRef) unpushed = Number((await gitOk$2(top, ["rev-list", "--count", `${baseRef}..HEAD`]))?.trim() ?? 0) || 0;
   }
   return { isRepo: true, branch, baseRef, files, unpushed, hasRemote };
 }
@@ -75993,7 +76719,7 @@ async function fileDiff(dir, filePath) {
     diff = body.replace(/\n$/, "").split("\n").map((l) => "+" + l).join("\n");
     return { diff, truncated: txt.length > body.length, binary: false };
   }
-  diff = await git$1(top, ["diff", "HEAD", "--no-color", "--", e.path], 6e4).catch(() => "") ?? "";
+  diff = await git$2(top, ["diff", "HEAD", "--no-color", "--", e.path], 6e4).catch(() => "") ?? "";
   if (/^Binary files /m.test(diff)) return { diff: "", truncated: false, binary: true };
   diff = diff.replace(/^diff --git[\s\S]*?\n(?=@@)/m, "");
   const truncated = diff.length > FILE_DIFF_MAX;
@@ -76014,9 +76740,9 @@ async function commit(dir, message, paths) {
   if (!msg) throw new Error(tt("aiconv.escrevaAMensagemDoCommit"));
   const entries = await checkedPaths(top, paths);
   if (!entries.length) throw new Error(tt("aiconv.nadaParaCommitar"));
-  await git$1(top, ["add", "-A", "--", ...entries.map((e) => e.path)]);
-  await git$1(top, ["commit", "-m", msg, "--", ...entries.map((e) => e.path)], 6e4);
-  return (await gitOk$1(top, ["rev-parse", "--short", "HEAD"]) ?? "").trim();
+  await git$2(top, ["add", "-A", "--", ...entries.map((e) => e.path)]);
+  await git$2(top, ["commit", "-m", msg, "--", ...entries.map((e) => e.path)], 6e4);
+  return (await gitOk$2(top, ["rev-parse", "--short", "HEAD"]) ?? "").trim();
 }
 async function discard(dir, filePath) {
   const top = await repoTop(dir);
@@ -76029,18 +76755,18 @@ async function discard(dir, filePath) {
     return;
   }
   if (e.status === "A") {
-    await git$1(top, ["rm", "-f", "--", e.path]);
+    await git$2(top, ["rm", "-f", "--", e.path]);
     return;
   }
-  await git$1(top, ["checkout", "HEAD", "--", e.path]);
+  await git$2(top, ["checkout", "HEAD", "--", e.path]);
 }
 async function openPullRequest(dir, baseRef) {
   const top = await repoTop(dir);
   if (!top) throw new Error(tt("aiconv.naoEUmRepositorioGit2"));
-  const branch = (await gitOk$1(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim();
+  const branch = (await gitOk$2(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim();
   if (!branch || branch === "HEAD") throw new Error(tt("aiconv.headDestacadoNaoHaBranch"));
   if (baseRef && branch === baseRef) throw new Error(tt("aiconv.voceEstaNaPropriaBranch", { branch }));
-  await git$1(top, ["push", "-u", "origin", branch], 12e4);
+  await git$2(top, ["push", "-u", "origin", branch], 12e4);
   const args = ["pr", "create", "--fill", "--head", branch, ...baseRef ? ["--base", baseRef] : []];
   try {
     const out = await run$1("gh", args, top, 6e4);
@@ -76055,9 +76781,9 @@ async function commitContext(dir) {
   const top = await repoTop(dir);
   if (!top) return "";
   const [log2, stat, diff] = await Promise.all([
-    gitOk$1(top, ["log", "--oneline", "-12"]),
-    gitOk$1(top, ["diff", "HEAD", "--stat"]),
-    gitOk$1(top, ["diff", "HEAD", "--no-color", "--", ".", ...LOCKFILES.map((f) => `:(exclude,glob)**/${f}`)])
+    gitOk$2(top, ["log", "--oneline", "-12"]),
+    gitOk$2(top, ["diff", "HEAD", "--stat"]),
+    gitOk$2(top, ["diff", "HEAD", "--no-color", "--", ".", ...LOCKFILES.map((f) => `:(exclude,glob)**/${f}`)])
   ]);
   const untracked = (await statusEntries(top)).filter((e) => e.status === "??").map((e) => e.path);
   return [
@@ -76097,7 +76823,7 @@ const CONV_PAGE_SIZE = 40;
 const CONV_TURNS_PAGE_SIZE = 20;
 const IMAGE_MEDIA_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const MAX_IMAGES_PER_MESSAGE = 8;
-function all$2(db2, sql, params = []) {
+function all$3(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   if (params.length) st2.bind(params);
   const out = [];
@@ -76105,16 +76831,16 @@ function all$2(db2, sql, params = []) {
   st2.free();
   return out;
 }
-function one$2(db2, sql, params = []) {
-  return all$2(db2, sql, params)[0] ?? null;
+function one$3(db2, sql, params = []) {
+  return all$3(db2, sql, params)[0] ?? null;
 }
-function exec$2(db2, sql, params = []) {
+function exec$3(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   st2.run(params);
   st2.free();
 }
-const nowIso$2 = () => (/* @__PURE__ */ new Date()).toISOString();
-function parseJson(raw, fallback) {
+const nowIso$3 = () => (/* @__PURE__ */ new Date()).toISOString();
+function parseJson$1(raw, fallback) {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw);
@@ -76130,7 +76856,7 @@ function toConv(r) {
     updatedAt: r.updatedAt,
     projectId: r.projectId ?? null,
     agentId: r.agentId ?? null,
-    skillIds: parseJson(r.skillIds, []),
+    skillIds: parseJson$1(r.skillIds, []),
     model: r.model ?? "",
     effort: r.effort ?? "",
     permissionMode: r.permissionMode || "default",
@@ -76161,7 +76887,7 @@ function toTurn(r) {
     conversationId: r.conversationId,
     createdAt: r.createdAt,
     prompt: r.prompt,
-    blocks: parseJson(r.blocks, []),
+    blocks: parseJson$1(r.blocks, []),
     status: r.status,
     error: r.error ?? null,
     costUsd: r.costUsd ?? 0,
@@ -76169,7 +76895,7 @@ function toTurn(r) {
     outputTokens: r.outputTokens ?? 0,
     contextTokens: r.contextTokens ?? 0,
     durationMs: r.durationMs ?? null,
-    attachments: parseJson(r.attachments, [])
+    attachments: parseJson$1(r.attachments, [])
   };
 }
 const CONV_SELECT = `SELECT c.*, (SELECT COUNT(*) FROM ai_conv_turns t WHERE t.conversationId = c.id) AS turnCount FROM ai_conversations c`;
@@ -76191,48 +76917,48 @@ async function listConversations(query = {}) {
   }
   const base2 = where.join(" AND ");
   const first = !query.after;
-  const pinned = first ? all$2(db2, `${CONV_SELECT} WHERE ${base2} AND c.pinned = 1 ORDER BY c.updatedAt DESC, c.id DESC`, params) : [];
+  const pinned2 = first ? all$3(db2, `${CONV_SELECT} WHERE ${base2} AND c.pinned = 1 ORDER BY c.updatedAt DESC, c.id DESC`, params) : [];
   const restWhere = [base2, "c.pinned = 0"];
   const restParams = [...params];
   if (query.after) {
     restWhere.push("(c.updatedAt < ? OR (c.updatedAt = ? AND c.id < ?))");
     restParams.push(query.after.updatedAt, query.after.updatedAt, query.after.id);
   }
-  const rest = all$2(db2, `${CONV_SELECT} WHERE ${restWhere.join(" AND ")} ORDER BY c.updatedAt DESC, c.id DESC LIMIT ?`, [...restParams, limit + 1]);
+  const rest = all$3(db2, `${CONV_SELECT} WHERE ${restWhere.join(" AND ")} ORDER BY c.updatedAt DESC, c.id DESC LIMIT ?`, [...restParams, limit + 1]);
   const hasMore = rest.length > limit;
-  const page = { items: [...pinned, ...rest.slice(0, limit)].map(toConv), hasMore };
+  const page = { items: [...pinned2, ...rest.slice(0, limit)].map(toConv), hasMore };
   if (first) {
-    page.projectIds = all$2(db2, "SELECT DISTINCT projectId FROM ai_conversations WHERE projectId IS NOT NULL").map((r) => Number(r.projectId));
-    page.hasNoProject = !!one$2(db2, "SELECT 1 AS x FROM ai_conversations WHERE projectId IS NULL LIMIT 1");
+    page.projectIds = all$3(db2, "SELECT DISTINCT projectId FROM ai_conversations WHERE projectId IS NOT NULL").map((r) => Number(r.projectId));
+    page.hasNoProject = !!one$3(db2, "SELECT 1 AS x FROM ai_conversations WHERE projectId IS NULL LIMIT 1");
   }
   return page;
 }
-async function getConversation(id) {
+async function getConversation(id2) {
   const db2 = await getDb();
-  const r = one$2(db2, `${CONV_SELECT} WHERE c.id = ?`, [id]);
+  const r = one$3(db2, `${CONV_SELECT} WHERE c.id = ?`, [id2]);
   return r ? toConv(r) : null;
 }
 async function findConversationBySession(sessionId) {
   const db2 = await getDb();
-  const r = one$2(db2, `${CONV_SELECT} WHERE c.sessionId = ? ORDER BY c.updatedAt DESC`, [sessionId]);
+  const r = one$3(db2, `${CONV_SELECT} WHERE c.sessionId = ? ORDER BY c.updatedAt DESC`, [sessionId]);
   return r ? toConv(r) : null;
 }
 async function sessionIdsInUse() {
   const db2 = await getDb();
-  const rows = all$2(db2, "SELECT id, sessionId FROM ai_conversations WHERE sessionId IS NOT NULL");
+  const rows = all$3(db2, "SELECT id, sessionId FROM ai_conversations WHERE sessionId IS NOT NULL");
   return new Map(rows.map((r) => [r.sessionId, r.id]));
 }
 async function createConversation(c) {
   const db2 = await getDb();
-  const id = crypto.randomUUID();
-  const now = nowIso$2();
-  exec$2(
+  const id2 = crypto.randomUUID();
+  const now = nowIso$3();
+  exec$3(
     db2,
     `INSERT INTO ai_conversations (id, title, createdAt, updatedAt, projectId, agentId, skillIds, model, effort, permissionMode, sessionId, cwd, configDir, claudeCommand, origin, contextTokens,
        useWorktree, forkFrom, repoPath, worktreeBranch, baseRef, contextWindow, seenAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id,
+      id2,
       c.title ?? "",
       c.createdAt ?? now,
       c.updatedAt ?? now,
@@ -76259,9 +76985,9 @@ async function createConversation(c) {
     ]
   );
   saveDb();
-  return await getConversation(id);
+  return await getConversation(id2);
 }
-async function updateConversation(id, patch) {
+async function updateConversation(id2, patch) {
   const db2 = await getDb();
   const sets = [];
   const params = [];
@@ -76281,16 +77007,16 @@ async function updateConversation(id, patch) {
   if (patch.claudeCommand !== void 0) put("claudeCommand", patch.claudeCommand.trim());
   if (patch.useWorktree !== void 0) put("useWorktree", patch.useWorktree ? 1 : 0);
   if (sets.length) {
-    params.push(id);
-    exec$2(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+    params.push(id2);
+    exec$3(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
     saveDb();
   }
-  return getConversation(id);
+  return getConversation(id2);
 }
-async function setConversationRuntime(id, r) {
+async function setConversationRuntime(id2, r) {
   const db2 = await getDb();
   const sets = ["updatedAt = ?"];
-  const params = [nowIso$2()];
+  const params = [nowIso$3()];
   for (const k of ["worktreeBranch", "repoPath", "baseRef", "forkFrom"]) {
     if (r[k] !== void 0) {
       sets.push(`${k} = ?`);
@@ -76329,60 +77055,60 @@ async function setConversationRuntime(id, r) {
     sets.push("totalOutputTokens = totalOutputTokens + ?");
     params.push(r.addOutput);
   }
-  params.push(id);
-  exec$2(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+  params.push(id2);
+  exec$3(db2, `UPDATE ai_conversations SET ${sets.join(", ")} WHERE id = ?`, params);
   saveDb();
 }
-async function markSeen(id) {
+async function markSeen(id2) {
   const db2 = await getDb();
-  const r = one$2(db2, "SELECT updatedAt, seenAt FROM ai_conversations WHERE id = ?", [id]);
+  const r = one$3(db2, "SELECT updatedAt, seenAt FROM ai_conversations WHERE id = ?", [id2]);
   if (!r || r.seenAt && r.seenAt >= r.updatedAt) return false;
-  exec$2(db2, "UPDATE ai_conversations SET seenAt = updatedAt WHERE id = ?", [id]);
+  exec$3(db2, "UPDATE ai_conversations SET seenAt = updatedAt WHERE id = ?", [id2]);
   saveDb();
   return true;
 }
-async function deleteConversation(id) {
+async function deleteConversation(id2) {
   const db2 = await getDb();
-  exec$2(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [id]);
-  exec$2(db2, "DELETE FROM ai_conversations WHERE id = ?", [id]);
+  exec$3(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [id2]);
+  exec$3(db2, "DELETE FROM ai_conversations WHERE id = ?", [id2]);
   saveDb();
 }
 async function listTurns(conversationId) {
   const db2 = await getDb();
-  return all$2(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id", [conversationId]).map(toTurn);
+  return all$3(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? ORDER BY id", [conversationId]).map(toTurn);
 }
 async function listTurnsPage(conversationId, opts) {
   const db2 = await getDb();
   const limit = Math.max(1, Math.min(500, Math.floor(opts.limit)));
   let rows;
   if (opts.sinceId != null) {
-    rows = all$2(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? AND id >= ? ORDER BY id", [conversationId, opts.sinceId]);
+    rows = all$3(db2, "SELECT * FROM ai_conv_turns WHERE conversationId = ? AND id >= ? ORDER BY id", [conversationId, opts.sinceId]);
   } else {
     const before = opts.beforeId != null ? " AND id < ?" : "";
     const params = opts.beforeId != null ? [conversationId, opts.beforeId, limit] : [conversationId, limit];
-    rows = all$2(db2, `SELECT * FROM ai_conv_turns WHERE conversationId = ?${before} ORDER BY id DESC LIMIT ?`, params).reverse();
+    rows = all$3(db2, `SELECT * FROM ai_conv_turns WHERE conversationId = ?${before} ORDER BY id DESC LIMIT ?`, params).reverse();
   }
   const oldest = rows[0]?.id;
-  const hasMore = oldest != null ? !!one$2(db2, "SELECT 1 AS x FROM ai_conv_turns WHERE conversationId = ? AND id < ? LIMIT 1", [conversationId, oldest]) : false;
+  const hasMore = oldest != null ? !!one$3(db2, "SELECT 1 AS x FROM ai_conv_turns WHERE conversationId = ? AND id < ? LIMIT 1", [conversationId, oldest]) : false;
   return { turns: rows.map(toTurn), hasMore };
 }
 async function createTurn(conversationId, prompt, attachments = []) {
   const db2 = await getDb();
-  exec$2(db2, "INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, attachments) VALUES (?, ?, ?, ?, ?, ?)", [
+  exec$3(db2, "INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, attachments) VALUES (?, ?, ?, ?, ?, ?)", [
     conversationId,
-    nowIso$2(),
+    nowIso$3(),
     prompt,
     "[]",
     "running",
     JSON.stringify(attachments)
   ]);
-  const id = Number(one$2(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  const id2 = Number(one$3(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
   saveDb();
-  return toTurn(one$2(db2, "SELECT * FROM ai_conv_turns WHERE id = ?", [id]));
+  return toTurn(one$3(db2, "SELECT * FROM ai_conv_turns WHERE id = ?", [id2]));
 }
 async function saveTurn(t) {
   const db2 = await getDb();
-  exec$2(
+  exec$3(
     db2,
     `UPDATE ai_conv_turns SET prompt = ?, blocks = ?, status = ?, error = ?, costUsd = ?, inputTokens = ?, outputTokens = ?, contextTokens = ?, durationMs = ? WHERE id = ?`,
     [t.prompt, JSON.stringify(t.blocks), t.status, t.error, t.costUsd, t.inputTokens, t.outputTokens, t.contextTokens, t.durationMs, t.id]
@@ -76393,9 +77119,9 @@ async function replaceTurns(conversationId, turns) {
   const db2 = await getDb();
   db2.run("BEGIN");
   try {
-    exec$2(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [conversationId]);
+    exec$3(db2, "DELETE FROM ai_conv_turns WHERE conversationId = ?", [conversationId]);
     for (const t of turns) {
-      exec$2(
+      exec$3(
         db2,
         `INSERT INTO ai_conv_turns (conversationId, createdAt, prompt, blocks, status, error, costUsd, inputTokens, outputTokens, contextTokens, durationMs, attachments)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -76427,9 +77153,9 @@ async function replaceTurns(conversationId, turns) {
 }
 async function markStaleTurnsInterrupted() {
   const db2 = await getDb();
-  const stale = one$2(db2, `SELECT COUNT(*) AS n FROM ai_conv_turns WHERE status = 'running'`)?.n ?? 0;
+  const stale = one$3(db2, `SELECT COUNT(*) AS n FROM ai_conv_turns WHERE status = 'running'`)?.n ?? 0;
   if (!stale) return;
-  exec$2(db2, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'O servidor foi reiniciado durante a execução.') WHERE status = 'running'`);
+  exec$3(db2, `UPDATE ai_conv_turns SET status = 'interrupted', error = COALESCE(error, 'O servidor foi reiniciado durante a execução.') WHERE status = 'running'`);
   saveDb();
 }
 const live = /* @__PURE__ */ new Map();
@@ -76553,14 +77279,14 @@ async function cancel(conversationId) {
 function controlResponse(requestId, response) {
   return { type: "control_response", response: { subtype: "success", request_id: requestId, response } };
 }
-function writeLine(run2, obj) {
+function writeLine(run2, obj2) {
   try {
-    run2.child?.stdin?.write(JSON.stringify(obj) + "\n");
+    run2.child?.stdin?.write(JSON.stringify(obj2) + "\n");
   } catch {
   }
 }
-function findTool(turn, id) {
-  return turn.blocks.find((b2) => b2.type === "tool" && b2.id === id);
+function findTool(turn, id2) {
+  return turn.blocks.find((b2) => b2.type === "tool" && b2.id === id2);
 }
 async function respond(conversationId, requestId, r) {
   const run2 = live.get(conversationId);
@@ -77037,9 +77763,9 @@ function repoTargetsFrom(p, repos) {
   const mine = repos.filter((r) => r.projectId === p.id);
   if (mine.length) {
     return mine.map((r) => {
-      const rel = r.path.trim() || ".";
-      const dir = path.isAbsolute(expandHome$5(rel)) ? expandHome$5(rel) : root ? path.join(root, rel) : null;
-      return dir ? { name: r.name, rel, dir, githubRepoUrl: r.githubRepoUrl || null, slug: githubSlug(r.githubRepoUrl) } : null;
+      const rel2 = r.path.trim() || ".";
+      const dir = path.isAbsolute(expandHome$5(rel2)) ? expandHome$5(rel2) : root ? path.join(root, rel2) : null;
+      return dir ? { name: r.name, rel: rel2, dir, githubRepoUrl: r.githubRepoUrl || null, slug: githubSlug(r.githubRepoUrl) } : null;
     }).filter((x) => !!x);
   }
   if (!root && !p.githubRepoUrl) return [];
@@ -77091,12 +77817,12 @@ async function detectChildRepos(localPath) {
     }
   }
   const repos = await Promise.all(
-    found.sort().map(async (rel) => ({ name: path.basename(rel), path: rel, githubRepoUrl: httpsUrl(await originUrl$1(path.join(root, rel))) }))
+    found.sort().map(async (rel2) => ({ name: path.basename(rel2), path: rel2, githubRepoUrl: httpsUrl(await originUrl$1(path.join(root, rel2))) }))
   );
   return { rootIsRepo: isGitDir(root), repos };
 }
-async function projectForGithubRepo(repo) {
-  const slug = repo.trim().toLowerCase();
+async function projectForGithubRepo(repo2) {
+  const slug = repo2.trim().toLowerCase();
   const [projects, rows] = await Promise.all([getProjects(), getProjectRepos()]);
   return projects.find((p) => repoTargetsFrom(p, rows).some((t) => t.slug === slug)) ?? null;
 }
@@ -77128,11 +77854,11 @@ async function absorbIntoWorkspace(targetId, sourceId) {
   if (!dup) throw new Error(tt("services.esteProjetoNaoCorrespondeA"));
   const [projects, rows] = await Promise.all([getProjects(), getProjectRepos(targetId)]);
   const source = projects.find((p) => p.id === sourceId);
-  const repo = rows.find((r) => r.name === dup.repoName);
-  if (source?.githubRepoUrl && repo && !repo.githubRepoUrl) {
+  const repo2 = rows.find((r) => r.name === dup.repoName);
+  if (source?.githubRepoUrl && repo2 && !repo2.githubRepoUrl) {
     await setProjectRepos(
       targetId,
-      rows.map((r) => ({ name: r.name, path: r.path, githubRepoUrl: r.id === repo.id ? source.githubRepoUrl : r.githubRepoUrl }))
+      rows.map((r) => ({ name: r.name, path: r.path, githubRepoUrl: r.id === repo2.id ? source.githubRepoUrl : r.githubRepoUrl }))
     );
   }
   await absorbProject(targetId, sourceId);
@@ -77251,16 +77977,16 @@ async function syncGithubIssues(forceFull = false) {
   const issues = data2.filter((i) => typeof i.number === "number" && typeof i.id === "number").map(mapIssue);
   if (full) await replaceGithubIssues(issues);
   else await upsertGithubIssues(issues);
-  await setSetting("github_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+  await setSetting$1("github_last_sync", (/* @__PURE__ */ new Date()).toISOString());
   return issues.length;
 }
-async function claudeCommandForRepo(repo) {
-  const match = await projectForGithubRepo(repo);
+async function claudeCommandForRepo(repo2) {
+  const match = await projectForGithubRepo(repo2);
   if (match?.claudeCommand && match.claudeCommand.trim()) return match.claudeCommand.trim();
   return await getSetting("claude_command") || "claude";
 }
-async function createIssueViaClaude(id) {
-  const issue = (await getGithubIssues()).find((i) => i.id === id);
+async function createIssueViaClaude(id2) {
+  const issue = (await getGithubIssues()).find((i) => i.id === id2);
   if (!issue) throw new Error("Issue não encontrada.");
   if (issue.url) throw new Error("Essa issue já está no GitHub.");
   const command = await claudeCommandForRepo(issue.repo);
@@ -77275,8 +78001,8 @@ async function createIssueViaClaude(id) {
   if (!m) {
     throw new Error(`Não consegui confirmar a criação (sem URL na resposta). Saída: ${out.slice(0, 200)}`);
   }
-  await markIssueOnGithub(id, m[0], Number(m[1]));
-  return (await getGithubIssues()).find((i) => i.id === id);
+  await markIssueOnGithub(id2, m[0], Number(m[1]));
+  return (await getGithubIssues()).find((i) => i.id === id2);
 }
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -77310,8 +78036,8 @@ async function getAccounts() {
   return list2;
 }
 async function saveAccounts(list2) {
-  await setSetting("google_accounts", encodeSecret("google_accounts", JSON.stringify(list2)));
-  await setSetting("google_refresh_token", "");
+  await setSetting$1("google_accounts", encodeSecret("google_accounts", JSON.stringify(list2)));
+  await setSetting$1("google_refresh_token", "");
 }
 async function addAccount(email, refreshToken) {
   const list2 = (await getAccounts()).filter((a) => a.email !== email);
@@ -77494,8 +78220,8 @@ async function googleConnected() {
   return (await getAccounts()).length > 0;
 }
 async function disconnectGoogle() {
-  await setSetting("google_accounts", "");
-  await setSetting("google_refresh_token", "");
+  await setSetting$1("google_accounts", "");
+  await setSetting$1("google_refresh_token", "");
 }
 async function disconnectGoogleAccount(email) {
   const list2 = (await getAccounts()).filter((a) => a.email !== email);
@@ -77666,10 +78392,10 @@ async function syncBankAccount(accounts) {
   if (!bank) return null;
   const label = (bank.marketingName || bank.name || "Conta corrente").trim();
   const name = bank.number ? `${label} · ${bank.number}` : label;
-  const { id, created } = await upsertExternalAccount(bank.id, name, (bank.currencyCode || "BRL").toUpperCase(), Math.round((bank.balance ?? 0) * 100) / 100);
-  if (!await getSetting("finance_default_account")) await setSetting("finance_default_account", String(id));
-  if (created) await assignAccountToUnlinked(id);
-  return id;
+  const { id: id2, created } = await upsertExternalAccount(bank.id, name, (bank.currencyCode || "BRL").toUpperCase(), Math.round((bank.balance ?? 0) * 100) / 100);
+  if (!await getSetting("finance_default_account")) await setSetting$1("finance_default_account", String(id2));
+  if (created) await assignAccountToUnlinked(id2);
+  return id2;
 }
 function isCardBillPayment(t, acc) {
   if (t.operationType === "PAGAMENTO_FATURA") return true;
@@ -78113,15 +78839,15 @@ async function spendAi(monitorId, limit) {
   await cacheSet(key, n + 1, 36 * 36e5);
 }
 async function draftFromText(text, currentCurrency = "BRL") {
-  const clean = text.trim().slice(0, 3e3);
-  if (clean.length < 8) throw new Error(tt("flights.descrevaAViagemComUm"));
+  const clean2 = text.trim().slice(0, 3e3);
+  if (clean2.length < 8) throw new Error(tt("flights.descrevaAViagemComUm"));
   const today2 = todayLocal();
-  const cacheKey = `ai:draft:${hash$1(`${today2.slice(0, 7)}|${clean}`)}`;
+  const cacheKey = `ai:draft:${hash$1(`${today2.slice(0, 7)}|${clean2}`)}`;
   let raw = await cacheGet(cacheKey);
   const cached2 = !!raw;
   if (!raw) {
     await spendAi(null, 10);
-    raw = firstJson$1(await ask("passagens.criarMonitor", { hoje: today2, moeda: currentCurrency, pedido: clean }));
+    raw = firstJson$1(await ask("passagens.criarMonitor", { hoje: today2, moeda: currentCurrency, pedido: clean2 }));
     await cacheSet(cacheKey, raw, 7 * 864e5);
   }
   return buildDraft(raw, cached2);
@@ -78189,12 +78915,12 @@ async function buildDraft(raw, cached2, withGround = true) {
   };
 }
 async function structureImportText(text, monitorId, aiLimit) {
-  const clean = text.trim().slice(0, 6e3);
-  const cacheKey = `ai:import:${hash$1(clean)}`;
+  const clean2 = text.trim().slice(0, 6e3);
+  const cacheKey = `ai:import:${hash$1(clean2)}`;
   let json2 = await cacheGet(cacheKey);
   if (!json2) {
     await spendAi(monitorId, aiLimit);
-    json2 = firstJson$1(await ask("passagens.importarAlerta", { hoje: todayLocal(), texto: clean }));
+    json2 = firstJson$1(await ask("passagens.importarAlerta", { hoje: todayLocal(), texto: clean2 }));
     await cacheSet(cacheKey, json2, 30 * 864e5);
   }
   return parseImport(JSON.stringify(json2), { source: "Alerta importado (IA)", verification: "imported" });
@@ -78668,8 +79394,8 @@ const skyscannerChrome = {
   }
 };
 const PROVIDERS = [travelpayouts, duffel, skyscannerChrome, manualImport];
-function getProvider(id) {
-  return PROVIDERS.find((p) => p.id === id);
+function getProvider(id2) {
+  return PROVIDERS.find((p) => p.id === id2);
 }
 function automatedProviders() {
   return PROVIDERS.filter((p) => p.capabilities.automated && p.search);
@@ -78677,7 +79403,7 @@ function automatedProviders() {
 const log = (event, data2 = {}) => {
   console.log(JSON.stringify({ scope: "flights", event, at: (/* @__PURE__ */ new Date()).toISOString(), ...data2 }));
 };
-async function setting(key) {
+async function setting$1(key) {
   return decodeSecret(await getSetting(key));
 }
 const CACHE_TTL$1 = { travelpayouts: 6 * 36e5, duffel: 20 * 6e4 };
@@ -78699,7 +79425,7 @@ function release() {
   activeRuns--;
   waiting.shift()?.();
 }
-function changed$4(monitorId, runId) {
+function changed$5(monitorId, runId) {
   broadcast("flights:updated", { monitorId, runId: runId ?? null });
 }
 async function usableProviders(m) {
@@ -78711,13 +79437,13 @@ async function usableProviders(m) {
       reasons.push(`${p.label}: desativado.`);
       continue;
     }
-    const st2 = await p.status({ getSetting: setting });
+    const st2 = await p.status({ getSetting: setting$1 });
     if (st2.available) list2.push(p);
     else reasons.push(`${p.label}: ${st2.reason}`);
   }
   return { list: list2, reasons };
 }
-async function startRun(monitorId, trigger, opts = {}) {
+async function startRun$1(monitorId, trigger, opts = {}) {
   const m = await getMonitor(monitorId);
   if (!m) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
   const existing = await activeRun(monitorId);
@@ -78734,11 +79460,11 @@ async function startRun(monitorId, trigger, opts = {}) {
   if (opts.more) await setMonitorMeta(monitorId, { extraDisplay: m.extraDisplay + opts.more });
   const runId = await createRun(monitorId, trigger);
   log("run.start", { monitorId, runId, trigger, providers: list2.map((p) => p.id) });
-  changed$4(monitorId, runId);
+  changed$5(monitorId, runId);
   void (async () => {
     await acquire();
     try {
-      await execute(runId, monitorId, list2, trigger, opts);
+      await execute$1(runId, monitorId, list2, trigger, opts);
     } catch (e) {
       log("run.crash", { runId, error: e instanceof Error ? e.message : String(e) });
       await updateRun(runId, { status: "failed", finishedAt: (/* @__PURE__ */ new Date()).toISOString(), message: e instanceof Error ? e.message : String(e) });
@@ -78746,12 +79472,12 @@ async function startRun(monitorId, trigger, opts = {}) {
     } finally {
       release();
       controllers.delete(runId);
-      changed$4(monitorId, runId);
+      changed$5(monitorId, runId);
     }
   })();
   return await getRun(runId);
 }
-function cancelRun(runId) {
+function cancelRun$1(runId) {
   const c = controllers.get(runId);
   if (!c) return false;
   c.abort();
@@ -78808,7 +79534,7 @@ function refreshHours(m) {
   if (s2.mode === "adaptive") return adaptiveHours(buildUniverse(m.config, todayLocal()).departDates[0] ?? null, todayLocal()) - 1;
   return 20;
 }
-async function execute(runId, monitorId, providers, trigger, opts) {
+async function execute$1(runId, monitorId, providers, trigger, opts) {
   let m = await getMonitor(monitorId);
   const ctl = new AbortController();
   controllers.set(runId, ctl);
@@ -78822,7 +79548,7 @@ async function execute(runId, monitorId, providers, trigger, opts) {
   let retrying = 0;
   const disabled = /* @__PURE__ */ new Map();
   let budgetHit = null;
-  const ctxBase = { getSetting: setting, now: () => /* @__PURE__ */ new Date() };
+  const ctxBase = { getSetting: setting$1, now: () => /* @__PURE__ */ new Date() };
   try {
     if (trigger === "schedule") {
       const old = new Date(Date.now() - refreshHours(m) * 36e5).toISOString();
@@ -78912,7 +79638,7 @@ async function execute(runId, monitorId, providers, trigger, opts) {
             log("task.error", { runId, task: t.key, kind: pe.kind, message: pe.message });
           }
           await updateRun(runId, stats);
-          changed$4(monitorId, runId);
+          changed$5(monitorId, runId);
         }
       };
       await Promise.all(Array.from({ length: PER_RUN_PARALLEL }, worker));
@@ -78923,7 +79649,7 @@ async function execute(runId, monitorId, providers, trigger, opts) {
     clearTimeout(timer2);
   }
   const pendingLeft = (await listTasks(monitorId)).filter((t) => t.status === "pending").length;
-  const notes = [...disabled.entries()].map(([id, why]) => `${getProvider(id)?.label ?? id}: ${why}`);
+  const notes = [...disabled.entries()].map(([id2, why]) => `${getProvider(id2)?.label ?? id2}: ${why}`);
   if (ctl.signal.aborted && !budgetHit) budgetHit = Date.now() > deadline ? "Tempo máximo da execução atingido." : "Cancelada.";
   const troubled = stats.failed > 0 || notes.length > 0 || retrying > 0;
   const status2 = stats.done === 0 && stats.cacheHits === 0 && troubled ? "failed" : budgetHit && pendingLeft ? "budget" : troubled ? "partial" : "done";
@@ -79004,7 +79730,7 @@ async function evaluateAlerts(m, runId, runStartIso) {
   if (fired.length) {
     await notify({ title: `✈️ ${m.name}`, body: fired.slice(0, 3).join("\n") + (fired.length > 3 ? `
 +${fired.length - 3} alerta(s)` : ""), source: "passagens", page: "trip-monitoring" });
-    changed$4(m.id, runId ?? void 0);
+    changed$5(m.id, runId ?? void 0);
   }
   return fired.length;
 }
@@ -79023,10 +79749,10 @@ async function schedulerTick() {
         if (m.lastRunAt) continue;
       } else if (Date.parse(m.nextRunAt) > now.getTime()) continue;
       try {
-        await startRun(m.id, "schedule");
+        await startRun$1(m.id, "schedule");
       } catch (e) {
         await setMonitorMeta(m.id, { lastError: e instanceof Error ? e.message : String(e), nextRunAt: new Date(now.getTime() + 6 * 36e5).toISOString() });
-        changed$4(m.id);
+        changed$5(m.id);
       }
     }
     if (Date.now() - lastPromoCheck > 2 * 36e5) {
@@ -79058,13 +79784,13 @@ async function bootFlights() {
   if (migrated) log("boot.migrated_legacy", { count: migrated });
   if (await getSetting("flights_tracked_backfill") !== "1") {
     const n2 = await backfillTrackedFromSkyscanner();
-    await setSetting("flights_tracked_backfill", "1");
+    await setSetting$1("flights_tracked_backfill", "1");
     if (n2) log("boot.tracked_backfill", { count: n2 });
   }
 }
-const changed$3 = (monitorId) => broadcast("flights:updated", { monitorId, runId: null });
-async function mustGet(id) {
-  const m = await getMonitor(Number(id));
+const changed$4 = (monitorId) => broadcast("flights:updated", { monitorId, runId: null });
+async function mustGet(id2) {
+  const m = await getMonitor(Number(id2));
   if (!m) throw new Error(tt("flights.monitoramentoNaoEncontrado"));
   return m;
 }
@@ -79082,7 +79808,7 @@ function registerFlightRpc(handle) {
     const fx = await loadFx$1();
     return Promise.all((await listMonitors()).map((m) => summarize$4(m, fx)));
   });
-  handle("flightMon:get", async (_, id) => summarize$4(await mustGet(id), await loadFx$1()));
+  handle("flightMon:get", async (_, id2) => summarize$4(await mustGet(id2), await loadFx$1()));
   handle("flightMon:validate", async (_, config2) => {
     const dropped = [];
     const cfg = normalizeConfig(config2, dropped);
@@ -79104,53 +79830,53 @@ function registerFlightRpc(handle) {
   });
   handle("flightMon:create", async (_, input) => {
     const p = prepare$1(input);
-    const id = await createMonitor(p.name, p.status, p.config, input.tripId ?? null);
-    changed$3(id);
-    return { id, status: p.status, errors: p.errors };
+    const id2 = await createMonitor(p.name, p.status, p.config, input.tripId ?? null);
+    changed$4(id2);
+    return { id: id2, status: p.status, errors: p.errors };
   });
-  handle("flightMon:update", async (_, id, input) => {
-    const cur = await mustGet(id);
+  handle("flightMon:update", async (_, id2, input) => {
+    const cur = await mustGet(id2);
     const p = prepare$1({ ...input, status: input.status ?? (cur.status === "draft" ? "active" : cur.status) });
     await updateMonitor(cur.id, { name: p.name, status: p.status, config: p.config, tripId: input.tripId !== void 0 ? input.tripId : cur.tripId });
     await setMonitorMeta(cur.id, { nextRunAt: null, lastError: null });
-    changed$3(cur.id);
+    changed$4(cur.id);
     return { id: cur.id, status: p.status, errors: p.errors };
   });
-  handle("flightMon:setStatus", async (_, id, status2) => {
-    const m = await mustGet(id);
+  handle("flightMon:setStatus", async (_, id2, status2) => {
+    const m = await mustGet(id2);
     if (status2 === "active" && configErrors(m.config, todayLocal()).length) throw new Error(tt("flights.completeAConfiguracao", { p0: configErrors(m.config, todayLocal())[0] }));
     await updateMonitor(m.id, { status: status2 });
     await setMonitorMeta(m.id, { nextRunAt: null });
-    changed$3(m.id);
+    changed$4(m.id);
   });
-  handle("flightMon:duplicate", async (_, id) => {
-    const m = await mustGet(id);
+  handle("flightMon:duplicate", async (_, id2) => {
+    const m = await mustGet(id2);
     const newId = await createMonitor(`${m.name} (cópia)`, "paused", m.config, m.tripId);
-    changed$3(newId);
+    changed$4(newId);
     return newId;
   });
-  handle("flightMon:delete", async (_, id) => {
-    await deleteMonitor(Number(id));
-    changed$3(null);
+  handle("flightMon:delete", async (_, id2) => {
+    await deleteMonitor(Number(id2));
+    changed$4(null);
   });
-  handle("flightMon:run", (_, id, opts) => startRun(Number(id), opts?.more ? "more" : "manual", { more: opts?.more }));
-  handle("flightMon:cancel", (_, runId) => cancelAssisted(Number(runId)) || cancelRun(Number(runId)));
-  handle("flightMon:retryFailed", async (_, id) => {
-    const n = await retryFailed(Number(id));
-    changed$3(Number(id));
+  handle("flightMon:run", (_, id2, opts) => startRun$1(Number(id2), opts?.more ? "more" : "manual", { more: opts?.more }));
+  handle("flightMon:cancel", (_, runId) => cancelAssisted(Number(runId)) || cancelRun$1(Number(runId)));
+  handle("flightMon:retryFailed", async (_, id2) => {
+    const n = await retryFailed(Number(id2));
+    changed$4(Number(id2));
     return n;
   });
-  handle("flightMon:offers", async (_, id, q2) => queryOffers(await mustGet(id), q2 ?? {}));
+  handle("flightMon:offers", async (_, id2, q2) => queryOffers(await mustGet(id2), q2 ?? {}));
   handle("flightMon:favorite", async (_, offerId, fav) => {
     await setFavorite(Number(offerId), !!fav);
     const o = await getOffer(Number(offerId));
-    changed$3(o?.monitorId ?? null);
+    changed$4(o?.monitorId ?? null);
   });
-  handle("flightMon:calendar", async (_, id) => calendar(await mustGet(id)));
-  handle("flightMon:history", async (_, id, days2) => history(await mustGet(id), days2 ?? 60));
-  handle("flightMon:plan", async (_, id) => plan(await mustGet(id)));
-  handle("flightMon:alerts", async (_, id) => listAlerts(Number(id)));
-  handle("flightMon:checkAlerts", async (_, id) => evaluateAlerts(await mustGet(id), null, new Date(Date.now() - 864e5).toISOString()));
+  handle("flightMon:calendar", async (_, id2) => calendar(await mustGet(id2)));
+  handle("flightMon:history", async (_, id2, days2) => history(await mustGet(id2), days2 ?? 60));
+  handle("flightMon:plan", async (_, id2) => plan(await mustGet(id2)));
+  handle("flightMon:alerts", async (_, id2) => listAlerts(Number(id2)));
+  handle("flightMon:checkAlerts", async (_, id2) => evaluateAlerts(await mustGet(id2), null, new Date(Date.now() - 864e5).toISOString()));
   handle("flightMon:places", (_, query) => searchPlaces(String(query ?? ""), 12));
   handle("flightMon:airport", (_, iata) => getAirport(iata));
   handle("flightMon:resolve", (_, ref) => resolveRef(ref));
@@ -79161,23 +79887,23 @@ function registerFlightRpc(handle) {
     return estimateGround(iata, c);
   });
   handle("flightMon:aiDraft", (_, text, currency2) => draftFromText(String(text ?? ""), currency2));
-  handle("flightMon:insights", async (_, id) => {
-    const m = await mustGet(id);
+  handle("flightMon:insights", async (_, id2) => {
+    const m = await mustGet(id2);
     const page = await queryOffers(m, { status: "eligible", pageSize: 12 });
     const rows = page.items.map(
       (o) => `${o.id} | ${o.origin}→${o.destination}${o.connections.length ? ` via ${o.connections.map((c) => c.airport).join("/")}` : ""} | ${o.slices[0].departLocal} | ${formatMoney(o.cost.fareInCurrency ?? o.price)} | ${formatMoney(o.cost.total)} (${o.cost.totalStatus}) | ${fmtMinutes(o.totalDurationMin)} | ${o.stops} | ${o.baggage.checked == null ? "mala ?" : `${o.baggage.checked} mala`} | ${o.verification}`
     );
     return insights(m, rows);
   });
-  handle("flightMon:skyscanner", (_, id, picks) => startSkyscanner(Number(id), Array.isArray(picks) ? picks : Number(picks) || 4));
+  handle("flightMon:skyscanner", (_, id2, picks) => startSkyscanner(Number(id2), Array.isArray(picks) ? picks : Number(picks) || 4));
   handle("flightMon:chromeStatus", () => chromeStatus());
-  handle("flightMon:skyscannerPreview", async (_, id) => buildPreview(await mustGet(id)));
-  handle("flightMon:tracked", async (_, id, days2) => trackedView(await mustGet(id), Math.max(7, Math.min(365, Number(days2) || 60))));
-  handle("flightMon:track", async (_, id, picks) => addTracked(Number(id), validatePicks(await mustGet(id), picks)));
-  handle("flightMon:untrack", async (_, id, pick) => {
-    await removeTracked(Number(id), { origin: String(pick?.origin ?? ""), destination: String(pick?.destination ?? ""), depart: String(pick?.depart ?? ""), ret: pick?.ret ? String(pick.ret) : null });
+  handle("flightMon:skyscannerPreview", async (_, id2) => buildPreview(await mustGet(id2)));
+  handle("flightMon:tracked", async (_, id2, days2) => trackedView(await mustGet(id2), Math.max(7, Math.min(365, Number(days2) || 60))));
+  handle("flightMon:track", async (_, id2, picks) => addTracked(Number(id2), validatePicks(await mustGet(id2), picks)));
+  handle("flightMon:untrack", async (_, id2, pick) => {
+    await removeTracked(Number(id2), { origin: String(pick?.origin ?? ""), destination: String(pick?.destination ?? ""), depart: String(pick?.depart ?? ""), ret: pick?.ret ? String(pick.ret) : null });
   });
-  handle("flightMon:promos", async (_, id, force) => promosFor(await mustGet(id), !!force));
+  handle("flightMon:promos", async (_, id2, force) => promosFor(await mustGet(id2), !!force));
   const parseFor = async (m, text, mode, source, observedAt, assisted) => {
     if (mode === "ai") return structureImportText(String(text ?? ""), m.id, m.config.budget.maxAiCallsPerRun);
     const obs = observedAt && !Number.isNaN(Date.parse(observedAt)) ? new Date(observedAt).toISOString() : void 0;
@@ -79185,22 +79911,22 @@ function registerFlightRpc(handle) {
   };
   handle(
     "flightMon:importPreview",
-    async (_, id, text, mode, source, observedAt, assisted) => parseFor(await mustGet(id), text, mode, source, observedAt, assisted)
+    async (_, id2, text, mode, source, observedAt, assisted) => parseFor(await mustGet(id2), text, mode, source, observedAt, assisted)
   );
-  handle("flightMon:importCommit", async (_, id, text, mode, source, observedAt, assisted) => {
-    const m = await mustGet(id);
+  handle("flightMon:importCommit", async (_, id2, text, mode, source, observedAt, assisted) => {
+    const m = await mustGet(id2);
     const parsed = await parseFor(m, text, mode, source, observedAt, assisted);
     const pk = paxKey(m.config);
     const res = await upsertOffers(m.id, parsed.offers.map((o) => ({ offer: o, fp: fingerprint(o, pk) })), pk, null);
     if (res.length) await setMonitorMeta(m.id, { lastSuccessAt: (/* @__PURE__ */ new Date()).toISOString() });
-    changed$3(m.id);
+    changed$4(m.id);
     return { imported: res.length, created: res.filter((r) => r.isNew).length, errors: parsed.errors };
   });
   handle("flightMon:providers", async () => {
     const day = todayLocal();
     return Promise.all(
       PROVIDERS.map(async (p) => {
-        const st2 = await p.status({ getSetting: setting });
+        const st2 = await p.status({ getSetting: setting$1 });
         const enabled = await getSetting(`flights_provider_${p.id}_enabled`) !== "0";
         return {
           id: p.id,
@@ -79218,11 +79944,11 @@ function registerFlightRpc(handle) {
       })
     );
   });
-  handle("flightMon:testProvider", async (_, id) => {
-    const p = getProvider(id);
+  handle("flightMon:testProvider", async (_, id2) => {
+    const p = getProvider(id2);
     if (!p?.test) throw new Error(tt("flights.esteProvedorNaoTemTeste"));
     const ctl = new AbortController();
-    return p.test({ getSetting: setting, signal: ctl.signal, now: () => /* @__PURE__ */ new Date() });
+    return p.test({ getSetting: setting$1, signal: ctl.signal, now: () => /* @__PURE__ */ new Date() });
   });
 }
 const NETWORK_LABELS = {
@@ -79485,7 +80211,7 @@ async function expectedKey() {
 }
 async function rotateAgentKey() {
   const key = `rka_${crypto.randomBytes(24).toString("base64url")}`;
-  await setSetting(AGENT_KEY, encodeSecret(AGENT_KEY, key));
+  await setSetting$1(AGENT_KEY, encodeSecret(AGENT_KEY, key));
   return key;
 }
 function keyMatches(given, expected) {
@@ -79635,7 +80361,7 @@ function publicConfig(c) {
   return rest;
 }
 async function saveConfig(p) {
-  const set = (k, v) => setSetting(k, v);
+  const set = (k, v) => setSetting$1(k, v);
   const b2 = (v) => v ? "1" : "0";
   if (p.beeperUrl !== void 0) {
     const v = validateBeeperUrl(p.beeperUrl || DEFAULT_BEEPER_URL);
@@ -79673,7 +80399,7 @@ async function saveConfig(p) {
   if (p.priorityWeights !== void 0) await set(K.weights, JSON.stringify(p.priorityWeights));
   if (p.professionalLabels !== void 0) await set(K.professional, JSON.stringify(p.professionalLabels.map((x) => x.trim()).filter(Boolean)));
 }
-function all$1(db2, sql, params = []) {
+function all$2(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   if (params.length) st2.bind(params);
   const out = [];
@@ -79681,19 +80407,19 @@ function all$1(db2, sql, params = []) {
   st2.free();
   return out;
 }
-function one$1(db2, sql, params = []) {
-  return all$1(db2, sql, params)[0] ?? null;
+function one$2(db2, sql, params = []) {
+  return all$2(db2, sql, params)[0] ?? null;
 }
-function exec$1(db2, sql, params = []) {
+function exec$2(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   st2.run(params);
   st2.free();
   return db2.getRowsModified();
 }
 function lastId$1(db2) {
-  return Number(one$1(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  return Number(one$2(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
 }
-async function tx$1(fn) {
+async function tx$2(fn) {
   const db2 = await getDb();
   db2.run("BEGIN");
   try {
@@ -79709,18 +80435,18 @@ async function tx$1(fn) {
     throw e;
   }
 }
-async function read$1(fn) {
+async function read$2(fn) {
   return fn(await getDb());
 }
-const nowIso$1 = () => (/* @__PURE__ */ new Date()).toISOString();
+const nowIso$2 = () => (/* @__PURE__ */ new Date()).toISOString();
 const b = (v) => v == null ? null : v ? 1 : 0;
 const chatKey = (providerId, remoteId) => `${providerId}:${remoteId}`;
 const accountKey = (providerId, remoteId) => `${providerId}:${remoteId}`;
 async function upsertAccounts(providerId, accounts) {
-  await tx$1((db2) => {
-    const now = nowIso$1();
+  await tx$2((db2) => {
+    const now = nowIso$2();
     for (const a of accounts) {
-      exec$1(
+      exec$2(
         db2,
         `INSERT INTO chat_accounts (key, providerId, remoteId, network, displayName, selfId, selfName, status, lastSeenAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -79730,7 +80456,7 @@ async function upsertAccounts(providerId, accounts) {
       );
     }
     const keep = accounts.map((a) => accountKey(providerId, a.remoteId));
-    exec$1(
+    exec$2(
       db2,
       `UPDATE chat_accounts SET status = 'removed' WHERE providerId = ? ${keep.length ? `AND key NOT IN (${keep.map(() => "?").join(",")})` : ""}`,
       [providerId, ...keep]
@@ -79738,8 +80464,8 @@ async function upsertAccounts(providerId, accounts) {
   });
 }
 async function listAccounts(providerId) {
-  return read$1(
-    (db2) => all$1(
+  return read$2(
+    (db2) => all$2(
       db2,
       `SELECT a.*, (SELECT COUNT(*) FROM chats c WHERE c.accountKey = a.key) AS chatCount
        FROM chat_accounts a ${providerId ? "WHERE a.providerId = ?" : ""} ORDER BY a.network, a.displayName`,
@@ -79748,7 +80474,7 @@ async function listAccounts(providerId) {
   );
 }
 async function setAccountSync(key, enabled) {
-  await tx$1((db2) => exec$1(db2, "UPDATE chat_accounts SET syncEnabled = ? WHERE key = ?", [enabled ? 1 : 0, key]));
+  await tx$2((db2) => exec$2(db2, "UPDATE chat_accounts SET syncEnabled = ? WHERE key = ?", [enabled ? 1 : 0, key]));
 }
 const PREVIEW_MAX = 160;
 function previewOf(text, store) {
@@ -79757,13 +80483,13 @@ function previewOf(text, store) {
   return t.length > PREVIEW_MAX ? `${t.slice(0, PREVIEW_MAX - 1)}…` : t;
 }
 async function upsertChats(providerId, chats2, storePreviews) {
-  return tx$1((db2) => {
-    const now = nowIso$1();
+  return tx$2((db2) => {
+    const now = nowIso$2();
     const changed2 = [];
     const ids2 = [];
     for (const c of chats2) {
       const key = chatKey(providerId, c.remoteId);
-      const prev = one$1(
+      const prev = one$2(
         db2,
         "SELECT id, lastActivity, scannedActivity, unreadMentions, mentionsEstimated FROM chats WHERE key = ?",
         [key]
@@ -79790,22 +80516,22 @@ async function upsertChats(providerId, chats2, storePreviews) {
         now
       ];
       if (prev) {
-        exec$1(
+        exec$2(
           db2,
           `UPDATE chats SET accountKey = ?, network = ?, title = ?, type = ?, imgUrl = ?, participantCount = ?, peerHandle = COALESCE(?, peerHandle),
              unreadCount = ?, unreadMentions = ?, lastActivity = ?, lastMessagePreview = ?, lastMessageFromMe = ?, lastMessageSender = ?,
              isMuted = ?, isArchived = ?, syncedAt = ? WHERE id = ?`,
           [...values, prev.id]
         );
-        if (c.unreadMentions != null) exec$1(db2, "UPDATE chats SET mentionsEstimated = 0 WHERE id = ?", [prev.id]);
+        if (c.unreadMentions != null) exec$2(db2, "UPDATE chats SET mentionsEstimated = 0 WHERE id = ?", [prev.id]);
         if (p) {
-          exec$1(db2, `UPDATE chats SET ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} = ? WHERE id = ? AND (${p.isMine ? "lastOutboundAt" : "lastInboundAt"} IS NULL OR ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} < ?)`, [p.timestamp, prev.id, p.timestamp]);
+          exec$2(db2, `UPDATE chats SET ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} = ? WHERE id = ? AND (${p.isMine ? "lastOutboundAt" : "lastInboundAt"} IS NULL OR ${p.isMine ? "lastOutboundAt" : "lastInboundAt"} < ?)`, [p.timestamp, prev.id, p.timestamp]);
         }
         ids2.push(prev.id);
         const act = values[9] ?? null;
         if (act !== prev.scannedActivity) changed2.push(prev.id);
       } else {
-        exec$1(
+        exec$2(
           db2,
           `INSERT INTO chats (accountKey, network, title, type, imgUrl, participantCount, peerHandle, unreadCount, unreadMentions, lastActivity,
              lastMessagePreview, lastMessageFromMe, lastMessageSender, isMuted, isArchived, syncedAt, key, providerId, remoteId, createdAt,
@@ -79813,9 +80539,9 @@ async function upsertChats(providerId, chats2, storePreviews) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [...values, key, providerId, c.remoteId, now, p && !p.isMine ? p.timestamp : null, p && p.isMine ? p.timestamp : null]
         );
-        const id = lastId$1(db2);
-        ids2.push(id);
-        changed2.push(id);
+        const id2 = lastId$1(db2);
+        ids2.push(id2);
+        changed2.push(id2);
       }
     }
     return { changed: changed2, ids: ids2 };
@@ -79839,17 +80565,17 @@ function attachmentLabel(type) {
 }
 async function applyScans(scans) {
   if (!scans.length) return;
-  await tx$1((db2) => {
-    for (const { id, scan: s2 } of scans) {
-      exec$1(
+  await tx$2((db2) => {
+    for (const { id: id2, scan: s2 } of scans) {
+      exec$2(
         db2,
         `UPDATE chats SET scannedActivity = ?, lastInboundAt = COALESCE(?, lastInboundAt), lastOutboundAt = COALESCE(?, lastOutboundAt),
            lastInboundClosing = ?, lastInboundQuestion = ?, lastOutboundQuestion = ?, lastInboundRepliesToMe = ?, pendingSince = ?
          WHERE id = ?`,
-        [s2.scannedActivity, s2.lastInboundAt, s2.lastOutboundAt, s2.lastInboundClosing ? 1 : 0, s2.lastInboundQuestion ? 1 : 0, s2.lastOutboundQuestion ? 1 : 0, s2.lastInboundRepliesToMe ? 1 : 0, s2.pendingSince, id]
+        [s2.scannedActivity, s2.lastInboundAt, s2.lastOutboundAt, s2.lastInboundClosing ? 1 : 0, s2.lastInboundQuestion ? 1 : 0, s2.lastOutboundQuestion ? 1 : 0, s2.lastInboundRepliesToMe ? 1 : 0, s2.pendingSince, id2]
       );
       if (s2.estimatedMentions != null) {
-        exec$1(db2, "UPDATE chats SET unreadMentions = ?, mentionsEstimated = 1 WHERE id = ? AND (unreadMentions IS NULL OR mentionsEstimated = 1)", [s2.estimatedMentions, id]);
+        exec$2(db2, "UPDATE chats SET unreadMentions = ?, mentionsEstimated = 1 WHERE id = ? AND (unreadMentions IS NULL OR mentionsEstimated = 1)", [s2.estimatedMentions, id2]);
       }
     }
   });
@@ -79864,79 +80590,79 @@ const FULL_SELECT = `
   LEFT JOIN contacts ct ON ct.id = o.contactId
   LEFT JOIN chat_accounts a ON a.key = c.accountKey`;
 async function allFullRows() {
-  return read$1((db2) => all$1(db2, FULL_SELECT));
+  return read$2((db2) => all$2(db2, FULL_SELECT));
 }
-async function fullRow(id) {
-  return read$1((db2) => one$1(db2, `${FULL_SELECT} WHERE c.id = ?`, [id]));
+async function fullRow(id2) {
+  return read$2((db2) => one$2(db2, `${FULL_SELECT} WHERE c.id = ?`, [id2]));
 }
-async function chatById(id) {
-  return read$1((db2) => one$1(db2, "SELECT * FROM chats WHERE id = ?", [id]));
+async function chatById(id2) {
+  return read$2((db2) => one$2(db2, "SELECT * FROM chats WHERE id = ?", [id2]));
 }
 async function chatByKey(key) {
-  return read$1((db2) => one$1(db2, "SELECT * FROM chats WHERE key = ?", [key]));
+  return read$2((db2) => one$2(db2, "SELECT * FROM chats WHERE key = ?", [key]));
 }
 async function chatIdsByRemote(providerId, remoteIds) {
   if (!remoteIds.length) return [];
-  return read$1((db2) => {
+  return read$2((db2) => {
     const out = [];
     for (const r of remoteIds) {
-      const row = one$1(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
+      const row = one$2(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
       if (row) out.push(row.id);
     }
     return out;
   });
 }
-async function patchChatCounters(id, unreadCount, unreadMentions) {
-  await tx$1((db2) => exec$1(db2, "UPDATE chats SET unreadCount = ?, unreadMentions = ? WHERE id = ?", [unreadCount, unreadMentions, id]));
+async function patchChatCounters(id2, unreadCount, unreadMentions) {
+  await tx$2((db2) => exec$2(db2, "UPDATE chats SET unreadCount = ?, unreadMentions = ? WHERE id = ?", [unreadCount, unreadMentions, id2]));
 }
-async function applyLastFromScan(id, s2) {
+async function applyLastFromScan(id2, s2) {
   const inT = s2.lastInboundAt ? Date.parse(s2.lastInboundAt) : 0;
   const outT = s2.lastOutboundAt ? Date.parse(s2.lastOutboundAt) : 0;
   const fromMe = !inT && !outT ? null : outT >= inT ? 1 : 0;
-  await tx$1((db2) => exec$1(db2, "UPDATE chats SET lastOutboundAt = COALESCE(?, lastOutboundAt), lastMessageFromMe = ? WHERE id = ?", [s2.lastOutboundAt, fromMe, id]));
+  await tx$2((db2) => exec$2(db2, "UPDATE chats SET lastOutboundAt = COALESCE(?, lastOutboundAt), lastMessageFromMe = ? WHERE id = ?", [s2.lastOutboundAt, fromMe, id2]));
 }
-async function recordOutbound(id, at, question, preview) {
-  await tx$1(
-    (db2) => exec$1(
+async function recordOutbound(id2, at, question, preview) {
+  await tx$2(
+    (db2) => exec$2(
       db2,
       `UPDATE chats SET lastOutboundAt = ?, lastActivity = ?, lastMessageFromMe = 1, lastMessageSender = NULL,
          lastOutboundQuestion = ?, pendingSince = NULL, lastMessagePreview = COALESCE(?, lastMessagePreview) WHERE id = ?`,
-      [at, at, question ? 1 : 0, preview, id]
+      [at, at, question ? 1 : 0, preview, id2]
     )
   );
 }
 async function deleteChatsByRemote(providerId, remoteIds) {
-  await tx$1((db2) => {
+  await tx$2((db2) => {
     for (const r of remoteIds) {
-      const row = one$1(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
+      const row = one$2(db2, "SELECT id FROM chats WHERE key = ?", [chatKey(providerId, r)]);
       if (!row) continue;
       if (hasOrgData(db2, row.id)) continue;
-      exec$1(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [row.id]);
-      exec$1(db2, "DELETE FROM chats WHERE id = ?", [row.id]);
+      exec$2(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [row.id]);
+      exec$2(db2, "DELETE FROM chats WHERE id = ?", [row.id]);
     }
   });
 }
 function hasOrgData(db2, chatId) {
-  const o = one$1(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]);
-  const labels2 = one$1(db2, "SELECT COUNT(*) AS n FROM label_links WHERE entityType = 'chat' AND entityId = ?", [chatId])?.n ?? 0;
-  const todos = one$1(db2, "SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?", [chatId])?.n ?? 0;
+  const o = one$2(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]);
+  const labels2 = one$2(db2, "SELECT COUNT(*) AS n FROM label_links WHERE entityType = 'chat' AND entityId = ?", [chatId])?.n ?? 0;
+  const todos = one$2(db2, "SELECT COUNT(*) AS n FROM chat_todos WHERE chatId = ?", [chatId])?.n ?? 0;
   if (labels2 || todos) return true;
   if (!o) return false;
   return !!(o.contactId || o.priority || o.manualState || o.snoozeUntil || o.reminderNote || o.notes || o.pinnedAt);
 }
 async function clearCache(opts = {}) {
-  return tx$1((db2) => {
+  return tx$2((db2) => {
     const cutoff = opts.olderThanDays ? new Date(Date.now() - opts.olderThanDays * 864e5).toISOString() : null;
-    const rows = all$1(db2, cutoff ? "SELECT id FROM chats WHERE lastActivity IS NULL OR lastActivity < ?" : "SELECT id FROM chats", cutoff ? [cutoff] : []);
+    const rows = all$2(db2, cutoff ? "SELECT id FROM chats WHERE lastActivity IS NULL OR lastActivity < ?" : "SELECT id FROM chats", cutoff ? [cutoff] : []);
     let removed = 0;
     let kept = 0;
     for (const r of rows) {
       if (hasOrgData(db2, r.id)) {
-        exec$1(db2, "UPDATE chats SET lastMessagePreview = NULL, scannedActivity = NULL WHERE id = ?", [r.id]);
+        exec$2(db2, "UPDATE chats SET lastMessagePreview = NULL, scannedActivity = NULL WHERE id = ?", [r.id]);
         kept++;
       } else {
-        exec$1(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [r.id]);
-        exec$1(db2, "DELETE FROM chats WHERE id = ?", [r.id]);
+        exec$2(db2, "DELETE FROM label_links WHERE entityType = 'chat' AND entityId = ?", [r.id]);
+        exec$2(db2, "DELETE FROM chats WHERE id = ?", [r.id]);
         removed++;
       }
     }
@@ -79945,7 +80671,7 @@ async function clearCache(opts = {}) {
 }
 const ORG_COLS = ["contactId", "priority", "manualState", "manualAt", "snoozeUntil", "snoozedAt", "reopenOnMessage", "reminderNote", "reminderNotifiedAt", "notes", "mentionsReviewedCount", "pinnedAt"];
 function patchOrgDb(db2, chatId, patch) {
-  exec$1(db2, "INSERT OR IGNORE INTO chat_org (chatId, updatedAt) VALUES (?, ?)", [chatId, nowIso$1()]);
+  exec$2(db2, "INSERT OR IGNORE INTO chat_org (chatId, updatedAt) VALUES (?, ?)", [chatId, nowIso$2()]);
   const sets = [];
   const params = [];
   for (const c of ORG_COLS) {
@@ -79957,20 +80683,20 @@ function patchOrgDb(db2, chatId, patch) {
   }
   if (!sets.length) return;
   sets.push("updatedAt = ?");
-  params.push(nowIso$1(), chatId);
-  exec$1(db2, `UPDATE chat_org SET ${sets.join(", ")} WHERE chatId = ?`, params);
+  params.push(nowIso$2(), chatId);
+  exec$2(db2, `UPDATE chat_org SET ${sets.join(", ")} WHERE chatId = ?`, params);
 }
 async function patchOrg(chatIds, patch) {
-  await tx$1((db2) => {
-    for (const id of chatIds) patchOrgDb(db2, id, patch);
+  await tx$2((db2) => {
+    for (const id2 of chatIds) patchOrgDb(db2, id2, patch);
   });
 }
 async function getOrg(chatId) {
-  return read$1((db2) => one$1(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]));
+  return read$2((db2) => one$2(db2, "SELECT * FROM chat_org WHERE chatId = ?", [chatId]));
 }
 async function dueReminders(nowIsoStr) {
-  return read$1(
-    (db2) => all$1(
+  return read$2(
+    (db2) => all$2(
       db2,
       `SELECT o.chatId, c.title, o.reminderNote, o.snoozeUntil FROM chat_org o JOIN chats c ON c.id = o.chatId
        WHERE o.snoozeUntil IS NOT NULL AND o.snoozeUntil <= ? AND (o.reminderNotifiedAt IS NULL OR o.reminderNotifiedAt < o.snoozeUntil)`,
@@ -79979,23 +80705,23 @@ async function dueReminders(nowIsoStr) {
   );
 }
 async function contactsLite() {
-  return read$1((db2) => all$1(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts ORDER BY name COLLATE NOCASE"));
+  return read$2((db2) => all$2(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts ORDER BY name COLLATE NOCASE"));
 }
-async function contactLite(id) {
-  return read$1((db2) => one$1(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts WHERE id = ?", [id]));
+async function contactLite(id2) {
+  return read$2((db2) => one$2(db2, "SELECT id, name, priority, vip, context, interests, lastContactAt FROM contacts WHERE id = ?", [id2]));
 }
 async function createContactFromChat(name, context) {
-  return tx$1((db2) => {
-    exec$1(db2, "INSERT INTO contacts (name, context, createdAt) VALUES (?, ?, ?)", [name, context, nowIso$1()]);
+  return tx$2((db2) => {
+    exec$2(db2, "INSERT INTO contacts (name, context, createdAt) VALUES (?, ?, ?)", [name, context, nowIso$2()]);
     return lastId$1(db2);
   });
 }
-async function setContactPriority(id, priority, vip) {
-  await tx$1((db2) => exec$1(db2, "UPDATE contacts SET priority = ?, vip = ? WHERE id = ?", [priority, vip ? 1 : 0, id]));
+async function setContactPriority(id2, priority, vip) {
+  await tx$2((db2) => exec$2(db2, "UPDATE contacts SET priority = ?, vip = ? WHERE id = ?", [priority, vip ? 1 : 0, id2]));
 }
 async function touchContactsFromOutbound() {
-  await tx$1(
-    (db2) => exec$1(
+  await tx$2(
+    (db2) => exec$2(
       db2,
       `UPDATE contacts SET lastContactAt = (
          SELECT MAX(c.lastOutboundAt) FROM chat_org o JOIN chats c ON c.id = o.chatId WHERE o.contactId = contacts.id)
@@ -80006,11 +80732,11 @@ async function touchContactsFromOutbound() {
   );
 }
 async function setContactFollowUp(contactId, date) {
-  await tx$1((db2) => exec$1(db2, "UPDATE contacts SET nextFollowUp = ? WHERE id = ? AND (nextFollowUp IS NULL OR nextFollowUp > ?)", [date, contactId, date]));
+  await tx$2((db2) => exec$2(db2, "UPDATE contacts SET nextFollowUp = ? WHERE id = ? AND (nextFollowUp IS NULL OR nextFollowUp > ?)", [date, contactId, date]));
 }
 async function listLabels() {
-  return read$1(
-    (db2) => all$1(
+  return read$2(
+    (db2) => all$2(
       db2,
       `SELECT l.id, l.name, l.color,
          (SELECT COUNT(*) FROM label_links k WHERE k.labelId = l.id AND k.entityType = 'chat') AS chatCount,
@@ -80019,31 +80745,31 @@ async function listLabels() {
     )
   );
 }
-async function saveLabel(id, name, color) {
-  return tx$1((db2) => {
-    if (id) exec$1(db2, "UPDATE labels SET name = ?, color = ? WHERE id = ?", [name, color, id]);
-    else exec$1(db2, "INSERT INTO labels (name, color, createdAt) VALUES (?, ?, ?)", [name, color, nowIso$1()]);
-    const lid = id || lastId$1(db2);
-    return one$1(db2, "SELECT id, name, color FROM labels WHERE id = ?", [lid]);
+async function saveLabel(id2, name, color) {
+  return tx$2((db2) => {
+    if (id2) exec$2(db2, "UPDATE labels SET name = ?, color = ? WHERE id = ?", [name, color, id2]);
+    else exec$2(db2, "INSERT INTO labels (name, color, createdAt) VALUES (?, ?, ?)", [name, color, nowIso$2()]);
+    const lid = id2 || lastId$1(db2);
+    return one$2(db2, "SELECT id, name, color FROM labels WHERE id = ?", [lid]);
   });
 }
-async function deleteLabel(id) {
-  await tx$1((db2) => {
-    exec$1(db2, "DELETE FROM label_links WHERE labelId = ?", [id]);
-    exec$1(db2, "DELETE FROM labels WHERE id = ?", [id]);
+async function deleteLabel(id2) {
+  await tx$2((db2) => {
+    exec$2(db2, "DELETE FROM label_links WHERE labelId = ?", [id2]);
+    exec$2(db2, "DELETE FROM labels WHERE id = ?", [id2]);
   });
 }
 async function setLabels(entityType, ids2, add, remove) {
-  await tx$1((db2) => {
-    for (const id of ids2) {
-      for (const l of add) exec$1(db2, "INSERT OR IGNORE INTO label_links (labelId, entityType, entityId) VALUES (?, ?, ?)", [l, entityType, id]);
-      for (const l of remove) exec$1(db2, "DELETE FROM label_links WHERE labelId = ? AND entityType = ? AND entityId = ?", [l, entityType, id]);
+  await tx$2((db2) => {
+    for (const id2 of ids2) {
+      for (const l of add) exec$2(db2, "INSERT OR IGNORE INTO label_links (labelId, entityType, entityId) VALUES (?, ?, ?)", [l, entityType, id2]);
+      for (const l of remove) exec$2(db2, "DELETE FROM label_links WHERE labelId = ? AND entityType = ? AND entityId = ?", [l, entityType, id2]);
     }
   });
 }
 async function labelMap(entityType) {
-  return read$1((db2) => {
-    const rows = all$1(
+  return read$2((db2) => {
+    const rows = all$2(
       db2,
       "SELECT k.entityId, l.id, l.name, l.color FROM label_links k JOIN labels l ON l.id = k.labelId WHERE k.entityType = ? ORDER BY l.name COLLATE NOCASE",
       [entityType]
@@ -80058,40 +80784,40 @@ async function labelMap(entityType) {
   });
 }
 async function createChatTodo(chatId, title, notes, dueDate, messageId) {
-  return tx$1((db2) => {
-    exec$1(
+  return tx$2((db2) => {
+    exec$2(
       db2,
       "INSERT INTO todos (title, notes, status, priority, dueDate, source, aiGenerated, type, createdAt) VALUES (?, ?, 'todo', 0, ?, 'chats', 0, ?, ?)",
-      [title, notes, dueDate, dueDate ? "lembrete" : "projeto", nowIso$1()]
+      [title, notes, dueDate, dueDate ? "lembrete" : "projeto", nowIso$2()]
     );
     const todoId = lastId$1(db2);
-    exec$1(db2, "INSERT OR IGNORE INTO chat_todos (chatId, todoId, messageId) VALUES (?, ?, ?)", [chatId, todoId, messageId]);
+    exec$2(db2, "INSERT OR IGNORE INTO chat_todos (chatId, todoId, messageId) VALUES (?, ?, ?)", [chatId, todoId, messageId]);
     return todoId;
   });
 }
 async function chatTodos(chatId) {
-  return read$1(
-    (db2) => all$1(db2, "SELECT td.id, td.title, td.status, td.dueDate FROM chat_todos t JOIN todos td ON td.id = t.todoId WHERE t.chatId = ? ORDER BY td.createdAt DESC", [chatId])
+  return read$2(
+    (db2) => all$2(db2, "SELECT td.id, td.title, td.status, td.dueDate FROM chat_todos t JOIN todos td ON td.id = t.todoId WHERE t.chatId = ? ORDER BY td.createdAt DESC", [chatId])
   );
 }
 async function listTemplates() {
-  return read$1((db2) => all$1(db2, "SELECT id, title, body FROM chat_templates ORDER BY title COLLATE NOCASE"));
+  return read$2((db2) => all$2(db2, "SELECT id, title, body FROM chat_templates ORDER BY title COLLATE NOCASE"));
 }
-async function getTemplate(id) {
-  return read$1((db2) => one$1(db2, "SELECT id, title, body FROM chat_templates WHERE id = ?", [id]));
+async function getTemplate(id2) {
+  return read$2((db2) => one$2(db2, "SELECT id, title, body FROM chat_templates WHERE id = ?", [id2]));
 }
-async function saveTemplate(id, title, body) {
-  await tx$1((db2) => {
-    if (id) exec$1(db2, "UPDATE chat_templates SET title = ?, body = ? WHERE id = ?", [title, body, id]);
-    else exec$1(db2, "INSERT INTO chat_templates (title, body, createdAt) VALUES (?, ?, ?)", [title, body, nowIso$1()]);
+async function saveTemplate(id2, title, body) {
+  await tx$2((db2) => {
+    if (id2) exec$2(db2, "UPDATE chat_templates SET title = ?, body = ? WHERE id = ?", [title, body, id2]);
+    else exec$2(db2, "INSERT INTO chat_templates (title, body, createdAt) VALUES (?, ?, ?)", [title, body, nowIso$2()]);
   });
 }
-async function deleteTemplate(id) {
-  await tx$1((db2) => exec$1(db2, "DELETE FROM chat_templates WHERE id = ?", [id]));
+async function deleteTemplate(id2) {
+  await tx$2((db2) => exec$2(db2, "DELETE FROM chat_templates WHERE id = ?", [id2]));
 }
 async function reconcile(activeProviderId) {
-  return tx$1((db2) => {
-    const fresh = all$1(
+  return tx$2((db2) => {
+    const fresh = all$2(
       db2,
       `SELECT c.id, c.network, c.peerHandle FROM chats c LEFT JOIN chat_org o ON o.chatId = c.id
        WHERE c.providerId = ? AND c.type = 'single' AND c.peerHandle IS NOT NULL AND o.chatId IS NULL`,
@@ -80099,16 +80825,16 @@ async function reconcile(activeProviderId) {
     );
     let moved = 0;
     for (const f of fresh) {
-      const old = one$1(
+      const old = one$2(
         db2,
         `SELECT c.id FROM chats c JOIN chat_org o ON o.chatId = c.id
          WHERE c.providerId != ? AND c.network = ? AND c.peerHandle = ? ORDER BY c.lastActivity DESC LIMIT 1`,
         [activeProviderId, f.network, f.peerHandle]
       );
       if (!old) continue;
-      exec$1(db2, "UPDATE chat_org SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
-      exec$1(db2, "UPDATE label_links SET entityId = ? WHERE entityType = 'chat' AND entityId = ?", [f.id, old.id]);
-      exec$1(db2, "UPDATE OR IGNORE chat_todos SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
+      exec$2(db2, "UPDATE chat_org SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
+      exec$2(db2, "UPDATE label_links SET entityId = ? WHERE entityType = 'chat' AND entityId = ?", [f.id, old.id]);
+      exec$2(db2, "UPDATE OR IGNORE chat_todos SET chatId = ? WHERE chatId = ?", [f.id, old.id]);
       moved++;
     }
     return moved;
@@ -81043,13 +81769,13 @@ function createMockProvider(control = createMockControl()) {
       }
       return out.sort((a, b2) => b2.sortKey.localeCompare(a.sortKey)).slice(0, limit ?? 20);
     },
-    receive(chatId, text, mentionMe = false, id) {
+    receive(chatId, text, mentionMe = false, id2) {
       const list2 = store.get(chatId);
       const c = chats2.find((x) => x.id === chatId);
       if (!list2 || !c) throw new Error("Conversa não encontrada.");
       const ts2 = Date.now();
       const msg = {
-        id: id ?? `${chatId}-r${list2.length + 1}`,
+        id: id2 ?? `${chatId}-r${list2.length + 1}`,
         chatId,
         senderId: `${chatId}-p1`,
         senderName: c.type === "group" ? "Tia Lu" : c.title,
@@ -81338,8 +82064,8 @@ async function counts() {
   }
   return c;
 }
-async function getSummary(id) {
-  const r = await fullRow(id);
+async function getSummary(id2) {
+  const r = await fullRow(id2);
   return r ? summarize$3(r, await summaryCtx()) : null;
 }
 const msgCache = /* @__PURE__ */ new Map();
@@ -81359,9 +82085,9 @@ async function selfInfo(accountKey2) {
   return { ids: new Set([acc?.selfId].filter((x) => !!x)), names };
 }
 const assetKey = crypto.randomBytes(32);
-function signAsset(chatId, ref, stable = false) {
+function signAsset(chatId, ref, stable2 = false) {
   const win = 6 * 36e5;
-  const exp = stable ? (Math.floor(Date.now() / win) + 2) * win : Date.now() + win;
+  const exp = stable2 ? (Math.floor(Date.now() / win) + 2) * win : Date.now() + win;
   const payload = Buffer.from(JSON.stringify([chatId, ref, exp])).toString("base64url");
   const sig = crypto.createHmac("sha256", assetKey).update(payload).digest("base64url");
   return `${payload}.${sig}`;
@@ -81550,7 +82276,7 @@ async function sendMessage(chatId, text, replyToId, imageInput) {
   }
   await touchContactsFromOutbound();
   invalidateMessages(chatId);
-  changed$2([chatId]);
+  changed$3([chatId]);
   return { ok: true, pendingId: r.pendingId };
 }
 function ownMessage(chatId, messageId) {
@@ -81569,7 +82295,7 @@ async function refreshAfterChange(provider, chatId) {
     }
   } catch {
   }
-  changed$2([chatId]);
+  changed$3([chatId]);
 }
 async function editMessage(chatId, messageId, text) {
   const body = text.trim();
@@ -81605,7 +82331,7 @@ async function markRead(chatId, read2) {
     await provider.markUnread(chat.remoteId);
     await patchChatCounters(chatId, Math.max(1, chat.unreadCount ?? 0), chat.unreadMentions);
   }
-  changed$2([chatId]);
+  changed$3([chatId]);
 }
 async function searchMessages(query, chatId) {
   const q2 = query.trim();
@@ -81760,7 +82486,7 @@ function relDay(iso2, now) {
 }
 let pendingChanged = /* @__PURE__ */ new Set();
 let changedTimer = null;
-function changed$2(ids2 = []) {
+function changed$3(ids2 = []) {
   ids2.forEach((i) => pendingChanged.add(i));
   if (changedTimer) return;
   changedTimer = setTimeout(() => {
@@ -81929,7 +82655,7 @@ const status = {
   capabilities: NO_CAPABILITIES,
   progress: null
 };
-let running$2 = null;
+let running$3 = null;
 let rerun = false;
 let timer = null;
 let failures = 0;
@@ -81938,7 +82664,7 @@ let unsubscribe = null;
 let realtimeProvider = null;
 let lastSyncMs = 0;
 let started = false;
-function getStatus() {
+function getStatus$1() {
   status.agentOnline = agentOnline();
   if (status.mode === "agent" && status.realtime !== "off") {
     const a = agentDetails();
@@ -81949,7 +82675,7 @@ function getStatus() {
 function setState(state, message = null) {
   status.state = state;
   status.message = message;
-  broadcast("chats:status", getStatus());
+  broadcast("chats:status", getStatus$1());
 }
 function startChatsEngine() {
   if (started) return;
@@ -81989,9 +82715,9 @@ async function reconfigure() {
   setState("idle");
   if (cfg.realtime) startRealtime(provider);
   else status.realtime = provider.subscribe ? "off" : "unsupported";
-  if (cfg.syncAuto) schedule(3e3);
+  if (cfg.syncAuto) schedule$1(3e3);
 }
-function schedule(ms) {
+function schedule$1(ms) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => void loop(), ms);
 }
@@ -82000,25 +82726,25 @@ async function loop() {
   if (!cfg.enabled || !cfg.syncAuto || authBlocked) return;
   await syncNow().catch(() => void 0);
   const base2 = cfg.syncIntervalSec * 1e3;
-  const interval = getStatus().realtime === "on" ? Math.max(base2, 10 * 6e4) : base2;
+  const interval = getStatus$1().realtime === "on" ? Math.max(base2, 10 * 6e4) : base2;
   const backoff = failures ? Math.min(15 * 6e4, 3e4 * 2 ** Math.min(failures - 1, 5)) : interval;
-  schedule(failures ? backoff : interval);
+  schedule$1(failures ? backoff : interval);
 }
 function syncNow(opts = {}) {
-  if (running$2) {
+  if (running$3) {
     rerun = true;
-    return running$2;
+    return running$3;
   }
-  running$2 = doSync(!!opts.full).finally(() => {
-    running$2 = null;
+  running$3 = doSync$1(!!opts.full).finally(() => {
+    running$3 = null;
     if (rerun) {
       rerun = false;
       void syncNow();
     }
   });
-  return running$2;
+  return running$3;
 }
-async function doSync(full) {
+async function doSync$1(full) {
   const cfg = await loadConfig();
   const provider = await activeProvider(cfg);
   if (!cfg.enabled || !provider) {
@@ -82051,7 +82777,7 @@ async function doSync(full) {
       changedIds.push(...res.changed);
       fetched += page.items.length;
       status.progress = { done: fetched, total: null };
-      broadcast("chats:status", getStatus());
+      broadcast("chats:status", getStatus$1());
       const oldest = page.items[page.items.length - 1]?.lastActivity;
       const passed = !initial && oldest && Date.parse(oldest) < since;
       if (!page.hasMore || !page.olderCursor || passed || fetched >= cfg.initialLimit) break;
@@ -82064,7 +82790,7 @@ async function doSync(full) {
     lastSyncMs = Date.now();
     status.progress = null;
     await finishOk(moved ? `${moved} conversa(s) reconciliada(s) com o provedor anterior.` : null);
-    changed$2(changedIds);
+    changed$3(changedIds);
     void notifyImportant(changedIds).catch(() => void 0);
   } catch (e) {
     status.progress = null;
@@ -82076,15 +82802,15 @@ async function finishOk(message) {
   failures = 0;
   status.lastSyncAt = (/* @__PURE__ */ new Date()).toISOString();
   status.lastError = null;
-  await setSetting(K.lastSync, status.lastSyncAt);
-  await setSetting(K.lastError, "");
+  await setSetting$1(K.lastSync, status.lastSyncAt);
+  await setSetting$1(K.lastError, "");
   setState(status.realtime === "on" ? "connected" : "idle", message);
 }
 async function finishErr(e) {
   failures++;
   const msg = e instanceof Error ? e.message : String(e);
   status.lastError = msg;
-  await setSetting(K.lastError, `${(/* @__PURE__ */ new Date()).toISOString()}|${msg}`);
+  await setSetting$1(K.lastError, `${(/* @__PURE__ */ new Date()).toISOString()}|${msg}`);
   if (e instanceof ProviderAuthError) {
     authBlocked = true;
     setState("error", msg);
@@ -82107,10 +82833,10 @@ async function scanMany(provider, ids2) {
   let i = 0;
   const worker = async () => {
     while (i < ids2.length) {
-      const id = ids2[i++];
+      const id2 = ids2[i++];
       try {
-        const scan = await scanChat(provider, id);
-        if (scan) results.push({ id, scan });
+        const scan = await scanChat(provider, id2);
+        if (scan) results.push({ id: id2, scan });
       } catch (e) {
         if (e instanceof ProviderUnavailableError || e instanceof ProviderAuthError) throw e;
       }
@@ -82135,7 +82861,7 @@ function startRealtime(provider) {
       void syncNow().catch(() => void 0);
     }
     if (err && s2 === "off" && status.state !== "error") status.message = err;
-    broadcast("chats:status", getStatus());
+    broadcast("chats:status", getStatus$1());
   });
 }
 function stopRealtime() {
@@ -82149,7 +82875,7 @@ function stopRealtime() {
 }
 function onEvent(e) {
   if (e.type === "chat.deleted") {
-    void deleteChatsByRemote(realtimeProvider?.id ?? "", e.chatIds).then(() => changed$2());
+    void deleteChatsByRemote(realtimeProvider?.id ?? "", e.chatIds).then(() => changed$3());
     return;
   }
   if (e.type === "chat.upserted") e.chatIds.forEach((c) => pendingChats.add(c));
@@ -82166,9 +82892,9 @@ async function flushEvents() {
   const cfg = await loadConfig();
   const enabled = new Set((await listAccounts(provider.id)).filter((a) => a.syncEnabled && a.status !== "removed").map((a) => a.remoteId));
   const chats2 = [];
-  for (const id of ids2.slice(0, 50)) {
+  for (const id2 of ids2.slice(0, 50)) {
     try {
-      const c = await provider.getChat(id);
+      const c = await provider.getChat(id2);
       if (c && enabled.has(c.accountId)) chats2.push(c);
     } catch {
     }
@@ -82176,27 +82902,27 @@ async function flushEvents() {
   if (ids2.length > 50) void syncNow();
   const res = await upsertChats(provider.id, chats2, cfg.storePreviews);
   const local = await chatIdsByRemote(provider.id, ids2);
-  local.forEach((id) => invalidateMessages(id));
+  local.forEach((id2) => invalidateMessages(id2));
   await scanMany(provider, local);
   await touchContactsFromOutbound();
-  changed$2(local);
+  changed$3(local);
   void notifyImportant(res.changed).catch(() => void 0);
 }
 const notified = /* @__PURE__ */ new Map();
 async function notifyImportant(ids2) {
   const cfg = await loadConfig();
   if (!cfg.notifyVipWaiting && !cfg.notifyMentions) return;
-  for (const id of ids2.slice(0, 50)) {
-    const s2 = await getSummary(id);
+  for (const id2 of ids2.slice(0, 50)) {
+    const s2 = await getSummary(id2);
     if (!s2 || s2.stale) continue;
     const stamp2 = s2.lastInboundAt ?? "";
-    if (notified.get(id) === stamp2) continue;
+    if (notified.get(id2) === stamp2) continue;
     const vip = s2.contactVip || s2.contactPriority === "alta" || s2.priority === "alta";
     if (cfg.notifyVipWaiting && vip && s2.replyState === "needs_reply" && !s2.lastMessageFromMe) {
-      notified.set(id, stamp2);
+      notified.set(id2, stamp2);
       await notify({ title: tt("chats.mandouMensagem", { p0: s2.contactName ?? s2.title }), body: tt("chats.pessoaImportanteEsperandoResposta"), source: "mensagens", page: "chats" });
     } else if (cfg.notifyMentions && s2.type === "group" && (s2.unreadMentions ?? 0) > 0 && !s2.mentionsReviewed) {
-      notified.set(id, stamp2);
+      notified.set(id2, stamp2);
       await notify({ title: tt("chats.mencionaramVoceEm", { title: s2.title }), body: tt("chats.mencaoOes", { unreadMentions: s2.unreadMentions, p1: s2.mentionsEstimated ? tt("chats.estimativaParen") : "" }), source: "mensagens", page: "chats" });
     }
   }
@@ -82216,7 +82942,7 @@ async function checkReminders() {
     due.map((d) => d.chatId),
     { reminderNotifiedAt: now }
   );
-  changed$2(due.map((d) => d.chatId));
+  changed$3(due.map((d) => d.chatId));
 }
 const BUILTIN_PRESETS = [
   { id: "b-attention", name: "🔥 Prioritárias", filter: { state: "high", sort: "priority" }, builtin: true },
@@ -82230,13 +82956,13 @@ const STATES = ["needs_reply", "waiting", "none", "resolved", "auto"];
 const PRIOS = ["alta", "normal", "baixa", null];
 const ids = (v) => Array.isArray(v) ? v.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 500) : [];
 function registerChatRpc(handle) {
-  handle("chats:status", () => getStatus());
+  handle("chats:status", () => getStatus$1());
   handle("chats:config", async () => ({ config: publicConfig(await loadConfig()), agent: agentDetails() }));
   handle("chats:saveConfig", async (_e, patch) => {
     await saveConfig(patch ?? {});
     await reconfigure();
     broadcast("chats:updated", { chatIds: [] });
-    return { config: publicConfig(await loadConfig()), status: getStatus() };
+    return { config: publicConfig(await loadConfig()), status: getStatus$1() };
   });
   handle("chats:test", async () => {
     const p = await activeProvider();
@@ -82247,7 +82973,7 @@ function registerChatRpc(handle) {
   handle("chats:agentStatus", () => agentDetails());
   handle("chats:syncNow", async (_e, full) => {
     await syncNow({ full: !!full });
-    return getStatus();
+    return getStatus$1();
   });
   handle("chats:accounts", async () => {
     const cfg = await loadConfig();
@@ -82267,47 +82993,47 @@ function registerChatRpc(handle) {
   });
   handle("chats:setAccountSync", async (_e, key, enabled) => {
     await setAccountSync(String(key), !!enabled);
-    changed$2();
+    changed$3();
     void syncNow().catch(() => void 0);
   });
   handle("chats:clearCache", async () => {
     invalidateMessages();
     const r = await clearCache();
-    changed$2();
+    changed$3();
     return r;
   });
   handle("chats:disconnect", async () => {
     await saveConfig({ enabled: false, beeperToken: "" });
     invalidateMessages();
     await reconfigure();
-    changed$2();
-    return getStatus();
+    changed$3();
+    return getStatus$1();
   });
   handle("chats:list", (_e, filter, offset, limit) => listChats(filter ?? {}, Number(offset) || 0, Number(limit) || 60));
   handle("chats:counts", () => counts());
-  handle("chats:get", (_e, id) => getSummary(Number(id)));
+  handle("chats:get", (_e, id2) => getSummary(Number(id2)));
   handle("chats:radar", () => radar());
   handle("chats:networks", async () => {
     const c = await counts();
-    return Object.entries(c.byNetwork).map(([id, v]) => ({ id, ...networkInfo(id), chats: v.chats, unread: v.unread }));
+    return Object.entries(c.byNetwork).map(([id2, v]) => ({ id: id2, ...networkInfo(id2), chats: v.chats, unread: v.unread }));
   });
-  handle("chats:messages", async (_e, id, cursor) => {
-    const page = await getMessages(Number(id), cursor ?? null);
+  handle("chats:messages", async (_e, id2, cursor) => {
+    const page = await getMessages(Number(id2), cursor ?? null);
     return page;
   });
-  handle("chats:send", (_e, id, text, replyToId, image) => sendMessage(Number(id), String(text ?? ""), replyToId ?? null, image ?? null));
-  handle("chats:editMessage", (_e, id, messageId, text) => editMessage(Number(id), String(messageId ?? ""), String(text ?? "")));
-  handle("chats:deleteMessage", (_e, id, messageId, forEveryone) => deleteMessage(Number(id), String(messageId ?? ""), forEveryone !== false));
-  handle("chats:markRead", (_e, id, read2) => markRead(Number(id), read2 !== false));
+  handle("chats:send", (_e, id2, text, replyToId, image) => sendMessage(Number(id2), String(text ?? ""), replyToId ?? null, image ?? null));
+  handle("chats:editMessage", (_e, id2, messageId, text) => editMessage(Number(id2), String(messageId ?? ""), String(text ?? "")));
+  handle("chats:deleteMessage", (_e, id2, messageId, forEveryone) => deleteMessage(Number(id2), String(messageId ?? ""), forEveryone !== false));
+  handle("chats:markRead", (_e, id2, read2) => markRead(Number(id2), read2 !== false));
   handle("chats:search", (_e, query, chatId) => searchMessages(String(query ?? ""), chatId ? Number(chatId) : null));
-  handle("chats:pendingMessages", (_e, id) => pendingMessages(Number(id)));
+  handle("chats:pendingMessages", (_e, id2) => pendingMessages(Number(id2)));
   handle("chats:setState", async (_e, chatIds, state) => {
     if (!STATES.includes(state)) throw new Error(tt("chats.estadoInvalido"));
     const list2 = ids(chatIds);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     if (state === "auto") await patchOrg(list2, { manualState: null, manualAt: null });
     else await patchOrg(list2, { manualState: state, manualAt: now, ...state === "resolved" || state === "none" ? { snoozeUntil: null, snoozedAt: null, reminderNote: null } : {} });
-    changed$2(list2);
+    changed$3(list2);
   });
   handle("chats:snooze", async (_e, chatIds, until, note, reopenOnMessage) => {
     const list2 = ids(chatIds);
@@ -82323,49 +83049,49 @@ function registerChatRpc(handle) {
         reminderNotifiedAt: null,
         reopenOnMessage: reopenOnMessage === false ? 0 : 1
       });
-      for (const id of list2) {
-        const org = await getOrg(id);
+      for (const id2 of list2) {
+        const org = await getOrg(id2);
         if (org?.contactId) await setContactFollowUp(org.contactId, iso2.slice(0, 10));
       }
     }
-    changed$2(list2);
+    changed$3(list2);
   });
   handle("chats:setPriority", async (_e, chatIds, priority) => {
     if (!PRIOS.includes(priority)) throw new Error(tt("chats.prioridadeInvalida"));
     const list2 = ids(chatIds);
     await patchOrg(list2, { priority });
-    changed$2(list2);
+    changed$3(list2);
   });
-  handle("chats:pin", async (_e, chatIds, pinned) => {
+  handle("chats:pin", async (_e, chatIds, pinned2) => {
     const list2 = ids(chatIds);
-    await patchOrg(list2, { pinnedAt: pinned === false ? null : (/* @__PURE__ */ new Date()).toISOString() });
-    changed$2(list2);
+    await patchOrg(list2, { pinnedAt: pinned2 === false ? null : (/* @__PURE__ */ new Date()).toISOString() });
+    changed$3(list2);
   });
-  handle("chats:setNotes", async (_e, id, notes) => {
-    await patchOrg([Number(id)], { notes: notes?.trim() ? notes.slice(0, 5e3) : null });
-    changed$2([Number(id)]);
+  handle("chats:setNotes", async (_e, id2, notes) => {
+    await patchOrg([Number(id2)], { notes: notes?.trim() ? notes.slice(0, 5e3) : null });
+    changed$3([Number(id2)]);
   });
   handle("chats:reviewMentions", async (_e, chatIds) => {
     const list2 = ids(chatIds);
-    for (const id of list2) {
-      const c = await chatById(id);
-      await patchOrg([id], { mentionsReviewedCount: c?.unreadMentions ?? 0 });
+    for (const id2 of list2) {
+      const c = await chatById(id2);
+      await patchOrg([id2], { mentionsReviewedCount: c?.unreadMentions ?? 0 });
     }
-    changed$2(list2);
+    changed$3(list2);
   });
-  handle("chats:suggestContacts", (_e, id) => suggestContacts(Number(id)));
+  handle("chats:suggestContacts", (_e, id2) => suggestContacts(Number(id2)));
   handle("chats:link", async (_e, chatIds, contactId) => {
     const list2 = ids(chatIds);
-    for (const id of list2) {
-      const c = await chatById(id);
+    for (const id2 of list2) {
+      const c = await chatById(id2);
       if (c?.type === "group" && contactId) throw new Error(tt("chats.gruposNaoSaoPessoasVincule"));
     }
     await patchOrg(list2, { contactId: contactId ? Number(contactId) : null });
     await touchContactsFromOutbound();
-    changed$2(list2);
+    changed$3(list2);
   });
-  handle("chats:createContact", async (_e, id, name) => {
-    const chat = await chatById(Number(id));
+  handle("chats:createContact", async (_e, id2, name) => {
+    const chat = await chatById(Number(id2));
     if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
     if (chat.type === "group") throw new Error(tt("chats.gruposNaoSaoPessoas"));
     const n = String(name ?? "").trim() || chat.title;
@@ -82373,7 +83099,7 @@ function registerChatRpc(handle) {
     const contactId = await createContactFromChat(n.slice(0, 120), ctx);
     await patchOrg([chat.id], { contactId });
     await touchContactsFromOutbound();
-    changed$2([chat.id]);
+    changed$3([chat.id]);
     return { contactId };
   });
   handle("chats:contactChats", (_e, contactId) => contactChats(Number(contactId)));
@@ -82382,30 +83108,30 @@ function registerChatRpc(handle) {
   handle("chats:setContactPriority", async (_e, contactId, priority, vip) => {
     if (!["alta", "normal", "baixa"].includes(priority)) throw new Error(tt("chats.prioridadeInvalida"));
     await setContactPriority(Number(contactId), priority, !!vip);
-    changed$2();
+    changed$3();
   });
   handle("chats:labels", () => listLabels());
-  handle("chats:saveLabel", async (_e, id, name, color) => {
+  handle("chats:saveLabel", async (_e, id2, name, color) => {
     const n = String(name ?? "").trim().slice(0, 40);
     if (!n) throw new Error(tt("chats.nomeObrigatorio"));
     const col = /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#6366f1";
-    const l = await saveLabel(id ? Number(id) : null, n, col);
-    changed$2();
+    const l = await saveLabel(id2 ? Number(id2) : null, n, col);
+    changed$3();
     return l;
   });
-  handle("chats:deleteLabel", async (_e, id) => {
-    await deleteLabel(Number(id));
-    changed$2();
+  handle("chats:deleteLabel", async (_e, id2) => {
+    await deleteLabel(Number(id2));
+    changed$3();
   });
   handle("chats:setLabels", async (_e, entity, entityIds, add, remove) => {
     if (entity !== "chat" && entity !== "contact") throw new Error(tt("chats.entidadeInvalida"));
     await setLabels(entity, ids(entityIds), ids(add), ids(remove));
-    changed$2(entity === "chat" ? ids(entityIds) : []);
+    changed$3(entity === "chat" ? ids(entityIds) : []);
   });
   handle("chats:contactLabels", async (_e, contactId) => (await labelMap("contact")).get(Number(contactId)) ?? []);
   handle("chats:contactLabelMap", async () => Object.fromEntries(await labelMap("contact")));
-  handle("chats:createTodo", async (_e, id, title, dueDate, messageId) => {
-    const chat = await fullRow(Number(id));
+  handle("chats:createTodo", async (_e, id2, title, dueDate, messageId) => {
+    const chat = await fullRow(Number(id2));
     if (!chat) throw new Error(tt("chats.conversaNaoEncontrada"));
     const t = String(title ?? "").trim().slice(0, 200);
     if (!t) throw new Error(tt("chats.tituloObrigatorio"));
@@ -82414,10 +83140,10 @@ function registerChatRpc(handle) {
 Abrir: #/chats?c=${chat.id}`;
     const todoId = await createChatTodo(chat.id, t, notes, dueDate, messageId);
     broadcast("inbox:updated", { source: "chats" });
-    changed$2([chat.id]);
+    changed$3([chat.id]);
     return { todoId };
   });
-  handle("chats:todos", (_e, id) => chatTodos(Number(id)));
+  handle("chats:todos", (_e, id2) => chatTodos(Number(id2)));
   handle("chats:presets", async () => {
     let user = [];
     try {
@@ -82430,24 +83156,24 @@ Abrir: #/chats?c=${chat.id}`;
   handle("chats:savePreset", async (_e, name, filter) => {
     const list2 = JSON.parse(await getSetting(K.presets) || "[]");
     list2.push({ id: `u-${Date.now()}`, name: String(name).slice(0, 40), filter });
-    await setSetting(K.presets, JSON.stringify(list2.slice(-30)));
+    await setSetting$1(K.presets, JSON.stringify(list2.slice(-30)));
   });
-  handle("chats:deletePreset", async (_e, id) => {
+  handle("chats:deletePreset", async (_e, id2) => {
     const list2 = JSON.parse(await getSetting(K.presets) || "[]");
-    await setSetting(K.presets, JSON.stringify(list2.filter((p) => p.id !== id)));
+    await setSetting$1(K.presets, JSON.stringify(list2.filter((p) => p.id !== id2)));
   });
   handle("chats:templates", () => listTemplates());
-  handle("chats:saveTemplate", async (_e, id, title, body) => {
+  handle("chats:saveTemplate", async (_e, id2, title, body) => {
     if (!String(title ?? "").trim() || !String(body ?? "").trim()) throw new Error(tt("chats.tituloETextoSaoObrigatorios"));
-    await saveTemplate(id ? Number(id) : null, String(title).slice(0, 80), String(body).slice(0, 4e3));
+    await saveTemplate(id2 ? Number(id2) : null, String(title).slice(0, 80), String(body).slice(0, 4e3));
   });
-  handle("chats:deleteTemplate", (_e, id) => deleteTemplate(Number(id)));
+  handle("chats:deleteTemplate", (_e, id2) => deleteTemplate(Number(id2)));
   handle("chats:aiSuggest", (_e, req) => suggestReplies(req));
   handle("chats:aiBatch", async (_e, reqs) => {
     const out = await suggestBatch(Array.isArray(reqs) ? reqs : [], (r) => broadcast("chats:ai", r));
     return out;
   });
-  handle("chats:aiSummarize", (_e, id, messageIds, includeNotes) => summarize$2(Number(id), Array.isArray(messageIds) ? messageIds.map(String) : [], !!includeNotes));
+  handle("chats:aiSummarize", (_e, id2, messageIds, includeNotes) => summarize$2(Number(id2), Array.isArray(messageIds) ? messageIds.map(String) : [], !!includeNotes));
 }
 const MEMORY_TYPES = ["FACT", "PREFERENCE", "GOAL", "CONSTRAINT", "HABIT", "INSTRUCTION", "EXPERIENCE", "LEARNING", "INFERENCE"];
 const MEMORY_LAYERS = ["semantic", "episodic", "procedural", "temporal", "reflective"];
@@ -82583,7 +83309,7 @@ async function callsToday() {
 async function callAi(op, chamada, params) {
   const st2 = await callsToday();
   if (st2.n >= st2.limit) throw new AiBudgetError(`Limite diário de chamadas de IA da Memória atingido (${st2.limit}). Ajuste em Configurações.`);
-  await setSetting("memory_llm_calls", JSON.stringify({ day: st2.day, n: st2.n + 1 }));
+  await setSetting$1("memory_llm_calls", JSON.stringify({ day: st2.day, n: st2.n + 1 }));
   const c = await montarChamada(chamada, params);
   return engine.complete(c.sistema ?? "", c.prompt, { model: c.modelo, op, motor: c.motor, effort: c.effort });
 }
@@ -82846,7 +83572,7 @@ function typeAllowed(rule, t) {
 function publicPolicies() {
   return MEMORY_POLICIES.map((p) => ({ ...p, types: p.consume && p.consume.types ? p.consume.types : MEMORY_TYPES }));
 }
-function all(db2, sql, params = []) {
+function all$1(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   if (params.length) st2.bind(params);
   const out = [];
@@ -82854,19 +83580,19 @@ function all(db2, sql, params = []) {
   st2.free();
   return out;
 }
-function one(db2, sql, params = []) {
-  return all(db2, sql, params)[0] ?? null;
+function one$1(db2, sql, params = []) {
+  return all$1(db2, sql, params)[0] ?? null;
 }
-function exec(db2, sql, params = []) {
+function exec$1(db2, sql, params = []) {
   const st2 = db2.prepare(sql);
   st2.run(params);
   st2.free();
   return db2.getRowsModified();
 }
 function lastId(db2) {
-  return Number(one(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  return Number(one$1(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
 }
-async function tx(fn) {
+async function tx$1(fn) {
   const db2 = await getDb();
   db2.run("BEGIN");
   try {
@@ -82882,10 +83608,10 @@ async function tx(fn) {
     throw e;
   }
 }
-async function read(fn) {
+async function read$1(fn) {
   return fn(await getDb());
 }
-const nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+const nowIso$1 = () => (/* @__PURE__ */ new Date()).toISOString();
 const sha = (s2) => crypto.createHash("sha256").update(s2).digest("hex");
 const jparse = (s2, fb) => {
   if (typeof s2 !== "string" || !s2) return fb;
@@ -82954,12 +83680,12 @@ const seeded = /* @__PURE__ */ new Set();
 async function ensureSeeded(owner2) {
   if (seeded.has(owner2)) return;
   const db2 = await getDb();
-  const has = one(db2, "SELECT COUNT(*) AS n FROM memory_categories WHERE ownerId = ?", [owner2])?.n ?? 0;
+  const has = one$1(db2, "SELECT COUNT(*) AS n FROM memory_categories WHERE ownerId = ?", [owner2])?.n ?? 0;
   if (!has) {
-    await tx((d) => {
-      const now = nowIso();
+    await tx$1((d) => {
+      const now = nowIso$1();
       SEED_CATEGORIES.forEach(
-        (c, i) => exec(
+        (c, i) => exec$1(
           d,
           `INSERT OR IGNORE INTO memory_categories (ownerId, slug, name, icon, description, defaultSensitivity, sortOrder, createdAt, updatedAt)
            VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -82982,39 +83708,39 @@ const toCategory = (r) => ({
   memoryCount: r.memoryCount != null ? Number(r.memoryCount) : void 0
 });
 function categoriesSync(db2, owner2, includeArchived = true) {
-  return all(
+  return all$1(
     db2,
     `SELECT c.*, (SELECT COUNT(*) FROM memories m WHERE m.categoryId = c.id AND m.ownerId = c.ownerId AND m.status NOT IN ('archived','superseded')) AS memoryCount
      FROM memory_categories c WHERE c.ownerId = ? ${includeArchived ? "" : "AND c.archivedAt IS NULL"} ORDER BY c.sortOrder, c.name`,
     [owner2]
   ).map(toCategory);
 }
-async function listCategories(owner2, includeArchived = true) {
+async function listCategories$1(owner2, includeArchived = true) {
   await ensureSeeded(owner2);
-  return read((db2) => categoriesSync(db2, owner2, includeArchived));
+  return read$1((db2) => categoriesSync(db2, owner2, includeArchived));
 }
 function categoryBySlug(db2, owner2, slug) {
-  const r = one(db2, "SELECT * FROM memory_categories WHERE ownerId = ? AND slug = ?", [owner2, slug]);
+  const r = one$1(db2, "SELECT * FROM memory_categories WHERE ownerId = ? AND slug = ?", [owner2, slug]);
   return r ? toCategory(r) : null;
 }
-function categoryById(db2, owner2, id) {
-  if (id == null) return null;
-  const r = one(db2, "SELECT * FROM memory_categories WHERE ownerId = ? AND id = ?", [owner2, id]);
+function categoryById(db2, owner2, id2) {
+  if (id2 == null) return null;
+  const r = one$1(db2, "SELECT * FROM memory_categories WHERE ownerId = ? AND id = ?", [owner2, id2]);
   return r ? toCategory(r) : null;
 }
-function slugify$1(s2) {
+function slugify$2(s2) {
   return normText(s2).replace(/\s+/g, "-").slice(0, 40) || "categoria";
 }
-async function createCategory(owner2, input) {
+async function createCategory$1(owner2, input) {
   await ensureSeeded(owner2);
   const name = String(input.name ?? "").trim().slice(0, 60);
   if (!name) throw new MemoryError("Nome da categoria é obrigatório.");
-  return tx((db2) => {
-    let slug = slugify$1(name);
-    for (let i = 2; categoryBySlug(db2, owner2, slug); i++) slug = `${slugify$1(name)}-${i}`;
-    const order = (one(db2, "SELECT MAX(sortOrder) AS m FROM memory_categories WHERE ownerId = ?", [owner2])?.m ?? 0) + 1;
-    const now = nowIso();
-    exec(
+  return tx$1((db2) => {
+    let slug = slugify$2(name);
+    for (let i = 2; categoryBySlug(db2, owner2, slug); i++) slug = `${slugify$2(name)}-${i}`;
+    const order = (one$1(db2, "SELECT MAX(sortOrder) AS m FROM memory_categories WHERE ownerId = ?", [owner2])?.m ?? 0) + 1;
+    const now = nowIso$1();
+    exec$1(
       db2,
       `INSERT INTO memory_categories (ownerId, slug, name, icon, description, defaultSensitivity, sortOrder, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?)`,
       [owner2, slug, name, String(input.icon ?? "•").slice(0, 8) || "•", String(input.description ?? "").slice(0, 300), oneOf(SENSITIVITIES, input.defaultSensitivity, "NORMAL"), order, now, now]
@@ -83022,13 +83748,13 @@ async function createCategory(owner2, input) {
     return categoryById(db2, owner2, lastId(db2));
   });
 }
-async function updateCategory(owner2, id, input) {
-  return tx((db2) => {
-    const cur = categoryById(db2, owner2, id);
+async function updateCategory(owner2, id2, input) {
+  return tx$1((db2) => {
+    const cur = categoryById(db2, owner2, id2);
     if (!cur) throw new MemoryError("Categoria não encontrada.", "not_found");
     const name = input.name != null ? String(input.name).trim().slice(0, 60) || cur.name : cur.name;
-    const archivedAt = input.archived == null ? cur.archivedAt : input.archived ? cur.archivedAt ?? nowIso() : null;
-    exec(
+    const archivedAt = input.archived == null ? cur.archivedAt : input.archived ? cur.archivedAt ?? nowIso$1() : null;
+    exec$1(
       db2,
       `UPDATE memory_categories SET name = ?, icon = ?, description = ?, defaultSensitivity = ?, archivedAt = ?, updatedAt = ? WHERE id = ? AND ownerId = ?`,
       [
@@ -83037,18 +83763,18 @@ async function updateCategory(owner2, id, input) {
         input.description != null ? String(input.description).slice(0, 300) : cur.description,
         input.defaultSensitivity ? oneOf(SENSITIVITIES, input.defaultSensitivity, cur.defaultSensitivity) : cur.defaultSensitivity,
         archivedAt,
-        nowIso(),
-        id,
+        nowIso$1(),
+        id2,
         owner2
       ]
     );
-    return categoryById(db2, owner2, id);
+    return categoryById(db2, owner2, id2);
   });
 }
 async function reorderCategories(owner2, ids2) {
-  await tx((db2) => {
-    const rest = all(db2, "SELECT id FROM memory_categories WHERE ownerId = ? ORDER BY sortOrder, name", [owner2]).map((r) => Number(r.id)).filter((id) => !ids2.includes(id));
-    [...ids2.map(Number), ...rest].forEach((id, i) => exec(db2, "UPDATE memory_categories SET sortOrder = ? WHERE id = ? AND ownerId = ?", [i, id, owner2]));
+  await tx$1((db2) => {
+    const rest = all$1(db2, "SELECT id FROM memory_categories WHERE ownerId = ? ORDER BY sortOrder, name", [owner2]).map((r) => Number(r.id)).filter((id2) => !ids2.includes(id2));
+    [...ids2.map(Number), ...rest].forEach((id2, i) => exec$1(db2, "UPDATE memory_categories SET sortOrder = ? WHERE id = ? AND ownerId = ?", [i, id2, owner2]));
   });
 }
 const MEM_SELECT = `SELECT m.id, m.title, m.content, m.categoryId, m.tags, m.type, m.layer, m.status, m.pinned, m.importance,
@@ -83091,13 +83817,13 @@ function toMemory(r) {
     embeddingModel: r.embeddingModel
   };
 }
-function memorySync(db2, owner2, id) {
-  const r = one(db2, `${MEM_SELECT} WHERE m.ownerId = ? AND m.id = ?`, [owner2, id]);
+function memorySync(db2, owner2, id2) {
+  const r = one$1(db2, `${MEM_SELECT} WHERE m.ownerId = ? AND m.id = ?`, [owner2, id2]);
   return r ? toMemory(r) : null;
 }
-function expireDueSync(db2, owner2, now = nowIso()) {
-  const due = all(db2, `SELECT id FROM memories WHERE ownerId = ? AND status IN ('active','unconfirmed') AND validUntil IS NOT NULL AND validUntil < ?`, [owner2, now]);
-  for (const { id } of due) setStatusSync(db2, owner2, Number(id), "expired", { actor: "system", reason: "Validade expirou" });
+function expireDueSync(db2, owner2, now = nowIso$1()) {
+  const due = all$1(db2, `SELECT id FROM memories WHERE ownerId = ? AND status IN ('active','unconfirmed') AND validUntil IS NOT NULL AND validUntil < ?`, [owner2, now]);
+  for (const { id: id2 } of due) setStatusSync(db2, owner2, Number(id2), "expired", { actor: "system", reason: "Validade expirou" });
   return due.length;
 }
 function searchTextOf(title, content, tags) {
@@ -83144,8 +83870,8 @@ async function listMemories(owner2, f = {}) {
   const limit = clampInt(f.limit, 1, 500, 100);
   const offset = clampInt(f.offset, 0, 1e9, 0);
   const w = where.join(" AND ");
-  const total = one(db2, `SELECT COUNT(*) AS n FROM memories m WHERE ${w}`, params)?.n ?? 0;
-  const items = all(db2, `${MEM_SELECT} WHERE ${w} ORDER BY ${order} LIMIT ? OFFSET ?`, [...params, limit, offset]).map(toMemory);
+  const total = one$1(db2, `SELECT COUNT(*) AS n FROM memories m WHERE ${w}`, params)?.n ?? 0;
+  const items = all$1(db2, `${MEM_SELECT} WHERE ${w} ORDER BY ${order} LIMIT ? OFFSET ?`, [...params, limit, offset]).map(toMemory);
   return { items, total: Number(total) };
 }
 const toEvidence = (r) => ({
@@ -83159,7 +83885,7 @@ const toEvidence = (r) => ({
   createdAt: r.createdAt
 });
 function revisionsSync(db2, owner2, memoryId) {
-  return all(db2, "SELECT * FROM memory_revisions WHERE ownerId = ? AND memoryId = ? ORDER BY id DESC", [owner2, memoryId]).map((r) => ({
+  return all$1(db2, "SELECT * FROM memory_revisions WHERE ownerId = ? AND memoryId = ? ORDER BY id DESC", [owner2, memoryId]).map((r) => ({
     id: Number(r.id),
     memoryId: Number(r.memoryId),
     version: Number(r.version),
@@ -83172,7 +83898,7 @@ function revisionsSync(db2, owner2, memoryId) {
   }));
 }
 function relationsSync(db2, owner2, memoryId) {
-  const rows = all(
+  const rows = all$1(
     db2,
     `SELECT r.id, r.fromId, r.toId, r.kind, r.note, r.createdAt, m.title AS otherTitle, m.id AS otherId, 'out' AS direction
        FROM memory_relations r JOIN memories m ON m.id = r.toId AND m.ownerId = r.ownerId WHERE r.ownerId = ? AND r.fromId = ?
@@ -83193,21 +83919,21 @@ function relationsSync(db2, owner2, memoryId) {
     direction: r.direction
   }));
 }
-async function getMemoryDetail(owner2, id) {
-  return read((db2) => {
-    const memory = memorySync(db2, owner2, id);
+async function getMemoryDetail(owner2, id2) {
+  return read$1((db2) => {
+    const memory = memorySync(db2, owner2, id2);
     if (!memory) return null;
     return {
       memory,
       category: categoryById(db2, owner2, memory.categoryId),
-      revisions: revisionsSync(db2, owner2, id),
-      evidence: all(db2, "SELECT * FROM memory_evidence WHERE ownerId = ? AND memoryId = ? ORDER BY id DESC", [owner2, id]).map(toEvidence),
-      relations: relationsSync(db2, owner2, id)
+      revisions: revisionsSync(db2, owner2, id2),
+      evidence: all$1(db2, "SELECT * FROM memory_evidence WHERE ownerId = ? AND memoryId = ? ORDER BY id DESC", [owner2, id2]).map(toEvidence),
+      relations: relationsSync(db2, owner2, id2)
     };
   });
 }
 function revision(db2, owner2, memoryId, version, kind, snapshot, meta) {
-  exec(db2, `INSERT INTO memory_revisions (ownerId, memoryId, version, changeKind, actor, reason, suggestionId, snapshot, createdAt) VALUES (?,?,?,?,?,?,?,?,?)`, [
+  exec$1(db2, `INSERT INTO memory_revisions (ownerId, memoryId, version, changeKind, actor, reason, suggestionId, snapshot, createdAt) VALUES (?,?,?,?,?,?,?,?,?)`, [
     owner2,
     memoryId,
     version,
@@ -83216,13 +83942,13 @@ function revision(db2, owner2, memoryId, version, kind, snapshot, meta) {
     meta.reason ?? null,
     meta.suggestionId ?? null,
     snapshot ? JSON.stringify(snapshot) : null,
-    nowIso()
+    nowIso$1()
   ]);
 }
 function addEvidenceSync(db2, owner2, target, ev) {
   const excerpt = String(ev.excerpt ?? "").trim().slice(0, 2e3);
   if (!excerpt) return;
-  exec(db2, `INSERT INTO memory_evidence (ownerId, memoryId, suggestionId, sourceKind, sourceRef, excerpt, contentHash, createdAt) VALUES (?,?,?,?,?,?,?,?)`, [
+  exec$1(db2, `INSERT INTO memory_evidence (ownerId, memoryId, suggestionId, sourceKind, sourceRef, excerpt, contentHash, createdAt) VALUES (?,?,?,?,?,?,?,?)`, [
     owner2,
     target.memoryId ?? null,
     target.suggestionId ?? null,
@@ -83230,7 +83956,7 @@ function addEvidenceSync(db2, owner2, target, ev) {
     ev.sourceRef ? String(ev.sourceRef).slice(0, 200) : null,
     excerpt,
     sha(excerpt),
-    nowIso()
+    nowIso$1()
   ]);
 }
 function normalizeInput(db2, owner2, input, base2) {
@@ -83260,9 +83986,9 @@ function normalizeInput(db2, owner2, input, base2) {
 }
 function createMemorySync(db2, owner2, input, meta = {}) {
   const v = normalizeInput(db2, owner2, input);
-  const now = nowIso();
+  const now = nowIso$1();
   const status2 = meta.status ?? "active";
-  exec(
+  exec$1(
     db2,
     `INSERT INTO memories (ownerId, title, content, categoryId, tags, type, layer, status, pinned, importance, extractionConfidence, reliability, stability,
       origin, originRef, scope, sensitivity, occurredAt, validFrom, validUntil, confirmedAt, normKey, searchText, createdAt, updatedAt)
@@ -83295,14 +84021,14 @@ function createMemorySync(db2, owner2, input, meta = {}) {
       now
     ]
   );
-  const id = lastId(db2);
-  revision(db2, owner2, id, 1, "create", null, meta);
-  for (const ev of meta.evidence ?? []) addEvidenceSync(db2, owner2, { memoryId: id }, ev);
-  return memorySync(db2, owner2, id);
+  const id2 = lastId(db2);
+  revision(db2, owner2, id2, 1, "create", null, meta);
+  for (const ev of meta.evidence ?? []) addEvidenceSync(db2, owner2, { memoryId: id2 }, ev);
+  return memorySync(db2, owner2, id2);
 }
 async function createMemory(owner2, input, meta = {}) {
   await ensureSeeded(owner2);
-  return tx(
+  return tx$1(
     (db2) => createMemorySync(db2, owner2, input, {
       origin: "manual",
       reliability: "stated",
@@ -83312,14 +84038,14 @@ async function createMemory(owner2, input, meta = {}) {
     })
   );
 }
-function updateMemorySync(db2, owner2, id, patch, meta = {}) {
-  const cur = memorySync(db2, owner2, id);
+function updateMemorySync(db2, owner2, id2, patch, meta = {}) {
+  const cur = memorySync(db2, owner2, id2);
   if (!cur) throw new MemoryError("Memória não encontrada.", "not_found");
   if (meta.expectedVersion != null && meta.expectedVersion !== cur.version) throw new MemoryError("A memória foi alterada em outro lugar. Recarregue e tente de novo.", "conflict");
   const v = normalizeInput(db2, owner2, { ...patch, content: patch.content ?? cur.content }, cur);
-  const now = nowIso();
+  const now = nowIso$1();
   const userEdit = (meta.actor ?? "user") === "user";
-  const n = exec(
+  const n = exec$1(
     db2,
     `UPDATE memories SET title=?, content=?, categoryId=?, tags=?, type=?, layer=?, pinned=?, importance=?, stability=?, scope=?, sensitivity=?,
        occurredAt=?, validFrom=?, validUntil=?, normKey=?, searchText=?, reliability=?, confirmedAt=?, status=?, version=version+1, updatedAt=?,
@@ -83346,122 +84072,122 @@ function updateMemorySync(db2, owner2, id, patch, meta = {}) {
       userEdit || meta.confirmed ? now : cur.confirmedAt,
       meta.status ?? (cur.status === "expired" && (!v.validUntil || v.validUntil > now) ? "active" : cur.status),
       now,
-      id,
+      id2,
       owner2,
       cur.version
     ]
   );
   if (!n) throw new MemoryError("Conflito de versão.", "conflict");
-  revision(db2, owner2, id, cur.version + 1, "update", cur, meta);
-  for (const ev of meta.evidence ?? []) addEvidenceSync(db2, owner2, { memoryId: id }, ev);
-  return memorySync(db2, owner2, id);
+  revision(db2, owner2, id2, cur.version + 1, "update", cur, meta);
+  for (const ev of meta.evidence ?? []) addEvidenceSync(db2, owner2, { memoryId: id2 }, ev);
+  return memorySync(db2, owner2, id2);
 }
-async function updateMemory(owner2, id, patch, meta = {}) {
-  return tx((db2) => updateMemorySync(db2, owner2, id, patch, meta));
+async function updateMemory(owner2, id2, patch, meta = {}) {
+  return tx$1((db2) => updateMemorySync(db2, owner2, id2, patch, meta));
 }
-function setStatusSync(db2, owner2, id, status2, meta = {}) {
-  const cur = memorySync(db2, owner2, id);
+function setStatusSync(db2, owner2, id2, status2, meta = {}) {
+  const cur = memorySync(db2, owner2, id2);
   if (!cur) throw new MemoryError("Memória não encontrada.", "not_found");
   if (cur.status === status2) return cur;
-  exec(db2, "UPDATE memories SET status=?, supersededById=?, version=version+1, updatedAt=? WHERE id=? AND ownerId=?", [
+  exec$1(db2, "UPDATE memories SET status=?, supersededById=?, version=version+1, updatedAt=? WHERE id=? AND ownerId=?", [
     status2,
     status2 === "superseded" ? meta.supersededById ?? cur.supersededById : null,
-    nowIso(),
-    id,
+    nowIso$1(),
+    id2,
     owner2
   ]);
-  revision(db2, owner2, id, cur.version + 1, `status:${status2}`, cur, meta);
-  return memorySync(db2, owner2, id);
+  revision(db2, owner2, id2, cur.version + 1, `status:${status2}`, cur, meta);
+  return memorySync(db2, owner2, id2);
 }
-async function setStatus(owner2, id, status2, meta = {}) {
-  return tx((db2) => setStatusSync(db2, owner2, id, oneOf(MEMORY_STATUSES, status2, "active"), meta));
+async function setStatus(owner2, id2, status2, meta = {}) {
+  return tx$1((db2) => setStatusSync(db2, owner2, id2, oneOf(MEMORY_STATUSES, status2, "active"), meta));
 }
-async function confirmMemory(owner2, id) {
-  return tx((db2) => {
-    const cur = memorySync(db2, owner2, id);
+async function confirmMemory(owner2, id2) {
+  return tx$1((db2) => {
+    const cur = memorySync(db2, owner2, id2);
     if (!cur) throw new MemoryError("Memória não encontrada.", "not_found");
-    const now = nowIso();
+    const now = nowIso$1();
     const status2 = cur.status === "unconfirmed" || cur.status === "outdated" ? "active" : cur.status;
-    exec(db2, "UPDATE memories SET confirmedAt=?, status=?, version=version+1, updatedAt=? WHERE id=? AND ownerId=?", [now, status2, now, id, owner2]);
-    revision(db2, owner2, id, cur.version + 1, "confirm", cur, { actor: "user" });
-    return memorySync(db2, owner2, id);
+    exec$1(db2, "UPDATE memories SET confirmedAt=?, status=?, version=version+1, updatedAt=? WHERE id=? AND ownerId=?", [now, status2, now, id2, owner2]);
+    revision(db2, owner2, id2, cur.version + 1, "confirm", cur, { actor: "user" });
+    return memorySync(db2, owner2, id2);
   });
 }
-async function setPinned(owner2, id, pinned) {
-  return tx((db2) => {
-    const cur = memorySync(db2, owner2, id);
+async function setPinned$1(owner2, id2, pinned2) {
+  return tx$1((db2) => {
+    const cur = memorySync(db2, owner2, id2);
     if (!cur) throw new MemoryError("Memória não encontrada.", "not_found");
-    if (cur.pinned === pinned) return cur;
-    exec(db2, "UPDATE memories SET pinned=?, version=version+1, updatedAt=? WHERE id=? AND ownerId=?", [pinned ? 1 : 0, nowIso(), id, owner2]);
-    revision(db2, owner2, id, cur.version + 1, pinned ? "pin" : "unpin", cur, { actor: "user" });
-    return memorySync(db2, owner2, id);
+    if (cur.pinned === pinned2) return cur;
+    exec$1(db2, "UPDATE memories SET pinned=?, version=version+1, updatedAt=? WHERE id=? AND ownerId=?", [pinned2 ? 1 : 0, nowIso$1(), id2, owner2]);
+    revision(db2, owner2, id2, cur.version + 1, pinned2 ? "pin" : "unpin", cur, { actor: "user" });
+    return memorySync(db2, owner2, id2);
   });
 }
-function hardDeleteSync(db2, owner2, id) {
-  const cur = one(db2, "SELECT id FROM memories WHERE id = ? AND ownerId = ?", [id, owner2]);
+function hardDeleteSync(db2, owner2, id2) {
+  const cur = one$1(db2, "SELECT id FROM memories WHERE id = ? AND ownerId = ?", [id2, owner2]);
   if (!cur) return false;
-  exec(db2, "DELETE FROM memory_revisions WHERE memoryId = ? AND ownerId = ?", [id, owner2]);
-  exec(db2, "DELETE FROM memory_evidence WHERE memoryId = ? AND ownerId = ?", [id, owner2]);
-  exec(db2, "DELETE FROM memory_relations WHERE (fromId = ? OR toId = ?) AND ownerId = ?", [id, id, owner2]);
-  exec(db2, "UPDATE memories SET supersededById = NULL WHERE supersededById = ? AND ownerId = ?", [id, owner2]);
-  const sugs = all(
+  exec$1(db2, "DELETE FROM memory_revisions WHERE memoryId = ? AND ownerId = ?", [id2, owner2]);
+  exec$1(db2, "DELETE FROM memory_evidence WHERE memoryId = ? AND ownerId = ?", [id2, owner2]);
+  exec$1(db2, "DELETE FROM memory_relations WHERE (fromId = ? OR toId = ?) AND ownerId = ?", [id2, id2, owner2]);
+  exec$1(db2, "UPDATE memories SET supersededById = NULL WHERE supersededById = ? AND ownerId = ?", [id2, owner2]);
+  const sugs = all$1(
     db2,
     `SELECT id, targetIds, resultMemoryIds, status FROM memory_suggestions WHERE ownerId = ? AND (targetIds LIKE ? OR resultMemoryIds LIKE ?)`,
-    [owner2, `%${id}%`, `%${id}%`]
+    [owner2, `%${id2}%`, `%${id2}%`]
   );
   for (const s2 of sugs) {
     const t = jparse(s2.targetIds, []);
     const r = jparse(s2.resultMemoryIds, []);
-    if (!t.includes(id) && !r.includes(id)) continue;
+    if (!t.includes(id2) && !r.includes(id2)) continue;
     const open = s2.status === "pending" || s2.status === "snoozed" || s2.status === "needs_info";
-    exec(db2, `UPDATE memory_suggestions SET targetIds=?, resultMemoryIds=?, targetSnapshot='[]', undo=NULL, status=?, updatedAt=? WHERE id=? AND ownerId=?`, [
-      JSON.stringify(t.filter((x) => x !== id)),
-      JSON.stringify(r.filter((x) => x !== id)),
-      open && t.includes(id) ? "superseded" : s2.status,
-      nowIso(),
+    exec$1(db2, `UPDATE memory_suggestions SET targetIds=?, resultMemoryIds=?, targetSnapshot='[]', undo=NULL, status=?, updatedAt=? WHERE id=? AND ownerId=?`, [
+      JSON.stringify(t.filter((x) => x !== id2)),
+      JSON.stringify(r.filter((x) => x !== id2)),
+      open && t.includes(id2) ? "superseded" : s2.status,
+      nowIso$1(),
       s2.id,
       owner2
     ]);
   }
-  const uses = all(db2, "SELECT id, selected, discarded FROM memory_usage WHERE ownerId = ? AND (selected LIKE ? OR discarded LIKE ?)", [
+  const uses = all$1(db2, "SELECT id, selected, discarded FROM memory_usage WHERE ownerId = ? AND (selected LIKE ? OR discarded LIKE ?)", [
     owner2,
-    `%"id":${id}%`,
-    `%"id":${id}%`
+    `%"id":${id2}%`,
+    `%"id":${id2}%`
   ]);
   for (const u of uses) {
-    const strip2 = (s2) => JSON.stringify(jparse(s2, []).filter((x) => x.id !== id));
+    const strip2 = (s2) => JSON.stringify(jparse(s2, []).filter((x) => x.id !== id2));
     const disc = jparse(u.discarded, {});
-    const discarded = JSON.stringify({ ...disc, items: (Array.isArray(disc.items) ? disc.items : []).filter((x) => x.id !== id) });
-    exec(db2, "UPDATE memory_usage SET selected=?, discarded=? WHERE id=?", [strip2(u.selected), discarded, u.id]);
+    const discarded = JSON.stringify({ ...disc, items: (Array.isArray(disc.items) ? disc.items : []).filter((x) => x.id !== id2) });
+    exec$1(db2, "UPDATE memory_usage SET selected=?, discarded=? WHERE id=?", [strip2(u.selected), discarded, u.id]);
   }
-  exec(db2, "DELETE FROM memories WHERE id = ? AND ownerId = ?", [id, owner2]);
-  exec(db2, "INSERT INTO memory_tombstones (ownerId, memoryId, deletedAt) VALUES (?,?,?)", [owner2, id, nowIso()]);
+  exec$1(db2, "DELETE FROM memories WHERE id = ? AND ownerId = ?", [id2, owner2]);
+  exec$1(db2, "INSERT INTO memory_tombstones (ownerId, memoryId, deletedAt) VALUES (?,?,?)", [owner2, id2, nowIso$1()]);
   return true;
 }
-async function hardDelete(owner2, id) {
-  return tx((db2) => hardDeleteSync(db2, owner2, id));
+async function hardDelete(owner2, id2) {
+  return tx$1((db2) => hardDeleteSync(db2, owner2, id2));
 }
 function addRelationSync(db2, owner2, fromId, toId, kind, note = null) {
   if (fromId === toId) throw new MemoryError("Uma memória não se relaciona com ela mesma.");
   if (!memorySync(db2, owner2, fromId) || !memorySync(db2, owner2, toId)) throw new MemoryError("Memória não encontrada.", "not_found");
-  exec(db2, "INSERT OR IGNORE INTO memory_relations (ownerId, fromId, toId, kind, note, createdAt) VALUES (?,?,?,?,?,?)", [
+  exec$1(db2, "INSERT OR IGNORE INTO memory_relations (ownerId, fromId, toId, kind, note, createdAt) VALUES (?,?,?,?,?,?)", [
     owner2,
     fromId,
     toId,
     oneOf(RELATION_KINDS, kind, "RELATED_TO"),
     note ? String(note).slice(0, 300) : null,
-    nowIso()
+    nowIso$1()
   ]);
 }
 async function addRelation(owner2, fromId, toId, kind, note) {
-  await tx((db2) => addRelationSync(db2, owner2, fromId, toId, kind, note ?? null));
+  await tx$1((db2) => addRelationSync(db2, owner2, fromId, toId, kind, note ?? null));
 }
 async function removeRelation(owner2, relationId) {
-  await tx((db2) => exec(db2, "DELETE FROM memory_relations WHERE id = ? AND ownerId = ?", [relationId, owner2]));
+  await tx$1((db2) => exec$1(db2, "DELETE FROM memory_relations WHERE id = ? AND ownerId = ?", [relationId, owner2]));
 }
 async function allRelations(owner2) {
-  return read(
-    (db2) => all(db2, "SELECT id, fromId, toId, kind FROM memory_relations WHERE ownerId = ?", [owner2]).map((r) => ({
+  return read$1(
+    (db2) => all$1(db2, "SELECT id, fromId, toId, kind FROM memory_relations WHERE ownerId = ?", [owner2]).map((r) => ({
       id: Number(r.id),
       fromId: Number(r.fromId),
       toId: Number(r.toId),
@@ -83470,12 +84196,12 @@ async function allRelations(owner2) {
   );
 }
 function findByNormSync(db2, owner2, normKey) {
-  const r = one(db2, `${MEM_SELECT} WHERE m.ownerId = ? AND m.normKey = ? AND m.status NOT IN ('superseded') LIMIT 1`, [owner2, normKey]);
+  const r = one$1(db2, `${MEM_SELECT} WHERE m.ownerId = ? AND m.normKey = ? AND m.status NOT IN ('superseded') LIMIT 1`, [owner2, normKey]);
   return r ? toMemory(r) : null;
 }
 function touchUsageSync(db2, owner2, ids2) {
-  const now = nowIso();
-  for (const id of ids2) exec(db2, "UPDATE memories SET useCount = useCount + 1, lastUsedAt = ? WHERE id = ? AND ownerId = ?", [now, id, owner2]);
+  const now = nowIso$1();
+  for (const id2 of ids2) exec$1(db2, "UPDATE memories SET useCount = useCount + 1, lastUsedAt = ? WHERE id = ? AND ownerId = ?", [now, id2, owner2]);
 }
 const STOP = new Set(
   "a o as os um uma uns umas de do da dos das em no na nos nas por para pra com sem que e ou se eu me meu minha meus minhas voce sobre como mais muito ja nao sim the and for with of to in on my is are be i".split(
@@ -83527,8 +84253,8 @@ function jaccard(a, b2) {
   return inter / (A.size + B.size - inter);
 }
 function sanitizeForPrompt(s2, max = 400) {
-  const clean = s2.replace(/[<>]/g, (c) => c === "<" ? "‹" : "›").replace(/```/g, "'''").replace(/\s+/g, " ").trim();
-  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+  const clean2 = s2.replace(/[<>]/g, (c) => c === "<" ? "‹" : "›").replace(/```/g, "'''").replace(/\s+/g, " ").trim();
+  return clean2.length > max ? `${clean2.slice(0, max - 1)}…` : clean2;
 }
 function renderLine(m, catName) {
   const tag2 = [catName, TYPE_LABEL[m.type]].filter(Boolean).join(" · ");
@@ -83539,7 +84265,7 @@ function renderLine(m, catName) {
 function retrieve(db2, owner2, opts) {
   const { rule } = opts;
   const now = (opts.now ?? /* @__PURE__ */ new Date()).toISOString();
-  const rows = all(
+  const rows = all$1(
     db2,
     `${MEM_SELECT.replace("FROM memories m", ", c.slug AS catSlug, c.name AS catName FROM memories m")}
      WHERE m.ownerId = ? AND m.status = 'active' AND (m.validUntil IS NULL OR m.validUntil >= ?) AND (m.validFrom IS NULL OR m.validFrom <= ?)`,
@@ -83681,13 +84407,13 @@ function normalizeProposed(db2, owner2, p) {
   };
 }
 function wasRejected(db2, owner2, normKey) {
-  const rows = all(db2, "SELECT verdict FROM memory_feedback WHERE ownerId = ? AND normKey = ? ORDER BY id DESC LIMIT 1", [owner2, normKey]);
+  const rows = all$1(db2, "SELECT verdict FROM memory_feedback WHERE ownerId = ? AND normKey = ? ORDER BY id DESC LIMIT 1", [owner2, normKey]);
   return rows.length > 0 && REJECTED.includes(rows[0].verdict);
 }
 function proposeSync(db2, owner2, s2, rule) {
   if (!SUGGESTION_OPS.includes(s2.op)) return { ok: false, reason: "operação inválida" };
   const targetIds = [...new Set((s2.targetIds ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
-  const targets = targetIds.map((id2) => memorySync(db2, owner2, id2));
+  const targets = targetIds.map((id22) => memorySync(db2, owner2, id22));
   if (targets.some((t) => !t)) return { ok: false, reason: "memória-alvo inexistente" };
   if (["UPDATE", "ARCHIVE"].includes(s2.op) && targets.length < 1) return { ok: false, reason: "sem memória-alvo" };
   if (["MERGE", "RESOLVE"].includes(s2.op) && targets.length < 2) return { ok: false, reason: "precisa de duas ou mais memórias" };
@@ -83719,10 +84445,10 @@ function proposeSync(db2, owner2, s2, rule) {
   if (!sensitivityAllowed(rule, sensitivity)) return { ok: false, reason: "sensibilidade acima do permitido" };
   if (!s2.newEvidence && wasRejected(db2, owner2, normKey)) return { ok: false, reason: "rejeitada antes" };
   const dedupeKey = sha(`${s2.op}|${normKey}|${targetIds.sort().join(",")}`);
-  const exists = one(db2, "SELECT id, status FROM memory_suggestions WHERE ownerId = ? AND dedupeKey = ?", [owner2, dedupeKey]);
+  const exists = one$1(db2, "SELECT id, status FROM memory_suggestions WHERE ownerId = ? AND dedupeKey = ?", [owner2, dedupeKey]);
   if (exists) {
     if (s2.newEvidence && !OPEN.includes(exists.status) && exists.status !== "approved") {
-      exec(db2, "UPDATE memory_suggestions SET status='pending', resolvedAt=NULL, updatedAt=? WHERE id=?", [nowIso(), exists.id]);
+      exec$1(db2, "UPDATE memory_suggestions SET status='pending', resolvedAt=NULL, updatedAt=? WHERE id=?", [nowIso$1(), exists.id]);
       for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: exists.id }, { sourceKind: ev.sourceKind ?? s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
       return { ok: true, id: Number(exists.id) };
     }
@@ -83732,8 +84458,8 @@ function proposeSync(db2, owner2, s2, rule) {
   const reliability = s2.sourceKind === "manual" || explicit ? "stated" : "inferred";
   if (proposed && reliability === "inferred" && proposed.type !== "LEARNING" && proposed.type !== "INFERENCE") proposed.type = "INFERENCE";
   if (proposed && reliability === "inferred") proposed.layer = defaultLayer(proposed.type);
-  const now = nowIso();
-  exec(
+  const now = nowIso$1();
+  exec$1(
     db2,
     `INSERT INTO memory_suggestions (ownerId, op, status, payload, question, targetIds, targetSnapshot, rationale, benefit, extractionConfidence, reliability, sensitivity,
        sourceKind, sourceRef, dedupeKey, batchId, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -83758,13 +84484,13 @@ function proposeSync(db2, owner2, s2, rule) {
       now
     ]
   );
-  const id = lastId(db2);
-  for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: id }, { sourceKind: ev.sourceKind ?? s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
-  return { ok: true, id };
+  const id2 = lastId(db2);
+  for (const ev of s2.evidence ?? []) addEvidenceSync(db2, owner2, { suggestionId: id2 }, { sourceKind: ev.sourceKind ?? s2.sourceKind, sourceRef: ev.sourceRef ?? s2.sourceRef ?? null, excerpt: ev.excerpt });
+  return { ok: true, id: id2 };
 }
 function snapshotOf(m) {
-  const { id, title, content, categoryId, type, layer, status: status2, tags, importance, sensitivity, version, confirmedAt, reliability } = m;
-  return { id, title, content, categoryId, type, layer, status: status2, tags, importance, sensitivity, version, confirmedAt, reliability };
+  const { id: id2, title, content, categoryId, type, layer, status: status2, tags, importance, sensitivity, version, confirmedAt, reliability } = m;
+  return { id: id2, title, content, categoryId, type, layer, status: status2, tags, importance, sensitivity, version, confirmedAt, reliability };
 }
 function toSuggestion$1(db2, owner2, r, withTargets = true) {
   const targetIds = jparse(r.targetIds, []);
@@ -83776,7 +84502,7 @@ function toSuggestion$1(db2, owner2, r, withTargets = true) {
     question: r.question,
     targetIds,
     targetSnapshot: jparse(r.targetSnapshot, []),
-    targets: withTargets ? targetIds.map((id) => memorySync(db2, owner2, id)).filter(Boolean) : void 0,
+    targets: withTargets ? targetIds.map((id2) => memorySync(db2, owner2, id2)).filter(Boolean) : void 0,
     rationale: r.rationale,
     benefit: r.benefit,
     extractionConfidence: r.extractionConfidence == null ? null : Number(r.extractionConfidence),
@@ -83784,7 +84510,7 @@ function toSuggestion$1(db2, owner2, r, withTargets = true) {
     sensitivity: r.sensitivity,
     sourceKind: r.sourceKind,
     sourceRef: r.sourceRef,
-    evidence: all(db2, "SELECT * FROM memory_evidence WHERE ownerId = ? AND suggestionId = ? ORDER BY id", [owner2, r.id]).map(toEvidence),
+    evidence: all$1(db2, "SELECT * FROM memory_evidence WHERE ownerId = ? AND suggestionId = ? ORDER BY id", [owner2, r.id]).map(toEvidence),
     snoozedUntil: r.snoozedUntil,
     resultMemoryIds: jparse(r.resultMemoryIds, []),
     batchId: r.batchId,
@@ -83792,17 +84518,17 @@ function toSuggestion$1(db2, owner2, r, withTargets = true) {
     resolvedAt: r.resolvedAt
   };
 }
-function getSync(db2, owner2, id) {
-  return one(db2, "SELECT * FROM memory_suggestions WHERE ownerId = ? AND id = ?", [owner2, id]);
+function getSync(db2, owner2, id2) {
+  return one$1(db2, "SELECT * FROM memory_suggestions WHERE ownerId = ? AND id = ?", [owner2, id2]);
 }
 async function listSuggestions(owner2, f = {}) {
-  return read((db2) => {
+  return read$1((db2) => {
     const where = ["ownerId = ?"];
     const params = [owner2];
     const st2 = f.status ?? "open";
     if (st2 === "open") {
       where.push(`(status IN ('pending','needs_info') OR (status = 'snoozed' AND (snoozedUntil IS NULL OR snoozedUntil <= ?)))`);
-      params.push(nowIso());
+      params.push(nowIso$1());
     } else if (st2 !== "all") {
       where.push("status = ?");
       params.push(st2);
@@ -83816,20 +84542,20 @@ async function listSuggestions(owner2, f = {}) {
       params.push(f.sourceKind);
     }
     const limit = Math.min(500, Math.max(1, Number(f.limit) || 200));
-    return all(db2, `SELECT * FROM memory_suggestions WHERE ${where.join(" AND ")} ORDER BY id DESC LIMIT ?`, [...params, limit]).map((r) => toSuggestion$1(db2, owner2, r));
+    return all$1(db2, `SELECT * FROM memory_suggestions WHERE ${where.join(" AND ")} ORDER BY id DESC LIMIT ?`, [...params, limit]).map((r) => toSuggestion$1(db2, owner2, r));
   });
 }
 function feedbackSync(db2, owner2, sug, verdict, note) {
   const p = jparse(sug.payload, null);
   const normKey = sug.op === "ASK" ? `ask:${normText(sug.question ?? "")}` : p ? normText(p.content) : `${sug.op.toLowerCase()}:${jparse(sug.targetIds, []).sort().join(",")}`;
-  exec(db2, "INSERT INTO memory_feedback (ownerId, suggestionId, verdict, note, normKey, op, createdAt) VALUES (?,?,?,?,?,?,?)", [
+  exec$1(db2, "INSERT INTO memory_feedback (ownerId, suggestionId, verdict, note, normKey, op, createdAt) VALUES (?,?,?,?,?,?,?)", [
     owner2,
     sug.id,
     verdict,
     note ? String(note).slice(0, 400) : null,
     normKey,
     sug.op,
-    nowIso()
+    nowIso$1()
   ]);
 }
 const ORIGIN_OF = {
@@ -83840,8 +84566,8 @@ const ORIGIN_OF = {
   text: "text",
   manual: "manual"
 };
-function approveSync(db2, owner2, id, opts = {}) {
-  const sug = getSync(db2, owner2, id);
+function approveSync(db2, owner2, id2, opts = {}) {
+  const sug = getSync(db2, owner2, id2);
   if (!sug) throw new MemoryError("Sugestão não encontrada.", "not_found");
   if (!OPEN.includes(sug.status)) return toSuggestion$1(db2, owner2, sug);
   if (sug.op === "ASK") throw new MemoryError("Perguntas são respondidas, não aprovadas.");
@@ -83853,11 +84579,11 @@ function approveSync(db2, owner2, id, opts = {}) {
   if (targets.some((t) => !t)) throw new MemoryError("Uma das memórias-alvo não existe mais. Rejeite esta sugestão.", "conflict");
   const meta = {
     actor: "user",
-    suggestionId: id,
-    reason: `Sugestão #${id} aprovada`,
+    suggestionId: id2,
+    reason: `Sugestão #${id2} aprovada`,
     confirmed: true
   };
-  const evidence = all(db2, "SELECT sourceKind, sourceRef, excerpt FROM memory_evidence WHERE ownerId = ? AND suggestionId = ?", [owner2, id]);
+  const evidence = all$1(db2, "SELECT sourceKind, sourceRef, excerpt FROM memory_evidence WHERE ownerId = ? AND suggestionId = ?", [owner2, id2]);
   const undo2 = { created: [], updated: [], statuses: [] };
   const result = [];
   const catId = (slug) => slug ? categoryBySlug(db2, owner2, slug)?.id ?? null : null;
@@ -83931,79 +84657,79 @@ function approveSync(db2, owner2, id, opts = {}) {
       break;
     }
   }
-  exec(db2, "UPDATE memory_suggestions SET status='approved', payload=?, resultMemoryIds=?, undo=?, resolvedAt=?, updatedAt=? WHERE id=? AND ownerId=?", [
+  exec$1(db2, "UPDATE memory_suggestions SET status='approved', payload=?, resultMemoryIds=?, undo=?, resolvedAt=?, updatedAt=? WHERE id=? AND ownerId=?", [
     proposed ? JSON.stringify(proposed) : sug.payload,
     JSON.stringify(result),
     JSON.stringify(undo2),
-    nowIso(),
-    nowIso(),
-    id,
+    nowIso$1(),
+    nowIso$1(),
+    id2,
     owner2
   ]);
   feedbackSync(db2, owner2, sug, edited ? "approved_edited" : "approved", null);
-  return toSuggestion$1(db2, owner2, getSync(db2, owner2, id));
+  return toSuggestion$1(db2, owner2, getSync(db2, owner2, id2));
 }
 function snapshotFull(m) {
-  const { title, content, categoryId, tags, type, layer, pinned, importance, stability, scope, sensitivity, occurredAt, validFrom, validUntil, reliability, confirmedAt } = m;
-  return { title, content, categoryId, tags, type, layer, pinned, importance, stability, scope, sensitivity, occurredAt, validFrom, validUntil, reliability, confirmedAt };
+  const { title, content, categoryId, tags, type, layer, pinned: pinned2, importance, stability, scope, sensitivity, occurredAt, validFrom, validUntil, reliability, confirmedAt } = m;
+  return { title, content, categoryId, tags, type, layer, pinned: pinned2, importance, stability, scope, sensitivity, occurredAt, validFrom, validUntil, reliability, confirmedAt };
 }
-async function approve(owner2, id, opts = {}) {
-  return tx((db2) => approveSync(db2, owner2, id, opts));
+async function approve(owner2, id2, opts = {}) {
+  return tx$1((db2) => approveSync(db2, owner2, id2, opts));
 }
 async function approveMany(owner2, ids2) {
-  return tx((db2) => {
+  return tx$1((db2) => {
     const approved = [];
     const skipped = [];
-    for (const id of ids2.slice(0, 200)) {
-      const s2 = getSync(db2, owner2, id);
-      if (!s2) skipped.push({ id, reason: "não encontrada" });
-      else if (!OPEN.includes(s2.status)) skipped.push({ id, reason: "já resolvida" });
-      else if (s2.op !== "CREATE") skipped.push({ id, reason: "operação exige revisão individual" });
-      else if (s2.sensitivity !== "NORMAL") skipped.push({ id, reason: "sensível: aprove individualmente" });
-      else if (s2.reliability === "inferred") skipped.push({ id, reason: "inferência: aprove individualmente" });
+    for (const id2 of ids2.slice(0, 200)) {
+      const s2 = getSync(db2, owner2, id2);
+      if (!s2) skipped.push({ id: id2, reason: "não encontrada" });
+      else if (!OPEN.includes(s2.status)) skipped.push({ id: id2, reason: "já resolvida" });
+      else if (s2.op !== "CREATE") skipped.push({ id: id2, reason: "operação exige revisão individual" });
+      else if (s2.sensitivity !== "NORMAL") skipped.push({ id: id2, reason: "sensível: aprove individualmente" });
+      else if (s2.reliability === "inferred") skipped.push({ id: id2, reason: "inferência: aprove individualmente" });
       else {
-        approveSync(db2, owner2, id);
-        approved.push(id);
+        approveSync(db2, owner2, id2);
+        approved.push(id2);
       }
     }
     return { approved, skipped };
   });
 }
-async function reject(owner2, id, verdict = "rejected", note = null) {
-  return tx((db2) => {
-    const sug = getSync(db2, owner2, id);
+async function reject(owner2, id2, verdict = "rejected", note = null) {
+  return tx$1((db2) => {
+    const sug = getSync(db2, owner2, id2);
     if (!sug) throw new MemoryError("Sugestão não encontrada.", "not_found");
     if (!OPEN.includes(sug.status)) return toSuggestion$1(db2, owner2, sug);
     const v = FEEDBACK_VERDICTS.includes(verdict) && !verdict.startsWith("approved") && verdict !== "snoozed" ? verdict : "rejected";
-    exec(db2, "UPDATE memory_suggestions SET status='rejected', resolvedAt=?, updatedAt=? WHERE id=? AND ownerId=?", [nowIso(), nowIso(), id, owner2]);
+    exec$1(db2, "UPDATE memory_suggestions SET status='rejected', resolvedAt=?, updatedAt=? WHERE id=? AND ownerId=?", [nowIso$1(), nowIso$1(), id2, owner2]);
     feedbackSync(db2, owner2, sug, v, note);
-    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id));
+    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id2));
   });
 }
-async function snooze(owner2, id, days2 = 7) {
-  return tx((db2) => {
-    const sug = getSync(db2, owner2, id);
+async function snooze(owner2, id2, days2 = 7) {
+  return tx$1((db2) => {
+    const sug = getSync(db2, owner2, id2);
     if (!sug) throw new MemoryError("Sugestão não encontrada.", "not_found");
     if (!OPEN.includes(sug.status)) return toSuggestion$1(db2, owner2, sug);
     const until = new Date(Date.now() + Math.min(90, Math.max(1, days2)) * 864e5).toISOString();
-    exec(db2, "UPDATE memory_suggestions SET status='snoozed', snoozedUntil=?, updatedAt=? WHERE id=? AND ownerId=?", [until, nowIso(), id, owner2]);
+    exec$1(db2, "UPDATE memory_suggestions SET status='snoozed', snoozedUntil=?, updatedAt=? WHERE id=? AND ownerId=?", [until, nowIso$1(), id2, owner2]);
     feedbackSync(db2, owner2, sug, "snoozed", null);
-    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id));
+    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id2));
   });
 }
-async function needsInfo(owner2, id, note) {
-  return tx((db2) => {
-    const sug = getSync(db2, owner2, id);
+async function needsInfo(owner2, id2, note) {
+  return tx$1((db2) => {
+    const sug = getSync(db2, owner2, id2);
     if (!sug) throw new MemoryError("Sugestão não encontrada.", "not_found");
     if (!OPEN.includes(sug.status)) return toSuggestion$1(db2, owner2, sug);
-    exec(db2, "UPDATE memory_suggestions SET status='needs_info', updatedAt=? WHERE id=? AND ownerId=?", [nowIso(), id, owner2]);
+    exec$1(db2, "UPDATE memory_suggestions SET status='needs_info', updatedAt=? WHERE id=? AND ownerId=?", [nowIso$1(), id2, owner2]);
     feedbackSync(db2, owner2, sug, "other", note || "pediu mais informações");
-    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id));
+    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id2));
   });
 }
-async function undo(owner2, id) {
-  return tx((db2) => {
-    const sug = getSync(db2, owner2, id);
+async function undo(owner2, id2) {
+  return tx$1((db2) => {
+    const sug = getSync(db2, owner2, id2);
     if (!sug) throw new MemoryError("Sugestão não encontrada.", "not_found");
     if (sug.status !== "approved" || !sug.undo) throw new MemoryError("Nada para desfazer.");
     const u = jparse(sug.undo, { created: [], updated: [], statuses: [] });
@@ -84015,18 +84741,18 @@ async function undo(owner2, id) {
       const cur = memorySync(db2, owner2, mid);
       if (cur && cur.version > 1) throw new MemoryError("A memória criada já foi editada; exclua manualmente se quiser.", "conflict");
     }
-    for (const x of u.statuses) setStatusSync(db2, owner2, x.id, x.before, { actor: "user", reason: `Desfez sugestão #${id}` });
-    for (const x of u.updated) updateMemorySync(db2, owner2, x.id, { ...x.before, content: x.before.content }, { actor: "user", reason: `Desfez sugestão #${id}`, reliability: x.before.reliability, confirmed: true });
+    for (const x of u.statuses) setStatusSync(db2, owner2, x.id, x.before, { actor: "user", reason: `Desfez sugestão #${id2}` });
+    for (const x of u.updated) updateMemorySync(db2, owner2, x.id, { ...x.before, content: x.before.content }, { actor: "user", reason: `Desfez sugestão #${id2}`, reliability: x.before.reliability, confirmed: true });
     for (const mid of u.created) hardDeleteSync(db2, owner2, mid);
-    exec(db2, "UPDATE memory_suggestions SET status='undone', undo=NULL, updatedAt=? WHERE id=? AND ownerId=?", [nowIso(), id, owner2]);
-    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id));
+    exec$1(db2, "UPDATE memory_suggestions SET status='undone', undo=NULL, updatedAt=? WHERE id=? AND ownerId=?", [nowIso$1(), id2, owner2]);
+    return toSuggestion$1(db2, owner2, getSync(db2, owner2, id2));
   });
 }
 async function suggestionStats(owner2) {
-  return read((db2) => {
+  return read$1((db2) => {
     const byStatus = {};
-    for (const r of all(db2, "SELECT status, COUNT(*) AS n FROM memory_suggestions WHERE ownerId = ? GROUP BY status", [owner2])) byStatus[r.status] = Number(r.n);
-    const old = one(db2, "SELECT MIN(createdAt) AS c FROM memory_suggestions WHERE ownerId = ? AND status IN ('pending','needs_info')", [owner2])?.c;
+    for (const r of all$1(db2, "SELECT status, COUNT(*) AS n FROM memory_suggestions WHERE ownerId = ? GROUP BY status", [owner2])) byStatus[r.status] = Number(r.n);
+    const old = one$1(db2, "SELECT MIN(createdAt) AS c FROM memory_suggestions WHERE ownerId = ? AND status IN ('pending','needs_info')", [owner2])?.c;
     return { byStatus, oldestPendingDays: old ? Math.floor((Date.now() - Date.parse(old)) / 864e5) : null };
   });
 }
@@ -84056,7 +84782,7 @@ function categoriesBlock(db2, owner2, rule) {
   return categoriesSync(db2, owner2, false).filter((c) => categoryAllowed(rule, c.slug) && SENS_RANK[c.defaultSensitivity] <= SENS_RANK[rule.maxSensitivity]).map((c) => `- ${c.slug}: ${c.name}${c.defaultSensitivity !== "NORMAL" ? " (sensível)" : ""}`).join("\n");
 }
 function rejectedHints(db2, owner2) {
-  const rows = all(
+  const rows = all$1(
     db2,
     `SELECT normKey, verdict FROM memory_feedback WHERE ownerId = ? AND verdict IN ('rejected','irrelevant','incorrect','too_personal') AND normKey IS NOT NULL ORDER BY id DESC LIMIT 15`,
     [owner2]
@@ -84071,7 +84797,7 @@ function verifiedExcerpt(source, quote) {
 function toSuggestion(item, base2) {
   const op = String(item.op ?? "CREATE").toUpperCase();
   if (!["CREATE", "UPDATE", "MERGE", "ARCHIVE", "RESOLVE", "ASK"].includes(op)) return null;
-  const targetIds = (Array.isArray(item.targetIds) ? item.targetIds : []).map(Number).filter((id) => base2.allowedIds.has(id));
+  const targetIds = (Array.isArray(item.targetIds) ? item.targetIds : []).map(Number).filter((id2) => base2.allowedIds.has(id2));
   const ev = base2.source ? verifiedExcerpt(base2.source, item.evidence) : { excerpt: "", verified: false };
   const confidence = Number(item.confidence);
   return {
@@ -84159,7 +84885,7 @@ function proposeFromItems(db2, owner2, items, rule, base2) {
   return stats.proposed;
 }
 function allowedMemories(db2, owner2, rule) {
-  const rows = all(
+  const rows = all$1(
     db2,
     `${MEM_SELECT.replace("FROM memories m", ", c.slug AS catSlug FROM memories m")} WHERE m.ownerId = ? AND m.status IN ('active','unconfirmed','outdated') ORDER BY m.importance DESC, m.updatedAt DESC`,
     [owner2]
@@ -84228,12 +84954,12 @@ async function analyzeMemories(useCase) {
   const allowedIds = new Set(mems.map((m) => m.id));
   const byId = new Map(mems.map((m) => [m.id, m]));
   for (const item of parsed.suggestions ?? []) {
-    const ids2 = (item.targetIds ?? []).map(Number).filter((id) => allowedIds.has(id));
+    const ids2 = (item.targetIds ?? []).map(Number).filter((id2) => allowedIds.has(id2));
     item.evidence = void 0;
     const s2 = toSuggestion(item, { sourceKind: useCase === "memory.analyze" ? "analysis" : "consolidation", sourceRef: `memoria:${useCase}`, batchId: stats.batchId, source: "", allowedIds });
     if (!s2) continue;
     s2.explicit = false;
-    s2.evidence = ids2.map((id) => ({ excerpt: `#${id}: ${byId.get(id).content}`, sourceRef: `memoria#${id}` }));
+    s2.evidence = ids2.map((id2) => ({ excerpt: `#${id2}: ${byId.get(id2).content}`, sourceRef: `memoria#${id2}` }));
     if (stats.proposed >= produce2.rule.maxSuggestionsPerRun) break;
     const r = proposeSync(db2, owner2, s2, produce2.rule);
     if (r.ok) stats.proposed++;
@@ -84248,14 +84974,14 @@ async function processEventBatch() {
   const owner2 = currentOwner();
   const size = Math.min(50, Math.max(1, Number(await getSetting("memory_batch_size") || 10)));
   const db2 = await getDb();
-  const events = all(
+  const events = all$1(
     db2,
     "SELECT id, producer, payload, sourceRef, attempts FROM memory_events WHERE ownerId = ? AND status IN ('pending','retry') AND attempts < 3 ORDER BY id LIMIT ?",
     [owner2, size]
   );
   if (!events.length) return out;
   const ids2 = events.map((e) => e.id);
-  exec(db2, `UPDATE memory_events SET status='processing', attempts=attempts+1 WHERE id IN (${ids2.map(() => "?").join(",")})`, ids2);
+  exec$1(db2, `UPDATE memory_events SET status='processing', attempts=attempts+1 WHERE id IN (${ids2.map(() => "?").join(",")})`, ids2);
   saveDb();
   const byProducer = /* @__PURE__ */ new Map();
   for (const e of events) byProducer.set(e.producer, [...byProducer.get(e.producer) ?? [], e]);
@@ -84272,11 +84998,11 @@ ${e.payload}`).join("\n\n"),
       });
       out.calls += st2.calls;
       out.proposed += st2.proposed;
-      exec(db2, `UPDATE memory_events SET status='done', error=NULL, processedAt=? WHERE id IN (${evIds.map(() => "?").join(",")})`, [nowIso(), ...evIds]);
+      exec$1(db2, `UPDATE memory_events SET status='done', error=NULL, processedAt=? WHERE id IN (${evIds.map(() => "?").join(",")})`, [nowIso$1(), ...evIds]);
     } catch (e) {
       out.failed += evs.length;
       const msg = (e instanceof Error ? e.message : String(e)).slice(0, 300);
-      exec(db2, `UPDATE memory_events SET status=CASE WHEN attempts >= 3 THEN 'failed' ELSE 'retry' END, error=? WHERE id IN (${evIds.map(() => "?").join(",")})`, [msg, ...evIds]);
+      exec$1(db2, `UPDATE memory_events SET status=CASE WHEN attempts >= 3 THEN 'failed' ELSE 'retry' END, error=? WHERE id IN (${evIds.map(() => "?").join(",")})`, [msg, ...evIds]);
     }
     out.events += evs.length;
   }
@@ -84287,7 +85013,7 @@ async function pruneEvents() {
   const days2 = Math.max(1, Number(await getSetting("memory_event_retention_days") || 14));
   const db2 = await getDb();
   const cutoff = new Date(Date.now() - days2 * 864e5).toISOString();
-  const n = exec(db2, "DELETE FROM memory_events WHERE status IN ('done','failed') AND createdAt < ?", [cutoff]);
+  const n = exec$1(db2, "DELETE FROM memory_events WHERE status IN ('done','failed') AND createdAt < ?", [cutoff]);
   if (n) saveDb();
   return n;
 }
@@ -84316,7 +85042,7 @@ function freshnessOf(m, now = Date.now()) {
   };
 }
 function liveMemories(db2, owner2) {
-  return all(
+  return all$1(
     db2,
     `${MEM_SELECT.replace("FROM memories m", ", c.slug AS catSlug FROM memories m")} WHERE m.ownerId = ? AND m.status IN ('active','unconfirmed','outdated')`,
     [owner2]
@@ -84325,7 +85051,7 @@ function liveMemories(db2, owner2) {
 async function freshness() {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  return read((db2) => {
+  return read$1((db2) => {
     const now = Date.now();
     const sev = { alta: 0, media: 1, baixa: 2 };
     return liveMemories(db2, owner2).map((m) => freshnessOf(m, now)).filter((x) => !!x).sort((a, b2) => sev[a.severity] - sev[b2.severity] || b2.memory.importance - a.memory.importance);
@@ -84341,11 +85067,11 @@ const COVERAGE_CRITERIA = [
 async function coverage() {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  return read((db2) => {
+  return read$1((db2) => {
     const mems = liveMemories(db2, owner2);
     const now = Date.now();
-    const gaps = all(db2, "SELECT categoryId, priority FROM memory_gaps WHERE ownerId = ? AND status = 'open'", [owner2]);
-    const conflicts = all(db2, "SELECT targetIds FROM memory_suggestions WHERE ownerId = ? AND op = 'RESOLVE' AND status IN ('pending','needs_info','snoozed')", [owner2]);
+    const gaps = all$1(db2, "SELECT categoryId, priority FROM memory_gaps WHERE ownerId = ? AND status = 'open'", [owner2]);
+    const conflicts = all$1(db2, "SELECT targetIds FROM memory_suggestions WHERE ownerId = ? AND op = 'RESOLVE' AND status IN ('pending','needs_info','snoozed')", [owner2]);
     const conflictIds = new Set(conflicts.flatMap((c) => jparse(c.targetIds, [])));
     const rows = categoriesSync(db2, owner2, false).map((c) => {
       const ms = mems.filter((m) => m.categoryId === c.id && m.status === "active");
@@ -84392,8 +85118,8 @@ async function coverage() {
 }
 async function listGaps(status2 = "open") {
   const owner2 = currentOwner();
-  return read(
-    (db2) => all(
+  return read$1(
+    (db2) => all$1(
       db2,
       `SELECT g.*, c.name AS category FROM memory_gaps g LEFT JOIN memory_categories c ON c.id = g.categoryId WHERE g.ownerId = ? ${status2 === "all" ? "" : "AND g.status = ?"} ORDER BY g.priority DESC, g.id DESC`,
       status2 === "all" ? [owner2] : [owner2, status2]
@@ -84409,8 +85135,8 @@ async function detectGaps() {
   const db2 = await getDb();
   const cov = await coverage();
   const mems = liveMemories(db2, owner2).filter((m) => m.status === "active" && categoryAllowed(consume2.rule, m.catSlug) && sensitivityAllowed(consume2.rule, m.effectiveSensitivity));
-  const dismissed = all(db2, "SELECT topic, status FROM memory_gaps WHERE ownerId = ? AND status != 'open' ORDER BY id DESC LIMIT 40", [owner2]);
-  const open = all(db2, "SELECT topic FROM memory_gaps WHERE ownerId = ? AND status = 'open'", [owner2]);
+  const dismissed = all$1(db2, "SELECT topic, status FROM memory_gaps WHERE ownerId = ? AND status != 'open' ORDER BY id DESC LIMIT 40", [owner2]);
+  const open = all$1(db2, "SELECT topic FROM memory_gaps WHERE ownerId = ? AND status = 'open'", [owner2]);
   const needs = MEMORY_POLICIES.filter((p) => p.consume && !p.useCase.startsWith("memory.")).map((p) => `- ${p.label}${p.approved ? "" : " (candidata)"}: ${p.purpose} [categorias: ${!p.consume ? "" : p.consume.categories === "*" ? "todas" : p.consume.categories.join(", ")}]`).join("\n");
   const params = {
     cobertura: cov.rows.map((r) => `- ${r.slug} (${r.name}): ${r.active} ativas, estado ${r.state}`).join("\n"),
@@ -84434,7 +85160,7 @@ async function detectGaps() {
     const given = g.sensitivity === "PRIVATE" ? "PRIVATE" : "NORMAL";
     const sens = cat && SENS_RANK[cat.defaultSensitivity] > SENS_RANK[given] ? cat.defaultSensitivity : given;
     if (SENS_RANK[sens] > SENS_RANK[produce2.rule.maxSensitivity] || sens === "RESTRICTED") continue;
-    created += exec(
+    created += exec$1(
       db2,
       "INSERT OR IGNORE INTO memory_gaps (ownerId, topic, categoryId, why, beneficiaries, priority, sensitivity, question, normKey, createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)",
       [
@@ -84447,48 +85173,48 @@ async function detectGaps() {
         sens,
         question,
         normText(topic),
-        nowIso()
+        nowIso$1()
       ]
     );
   }
   saveDb();
   return { created, calls: 1 };
 }
-async function setGapStatus(id, status2) {
-  await tx((db2) => exec(db2, "UPDATE memory_gaps SET status = ?, resolvedAt = ? WHERE id = ? AND ownerId = ?", [status2, status2 === "open" ? null : nowIso(), id, currentOwner()]));
+async function setGapStatus(id2, status2) {
+  await tx$1((db2) => exec$1(db2, "UPDATE memory_gaps SET status = ?, resolvedAt = ? WHERE id = ? AND ownerId = ?", [status2, status2 === "open" ? null : nowIso$1(), id2, currentOwner()]));
 }
-async function answerGap(id, answer) {
+async function answerGap(id2, answer) {
   const owner2 = currentOwner();
   const db2 = await getDb();
-  const g = one(db2, "SELECT question, topic FROM memory_gaps WHERE id = ? AND ownerId = ?", [id, owner2]);
+  const g = one$1(db2, "SELECT question, topic FROM memory_gaps WHERE id = ? AND ownerId = ?", [id2, owner2]);
   if (!g) throw new MemoryError("Lacuna não encontrada.", "not_found");
-  const st2 = await extractFromText({ useCase: "memory.interview", text: answer, sourceKind: "interview", sourceRef: `lacuna#${id}`, op: "entrevista", hint: `Resposta à pergunta: "${g.question}"` });
-  exec(db2, "UPDATE memory_gaps SET status = 'answered', resolvedAt = ? WHERE id = ? AND ownerId = ?", [nowIso(), id, owner2]);
+  const st2 = await extractFromText({ useCase: "memory.interview", text: answer, sourceKind: "interview", sourceRef: `lacuna#${id2}`, op: "entrevista", hint: `Resposta à pergunta: "${g.question}"` });
+  exec$1(db2, "UPDATE memory_gaps SET status = 'answered', resolvedAt = ? WHERE id = ? AND ownerId = ?", [nowIso$1(), id2, owner2]);
   saveDb();
   return st2;
 }
-function interviewSync(db2, owner2, id) {
-  const r = one(db2, "SELECT * FROM memory_interviews WHERE id = ? AND ownerId = ?", [id, owner2]);
+function interviewSync(db2, owner2, id2) {
+  const r = one$1(db2, "SELECT * FROM memory_interviews WHERE id = ? AND ownerId = ?", [id2, owner2]);
   return r ? { ...r, id: Number(r.id), turns: jparse(r.turns, []) } : null;
 }
 async function listInterviews() {
   const owner2 = currentOwner();
-  return read((db2) => all(db2, "SELECT id FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 20", [owner2]).map((r) => interviewSync(db2, owner2, Number(r.id))));
+  return read$1((db2) => all$1(db2, "SELECT id FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 20", [owner2]).map((r) => interviewSync(db2, owner2, Number(r.id))));
 }
-async function interviewStep(id, answer) {
+async function interviewStep(id2, answer) {
   const owner2 = currentOwner();
   const consume2 = await resolveConsume("memory.interview");
   const produce2 = await resolveProduce("memory.interview");
   if (!consume2.ok || !produce2.ok) throw new MemoryError("Entrevista bloqueada pela política.", "forbidden");
   const db2 = await getDb();
-  const iv = interviewSync(db2, owner2, id);
+  const iv = interviewSync(db2, owner2, id2);
   if (!iv) throw new MemoryError("Entrevista não encontrada.", "not_found");
   if (iv.status !== "open") throw new MemoryError("Esta conversa já foi encerrada.");
   const last = iv.turns[iv.turns.length - 1];
   const cats = categoriesSync(db2, owner2, false);
   const cat = cats.find((c) => c.id === iv.categoryId);
   const known = retrieve(db2, owner2, { rule: consume2.rule, query: `${iv.topic} ${cat?.name ?? ""} ${answer ?? ""}`, minRelevance: 0.1 }).selected;
-  const previousQs = all(db2, "SELECT turns FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 10", [owner2]).flatMap((r) => jparse(r.turns, [])).map((t) => t.question);
+  const previousQs = all$1(db2, "SELECT turns FROM memory_interviews WHERE ownerId = ? ORDER BY id DESC LIMIT 10", [owner2]).flatMap((r) => jparse(r.turns, [])).map((t) => t.question);
   const params = {
     tema: sanitizeForPrompt(iv.topic, 200),
     categoria: cat ? ` (categoria ${cat.slug})` : "",
@@ -84505,72 +85231,72 @@ R: ${t.skipped ? "(pulou)" : sanitizeForPrompt(t.answer ?? "", 800)}`).join("\n"
   const parsed = parseJsonObject(raw);
   let proposed = 0;
   if (answer && last) {
-    proposed = proposeFromItems(db2, owner2, parsed.suggestions ?? [], produce2.rule, { sourceKind: "interview", sourceRef: `entrevista#${id}`, source: answer, allowedIds: new Set(known.map((k) => k.memory.id)) });
+    proposed = proposeFromItems(db2, owner2, parsed.suggestions ?? [], produce2.rule, { sourceKind: "interview", sourceRef: `entrevista#${id2}`, source: answer, allowedIds: new Set(known.map((k) => k.memory.id)) });
     last.proposed = proposed;
   }
   const next = String(parsed.next_question ?? "").trim();
-  if (next) iv.turns.push({ question: next.slice(0, 400), why: String(parsed.why ?? "").slice(0, 200), at: nowIso() });
+  if (next) iv.turns.push({ question: next.slice(0, 400), why: String(parsed.why ?? "").slice(0, 200), at: nowIso$1() });
   const ended = !next;
-  exec(db2, "UPDATE memory_interviews SET turns = ?, status = ?, updatedAt = ?, endedAt = ? WHERE id = ? AND ownerId = ?", [
+  exec$1(db2, "UPDATE memory_interviews SET turns = ?, status = ?, updatedAt = ?, endedAt = ? WHERE id = ? AND ownerId = ?", [
     JSON.stringify(iv.turns),
     ended ? "ended" : "open",
-    nowIso(),
-    ended ? nowIso() : null,
-    id,
+    nowIso$1(),
+    ended ? nowIso$1() : null,
+    id2,
     owner2
   ]);
   saveDb();
-  return interviewSync(db2, owner2, id);
+  return interviewSync(db2, owner2, id2);
 }
 async function startInterview(topic, categoryId) {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
   const t = String(topic ?? "").trim().slice(0, 200) || "Descubra informações importantes que ainda não sabe sobre mim";
-  const id = await tx((db2) => {
-    const now = nowIso();
-    exec(db2, "INSERT INTO memory_interviews (ownerId, topic, categoryId, turns, createdAt, updatedAt) VALUES (?,?,?,?,?,?)", [owner2, t, categoryId ?? null, "[]", now, now]);
+  const id2 = await tx$1((db2) => {
+    const now = nowIso$1();
+    exec$1(db2, "INSERT INTO memory_interviews (ownerId, topic, categoryId, turns, createdAt, updatedAt) VALUES (?,?,?,?,?,?)", [owner2, t, categoryId ?? null, "[]", now, now]);
     return lastId(db2);
   });
-  return interviewStep(id, null);
+  return interviewStep(id2, null);
 }
-async function answerInterview(id, answer) {
+async function answerInterview(id2, answer) {
   const owner2 = currentOwner();
   const text = String(answer ?? "").trim().slice(0, 4e3);
   if (!text) throw new MemoryError("Resposta vazia.");
-  await tx((db2) => {
-    const iv = interviewSync(db2, owner2, id);
+  await tx$1((db2) => {
+    const iv = interviewSync(db2, owner2, id2);
     if (!iv) throw new MemoryError("Entrevista não encontrada.", "not_found");
     const last = iv.turns[iv.turns.length - 1];
     if (!last || last.answer || last.skipped) throw new MemoryError("Não há pergunta aguardando resposta.");
     last.answer = text;
-    exec(db2, "UPDATE memory_interviews SET turns = ?, updatedAt = ? WHERE id = ?", [JSON.stringify(iv.turns), nowIso(), id]);
+    exec$1(db2, "UPDATE memory_interviews SET turns = ?, updatedAt = ? WHERE id = ?", [JSON.stringify(iv.turns), nowIso$1(), id2]);
   });
-  return interviewStep(id, text);
+  return interviewStep(id2, text);
 }
-async function skipInterview(id) {
+async function skipInterview(id2) {
   const owner2 = currentOwner();
-  await tx((db2) => {
-    const iv = interviewSync(db2, owner2, id);
+  await tx$1((db2) => {
+    const iv = interviewSync(db2, owner2, id2);
     if (!iv) throw new MemoryError("Entrevista não encontrada.", "not_found");
     const last = iv.turns[iv.turns.length - 1];
     if (last && !last.answer) last.skipped = true;
-    exec(db2, "UPDATE memory_interviews SET turns = ?, updatedAt = ? WHERE id = ?", [JSON.stringify(iv.turns), nowIso(), id]);
+    exec$1(db2, "UPDATE memory_interviews SET turns = ?, updatedAt = ? WHERE id = ?", [JSON.stringify(iv.turns), nowIso$1(), id2]);
   });
-  return interviewStep(id, null);
+  return interviewStep(id2, null);
 }
-async function endInterview(id) {
+async function endInterview(id2) {
   const owner2 = currentOwner();
-  return tx((db2) => {
-    exec(db2, "UPDATE memory_interviews SET status = 'ended', endedAt = ?, updatedAt = ? WHERE id = ? AND ownerId = ?", [nowIso(), nowIso(), id, owner2]);
-    const iv = interviewSync(db2, owner2, id);
+  return tx$1((db2) => {
+    exec$1(db2, "UPDATE memory_interviews SET status = 'ended', endedAt = ?, updatedAt = ? WHERE id = ? AND ownerId = ?", [nowIso$1(), nowIso$1(), id2, owner2]);
+    const iv = interviewSync(db2, owner2, id2);
     if (!iv) throw new MemoryError("Entrevista não encontrada.", "not_found");
     return iv;
   });
 }
 async function timeline(opts = {}) {
   const owner2 = currentOwner();
-  return read(
-    (db2) => all(
+  return read$1(
+    (db2) => all$1(
       db2,
       `SELECT r.createdAt AS at, r.changeKind AS kind, r.memoryId, m.title, m.categoryId, m.occurredAt, r.actor, r.reason
        FROM memory_revisions r JOIN memories m ON m.id = r.memoryId AND m.ownerId = r.ownerId
@@ -84604,7 +85330,7 @@ function renderContext(selected, purpose) {
 const cache$2 = /* @__PURE__ */ new Map();
 const CACHE_TTL = 6e4;
 function dataVersion(db2, owner2) {
-  const r = one(
+  const r = one$1(
     db2,
     `SELECT (SELECT COUNT(*) FROM memories WHERE ownerId = ?) AS n, (SELECT MAX(updatedAt) FROM memories WHERE ownerId = ?) AS u,
             (SELECT COUNT(*) FROM memory_tombstones WHERE ownerId = ?) AS t`,
@@ -84615,13 +85341,13 @@ function dataVersion(db2, owner2) {
 const hash = (s2) => crypto.createHash("sha256").update(s2).digest("hex").slice(0, 16);
 function trace(db2, owner2, req, out) {
   const q2 = (req.query ?? "").trim();
-  exec(
+  exec$1(
     db2,
     `INSERT INTO memory_usage (ownerId, createdAt, useCase, purpose, queryHash, queryPreview, simulated, blocked, selected, discarded, tokens, budget, durationMs, vector, policyVersion)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       owner2,
-      nowIso(),
+      nowIso$1(),
       String(req.useCase).slice(0, 80),
       String(req.purpose ?? "").slice(0, 120),
       q2 ? hash(q2) : null,
@@ -84638,7 +85364,7 @@ function trace(db2, owner2, req, out) {
       POLICY_VERSION
     ]
   );
-  return Number(one(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
+  return Number(one$1(db2, "SELECT last_insert_rowid() AS id")?.id ?? 0);
 }
 async function getMemoryContext(req) {
   const started2 = Date.now();
@@ -84695,27 +85421,27 @@ async function pruneTraces() {
   const days2 = Math.max(1, Number(await getSetting("memory_trace_retention_days") || 30));
   const db2 = await getDb();
   const cutoff = new Date(Date.now() - days2 * 864e5).toISOString();
-  const n = exec(db2, "DELETE FROM memory_usage WHERE createdAt < ?", [cutoff]);
+  const n = exec$1(db2, "DELETE FROM memory_usage WHERE createdAt < ?", [cutoff]);
   if (n) saveDb();
   return n;
 }
-const running$1 = /* @__PURE__ */ new Set();
+const running$2 = /* @__PURE__ */ new Set();
 async function runJob(kind, periodKey, fn, params = {}) {
   const owner2 = currentOwner();
   const db2 = await getDb();
   const key = `${kind}:${periodKey}`;
-  if (running$1.has(key)) return { ran: false, id: 0 };
-  exec(db2, "INSERT OR IGNORE INTO memory_jobs (ownerId, kind, dedupeKey, params, runAfter, createdAt) VALUES (?,?,?,?,?,?)", [owner2, kind, key, JSON.stringify(params), nowIso(), nowIso()]);
-  const job = one(db2, "SELECT id, status, attempts, maxAttempts, runAfter FROM memory_jobs WHERE ownerId = ? AND dedupeKey = ?", [owner2, key]);
-  const retryable = job.status === "failed" && job.attempts < job.maxAttempts && job.runAfter <= nowIso();
+  if (running$2.has(key)) return { ran: false, id: 0 };
+  exec$1(db2, "INSERT OR IGNORE INTO memory_jobs (ownerId, kind, dedupeKey, params, runAfter, createdAt) VALUES (?,?,?,?,?,?)", [owner2, kind, key, JSON.stringify(params), nowIso$1(), nowIso$1()]);
+  const job = one$1(db2, "SELECT id, status, attempts, maxAttempts, runAfter FROM memory_jobs WHERE ownerId = ? AND dedupeKey = ?", [owner2, key]);
+  const retryable = job.status === "failed" && job.attempts < job.maxAttempts && job.runAfter <= nowIso$1();
   if (job.status !== "queued" && !retryable) return { ran: false, id: job.id };
-  running$1.add(key);
-  exec(db2, "UPDATE memory_jobs SET status='running', attempts=attempts+1, startedAt=?, error=NULL WHERE id=?", [nowIso(), job.id]);
+  running$2.add(key);
+  exec$1(db2, "UPDATE memory_jobs SET status='running', attempts=attempts+1, startedAt=?, error=NULL WHERE id=?", [nowIso$1(), job.id]);
   saveDb();
   broadcast("memory:job", { id: job.id, kind, status: "running" });
   try {
     const result = await fn();
-    exec(db2, "UPDATE memory_jobs SET status='done', finishedAt=?, stats=? WHERE id=?", [nowIso(), JSON.stringify(result ?? {}), job.id]);
+    exec$1(db2, "UPDATE memory_jobs SET status='done', finishedAt=?, stats=? WHERE id=?", [nowIso$1(), JSON.stringify(result ?? {}), job.id]);
     saveDb();
     broadcast("memory:job", { id: job.id, kind, status: "done", stats: result });
     broadcast("memory:updated", { kind });
@@ -84725,9 +85451,9 @@ async function runJob(kind, periodKey, fn, params = {}) {
     const attempts = job.attempts + 1;
     const terminal = e instanceof AiBudgetError || attempts >= job.maxAttempts;
     const backoffMin = 5 * 2 ** attempts;
-    exec(db2, "UPDATE memory_jobs SET status=?, finishedAt=?, error=?, runAfter=?, maxAttempts=? WHERE id=?", [
+    exec$1(db2, "UPDATE memory_jobs SET status=?, finishedAt=?, error=?, runAfter=?, maxAttempts=? WHERE id=?", [
       "failed",
-      nowIso(),
+      nowIso$1(),
       msg,
       new Date(Date.now() + backoffMin * 6e4).toISOString(),
       terminal ? attempts : job.maxAttempts,
@@ -84737,7 +85463,7 @@ async function runJob(kind, periodKey, fn, params = {}) {
     broadcast("memory:job", { id: job.id, kind, status: "failed", error: msg });
     return { ran: true, id: job.id, error: msg };
   } finally {
-    running$1.delete(key);
+    running$2.delete(key);
   }
 }
 async function startManualJob(kind, fn, params = {}) {
@@ -84745,7 +85471,7 @@ async function startManualJob(kind, fn, params = {}) {
   const p = runJob(kind, period, fn, params);
   const db2 = await getDb();
   for (let i = 0; i < 20; i++) {
-    const row = one(db2, "SELECT id FROM memory_jobs WHERE ownerId = ? AND dedupeKey = ?", [currentOwner(), `${kind}:${period}`]);
+    const row = one$1(db2, "SELECT id FROM memory_jobs WHERE ownerId = ? AND dedupeKey = ?", [currentOwner(), `${kind}:${period}`]);
     if (row) {
       void p.catch(() => void 0);
       return Number(row.id);
@@ -84757,13 +85483,13 @@ async function startManualJob(kind, fn, params = {}) {
 }
 async function listJobs(limit = 30) {
   const db2 = await getDb();
-  return all(db2, "SELECT id, kind, status, attempts, error, stats, createdAt, startedAt, finishedAt FROM memory_jobs WHERE ownerId = ? ORDER BY id DESC LIMIT ?", [
+  return all$1(db2, "SELECT id, kind, status, attempts, error, stats, createdAt, startedAt, finishedAt FROM memory_jobs WHERE ownerId = ? ORDER BY id DESC LIMIT ?", [
     currentOwner(),
     Math.min(200, limit)
   ]).map((j) => ({ ...j, id: Number(j.id), attempts: Number(j.attempts), stats: jparse(j.stats, {}) }));
 }
-async function getJob(id) {
-  return (await listJobs(200)).find((j) => j.id === id) ?? null;
+async function getJob(id2) {
+  return (await listJobs(200)).find((j) => j.id === id2) ?? null;
 }
 const dayKey = (d = /* @__PURE__ */ new Date()) => d.toISOString().slice(0, 10);
 const intervalKey = (minutes, d = /* @__PURE__ */ new Date()) => String(Math.floor(d.getTime() / (minutes * 6e4)));
@@ -84784,7 +85510,7 @@ async function memoryTick(now = /* @__PURE__ */ new Date()) {
     await runJob("housekeeping", dayKey(now), async () => ({ traces: await pruneTraces(), events: await pruneEvents() }));
     if (await getSetting("memory_agent_enabled") === "1") {
       const every = Math.max(15, Number(await getSetting("memory_agent_interval_min") || 60));
-      const pending2 = Number(one(db2, "SELECT COUNT(*) AS n FROM memory_events WHERE ownerId = ? AND status IN ('pending','retry')", [currentOwner()])?.n ?? 0);
+      const pending2 = Number(one$1(db2, "SELECT COUNT(*) AS n FROM memory_events WHERE ownerId = ? AND status IN ('pending','retry')", [currentOwner()])?.n ?? 0);
       if (pending2 > 0) {
         const r = await runJob("agent_batch", intervalKey(every, now), () => processEventBatch());
         if (r.result && r.result.proposed > 0) await maybeNotify("🧠 Memória: novas sugestões", `${r.result.proposed} sugestão(ões) aguardando revisão no Memory Inbox.`);
@@ -84796,7 +85522,7 @@ async function memoryTick(now = /* @__PURE__ */ new Date()) {
       if (!last || now.getTime() - Date.parse(last) >= days2 * 864e5) {
         const r = await runJob("consolidation", dayKey(now), () => analyzeMemories("memory.consolidation"));
         if (r.ran && !r.error) {
-          await setSetting("memory_consolidation_last", now.toISOString());
+          await setSetting$1("memory_consolidation_last", now.toISOString());
           if (r.result && r.result.proposed > 0) await maybeNotify("🧠 Consolidação da memória", `${r.result.proposed} sugestão(ões) de consolidação ou conflito para revisar.`);
         }
       }
@@ -84808,7 +85534,7 @@ async function memoryTick(now = /* @__PURE__ */ new Date()) {
 }
 function exportable(db2, owner2, o) {
   const statuses = o.includeArchived ? MEMORY_STATUSES : ["active", "unconfirmed", "outdated"];
-  return all(
+  return all$1(
     db2,
     `${MEM_SELECT.replace("FROM memories m", ", c.slug AS catSlug FROM memories m")} WHERE m.ownerId = ? AND m.status IN (${statuses.map(() => "?").join(",")}) ORDER BY c.sortOrder, m.importance DESC, m.id`,
     [owner2, ...statuses]
@@ -84817,33 +85543,33 @@ function exportable(db2, owner2, o) {
 async function exportJson(o = {}) {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  return read((db2) => {
+  return read$1((db2) => {
     const mems = exportable(db2, owner2, o);
-    const ref = (id) => `m${id}`;
+    const ref = (id2) => `m${id2}`;
     const ids2 = new Set(mems.map((m) => m.id));
     const evidence = /* @__PURE__ */ new Map();
-    for (const e of all(db2, "SELECT memoryId, sourceKind, sourceRef, excerpt FROM memory_evidence WHERE ownerId = ? AND memoryId IS NOT NULL", [owner2]))
+    for (const e of all$1(db2, "SELECT memoryId, sourceKind, sourceRef, excerpt FROM memory_evidence WHERE ownerId = ? AND memoryId IS NOT NULL", [owner2]))
       if (ids2.has(Number(e.memoryId))) evidence.set(Number(e.memoryId), [...evidence.get(Number(e.memoryId)) ?? [], { sourceKind: e.sourceKind, sourceRef: e.sourceRef, excerpt: e.excerpt }]);
     return {
       format: "rickos-memory",
       version: 1,
-      exportedAt: nowIso(),
+      exportedAt: nowIso$1(),
       categories: categoriesSync(db2, owner2).map(({ slug, name, icon, description, defaultSensitivity, sortOrder, archivedAt }) => ({ slug, name, icon, description, defaultSensitivity, sortOrder, archivedAt })),
       memories: mems.map((m) => {
-        const { id, categoryId: _c, effectiveSensitivity: _e, embeddingModel: _em, supersededById: _s, catSlug, ...rest } = m;
-        return { ...rest, ref: ref(id), category: catSlug, evidence: evidence.get(id) ?? [] };
+        const { id: id2, categoryId: _c, effectiveSensitivity: _e, embeddingModel: _em, supersededById: _s, catSlug, ...rest } = m;
+        return { ...rest, ref: ref(id2), category: catSlug, evidence: evidence.get(id2) ?? [] };
       }),
-      relations: all(db2, "SELECT fromId, toId, kind, note FROM memory_relations WHERE ownerId = ?", [owner2]).filter((r) => ids2.has(Number(r.fromId)) && ids2.has(Number(r.toId))).map((r) => ({ from: ref(Number(r.fromId)), to: ref(Number(r.toId)), kind: r.kind, note: r.note }))
+      relations: all$1(db2, "SELECT fromId, toId, kind, note FROM memory_relations WHERE ownerId = ?", [owner2]).filter((r) => ids2.has(Number(r.fromId)) && ids2.has(Number(r.toId))).map((r) => ({ from: ref(Number(r.fromId)), to: ref(Number(r.toId)), kind: r.kind, note: r.note }))
     };
   });
 }
 async function exportMarkdown(o = {}) {
   const owner2 = currentOwner();
   await ensureSeeded(owner2);
-  return read((db2) => {
+  return read$1((db2) => {
     const mems = exportable(db2, owner2, o);
     const cats = categoriesSync(db2, owner2);
-    const lines = ["# Memória Pessoal", "", `_Exportado em ${nowIso().slice(0, 10)} · ${mems.length} memórias_`, ""];
+    const lines = ["# Memória Pessoal", "", `_Exportado em ${nowIso$1().slice(0, 10)} · ${mems.length} memórias_`, ""];
     const groups = [
       ...cats.map((c) => [`${c.icon} ${c.name}`, mems.filter((m) => m.categoryId === c.id)]),
       ["Sem categoria", mems.filter((m) => m.categoryId == null)]
@@ -84865,7 +85591,7 @@ const bump = (r, k) => {
   r.reasons[k] = (r.reasons[k] ?? 0) + 1;
 };
 function registerImport(db2, owner2, kind, sourceHash, stats) {
-  exec(db2, "INSERT OR REPLACE INTO memory_imports (ownerId, kind, sourceHash, status, stats, createdAt) VALUES (?,?,?,?,?,?)", [owner2, kind, sourceHash, "done", JSON.stringify(stats), nowIso()]);
+  exec$1(db2, "INSERT OR REPLACE INTO memory_imports (ownerId, kind, sourceHash, status, stats, createdAt) VALUES (?,?,?,?,?,?)", [owner2, kind, sourceHash, "done", JSON.stringify(stats), nowIso$1()]);
 }
 async function importJson(input, mode = "review") {
   const owner2 = currentOwner();
@@ -84874,13 +85600,13 @@ async function importJson(input, mode = "review") {
   if (!b2 || b2.format !== "rickos-memory" || !Array.isArray(b2.memories)) throw new MemoryError("Arquivo não é uma exportação da Memória Pessoal.");
   if (b2.memories.length > 5e3) throw new MemoryError("Arquivo grande demais (máx. 5000 memórias).");
   const produce2 = await resolveProduce("memory.text");
-  return tx((db2) => {
+  return tx$1((db2) => {
     const r = { created: 0, suggested: 0, skipped: 0, reasons: {} };
     for (const c of Array.isArray(b2.categories) ? b2.categories.slice(0, 200) : []) {
-      const slug = slugify$1(String(c.slug || c.name || ""));
+      const slug = slugify$2(String(c.slug || c.name || ""));
       if (!slug || categoryBySlug(db2, owner2, slug)) continue;
-      const now = nowIso();
-      exec(db2, "INSERT INTO memory_categories (ownerId, slug, name, icon, description, defaultSensitivity, sortOrder, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?)", [
+      const now = nowIso$1();
+      exec$1(db2, "INSERT INTO memory_categories (ownerId, slug, name, icon, description, defaultSensitivity, sortOrder, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?)", [
         owner2,
         slug,
         String(c.name || slug).slice(0, 60),
@@ -84905,7 +85631,7 @@ async function importJson(input, mode = "review") {
         bump(r, "já existe");
         continue;
       }
-      const cat = m.category ? categoryBySlug(db2, owner2, slugify$1(String(m.category))) : null;
+      const cat = m.category ? categoryBySlug(db2, owner2, slugify$2(String(m.category))) : null;
       const type = MEMORY_TYPES.includes(m.type) ? m.type : "FACT";
       if (mode === "direct") {
         const created = createMemorySync(
@@ -84950,7 +85676,7 @@ async function importJson(input, mode = "review") {
             bump(r, "referência de origem inválida");
             continue;
           }
-          if (one(db2, "SELECT id FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'import' AND sourceRef = ?", [owner2, sourceRef])) {
+          if (one$1(db2, "SELECT id FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'import' AND sourceRef = ?", [owner2, sourceRef])) {
             bump(r, "referência já importada");
             continue;
           }
@@ -84976,10 +85702,10 @@ async function importJson(input, mode = "review") {
       }
     }
     if (mode === "direct")
-      for (const rel of Array.isArray(b2.relations) ? b2.relations.slice(0, 2e4) : []) {
-        const from = refs.get(String(rel.from));
-        const to = refs.get(String(rel.to));
-        if (from && to && from !== to && RELATION_KINDS.includes(rel.kind)) addRelationSync(db2, owner2, from, to, rel.kind, rel.note ?? null);
+      for (const rel2 of Array.isArray(b2.relations) ? b2.relations.slice(0, 2e4) : []) {
+        const from = refs.get(String(rel2.from));
+        const to = refs.get(String(rel2.to));
+        if (from && to && from !== to && RELATION_KINDS.includes(rel2.kind)) addRelationSync(db2, owner2, from, to, rel2.kind, rel2.note ?? null);
       }
     registerImport(db2, owner2, `json-${mode}`, sha(JSON.stringify(b2.memories)), r);
     return r;
@@ -85040,7 +85766,7 @@ async function importMarkdownItems(md, sourceKind, sourceRef, useCase) {
   const produce2 = await resolveProduce(useCase);
   if (!produce2.ok) throw new MemoryError(`Importação bloqueada: ${produce2.reason}`, "forbidden");
   const items = parseMarkdownItems(String(md ?? "")).slice(0, 1e3);
-  return tx((db2) => {
+  return tx$1((db2) => {
     const r = { created: 0, suggested: 0, skipped: 0, reasons: {} };
     for (const it of items) {
       const out = proposeSync(
@@ -85071,18 +85797,18 @@ async function legacyText() {
 async function legacyStatus() {
   const owner2 = currentOwner();
   const text = await legacyText();
-  return read((db2) => ({
+  return read$1((db2) => ({
     hasLegacy: !!text,
     chars: text.length,
     bullets: parseMarkdownItems(text).length,
     sourceHash: text ? sha(text) : null,
-    imports: all(db2, "SELECT kind, createdAt, stats FROM memory_imports WHERE ownerId = ? AND kind LIKE 'legacy%' ORDER BY id DESC", [owner2]).map((r) => ({
+    imports: all$1(db2, "SELECT kind, createdAt, stats FROM memory_imports WHERE ownerId = ? AND kind LIKE 'legacy%' ORDER BY id DESC", [owner2]).map((r) => ({
       kind: r.kind,
       createdAt: r.createdAt,
       stats: jparse(r.stats, { created: 0, suggested: 0, skipped: 0, reasons: {} })
     })),
-    pending: Number(one(db2, "SELECT COUNT(*) AS n FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'migration' AND status IN ('pending','snoozed','needs_info')", [owner2])?.n ?? 0),
-    approved: Number(one(db2, "SELECT COUNT(*) AS n FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'migration' AND status = 'approved'", [owner2])?.n ?? 0)
+    pending: Number(one$1(db2, "SELECT COUNT(*) AS n FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'migration' AND status IN ('pending','snoozed','needs_info')", [owner2])?.n ?? 0),
+    approved: Number(one$1(db2, "SELECT COUNT(*) AS n FROM memory_suggestions WHERE ownerId = ? AND sourceKind = 'migration' AND status = 'approved'", [owner2])?.n ?? 0)
   }));
 }
 async function migrateLegacy(opts) {
@@ -85093,7 +85819,7 @@ async function migrateLegacy(opts) {
   const hash2 = sha(text);
   const kind = opts.ai ? "legacy-ai" : "legacy-lines";
   const db2 = await getDb();
-  const prev = one(db2, "SELECT stats FROM memory_imports WHERE ownerId = ? AND kind = ? AND sourceHash = ?", [owner2, kind, hash2]);
+  const prev = one$1(db2, "SELECT stats FROM memory_imports WHERE ownerId = ? AND kind = ? AND sourceHash = ?", [owner2, kind, hash2]);
   if (prev && !opts.force) return { ...jparse(prev.stats, { created: 0, suggested: 0, skipped: 0, reasons: {} }), alreadyImported: true };
   let result;
   if (opts.ai) {
@@ -85102,7 +85828,7 @@ async function migrateLegacy(opts) {
   } else {
     result = await importMarkdownItems(text, "migration", "knowledge_base", "memory.migration");
   }
-  await tx((d) => registerImport(d, owner2, kind, hash2, { created: result.created, suggested: result.suggested, skipped: result.skipped, reasons: result.reasons }));
+  await tx$1((d) => registerImport(d, owner2, kind, hash2, { created: result.created, suggested: result.suggested, skipped: result.skipped, reasons: result.reasons }));
   return result;
 }
 const NEWS_DEFAULT_CATEGORIES = ["Brasil", "Mundo", "Tech", "Finance"];
@@ -85135,16 +85861,16 @@ async function getNewsCategories() {
 }
 async function setNewsCategories(list2) {
   const seen2 = /* @__PURE__ */ new Set();
-  const clean = [];
+  const clean2 = [];
   for (const c of list2) {
     const name = String(c ?? "").trim().slice(0, 40);
     if (!name || seen2.has(name.toLowerCase())) continue;
     seen2.add(name.toLowerCase());
-    clean.push(name);
+    clean2.push(name);
   }
-  await setSetting(CATEGORIES_SETTING, JSON.stringify(clean));
+  await setSetting$1(CATEGORIES_SETTING, JSON.stringify(clean2));
   broadcast("news:updated", { kind: "categories" });
-  return clean;
+  return clean2;
 }
 async function getNewsConfig() {
   return { hasGeminiKey: !!await geminiKey(), categories: await getNewsCategories() };
@@ -85159,7 +85885,13 @@ async function getNewsDigest() {
   }
 }
 async function getNewsState() {
-  return { config: await getNewsConfig(), digest: await getNewsDigest(), readsCount: (await getReads()).length };
+  return {
+    config: await getNewsConfig(),
+    digest: await getNewsDigest(),
+    readsCount: (await getReads()).length,
+    generating: runInfo,
+    lastError
+  };
 }
 async function getReads() {
   try {
@@ -85175,7 +85907,7 @@ async function markNewsRead(url2) {
   const reads = await getReads();
   if (!topic || reads.some((r) => r.url === url2)) return reads.length;
   reads.unshift({ at: (/* @__PURE__ */ new Date()).toISOString(), categoria: topic.categoria, titulo: topic.titulo_resumido, resumo: topic.resumo_curto, url: url2 });
-  await setSetting(READS_SETTING, JSON.stringify(reads.slice(0, MAX_READS)));
+  await setSetting$1(READS_SETTING, JSON.stringify(reads.slice(0, MAX_READS)));
   broadcast("news:updated", { kind: "reads" });
   return Math.min(reads.length, MAX_READS);
 }
@@ -85208,8 +85940,8 @@ function parseRss(xml) {
     const source = tag(block, "source");
     let title = tag(block, "title");
     if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3));
-    const link = tag(block, "link");
-    if (title && link) items.push({ title, link, pubDate: tag(block, "pubDate"), source });
+    const link2 = tag(block, "link");
+    if (title && link2) items.push({ title, link: link2, pubDate: tag(block, "pubDate"), source });
   }
   return items;
 }
@@ -85291,7 +86023,9 @@ URL: ${it.link}`).join("\n");
   }
   return out.slice(0, MAX_TOPICS_PER_CATEGORY);
 }
-let running = null;
+let running$1 = null;
+let runInfo = null;
+let lastError = null;
 const GEMINI_CONCURRENCY = 2;
 const MAX_RETRIES = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -85323,8 +86057,11 @@ function limiter(limit) {
   };
 }
 function generateNewsDigest(targetDate, tzOffsetMin2, only) {
-  if (running) return running;
-  running = (async () => {
+  if (running$1) return running$1;
+  runInfo = { only: Array.isArray(only) && only.length ? only : null, startedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  lastError = null;
+  broadcast("news:updated", { kind: "running" });
+  running$1 = (async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) throw new Error("Data inválida.");
     const key = await geminiKey();
     if (!key) throw new Error("Configure a chave de API do Google Gemini em Configurações → Resumo de Notícias.");
@@ -85358,13 +86095,17 @@ function generateNewsDigest(targetDate, tzOffsetMin2, only) {
     for (const c of fresh) byName.set(c.categoria, c);
     const merged = categories.map((c) => byName.get(c)).filter((c) => !!c);
     const digest = { generatedAt: (/* @__PURE__ */ new Date()).toISOString(), targetDate, model: MODEL, categories: merged };
-    await setSetting(DIGEST_SETTING, JSON.stringify(digest));
-    broadcast("news:updated", { kind: "digest" });
+    await setSetting$1(DIGEST_SETTING, JSON.stringify(digest));
     return digest;
-  })().finally(() => {
-    running = null;
+  })().catch((e) => {
+    lastError = e instanceof Error ? e.message : String(e);
+    throw e;
+  }).finally(() => {
+    running$1 = null;
+    runInfo = null;
+    broadcast("news:updated", { kind: "digest" });
   });
-  return running;
+  return running$1;
 }
 function friendlyError(e) {
   const msg = e instanceof Error ? e.message : String(e);
@@ -85408,7 +86149,7 @@ function registerMemoryIntegrations(handle) {
   handle("memory:produceBraindump", (_e, text) => produce("braindump.extract", text, `braindump#${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`));
 }
 const owner = () => currentOwner();
-const changed$1 = (kind) => broadcast("memory:updated", { kind });
+const changed$2 = (kind) => broadcast("memory:updated", { kind });
 const num = (v) => {
   const n = Number(v);
   if (!Number.isInteger(n) || n <= 0) throw new MemoryError("Identificador inválido.");
@@ -85437,7 +86178,7 @@ async function readSettings$1() {
 async function saveSettings(patch) {
   for (const [k, v] of Object.entries(patch ?? {})) {
     if (k === "overrides") {
-      const clean = {};
+      const clean2 = {};
       for (const [uc, o] of Object.entries(v ?? {})) {
         if (!MEMORY_POLICIES.some((p) => p.useCase === uc) || !o || typeof o !== "object") continue;
         const x = {};
@@ -85447,9 +86188,9 @@ async function saveSettings(patch) {
         if (o.maxItems != null && Number(o.maxItems) >= 0) x.maxItems = Math.floor(Number(o.maxItems));
         if (Array.isArray(o.categories)) x.categories = o.categories.map(String).slice(0, 50);
         if (["NORMAL", "PRIVATE", "RESTRICTED"].includes(String(o.maxSensitivity))) x.maxSensitivity = o.maxSensitivity;
-        if (Object.keys(x).length) clean[uc] = x;
+        if (Object.keys(x).length) clean2[uc] = x;
       }
-      await setSetting(OVERRIDES_KEY, JSON.stringify(clean));
+      await setSetting$1(OVERRIDES_KEY, JSON.stringify(clean2));
       continue;
     }
     const spec = MEMORY_SETTINGS[k];
@@ -85461,31 +86202,31 @@ async function saveSettings(patch) {
       val = String(Math.min(s2.max, Math.max(s2.min, Math.round(Number(v)) || s2.min)));
     } else if (spec.kind === "json") val = Array.isArray(v) ? JSON.stringify(v.map(String)) : "";
     else val = String(v ?? "").trim().slice(0, 60);
-    await setSetting(k, val);
+    await setSetting$1(k, val);
   }
-  changed$1("settings");
+  changed$2("settings");
 }
 async function overview() {
   const o = owner();
   await ensureSeeded(o);
   const db2 = await getDb();
-  const n = (sql, p = [o]) => Number(one(db2, sql, p)?.n ?? 0);
+  const n = (sql, p = [o]) => Number(one$1(db2, sql, p)?.n ?? 0);
   const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
   const recent = (await listMemories(o, { sort: "recent", limit: 6 })).items;
   const used = (await listMemories(o, { sort: "used", limit: 6 })).items.filter((m) => m.useCount > 0);
-  const growth = all(
+  const growth = all$1(
     db2,
     "SELECT substr(createdAt,1,7) AS month, COUNT(*) AS n FROM memories WHERE ownerId = ? AND createdAt >= ? GROUP BY month ORDER BY month",
     [o, new Date(Date.now() - 365 * 864e5).toISOString()]
   );
-  const retrieval = all(
+  const retrieval = all$1(
     db2,
     `SELECT useCase, COUNT(*) AS calls, SUM(CASE WHEN blocked IS NOT NULL THEN 1 ELSE 0 END) AS blocked,
        SUM(CASE WHEN blocked IS NULL AND selected = '[]' THEN 1 ELSE 0 END) AS empty, AVG(durationMs) AS avgMs, AVG(tokens) AS avgTokens
      FROM memory_usage WHERE ownerId = ? AND createdAt >= ? AND simulated = 0 GROUP BY useCase ORDER BY calls DESC`,
     [o, since30]
   );
-  const cost = all(
+  const cost = all$1(
     db2,
     "SELECT source, COUNT(*) AS calls, SUM(inputTokens) AS inputTokens, SUM(outputTokens) AS outputTokens, SUM(costUsd) AS costUsd FROM ai_usage WHERE source LIKE 'memoria-%' AND createdAt >= ? GROUP BY source ORDER BY costUsd DESC",
     [since30]
@@ -85523,11 +86264,11 @@ async function overview() {
 async function traces(limit = 50) {
   const o = owner();
   const db2 = await getDb();
-  const rows = all(db2, "SELECT * FROM memory_usage WHERE ownerId = ? ORDER BY id DESC LIMIT ?", [o, Math.min(200, limit)]);
-  const label = (id) => {
-    const m = memorySync(db2, o, id);
-    if (!m) return { title: `#${id} (excluída)`, restricted: false, exists: false };
-    if (m.effectiveSensitivity === "RESTRICTED") return { title: `🔒 Memória restrita #${id}`, restricted: true, exists: true };
+  const rows = all$1(db2, "SELECT * FROM memory_usage WHERE ownerId = ? ORDER BY id DESC LIMIT ?", [o, Math.min(200, limit)]);
+  const label = (id2) => {
+    const m = memorySync(db2, o, id2);
+    if (!m) return { title: `#${id2} (excluída)`, restricted: false, exists: false };
+    if (m.effectiveSensitivity === "RESTRICTED") return { title: `🔒 Memória restrita #${id2}`, restricted: true, exists: true };
     return { title: m.title, restricted: false, exists: true };
   };
   return rows.map((r) => {
@@ -85546,63 +86287,63 @@ async function traces(limit = 50) {
 }
 function registerMemoryRpc(handle) {
   registerMemoryIntegrations(handle);
-  handle("memory:categories", (_e, includeArchived) => listCategories(owner(), includeArchived !== false));
+  handle("memory:categories", (_e, includeArchived) => listCategories$1(owner(), includeArchived !== false));
   handle("memory:createCategory", async (_e, input) => {
-    const c = await createCategory(owner(), input);
-    changed$1("categories");
+    const c = await createCategory$1(owner(), input);
+    changed$2("categories");
     return c;
   });
-  handle("memory:updateCategory", async (_e, id, input) => {
-    const c = await updateCategory(owner(), num(id), input ?? {});
-    changed$1("categories");
+  handle("memory:updateCategory", async (_e, id2, input) => {
+    const c = await updateCategory(owner(), num(id2), input ?? {});
+    changed$2("categories");
     return c;
   });
   handle("memory:reorderCategories", async (_e, ids2) => {
     await reorderCategories(owner(), (Array.isArray(ids2) ? ids2 : []).map(num));
-    changed$1("categories");
+    changed$2("categories");
   });
   handle("memory:list", (_e, filter) => listMemories(owner(), filter ?? {}));
-  handle("memory:get", (_e, id) => getMemoryDetail(owner(), num(id)));
+  handle("memory:get", (_e, id2) => getMemoryDetail(owner(), num(id2)));
   handle("memory:create", async (_e, input) => {
     const m = await createMemory(owner(), input);
-    changed$1("memories");
+    changed$2("memories");
     return m;
   });
-  handle("memory:update", async (_e, id, patch, expectedVersion) => {
-    const m = await updateMemory(owner(), num(id), patch, { actor: "user", expectedVersion: expectedVersion ?? void 0 });
-    changed$1("memories");
+  handle("memory:update", async (_e, id2, patch, expectedVersion) => {
+    const m = await updateMemory(owner(), num(id2), patch, { actor: "user", expectedVersion: expectedVersion ?? void 0 });
+    changed$2("memories");
     return m;
   });
-  handle("memory:setStatus", async (_e, id, status2, reason) => {
+  handle("memory:setStatus", async (_e, id2, status2, reason) => {
     const allowed = ["active", "archived", "outdated", "unconfirmed"];
     if (!allowed.includes(status2)) throw new MemoryError("Status inválido.");
-    const m = await setStatus(owner(), num(id), status2, { actor: "user", reason: reason ?? null });
-    changed$1("memories");
+    const m = await setStatus(owner(), num(id2), status2, { actor: "user", reason: reason ?? null });
+    changed$2("memories");
     return m;
   });
-  handle("memory:confirm", async (_e, id) => {
-    const m = await confirmMemory(owner(), num(id));
-    changed$1("memories");
+  handle("memory:confirm", async (_e, id2) => {
+    const m = await confirmMemory(owner(), num(id2));
+    changed$2("memories");
     return m;
   });
-  handle("memory:pin", async (_e, id, pinned) => {
-    const m = await setPinned(owner(), num(id), !!pinned);
-    changed$1("memories");
+  handle("memory:pin", async (_e, id2, pinned2) => {
+    const m = await setPinned$1(owner(), num(id2), !!pinned2);
+    changed$2("memories");
     return m;
   });
-  handle("memory:delete", async (_e, id) => {
-    const ok = await hardDelete(owner(), num(id));
-    changed$1("memories");
+  handle("memory:delete", async (_e, id2) => {
+    const ok = await hardDelete(owner(), num(id2));
+    changed$2("memories");
     return ok;
   });
   handle("memory:addRelation", async (_e, fromId, toId, kind, note) => {
     if (!RELATION_KINDS.includes(kind)) throw new MemoryError("Tipo de relação inválido.");
     await addRelation(owner(), num(fromId), num(toId), kind, note ?? null);
-    changed$1("relations");
+    changed$2("relations");
   });
-  handle("memory:removeRelation", async (_e, id) => {
-    await removeRelation(owner(), num(id));
-    changed$1("relations");
+  handle("memory:removeRelation", async (_e, id2) => {
+    await removeRelation(owner(), num(id2));
+    changed$2("relations");
   });
   handle("memory:graph", async () => {
     const o = owner();
@@ -85610,34 +86351,34 @@ function registerMemoryRpc(handle) {
     return { memories, relations: await allRelations(o) };
   });
   handle("memory:suggestions", (_e, f) => listSuggestions(owner(), f ?? {}));
-  handle("memory:approve", async (_e, id, opts) => {
-    const r = await approve(owner(), num(id), opts ?? {});
-    changed$1("suggestions");
+  handle("memory:approve", async (_e, id2, opts) => {
+    const r = await approve(owner(), num(id2), opts ?? {});
+    changed$2("suggestions");
     return r;
   });
   handle("memory:approveMany", async (_e, ids2) => {
     const r = await approveMany(owner(), (Array.isArray(ids2) ? ids2 : []).map(num));
-    changed$1("suggestions");
+    changed$2("suggestions");
     return r;
   });
-  handle("memory:reject", async (_e, id, verdict, note) => {
-    const r = await reject(owner(), num(id), verdict ?? "rejected", note ?? null);
-    changed$1("suggestions");
+  handle("memory:reject", async (_e, id2, verdict, note) => {
+    const r = await reject(owner(), num(id2), verdict ?? "rejected", note ?? null);
+    changed$2("suggestions");
     return r;
   });
-  handle("memory:snooze", async (_e, id, days2) => {
-    const r = await snooze(owner(), num(id), Number(days2) || 7);
-    changed$1("suggestions");
+  handle("memory:snooze", async (_e, id2, days2) => {
+    const r = await snooze(owner(), num(id2), Number(days2) || 7);
+    changed$2("suggestions");
     return r;
   });
-  handle("memory:needsInfo", async (_e, id, note) => {
-    const r = await needsInfo(owner(), num(id), String(note ?? ""));
-    changed$1("suggestions");
+  handle("memory:needsInfo", async (_e, id2, note) => {
+    const r = await needsInfo(owner(), num(id2), String(note ?? ""));
+    changed$2("suggestions");
     return r;
   });
-  handle("memory:undo", async (_e, id) => {
-    const r = await undo(owner(), num(id));
-    changed$1("suggestions");
+  handle("memory:undo", async (_e, id2) => {
+    const r = await undo(owner(), num(id2));
+    changed$2("suggestions");
     return r;
   });
   handle("memory:extractText", (_e, text) => {
@@ -85649,19 +86390,19 @@ function registerMemoryRpc(handle) {
   handle("memory:analyze", () => startManualJob("analyze", () => analyzeMemories("memory.analyze")));
   handle("memory:consolidateNow", () => startManualJob("consolidation", () => analyzeMemories("memory.consolidation")));
   handle("memory:jobs", (_e, limit) => listJobs(Number(limit) || 30));
-  handle("memory:job", (_e, id) => getJob(num(id)));
+  handle("memory:job", (_e, id2) => getJob(num(id2)));
   handle("memory:legacyStatus", () => legacyStatus());
   handle("memory:migrate", async (_e, opts) => {
     if (opts?.ai) return { jobId: await startManualJob("migration", () => migrateLegacy({ ai: true, force: !!opts.force })) };
     const r = await migrateLegacy({ ai: false, force: !!opts?.force });
-    changed$1("suggestions");
+    changed$2("suggestions");
     return { result: r };
   });
   handle("memory:exportJson", (_e, o) => exportJson(o ?? {}));
   handle("memory:exportMarkdown", (_e, o) => exportMarkdown(o ?? {}));
   handle("memory:importJson", async (_e, data2, mode) => {
     const r = await importJson(data2, mode === "direct" ? "direct" : "review");
-    changed$1("memories");
+    changed$2("memories");
     return r;
   });
   handle("memory:importMarkdown", async (_e, md, ai) => {
@@ -85669,7 +86410,7 @@ function registerMemoryRpc(handle) {
     if (text.length > 2e5) throw new MemoryError("Arquivo grande demais.");
     if (ai) return { jobId: await startManualJob("import-md", () => extractFromText({ useCase: "memory.text", text, sourceKind: "import", sourceRef: "markdown", op: "texto" })) };
     const r = await importMarkdownItems(text, "import", "markdown", "memory.text");
-    changed$1("suggestions");
+    changed$2("suggestions");
     return { result: r };
   });
   handle("memory:policies", () => publicPolicies());
@@ -85679,29 +86420,2861 @@ function registerMemoryRpc(handle) {
   handle("memory:coverage", () => coverage());
   handle("memory:gaps", (_e, status2) => listGaps(status2 ?? "open"));
   handle("memory:detectGaps", () => startManualJob("gaps", () => detectGaps()));
-  handle("memory:gapStatus", async (_e, id, status2) => {
+  handle("memory:gapStatus", async (_e, id2, status2) => {
     if (!["dismissed", "irrelevant", "open"].includes(status2)) throw new MemoryError("Status inválido.");
-    await setGapStatus(num(id), status2);
-    changed$1("gaps");
+    await setGapStatus(num(id2), status2);
+    changed$2("gaps");
   });
-  handle("memory:answerGap", (_e, id, answer) => {
+  handle("memory:answerGap", (_e, id2, answer) => {
     const a = String(answer ?? "").trim();
     if (!a) throw new MemoryError("Resposta vazia.");
-    return startManualJob("gap-answer", () => answerGap(num(id), a));
+    return startManualJob("gap-answer", () => answerGap(num(id2), a));
   });
   handle("memory:interviews", () => listInterviews());
   handle("memory:startInterview", (_e, topic, categoryId) => startInterview(String(topic ?? ""), categoryId ? num(categoryId) : null));
-  handle("memory:answerInterview", async (_e, id, answer) => {
-    const r = await answerInterview(num(id), String(answer ?? ""));
-    changed$1("suggestions");
+  handle("memory:answerInterview", async (_e, id2, answer) => {
+    const r = await answerInterview(num(id2), String(answer ?? ""));
+    changed$2("suggestions");
     return r;
   });
-  handle("memory:skipInterview", (_e, id) => skipInterview(num(id)));
-  handle("memory:endInterview", (_e, id) => endInterview(num(id)));
+  handle("memory:skipInterview", (_e, id2) => skipInterview(num(id2)));
+  handle("memory:endInterview", (_e, id2) => endInterview(num(id2)));
   handle("memory:timeline", (_e, opts) => timeline(opts ?? {}));
   handle("memory:overview", () => overview());
   handle("memory:settings", () => readSettings$1());
   handle("memory:saveSettings", (_e, patch) => saveSettings(patch));
+}
+function groupOf(status2) {
+  if (status2 === "planned") return "futuros";
+  if (status2 === "paused" || status2 === "completed") return "antigos";
+  return "ativos";
+}
+const RATINGS = ["again", "hard", "good", "easy"];
+function localDate(d = /* @__PURE__ */ new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function addDays(dateStr, days2) {
+  const d = /* @__PURE__ */ new Date(`${dateStr}T12:00:00`);
+  d.setDate(d.getDate() + days2);
+  return localDate(d);
+}
+const QUALITY = { again: 2, hard: 3, good: 4, easy: 5 };
+const MIN_EASE = 1.3;
+function schedule(card, rating, now = /* @__PURE__ */ new Date()) {
+  const today2 = localDate(now);
+  const q2 = QUALITY[rating];
+  let ease = card.easeFactor || 2.5;
+  let reps = card.repetitions || 0;
+  let interval = card.intervalDays || 0;
+  ease = ease + (0.1 - (5 - q2) * (0.08 + (5 - q2) * 0.02));
+  if (ease < MIN_EASE) ease = MIN_EASE;
+  if (q2 < 3) {
+    reps = 0;
+    interval = 0;
+  } else {
+    reps += 1;
+    if (reps === 1) interval = 1;
+    else if (reps === 2) interval = 6;
+    else interval = Math.round(interval * ease);
+    if (rating === "hard") interval = Math.max(1, Math.round(interval * 0.8));
+    else if (rating === "easy") interval = Math.round(interval * 1.3);
+    interval = Math.max(1, interval);
+  }
+  return {
+    easeFactor: Math.round(ease * 100) / 100,
+    intervalDays: interval,
+    repetitions: reps,
+    nextReviewAt: addDays(today2, interval),
+    lastReviewedAt: now.toISOString()
+  };
+}
+function normalizeAnswer(s2) {
+  return s2.normalize("NFKC").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\s\p{P}\p{S}]+/gu, "");
+}
+function nodeMinutes(estimatedHours) {
+  return estimatedHours != null && estimatedHours > 0 ? Math.round(estimatedHours * 60) : null;
+}
+function all(db2, sql, params = []) {
+  const st2 = db2.prepare(sql);
+  if (params.length) st2.bind(params);
+  const out = [];
+  while (st2.step()) out.push(st2.getAsObject());
+  st2.free();
+  return out;
+}
+function one(db2, sql, params = []) {
+  return all(db2, sql, params)[0] ?? null;
+}
+function exec(db2, sql, params = []) {
+  const st2 = db2.prepare(sql);
+  st2.run(params);
+  st2.free();
+  if (!/^\s*(INSERT|REPLACE)\b/i.test(sql)) return 0;
+  const r = db2.prepare("SELECT last_insert_rowid() AS id");
+  r.step();
+  const id2 = Number(r.getAsObject().id);
+  r.free();
+  return id2;
+}
+let depth = 0;
+async function tx(fn) {
+  const db2 = await getDb();
+  if (depth > 0) return fn(db2);
+  depth++;
+  db2.run("BEGIN");
+  try {
+    const r = fn(db2);
+    db2.run("COMMIT");
+    depth--;
+    saveDb();
+    return r;
+  } catch (e) {
+    try {
+      db2.run("ROLLBACK");
+    } catch {
+    }
+    depth--;
+    throw e;
+  }
+}
+async function read(fn) {
+  return fn(await getDb());
+}
+const nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+class StudyError extends Error {
+}
+function setting(db2, key) {
+  return one(db2, "SELECT value FROM settings WHERE key = ?", [key])?.value ?? null;
+}
+function setSetting(db2, key, value) {
+  if (value == null) exec(db2, "DELETE FROM settings WHERE key = ?", [key]);
+  else exec(db2, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [key, value]);
+}
+const NEW_PER_DAY_KEY = "study_new_per_day";
+const PINNED_KEY = "study_pinned";
+const DEFAULT_NEW_PER_DAY = 20;
+async function getPrefs() {
+  return read((db2) => ({ newPerDay: newPerDay(db2), pinned: pinned(db2) }));
+}
+function newPerDay(db2) {
+  const n = Number(setting(db2, NEW_PER_DAY_KEY));
+  return Number.isFinite(n) && n >= 0 && setting(db2, NEW_PER_DAY_KEY) != null ? Math.floor(n) : DEFAULT_NEW_PER_DAY;
+}
+async function setNewPerDay(n) {
+  if (!Number.isFinite(n) || n < 0 || n > 1e3) throw new StudyError(tt("estudos.limiteNovosInvalido"));
+  await tx((db2) => setSetting(db2, NEW_PER_DAY_KEY, String(Math.floor(n))));
+}
+function pinned(db2) {
+  try {
+    const v = JSON.parse(setting(db2, PINNED_KEY) || "null");
+    return v && typeof v.topicId === "number" ? v : null;
+  } catch {
+    return null;
+  }
+}
+async function setPinned(p) {
+  await tx((db2) => setSetting(db2, PINNED_KEY, p ? JSON.stringify({ topicId: p.topicId, nodeId: p.nodeId ?? null, target: p.target ?? "note", refId: p.refId ?? null }) : null));
+}
+const TOPIC_STATUSES = ["studying", "planned", "paused", "completed"];
+function checkStatus(s2) {
+  if (!TOPIC_STATUSES.includes(s2)) throw new StudyError(tt("estudos.statusInvalidoValor", { status: s2 }));
+  return s2;
+}
+async function getTopic(id2) {
+  return read((db2) => one(db2, "SELECT * FROM study_topics WHERE id = ?", [id2]));
+}
+const clean = (s2) => s2 == null ? null : s2.trim() || null;
+async function createTopic(input) {
+  const name = (input.name ?? "").trim();
+  if (!name) throw new StudyError(tt("estudos.topicoSemTitulo"));
+  const status2 = checkStatus(input.status ?? "studying");
+  return tx((db2) => {
+    const id2 = exec(
+      db2,
+      `INSERT INTO study_topics (name, category, status, targetDate, priority, color, createdAt, kind, targetLanguage, explanationLanguage, goal, reviewWhenArchived, readingMode, uid)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, lower(hex(randomblob(8))))`,
+      [
+        name,
+        clean(input.category),
+        status2,
+        clean(input.targetDate),
+        input.priority ?? 0,
+        input.color || "#6366f1",
+        nowIso(),
+        input.kind === "language" ? "language" : "general",
+        clean(input.targetLanguage),
+        clean(input.explanationLanguage),
+        clean(input.goal),
+        input.reviewWhenArchived ? 1 : 0,
+        input.readingMode === "visible" ? "visible" : "hidden"
+      ]
+    );
+    return one(db2, "SELECT * FROM study_topics WHERE id = ?", [id2]);
+  });
+}
+async function createFutureTopic(name) {
+  return createTopic({ name, status: "planned" });
+}
+async function updateTopic(id2, patch) {
+  return tx((db2) => {
+    const cur = one(db2, "SELECT * FROM study_topics WHERE id = ?", [id2]);
+    if (!cur) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+    const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+    const name = has("name") ? (patch.name ?? "").trim() : cur.name;
+    if (!name) throw new StudyError(tt("estudos.topicoSemTitulo"));
+    exec(
+      db2,
+      `UPDATE study_topics SET name = ?, category = ?, status = ?, targetDate = ?, priority = ?, color = ?, kind = ?, targetLanguage = ?,
+       explanationLanguage = ?, goal = ?, reviewWhenArchived = ?, readingMode = ? WHERE id = ?`,
+      [
+        name,
+        has("category") ? clean(patch.category) : cur.category,
+        has("status") ? checkStatus(patch.status) : cur.status,
+        has("targetDate") ? clean(patch.targetDate) : cur.targetDate,
+        has("priority") ? patch.priority ?? 0 : cur.priority,
+        has("color") ? patch.color || cur.color : cur.color,
+        has("kind") ? patch.kind === "language" ? "language" : "general" : cur.kind,
+        has("targetLanguage") ? clean(patch.targetLanguage) : cur.targetLanguage,
+        has("explanationLanguage") ? clean(patch.explanationLanguage) : cur.explanationLanguage,
+        has("goal") ? clean(patch.goal) : cur.goal,
+        has("reviewWhenArchived") ? patch.reviewWhenArchived ? 1 : 0 : cur.reviewWhenArchived,
+        has("readingMode") ? patch.readingMode === "visible" ? "visible" : "hidden" : cur.readingMode,
+        id2
+      ]
+    );
+    return one(db2, "SELECT * FROM study_topics WHERE id = ?", [id2]);
+  });
+}
+async function setTopicStatus(id2, status2) {
+  return updateTopic(id2, { status: checkStatus(status2) });
+}
+async function getLibrary() {
+  const today2 = localDate();
+  return read((db2) => {
+    const topics = all(db2, "SELECT * FROM study_topics ORDER BY priority DESC, name COLLATE NOCASE ASC, id ASC");
+    const nodes = new Map(
+      all(
+        db2,
+        "SELECT topicId, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done, COUNT(*) AS total FROM study_nodes GROUP BY topicId"
+      ).map((r) => [r.topicId, r])
+    );
+    const cards = new Map(
+      all(db2, "SELECT topicId, COUNT(*) AS n FROM study_flashcards WHERE status <> 'suggested' GROUP BY topicId").map((r) => [r.topicId, r.n])
+    );
+    const due = new Map(
+      all(
+        db2,
+        `SELECT c.topicId, COUNT(*) AS n FROM study_card_states s JOIN study_flashcards c ON c.id = s.cardId
+         WHERE s.suspended = 0 AND c.status = 'active' AND s.lastReviewedAt IS NOT NULL AND (s.nextReviewAt IS NULL OR s.nextReviewAt <= ?)
+         GROUP BY c.topicId`,
+        [today2]
+      ).map((r) => [r.topicId, r.n])
+    );
+    const cps = /* @__PURE__ */ new Map();
+    for (const c of all(db2, "SELECT * FROM study_checkpoints ORDER BY updatedAt DESC, id DESC")) if (!cps.has(c.topicId)) cps.set(c.topicId, c);
+    return topics.map((t) => ({
+      ...t,
+      group: groupOf(t.status),
+      nodesDone: nodes.get(t.id)?.done ?? 0,
+      nodesTotal: nodes.get(t.id)?.total ?? 0,
+      cards: cards.get(t.id) ?? 0,
+      due: due.get(t.id) ?? 0,
+      lastActivityAt: cps.get(t.id)?.updatedAt ?? null,
+      whereStopped: cps.get(t.id)?.whereStopped ?? null
+    }));
+  });
+}
+function treeOrder(nodes) {
+  const by = /* @__PURE__ */ new Map();
+  const ids2 = new Set(nodes.map((n) => n.id));
+  for (const n of nodes) {
+    const k = n.parentId != null && ids2.has(n.parentId) ? n.parentId : null;
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(n);
+  }
+  for (const arr2 of by.values()) arr2.sort((a, b2) => a.orderIndex - b2.orderIndex || a.id - b2.id);
+  const out = [];
+  const seen2 = /* @__PURE__ */ new Set();
+  const walk = (pid) => {
+    for (const n of by.get(pid) ?? []) {
+      if (seen2.has(n.id)) continue;
+      seen2.add(n.id);
+      out.push(n);
+      walk(n.id);
+    }
+  };
+  walk(null);
+  return out;
+}
+function firstPending(nodes, filter = () => true) {
+  const ordered = treeOrder(nodes);
+  const pendingChildren = /* @__PURE__ */ new Set();
+  for (const n of nodes) if (n.status !== "done" && n.parentId != null) pendingChildren.add(n.parentId);
+  return ordered.find((n) => n.status !== "done" && !pendingChildren.has(n.id) && filter(n)) ?? null;
+}
+function activeTopics(db2) {
+  return all(db2, "SELECT * FROM study_topics WHERE status = 'studying' ORDER BY priority DESC, name COLLATE NOCASE ASC, id ASC");
+}
+function nodeTitle(db2, id2) {
+  return id2 == null ? null : one(db2, "SELECT title FROM study_nodes WHERE id = ?", [id2])?.title ?? null;
+}
+async function getContinue() {
+  return read((db2) => {
+    const base2 = (t) => ({
+      topicId: t?.id ?? null,
+      topicName: t?.name ?? null,
+      nodeId: null,
+      nodeTitle: null,
+      target: "note",
+      refId: null,
+      whereStopped: null,
+      position: null
+    });
+    const p = pinned(db2);
+    if (p) {
+      const t = one(db2, "SELECT * FROM study_topics WHERE id = ?", [p.topicId]);
+      if (t) return { ...base2(t), reason: "pinned", nodeId: p.nodeId, nodeTitle: nodeTitle(db2, p.nodeId), target: p.target, refId: p.refId };
+    }
+    const topics = activeTopics(db2);
+    if (!topics.length) return { ...base2(null), reason: "nothing" };
+    const ids2 = topics.map((t) => t.id);
+    const ph = ids2.map(() => "?").join(",");
+    const cp = one(db2, `SELECT * FROM study_checkpoints WHERE topicId IN (${ph}) ORDER BY updatedAt DESC, id DESC LIMIT 1`, ids2);
+    if (cp) {
+      const t = topics.find((x) => x.id === cp.topicId);
+      return {
+        ...base2(t),
+        reason: "checkpoint",
+        nodeId: cp.nodeId,
+        nodeTitle: nodeTitle(db2, cp.nodeId),
+        target: cp.target,
+        refId: cp.refId,
+        whereStopped: cp.whereStopped,
+        position: cp.position
+      };
+    }
+    for (const t of topics) {
+      const nodes = all(db2, "SELECT * FROM study_nodes WHERE topicId = ?", [t.id]);
+      const n = firstPending(nodes, (x) => x.origin === "plan");
+      if (n) return { ...base2(t), reason: "plan", nodeId: n.id, nodeTitle: n.title };
+    }
+    for (const t of topics) {
+      const n = firstPending(all(db2, "SELECT * FROM study_nodes WHERE topicId = ?", [t.id]));
+      if (n) return { ...base2(t), reason: "manual", nodeId: n.id, nodeTitle: n.title };
+    }
+    const first = topics[0];
+    const hasContent = !!one(db2, "SELECT 1 FROM study_notes WHERE topicId = ? AND TRIM(content) <> '' LIMIT 1", [first.id]) || !!one(db2, "SELECT 1 FROM study_sources WHERE topicId = ? LIMIT 1", [first.id]) || !!one(db2, "SELECT 1 FROM study_nodes WHERE topicId = ? LIMIT 1", [first.id]);
+    return { ...base2(first), reason: hasContent ? "manual" : "empty-topic" };
+  });
+}
+function topicMatches(t, f) {
+  if (f.topicId != null && t.id !== f.topicId) return false;
+  if (f.category && (t.category ?? "") !== f.category) return false;
+  if (f.language && (t.targetLanguage ?? "") !== f.language) return false;
+  return true;
+}
+async function getTimeOptions(minutes, filters = {}) {
+  const queue2 = await getReviewQueue({});
+  const cont = await getContinue();
+  return read((db2) => {
+    const topics = activeTopics(db2).filter((t) => topicMatches(t, filters));
+    const fits = [];
+    for (const t of topics) {
+      const nodes = all(db2, "SELECT * FROM study_nodes WHERE topicId = ?", [t.id]);
+      const pendingChildren = /* @__PURE__ */ new Set();
+      for (const n of nodes) if (n.status !== "done" && n.parentId != null) pendingChildren.add(n.parentId);
+      for (const n of treeOrder(nodes)) {
+        const m = nodeMinutes(n.estimatedHours);
+        if (n.status === "done" || pendingChildren.has(n.id) || m == null || m > minutes) continue;
+        fits.push({ kind: "node", topicId: t.id, topicName: t.name, nodeId: n.id, title: n.title, minutes: m });
+      }
+    }
+    fits.sort((a, b2) => (b2.minutes ?? 0) - (a.minutes ?? 0));
+    const topicIds = new Set(topics.map((t) => t.id));
+    const fallback = [];
+    if (cont.topicId != null && topicIds.has(cont.topicId)) {
+      fallback.push({ kind: "resume-note", topicId: cont.topicId, topicName: cont.topicName, nodeId: cont.nodeId, title: cont.nodeTitle ?? cont.topicName ?? "", minutes: null });
+    }
+    const cards = queue2.items.filter((i) => topicIds.has(i.card.topicId)).length;
+    if (cards) fallback.push({ kind: "cards", topicId: filters.topicId ?? null, topicName: null, nodeId: null, title: "", minutes: null, count: cards });
+    const qs = all(
+      db2,
+      `SELECT COUNT(*) AS n FROM study_questions WHERE status = 'active' AND topicId IN (${[...topicIds].map(() => "?").join(",") || "NULL"})`,
+      [...topicIds]
+    )[0]?.n ?? 0;
+    if (qs) fallback.push({ kind: "questions", topicId: filters.topicId ?? null, topicName: null, nodeId: null, title: "", minutes: null, count: qs });
+    return { fits: fits.slice(0, 6), fallback };
+  });
+}
+async function listCategories() {
+  return read(
+    (db2) => all(
+      db2,
+      `SELECT k.id, k.name, k.sortOrder, (SELECT COUNT(*) FROM study_flashcards c WHERE c.categoryId = k.id) AS cards
+       FROM study_card_categories k ORDER BY k.sortOrder ASC, k.name COLLATE NOCASE ASC`
+    )
+  );
+}
+async function createCategory(name) {
+  const n = (name ?? "").trim();
+  if (!n) throw new StudyError(tt("estudos.categoriaVazia"));
+  return tx((db2) => {
+    if (one(db2, "SELECT 1 FROM study_card_categories WHERE name = ?", [n])) throw new StudyError(tt("estudos.categoriaExiste", { nome: n }));
+    const max = one(db2, "SELECT COALESCE(MAX(sortOrder), 0) AS m FROM study_card_categories")?.m ?? 0;
+    const id2 = exec(db2, "INSERT INTO study_card_categories (name, sortOrder, createdAt) VALUES (?, ?, ?)", [n, max + 10, nowIso()]);
+    return { id: id2, name: n, sortOrder: max + 10, cards: 0 };
+  });
+}
+async function renameCategory(id2, name) {
+  const n = (name ?? "").trim();
+  if (!n) throw new StudyError(tt("estudos.categoriaVazia"));
+  await tx((db2) => {
+    if (one(db2, "SELECT 1 FROM study_card_categories WHERE name = ? AND id <> ?", [n, id2])) throw new StudyError(tt("estudos.categoriaExiste", { nome: n }));
+    exec(db2, "UPDATE study_card_categories SET name = ? WHERE id = ?", [n, id2]);
+  });
+}
+async function deleteCategory(id2) {
+  await tx((db2) => {
+    exec(db2, "UPDATE study_flashcards SET categoryId = NULL WHERE categoryId = ?", [id2]);
+    exec(db2, "DELETE FROM study_card_categories WHERE id = ?", [id2]);
+  });
+}
+function parseVariants(v) {
+  try {
+    const a = JSON.parse(v || "[]");
+    return Array.isArray(a) ? a.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+function cardOut(db2, c, states) {
+  return {
+    ...c,
+    variants: parseVariants(c.variants),
+    categoryName: c.categoryName ?? null,
+    states: states ?? all(db2, "SELECT * FROM study_card_states WHERE cardId = ? ORDER BY CASE direction WHEN 'forward' THEN 0 ELSE 1 END", [c.id])
+  };
+}
+const CARD_SELECT = "SELECT c.*, k.name AS categoryName FROM study_flashcards c LEFT JOIN study_card_categories k ON k.id = c.categoryId";
+async function listCards(f = {}) {
+  return read((db2) => {
+    const where = [];
+    const params = [];
+    if (f.topicId != null) {
+      where.push("c.topicId = ?");
+      params.push(f.topicId);
+    }
+    if (f.nodeId != null) {
+      where.push("c.nodeId = ?");
+      params.push(f.nodeId);
+    }
+    if (f.categoryId === "none") where.push("c.categoryId IS NULL");
+    else if (f.categoryId != null) {
+      where.push("c.categoryId = ?");
+      params.push(f.categoryId);
+    }
+    if (f.language) {
+      where.push("COALESCE(c.language, (SELECT targetLanguage FROM study_topics t WHERE t.id = c.topicId)) = ?");
+      params.push(f.language);
+    }
+    if (f.status && f.status !== "all") {
+      where.push("c.status = ?");
+      params.push(f.status);
+    } else if (!f.status) where.push("c.status <> 'suggested'");
+    if (f.text?.trim()) {
+      where.push("(ulower(c.front) LIKE ? OR ulower(c.back) LIKE ? OR ulower(COALESCE(c.example, '')) LIKE ?)");
+      const q2 = `%${f.text.trim().toLowerCase()}%`;
+      params.push(q2, q2, q2);
+    }
+    const rows = all(db2, `${CARD_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY c.id DESC`, params);
+    const states = /* @__PURE__ */ new Map();
+    if (rows.length) {
+      for (const s2 of all(db2, `SELECT * FROM study_card_states WHERE cardId IN (${rows.map(() => "?").join(",")})`, rows.map((r) => r.id))) {
+        if (!states.has(s2.cardId)) states.set(s2.cardId, []);
+        states.get(s2.cardId).push(s2);
+      }
+    }
+    return rows.map((r) => cardOut(db2, r, (states.get(r.id) ?? []).sort((a, b2) => (a.direction === "forward" ? -1 : 1) - (b2.direction === "forward" ? -1 : 1))));
+  });
+}
+async function getCard(id2) {
+  return read((db2) => {
+    const c = one(db2, `${CARD_SELECT} WHERE c.id = ?`, [id2]);
+    return c ? cardOut(db2, c) : null;
+  });
+}
+function ensureState(db2, cardId, direction) {
+  const s2 = one(db2, "SELECT * FROM study_card_states WHERE cardId = ? AND direction = ?", [cardId, direction]);
+  if (!s2) exec(db2, "INSERT INTO study_card_states (cardId, direction) VALUES (?, ?)", [cardId, direction]);
+  else if (s2.suspended) exec(db2, "UPDATE study_card_states SET suspended = 0 WHERE id = ?", [s2.id]);
+}
+function validCard(input) {
+  if (!(input.front ?? "").trim()) throw new StudyError(tt("estudos.frenteVazia"));
+  if (input.cardType !== "cloze" && !(input.back ?? "").trim()) throw new StudyError(tt("estudos.versoVazio"));
+  if (input.cardType === "cloze" && !/\{\{[^}]+\}\}/.test(input.front)) throw new StudyError(tt("estudos.marqueLacuna"));
+}
+function insertCard(db2, input) {
+  validCard(input);
+  const now = nowIso();
+  const id2 = exec(
+    db2,
+    `INSERT INTO study_flashcards (topicId, nodeId, front, back, createdAt, cardType, categoryId, language, example, reading, variants, drill, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.topicId,
+      input.nodeId ?? null,
+      input.front.trim(),
+      (input.back ?? "").trim(),
+      now,
+      input.cardType === "cloze" ? "cloze" : "basic",
+      input.categoryId ?? null,
+      clean(input.language),
+      clean(input.example),
+      clean(input.reading),
+      input.variants?.length ? JSON.stringify(input.variants.map((v) => v.trim()).filter(Boolean)) : null,
+      clean(input.drill),
+      input.status ?? "active"
+    ]
+  );
+  ensureState(db2, id2, "forward");
+  if (input.reverse && input.cardType !== "cloze") ensureState(db2, id2, "reverse");
+  return id2;
+}
+async function createCard(input) {
+  const id2 = await tx((db2) => insertCard(db2, input));
+  return await getCard(id2);
+}
+async function updateCard(id2, input) {
+  await tx((db2) => {
+    const cur = one(db2, "SELECT * FROM study_flashcards WHERE id = ?", [id2]);
+    if (!cur) throw new StudyError(tt("estudos.cartaoNaoEncontrado"));
+    validCard({ ...input, topicId: cur.topicId });
+    exec(
+      db2,
+      `UPDATE study_flashcards SET nodeId = ?, front = ?, back = ?, cardType = ?, categoryId = ?, language = ?, example = ?, reading = ?, variants = ?, drill = ? WHERE id = ?`,
+      [
+        input.nodeId ?? null,
+        input.front.trim(),
+        (input.back ?? "").trim(),
+        input.cardType === "cloze" ? "cloze" : "basic",
+        input.categoryId ?? null,
+        clean(input.language),
+        clean(input.example),
+        clean(input.reading),
+        input.variants?.length ? JSON.stringify(input.variants.map((v) => v.trim()).filter(Boolean)) : null,
+        clean(input.drill),
+        id2
+      ]
+    );
+    if (input.reverse && input.cardType !== "cloze") ensureState(db2, id2, "reverse");
+    else exec(db2, "UPDATE study_card_states SET suspended = 1 WHERE cardId = ? AND direction = 'reverse'", [id2]);
+  });
+  return await getCard(id2);
+}
+async function setCardStatus(id2, status2) {
+  if (!["active", "suspended", "suggested"].includes(status2)) throw new StudyError(tt("estudos.statusInvalido"));
+  await tx((db2) => exec(db2, "UPDATE study_flashcards SET status = ? WHERE id = ?", [status2, id2]));
+}
+async function setStateSuspended(stateId, suspended) {
+  await tx((db2) => exec(db2, "UPDATE study_card_states SET suspended = ? WHERE id = ?", [suspended ? 1 : 0, stateId]));
+}
+async function deleteCard(id2) {
+  await tx((db2) => exec(db2, "DELETE FROM study_flashcards WHERE id = ?", [id2]));
+}
+function introducedToday(db2, now) {
+  const since = new Date(now.getTime() - 36 * 36e5).toISOString();
+  const today2 = localDate(now);
+  return all(db2, "SELECT introducedAt FROM study_card_states WHERE introducedAt >= ?", [since]).filter(
+    (r) => localDate(new Date(r.introducedAt)) === today2
+  ).length;
+}
+async function getReviewQueue(f = {}, now = /* @__PURE__ */ new Date()) {
+  return read((db2) => {
+    const today2 = localDate(now);
+    const where = ["s.suspended = 0", "c.status = 'active'"];
+    const params = [];
+    if (f.topicIds?.length) {
+      where.push(`c.topicId IN (${f.topicIds.map(() => "?").join(",")})`);
+      params.push(...f.topicIds);
+    } else if (f.topicId != null) {
+      where.push("c.topicId = ?");
+      params.push(f.topicId);
+    } else {
+      where.push("(t.status = 'studying' OR (t.status IN ('paused', 'completed') AND t.reviewWhenArchived = 1))");
+    }
+    if (f.nodeId != null) {
+      where.push("c.nodeId = ?");
+      params.push(f.nodeId);
+    }
+    if (f.categoryId === "none") where.push("c.categoryId IS NULL");
+    else if (f.categoryId != null) {
+      where.push("c.categoryId = ?");
+      params.push(f.categoryId);
+    }
+    if (f.language) {
+      where.push("COALESCE(c.language, t.targetLanguage) = ?");
+      params.push(f.language);
+    }
+    const rows = all(
+      db2,
+      `SELECT c.*, k.name AS categoryName, t.name AS topicName, t.kind AS topicKind, t.targetLanguage, t.readingMode,
+              s.id AS s_id, s.direction AS s_direction, s.easeFactor AS s_ease, s.intervalDays AS s_interval, s.repetitions AS s_reps,
+              s.nextReviewAt AS s_next, s.lastReviewedAt AS s_last, s.introducedAt AS s_intro, s.suspended AS s_susp
+       FROM study_card_states s
+       JOIN study_flashcards c ON c.id = s.cardId
+       JOIN study_topics t ON t.id = c.topicId
+       LEFT JOIN study_card_categories k ON k.id = c.categoryId
+       WHERE ${where.join(" AND ")}
+         AND (s.nextReviewAt IS NULL OR s.nextReviewAt <= ?)
+       ORDER BY s.nextReviewAt ASC, c.id ASC, CASE s.direction WHEN 'forward' THEN 0 ELSE 1 END`,
+      [...params, today2]
+    );
+    const perDay = newPerDay(db2);
+    const newLeft = Math.max(0, perDay - introducedToday(db2, now));
+    const reviews = [];
+    const fresh = [];
+    for (const r of rows) {
+      const state = {
+        id: r.s_id,
+        cardId: r.id,
+        direction: r.s_direction,
+        easeFactor: r.s_ease,
+        intervalDays: r.s_interval,
+        repetitions: r.s_reps,
+        nextReviewAt: r.s_next,
+        lastReviewedAt: r.s_last,
+        introducedAt: r.s_intro,
+        suspended: r.s_susp
+      };
+      const isNew = r.s_last == null;
+      const item = {
+        card: cardOut(db2, r, []),
+        state,
+        topicName: r.topicName,
+        topicKind: r.topicKind,
+        targetLanguage: r.targetLanguage,
+        readingMode: r.readingMode,
+        isNew
+      };
+      (isNew ? fresh : reviews).push(item);
+    }
+    fresh.sort((a, b2) => a.card.id - b2.card.id || (a.state.direction === "forward" ? -1 : 1));
+    return { items: [...reviews, ...fresh.slice(0, newLeft)], newLeft, newPerDay: perDay, dueTotal: reviews.length };
+  });
+}
+async function reviewState(stateId, rating, now = /* @__PURE__ */ new Date()) {
+  return tx((db2) => {
+    const s2 = one(db2, "SELECT * FROM study_card_states WHERE id = ?", [stateId]);
+    if (!s2) throw new StudyError(tt("estudos.cartaoNaoEncontrado"));
+    const card = one(db2, "SELECT topicId FROM study_flashcards WHERE id = ?", [s2.cardId]);
+    const u = schedule(s2, rating, now);
+    exec(
+      db2,
+      "UPDATE study_card_states SET easeFactor = ?, intervalDays = ?, repetitions = ?, nextReviewAt = ?, lastReviewedAt = ?, introducedAt = COALESCE(introducedAt, ?) WHERE id = ?",
+      [u.easeFactor, u.intervalDays, u.repetitions, u.nextReviewAt, u.lastReviewedAt, u.lastReviewedAt, stateId]
+    );
+    if (s2.direction === "forward") {
+      exec(db2, "UPDATE study_flashcards SET easeFactor = ?, intervalDays = ?, repetitions = ?, nextReviewAt = ?, lastReviewedAt = ? WHERE id = ?", [
+        u.easeFactor,
+        u.intervalDays,
+        u.repetitions,
+        u.nextReviewAt,
+        u.lastReviewedAt,
+        s2.cardId
+      ]);
+    }
+    exec(db2, "INSERT INTO study_review_log (flashcardId, topicId, rating, reviewedAt, direction, stateId) VALUES (?, ?, ?, ?, ?, ?)", [
+      s2.cardId,
+      card.topicId,
+      rating,
+      u.lastReviewedAt,
+      s2.direction,
+      stateId
+    ]);
+    return one(db2, "SELECT * FROM study_card_states WHERE id = ?", [stateId]);
+  });
+}
+async function listSources(topicId, nodeId) {
+  return read(
+    (db2) => nodeId === void 0 ? all(db2, "SELECT * FROM study_sources WHERE topicId = ? ORDER BY updatedAt DESC, id DESC", [topicId]) : all(db2, "SELECT * FROM study_sources WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY updatedAt DESC, id DESC", [topicId, nodeId])
+  );
+}
+function insertSource(db2, s2) {
+  const title = (s2.title ?? "").trim();
+  if (!title) throw new StudyError(tt("estudos.fonteSemTitulo"));
+  if (s2.kind === "link" && !(s2.url ?? "").trim()) throw new StudyError(tt("estudos.informeLink"));
+  const now = nowIso();
+  return exec(
+    db2,
+    "INSERT INTO study_sources (topicId, nodeId, kind, title, content, url, locator, originPath, originHash, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [s2.topicId, s2.nodeId ?? null, s2.kind ?? "text", title, s2.content ?? "", clean(s2.url), clean(s2.locator), clean(s2.originPath), clean(s2.originHash), now, now]
+  );
+}
+async function createSource(s2) {
+  const id2 = await tx((db2) => insertSource(db2, s2));
+  return read((db2) => one(db2, "SELECT * FROM study_sources WHERE id = ?", [id2]));
+}
+async function updateSource(id2, patch) {
+  return tx((db2) => {
+    const cur = one(db2, "SELECT * FROM study_sources WHERE id = ?", [id2]);
+    if (!cur) throw new StudyError(tt("estudos.fonteNaoEncontrada"));
+    const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+    exec(db2, "UPDATE study_sources SET nodeId = ?, title = ?, content = ?, url = ?, locator = ?, originHash = ?, updatedAt = ? WHERE id = ?", [
+      has("nodeId") ? patch.nodeId ?? null : cur.nodeId,
+      has("title") ? (patch.title ?? "").trim() || cur.title : cur.title,
+      has("content") ? patch.content ?? "" : cur.content,
+      has("url") ? clean(patch.url) : cur.url,
+      has("locator") ? clean(patch.locator) : cur.locator,
+      has("originHash") ? clean(patch.originHash) : cur.originHash,
+      nowIso(),
+      id2
+    ]);
+    return one(db2, "SELECT * FROM study_sources WHERE id = ?", [id2]);
+  });
+}
+async function deleteSource(id2) {
+  await tx((db2) => exec(db2, "DELETE FROM study_sources WHERE id = ?", [id2]));
+}
+const titleFromPath = (p) => (p.split("/").pop() || p).replace(/\.(md|markdown|txt)$/i, "").replace(/[-_]+/g, " ").trim() || p;
+async function previewImport(topicId, files) {
+  return read(
+    (db2) => files.map((f) => {
+      const ex2 = one(db2, "SELECT * FROM study_sources WHERE topicId = ? AND originPath = ? ORDER BY id DESC LIMIT 1", [topicId, f.path]);
+      return {
+        path: f.path,
+        title: titleFromPath(f.path),
+        chars: f.content.length,
+        status: !ex2 ? "new" : ex2.originHash === f.hash ? "unchanged" : "changed",
+        existingId: ex2?.id ?? null
+      };
+    })
+  );
+}
+async function applyImport(topicId, nodeId, files) {
+  return tx((db2) => {
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    for (const f of files) {
+      if (f.decision === "skip") {
+        skipped++;
+        continue;
+      }
+      const ex2 = one(db2, "SELECT * FROM study_sources WHERE topicId = ? AND originPath = ? ORDER BY id DESC LIMIT 1", [topicId, f.path]);
+      if (ex2 && f.decision === "update") {
+        exec(db2, "UPDATE study_sources SET content = ?, originHash = ?, updatedAt = ? WHERE id = ?", [f.content, f.hash, nowIso(), ex2.id]);
+        updated++;
+      } else if (ex2 && ex2.originHash === f.hash) {
+        skipped++;
+      } else {
+        insertSource(db2, { topicId, nodeId, kind: "file", title: f.title || titleFromPath(f.path), content: f.content, originPath: f.path, originHash: f.hash });
+        created++;
+      }
+    }
+    return { created, updated, skipped };
+  });
+}
+async function saveCheckpoint(c) {
+  return tx((db2) => {
+    const cur = one(
+      db2,
+      "SELECT * FROM study_checkpoints WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) AND target = ? AND IFNULL(refId, -1) = IFNULL(?, -1)",
+      [c.topicId, c.nodeId ?? null, c.target, c.refId ?? null]
+    );
+    const where = c.whereStopped === void 0 ? cur?.whereStopped ?? null : clean(c.whereStopped);
+    const now = nowIso();
+    if (cur) {
+      exec(db2, "UPDATE study_checkpoints SET position = ?, whereStopped = ?, updatedAt = ? WHERE id = ?", [c.position ?? cur.position, where, now, cur.id]);
+      return one(db2, "SELECT * FROM study_checkpoints WHERE id = ?", [cur.id]);
+    }
+    const id2 = exec(db2, "INSERT INTO study_checkpoints (topicId, nodeId, target, refId, position, whereStopped, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+      c.topicId,
+      c.nodeId ?? null,
+      c.target,
+      c.refId ?? null,
+      c.position ?? null,
+      where,
+      now
+    ]);
+    return one(db2, "SELECT * FROM study_checkpoints WHERE id = ?", [id2]);
+  });
+}
+async function getCheckpoint(topicId, nodeId, target, refId = null) {
+  return read(
+    (db2) => one(
+      db2,
+      "SELECT * FROM study_checkpoints WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) AND target = ? AND IFNULL(refId, -1) = IFNULL(?, -1)",
+      [topicId, nodeId, target, refId]
+    )
+  );
+}
+function insertQuestion(db2, q2) {
+  const prompt = (q2.prompt ?? "").trim();
+  if (!prompt) throw new StudyError(tt("estudos.perguntaVazia"));
+  const now = nowIso();
+  return exec(
+    db2,
+    "INSERT INTO study_questions (topicId, nodeId, kind, prompt, reference, hint, origin, status, revisit, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+    [q2.topicId, q2.nodeId ?? null, q2.kind ?? "recall", prompt, clean(q2.reference), clean(q2.hint), q2.origin ?? "manual", "active", now, now]
+  );
+}
+async function createQuestion(q2) {
+  const id2 = await tx((db2) => insertQuestion(db2, q2));
+  return read((db2) => one(db2, "SELECT * FROM study_questions WHERE id = ?", [id2]));
+}
+async function updateQuestion(id2, patch) {
+  await tx((db2) => {
+    const cur = one(db2, "SELECT * FROM study_questions WHERE id = ?", [id2]);
+    if (!cur) throw new StudyError(tt("estudos.perguntaNaoEncontrada"));
+    const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+    exec(db2, "UPDATE study_questions SET prompt = ?, reference = ?, hint = ?, kind = ?, nodeId = ?, status = ?, revisit = ?, updatedAt = ? WHERE id = ?", [
+      has("prompt") ? (patch.prompt ?? "").trim() || cur.prompt : cur.prompt,
+      has("reference") ? clean(patch.reference) : cur.reference,
+      has("hint") ? clean(patch.hint) : cur.hint,
+      has("kind") ? patch.kind ?? cur.kind : cur.kind,
+      has("nodeId") ? patch.nodeId ?? null : cur.nodeId,
+      has("status") ? patch.status ?? cur.status : cur.status,
+      has("revisit") ? patch.revisit ? 1 : 0 : cur.revisit,
+      nowIso(),
+      id2
+    ]);
+  });
+}
+async function deleteQuestion(id2) {
+  await tx((db2) => exec(db2, "DELETE FROM study_questions WHERE id = ?", [id2]));
+}
+async function listQuestions(f = {}) {
+  return read((db2) => {
+    const where = [];
+    const params = [];
+    if (!f.includeArchived) where.push("q.status = 'active'");
+    if (f.topicId != null) {
+      where.push("q.topicId = ?");
+      params.push(f.topicId);
+    } else if (!f.allGroups) where.push("t.status = 'studying'");
+    if (f.nodeId != null) {
+      where.push("q.nodeId = ?");
+      params.push(f.nodeId);
+    }
+    return all(
+      db2,
+      `SELECT q.*, t.name AS topicName,
+         (SELECT COUNT(*) FROM study_attempts a WHERE a.questionId = q.id) AS attempts,
+         (SELECT a.outcome FROM study_attempts a WHERE a.questionId = q.id ORDER BY a.createdAt DESC, a.id DESC LIMIT 1) AS lastOutcome,
+         (SELECT a.createdAt FROM study_attempts a WHERE a.questionId = q.id ORDER BY a.createdAt DESC, a.id DESC LIMIT 1) AS lastAttemptAt
+       FROM study_questions q JOIN study_topics t ON t.id = q.topicId
+       ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY q.revisit DESC,
+         CASE WHEN lastOutcome IN ('miss', 'partial') THEN 0 WHEN lastOutcome IS NULL THEN 1 ELSE 2 END,
+         COALESCE(lastAttemptAt, '') ASC, q.id ASC`,
+      params
+    );
+  });
+}
+async function recordAttempt(questionId, a) {
+  if (!["ok", "partial", "miss", "skipped"].includes(a.outcome)) throw new StudyError(tt("estudos.resultadoInvalido"));
+  return tx((db2) => {
+    const q2 = one(db2, "SELECT * FROM study_questions WHERE id = ?", [questionId]);
+    if (!q2) throw new StudyError(tt("estudos.perguntaNaoEncontrada"));
+    const id2 = exec(db2, "INSERT INTO study_attempts (questionId, topicId, answer, helpUsed, outcome, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
+      questionId,
+      q2.topicId,
+      clean(a.answer),
+      clean(a.helpUsed),
+      a.outcome,
+      nowIso()
+    ]);
+    if (a.outcome === "miss" || a.outcome === "partial") exec(db2, "UPDATE study_questions SET revisit = 1 WHERE id = ?", [questionId]);
+    else if (a.outcome === "ok") exec(db2, "UPDATE study_questions SET revisit = 0 WHERE id = ?", [questionId]);
+    return one(db2, "SELECT * FROM study_attempts WHERE id = ?", [id2]);
+  });
+}
+async function listAttempts(questionId) {
+  return read((db2) => all(db2, "SELECT * FROM study_attempts WHERE questionId = ? ORDER BY createdAt DESC, id DESC", [questionId]));
+}
+const repo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  DEFAULT_NEW_PER_DAY,
+  NEW_PER_DAY_KEY,
+  PINNED_KEY,
+  applyImport,
+  createCard,
+  createCategory,
+  createFutureTopic,
+  createQuestion,
+  createSource,
+  createTopic,
+  deleteCard,
+  deleteCategory,
+  deleteQuestion,
+  deleteSource,
+  getCard,
+  getCheckpoint,
+  getContinue,
+  getLibrary,
+  getPrefs,
+  getReviewQueue,
+  getTimeOptions,
+  getTopic,
+  insertCard,
+  insertQuestion,
+  insertSource,
+  listAttempts,
+  listCards,
+  listCategories,
+  listQuestions,
+  listSources,
+  previewImport,
+  recordAttempt,
+  renameCategory,
+  reviewState,
+  saveCheckpoint,
+  setCardStatus,
+  setNewPerDay,
+  setPinned,
+  setStateSuspended,
+  setTopicStatus,
+  treeOrder,
+  updateCard,
+  updateQuestion,
+  updateSource,
+  updateTopic
+}, Symbol.toStringTag, { value: "Module" }));
+const ATTACHMENT_PREFIX = "anexos/";
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+const MIME_EXT = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/avif": "avif"
+};
+const EXT_MIME = Object.fromEntries(Object.entries(MIME_EXT).map(([m, e]) => [e, m]));
+EXT_MIME.jpeg = "image/jpeg";
+function attachmentsDir() {
+  const d = path.join(dataDir(), "estudos", "anexos");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+function slugify$1(s2, fallback = "item") {
+  return s2.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").toLowerCase().slice(0, 48).replace(/-$/, "") || fallback;
+}
+function mimeFromName(name) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_MIME[ext] ?? null;
+}
+async function storeAttachment(bytes, originalName, mime, preferredFileName) {
+  const type = MIME_EXT[mime] ? mime : mimeFromName(originalName ?? "");
+  if (!type) throw new StudyError(tt("estudos.imagemNaoSuportada"));
+  if (!bytes.length) throw new StudyError(tt("estudos.arquivoVazio"));
+  if (bytes.length > MAX_ATTACHMENT_BYTES) throw new StudyError(tt("estudos.imagemGrande"));
+  const sha2 = crypto.createHash("sha256").update(bytes).digest("hex");
+  const existing = await read((db2) => one(db2, "SELECT * FROM study_attachments WHERE sha256 = ?", [sha2]));
+  const base2 = slugify$1((originalName ?? "imagem").replace(/\.[^.]+$/, ""), "imagem");
+  const wanted = preferredFileName && /^[a-z0-9][a-z0-9._-]*$/i.test(preferredFileName) && preferredFileName.startsWith(sha2.slice(0, 12)) ? preferredFileName : null;
+  const fileName = existing?.fileName ?? wanted ?? `${sha2.slice(0, 12)}-${base2}.${MIME_EXT[type]}`;
+  const file = path.join(attachmentsDir(), fileName);
+  if (!fs.existsSync(file)) fs.writeFileSync(file, bytes);
+  if (existing) return existing;
+  return tx((db2) => {
+    const id2 = exec(db2, "INSERT INTO study_attachments (sha256, fileName, originalName, mime, size, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
+      sha2,
+      fileName,
+      originalName,
+      type,
+      bytes.length,
+      nowIso()
+    ]);
+    return one(db2, "SELECT * FROM study_attachments WHERE id = ?", [id2]);
+  });
+}
+async function attachmentFile(fileName) {
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(fileName)) return null;
+  const row = await read(
+    (db2) => one(db2, "SELECT * FROM study_attachments WHERE fileName = ?", [fileName]) ?? (/^[0-9a-f]{12}-/.test(fileName) ? one(db2, "SELECT * FROM study_attachments WHERE substr(sha256, 1, 12) = ?", [fileName.slice(0, 12)]) : null)
+  );
+  if (!row) return null;
+  const file = path.join(attachmentsDir(), row.fileName);
+  return fs.existsSync(file) ? { file, mime: row.mime } : null;
+}
+async function listAttachments() {
+  return read((db2) => all(db2, "SELECT * FROM study_attachments ORDER BY fileName"));
+}
+function referencedAttachments(md) {
+  const out = /* @__PURE__ */ new Set();
+  for (const m of md.matchAll(/!\[[^\]]*\]\((?:\.\.\/)*anexos\/([^)\s]+)\)/g)) out.add(decodeURIComponent(m[1]));
+  return [...out];
+}
+const BUNDLE_FORMAT = "rickos-estudos";
+const BUNDLE_VERSION = 1;
+const TABLES = [
+  { table: "study_nodes", refs: { topicId: "study_topics", parentId: "study_nodes", planId: "study_plans" }, by: { column: "topicId" } },
+  { table: "study_notes", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_sources", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_flashcards", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_card_states", refs: { cardId: "study_flashcards" }, by: { column: "cardId", parent: "study_flashcards" } },
+  { table: "study_review_log", refs: { flashcardId: "study_flashcards", topicId: "study_topics", stateId: "study_card_states" }, by: { column: "topicId" } },
+  { table: "study_questions", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_attempts", refs: { questionId: "study_questions", topicId: "study_topics" }, by: { column: "topicId" } },
+  { table: "study_quiz_attempts", refs: { topicId: "study_topics" }, by: { column: "topicId" } },
+  { table: "study_plans", refs: { topicId: "study_topics" }, by: { column: "topicId" } },
+  { table: "study_lessons", refs: { topicId: "study_topics", nodeId: "study_nodes", planId: "study_plans" }, by: { column: "topicId" } },
+  { table: "study_lesson_turns", refs: { lessonId: "study_lessons" }, by: { column: "lessonId", parent: "study_lessons" } },
+  { table: "study_materials", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_suggestions", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_checkpoints", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } },
+  { table: "study_origins", refs: { topicId: "study_topics", nodeId: "study_nodes" }, by: { column: "topicId" } }
+];
+const EXTERNAL_LINKS = [
+  { modulo: "Time Tracker", onde: "tasks.studyNodeId", efeito: "horas de foco por tópico; após restaurar, sessões antigas não se religam aos nós novos" },
+  { modulo: "Metas", onde: "goals (kind = 'study', refId)", efeito: "metas mensais ligadas a um tópico precisam ser religadas" },
+  { modulo: "Configurações", onde: "settings study_* (fixado, limite de novos, Git)", efeito: "preferências locais de cada instalação" }
+];
+function hasTable(db2, t) {
+  return !!one(db2, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [t]);
+}
+function columns(db2, t) {
+  return all(db2, `PRAGMA table_info(${t})`).map((c) => c.name);
+}
+function ensureUids(db2) {
+  db2.run("UPDATE study_topics SET uid = lower(hex(randomblob(8))) WHERE uid IS NULL OR uid = ''");
+}
+function topicFolder(t) {
+  return `${slugify$1(String(t.name), "topico")}-${String(t.uid ?? t.id).slice(0, 6)}`;
+}
+function stable(v) {
+  return JSON.stringify(v, null, 2) + "\n";
+}
+function relinkAttachments(md, depth2) {
+  const up = "../".repeat(depth2);
+  return md.replace(/(!\[[^\]]*\]\()(?:\.\.\/)*anexos\//g, `$1${up}anexos/`);
+}
+function topicData(db2, topic) {
+  const tables = {};
+  const idsOf = {};
+  for (const spec of TABLES) {
+    if (!hasTable(db2, spec.table)) continue;
+    let rows;
+    if (spec.by.column === "topicId" && !("parent" in spec.by)) {
+      rows = all(db2, `SELECT * FROM ${spec.table} WHERE topicId = ? ORDER BY id`, [topic.id]);
+    } else {
+      const by = spec.by;
+      const parents = idsOf[by.parent] ?? [];
+      rows = parents.length ? all(db2, `SELECT * FROM ${spec.table} WHERE ${by.column} IN (${parents.map(() => "?").join(",")}) ORDER BY id`, parents) : [];
+    }
+    tables[spec.table] = rows;
+    idsOf[spec.table] = rows.map((r) => Number(r.id));
+  }
+  const categories = {};
+  for (const c of tables.study_flashcards ?? []) {
+    if (c.categoryId == null) continue;
+    const k = one(db2, "SELECT name FROM study_card_categories WHERE id = ?", [c.categoryId]);
+    if (k) categories[String(c.categoryId)] = k.name;
+  }
+  return { formato: BUNDLE_FORMAT, versao: BUNDLE_VERSION, topic, tables, categories };
+}
+function nodeMarkdown(n, note) {
+  const head = `# ${n.title}${n.status === "done" ? " ✓" : ""}
+
+`;
+  const desc = n.description ? `${n.description}
+
+` : "";
+  return head + desc + (note.trim() ? note.trim() + "\n" : "");
+}
+async function exportAll() {
+  const atts = await listAttachments();
+  const files = [];
+  const manifestTopics = [];
+  const used = /* @__PURE__ */ new Set();
+  await tx((db2) => ensureUids(db2));
+  await read((db2) => {
+    const topics = all(db2, "SELECT * FROM study_topics ORDER BY uid, id");
+    for (const t of topics) {
+      const folder = topicFolder(t);
+      const data2 = topicData(db2, t);
+      const nodes = treeOrder(data2.tables.study_nodes ?? []);
+      const notes = data2.tables.study_notes ?? [];
+      const noteOf = (nodeId) => String(notes.find((n) => (n.nodeId ?? null) === nodeId)?.content ?? "");
+      const index = nodes.map((n, i) => `${"  ".repeat(depthOf(nodes, n))}- [${n.title}](notas/${fileOfNode(i, n)})${n.status === "done" ? " ✓" : ""}`);
+      const readme = `# ${t.name}
+
+` + (t.goal ? `**Objetivo:** ${t.goal}
+
+` : "") + (t.kind === "language" && t.targetLanguage ? `**Idioma praticado:** ${t.targetLanguage}
+
+` : "") + (noteOf(null).trim() ? relinkAttachments(noteOf(null).trim(), 1) + "\n\n" : "") + (index.length ? `## Roteiro
+
+${index.join("\n")}
+` : "");
+      files.push({ path: `${folder}/README.md`, content: readme });
+      nodes.forEach((n, i) => {
+        files.push({ path: `${folder}/notas/${fileOfNode(i, n)}`, content: relinkAttachments(nodeMarkdown(n, noteOf(n.id)), 2) });
+      });
+      for (const s2 of data2.tables.study_sources ?? []) {
+        const body = `# ${s2.title}
+
+${s2.url ? `<${s2.url}>${s2.locator ? ` · ${s2.locator}` : ""}
+
+` : s2.locator ? `${s2.locator}
+
+` : ""}${String(s2.content ?? "").trim()}
+`;
+        files.push({ path: `${folder}/fontes/${String(s2.id).padStart(4, "0")}-${slugify$1(String(s2.title), "fonte")}.md`, content: relinkAttachments(body, 2) });
+      }
+      files.push({ path: `${folder}/dados.json`, content: stable(data2) });
+      for (const tb of Object.values(data2.tables)) for (const r of tb) for (const v of Object.values(r)) if (typeof v === "string" && v.includes(ATTACHMENT_PREFIX)) referencedAttachments(v).forEach((f) => used.add(f));
+      manifestTopics.push({ uid: t.uid, nome: t.name, pasta: folder, status: t.status });
+    }
+  });
+  const exportedAtts = [];
+  for (const name of [...used].sort()) {
+    const a = atts.find((x) => x.fileName === name) ?? atts.find((x) => /^[0-9a-f]{12}-/.test(name) && x.sha256.startsWith(name.slice(0, 12)));
+    const f = a && path.join(attachmentsDir(), a.fileName);
+    if (!a || !f || !fs.existsSync(f)) continue;
+    files.push({ path: `anexos/${name}`, content: fs.readFileSync(f) });
+    exportedAtts.push({ fileName: name, sha256: a.sha256, mime: a.mime });
+  }
+  const manifest = {
+    formato: BUNDLE_FORMAT,
+    versao: BUNDLE_VERSION,
+    topicos: manifestTopics,
+    anexos: exportedAtts.map((a) => ({ arquivo: a.fileName, sha256: a.sha256, mime: a.mime })),
+    vinculosExternos: EXTERNAL_LINKS,
+    arquivos: [...files.map((f) => f.path), "manifest.json", "README.md"].sort()
+  };
+  files.push({ path: "manifest.json", content: stable(manifest) });
+  files.push({ path: "README.md", content: ROOT_README });
+  files.sort((a, b2) => a.path.localeCompare(b2.path));
+  return { files, manifest };
+}
+const ROOT_README = `# Caderno de estudos (rickOS)
+
+Pasta gerenciada pelo módulo Estudos do rickOS. Cada tópico tem uma pasta com o README (objetivo
+e roteiro), \`notas/\` (uma nota por item, na ordem do roteiro), \`fontes/\` e \`dados.json\`.
+As imagens ficam em \`anexos/\` com links relativos.
+
+Para restaurar numa instalação nova: Estudos → Repositório → Restaurar. O \`dados.json\` guarda
+hierarquia, ordem, estados, cartões com a agenda de revisão, logs, tentativas, checkpoints,
+aulas e os últimos materiais do tutor. Arquivos fora desta pasta não são tocados pelo rickOS.
+`;
+function depthOf(nodes, n) {
+  let d = 0;
+  let cur = n;
+  const by = new Map(nodes.map((x) => [x.id, x]));
+  while (cur?.parentId != null && by.has(cur.parentId) && d < 20) {
+    cur = by.get(cur.parentId);
+    d++;
+  }
+  return d;
+}
+function fileOfNode(i, n) {
+  return `${String(i + 1).padStart(3, "0")}-${slugify$1(n.title, "item")}.md`;
+}
+async function restoreFromFolder(root) {
+  const manifestPath = path.join(root, "manifest.json");
+  if (!fs.existsSync(manifestPath)) throw new StudyError(tt("estudos.manifestoNaoEncontrado"));
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  if (manifest.formato !== BUNDLE_FORMAT) throw new StudyError(tt("estudos.naoECopia"));
+  if (Number(manifest.versao) > BUNDLE_VERSION) throw new StudyError(tt("estudos.versaoCopia", { versao: String(manifest.versao) }));
+  const report = { created: [], skipped: [], attachments: 0, missingAttachments: [] };
+  for (const a of manifest.anexos ?? []) {
+    const f = path.join(root, "anexos", String(a.arquivo));
+    if (!fs.existsSync(f)) {
+      report.missingAttachments.push(String(a.arquivo));
+      continue;
+    }
+    await storeAttachment(fs.readFileSync(f), String(a.arquivo).replace(/^[0-9a-f]{12}-/, ""), String(a.mime || mimeFromName(a.arquivo) || ""), String(a.arquivo));
+    report.attachments++;
+  }
+  for (const t of manifest.topicos ?? []) {
+    const dataPath = path.join(root, String(t.pasta), "dados.json");
+    if (!fs.existsSync(dataPath)) {
+      report.skipped.push(`${t.nome} (sem dados.json)`);
+      continue;
+    }
+    const data2 = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+    const r = await restoreTopic(data2);
+    (r ? report.created : report.skipped).push(String(t.nome));
+  }
+  return report;
+}
+async function restoreTopic(data2) {
+  return tx((db2) => {
+    const uid = data2.topic.uid;
+    if (uid && one(db2, "SELECT 1 FROM study_topics WHERE uid = ?", [uid])) return null;
+    const maps = {};
+    const insert = (table, row, override) => {
+      const keepId = row.id != null && !one(db2, `SELECT 1 FROM ${table} WHERE id = ?`, [row.id]);
+      const cols = columns(db2, table).filter((c) => c === "id" ? keepId : c in row || c in override);
+      const vals = cols.map((c) => (c in override ? override[c] : row[c]) ?? null);
+      const newId = exec(db2, `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`, vals);
+      return keepId ? Number(row.id) : newId;
+    };
+    const topicId = insert("study_topics", data2.topic, {});
+    maps.study_topics = /* @__PURE__ */ new Map([[Number(data2.topic.id), topicId]]);
+    const catByName = new Map(all(db2, "SELECT id, name FROM study_card_categories").map((c) => [c.name, c.id]));
+    const catId = (old) => {
+      if (old == null) return null;
+      const name = data2.categories?.[String(old)];
+      if (!name) return null;
+      if (!catByName.has(name)) {
+        const max = one(db2, "SELECT COALESCE(MAX(sortOrder), 0) AS m FROM study_card_categories")?.m ?? 0;
+        catByName.set(name, exec(db2, "INSERT INTO study_card_categories (name, sortOrder, createdAt) VALUES (?, ?, ?)", [name, max + 10, (/* @__PURE__ */ new Date()).toISOString()]));
+      }
+      return catByName.get(name);
+    };
+    const deferred = [];
+    for (const spec of TABLES) {
+      const rows = data2.tables?.[spec.table];
+      if (!rows?.length || !hasTable(db2, spec.table)) continue;
+      maps[spec.table] = maps[spec.table] ?? /* @__PURE__ */ new Map();
+      const ordered = spec.table === "study_nodes" ? orderParentsFirst(rows) : rows;
+      for (const r of ordered) {
+        const override = {};
+        for (const [col, target] of Object.entries(spec.refs)) {
+          if (r[col] == null) continue;
+          const m = maps[target]?.get(Number(r[col]));
+          if (m != null) override[col] = m;
+          else if (target === spec.table || target === "study_plans" || target === "study_card_states") {
+            override[col] = null;
+            deferred.push({ table: spec.table, id: -1, col, target, old: Number(r[col]) });
+          } else override[col] = null;
+        }
+        if (spec.table === "study_flashcards") override.categoryId = catId(r.categoryId);
+        if (spec.table === "study_checkpoints" && r.refId != null) {
+          const target = r.target === "source" ? "study_sources" : r.target === "lesson" ? "study_lessons" : null;
+          override.refId = target ? maps[target]?.get(Number(r.refId)) ?? null : null;
+        }
+        if (spec.table === "study_origins" && one(db2, "SELECT 1 FROM study_origins WHERE originKey = ?", [r.originKey])) continue;
+        const newId = insert(spec.table, r, override);
+        maps[spec.table].set(Number(r.id), newId);
+        for (const d of deferred) if (d.id === -1 && d.table === spec.table) d.id = newId;
+      }
+    }
+    for (const d of deferred) {
+      const m = maps[d.target]?.get(d.old);
+      if (m != null && d.id > 0) exec(db2, `UPDATE ${d.table} SET ${d.col} = ? WHERE id = ?`, [m, d.id]);
+    }
+    return topicId;
+  });
+}
+function orderParentsFirst(rows) {
+  const out = [];
+  const done = /* @__PURE__ */ new Set();
+  const ids2 = new Set(rows.map((r) => Number(r.id)));
+  let rest = [...rows];
+  let guard = rows.length + 2;
+  while (rest.length && guard-- > 0) {
+    const next = [];
+    for (const r of rest) {
+      const p = r.parentId == null ? null : Number(r.parentId);
+      if (p == null || !ids2.has(p) || done.has(p)) {
+        out.push(r);
+        done.add(Number(r.id));
+      } else next.push(r);
+    }
+    rest = next;
+  }
+  return [...out, ...rest];
+}
+function writeFiles(root, files) {
+  for (const f of files) {
+    const dest = path.join(root, f.path);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, f.content);
+  }
+  return files.map((f) => f.path);
+}
+const COMMIT_MESSAGE = "estudos: sincronizar caderno";
+const KEY = { remote: "study_git_remote", branch: "study_git_branch", folder: "study_git_folder", state: "study_git_state" };
+function git$1(args, cwd, timeoutMs = 6e4) {
+  return new Promise((resolve) => {
+    child_process.execFile(
+      "git",
+      args,
+      {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 32 * 1024 * 1024,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "echo", LC_ALL: "C" }
+      },
+      (err, stdout, stderr) => {
+        const code = err ? typeof err.code === "number" ? Number(err.code) : 1 : 0;
+        resolve({ code, stdout: String(stdout), stderr: String(stderr || (err && !stderr ? err.message : "")) });
+      }
+    );
+  });
+}
+async function gitOk$1(args, cwd, timeoutMs) {
+  const r = await git$1(args, cwd, timeoutMs);
+  if (r.code !== 0) throw new StudyError(tt("estudos.git", { cmd: args[0], erro: (r.stderr || r.stdout).trim().split("\n").slice(-2).join(" ") }));
+  return r.stdout.trim();
+}
+const sha1 = (b2) => crypto.createHash("sha1").update(b2).digest("hex");
+function settingSync(db2, k) {
+  return one(db2, "SELECT value FROM settings WHERE key = ?", [k])?.value ?? null;
+}
+async function getConfig() {
+  return read((db2) => {
+    const remote = settingSync(db2, KEY.remote);
+    if (!remote) return null;
+    return { remote, branch: settingSync(db2, KEY.branch) || "main", folder: settingSync(db2, KEY.folder) || "rickos-estudos" };
+  });
+}
+async function loadState() {
+  return read((db2) => {
+    try {
+      const v = JSON.parse(settingSync(db2, KEY.state) || "null");
+      if (v && typeof v === "object") return { ours: v.ours ?? {}, last: v.last ?? null };
+    } catch {
+    }
+    return { ours: {}, last: null };
+  });
+}
+async function saveState(s2) {
+  await tx((db2) => {
+    exec(db2, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [KEY.state, JSON.stringify(s2)]);
+  });
+}
+function checkoutDir() {
+  return path.join(dataDir(), "estudos", "repo");
+}
+function validFolder(f) {
+  const clean2 = f.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  if (!clean2 || clean2.split("/").some((p) => !p || p === "." || p === ".." || p === ".git")) throw new StudyError(tt("estudos.pastaGerenciadaInvalida"));
+  return clean2;
+}
+function validBranch(b2) {
+  const v = b2.trim() || "main";
+  if (!/^[A-Za-z0-9._/-]{1,100}$/.test(v) || v.includes("..") || v.startsWith("-")) throw new StudyError(tt("estudos.branchInvalido"));
+  return v;
+}
+function validRemote(r) {
+  const v = r.trim();
+  if (!v || v.startsWith("-") || /\s/.test(v)) throw new StudyError(tt("estudos.remotoInvalido"));
+  return v;
+}
+function previewDir(id2) {
+  return path.join(dataDir(), "estudos", `preview-${id2}`);
+}
+function countFiles(dir, filter, skip = /* @__PURE__ */ new Set([".git"])) {
+  let n = 0;
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (skip.has(e.name)) continue;
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (filter(p)) n++;
+    }
+  };
+  if (fs.existsSync(dir)) walk(dir);
+  return n;
+}
+async function previewLink(input) {
+  const remote = validRemote(String(input.remote ?? ""));
+  const branch = validBranch(String(input.branch ?? "main"));
+  const folder = validFolder(String(input.folder ?? "rickos-estudos"));
+  const id2 = crypto.randomBytes(6).toString("hex");
+  const dir = previewDir(id2);
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  await gitOk$1(["clone", "--quiet", "--no-checkout", remote, dir], path.dirname(dir), 18e4);
+  const heads = await gitOk$1(["ls-remote", "--heads", "origin"], dir);
+  const emptyRepo = !heads;
+  const branchExists = heads.split("\n").some((l) => l.endsWith(`refs/heads/${branch}`));
+  if (branchExists) await gitOk$1(["checkout", "--quiet", "-B", branch, `origin/${branch}`], dir);
+  else await gitOk$1(["checkout", "--quiet", "--orphan", branch], dir).catch(() => void 0);
+  const target = path.join(dir, folder);
+  let folderState = "free";
+  let folderFiles = 0;
+  if (fs.existsSync(target)) {
+    folderFiles = countFiles(target, () => true);
+    const mf = path.join(target, "manifest.json");
+    let managed = false;
+    try {
+      managed = fs.existsSync(mf) && JSON.parse(fs.readFileSync(mf, "utf8")).formato === BUNDLE_FORMAT;
+    } catch {
+    }
+    folderState = managed ? "managed" : folderFiles ? "occupied" : "free";
+  }
+  const topLevel = fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x !== ".git").sort() : [];
+  const notesOutside = countFiles(dir, (p) => /\.(md|markdown|txt)$/i.test(p) && !p.startsWith(target + path.sep), /* @__PURE__ */ new Set([".git"]));
+  let suggestion = null;
+  if (folderState === "occupied") {
+    for (let i = 2; i < 50; i++) {
+      const cand = `${folder}-${i}`;
+      if (!fs.existsSync(path.join(dir, cand))) {
+        suggestion = cand;
+        break;
+      }
+    }
+  }
+  return { remote, branch, folder, emptyRepo, branchExists, folderState, folderFiles, topLevel, notesOutside, suggestion, previewId: id2 };
+}
+async function link(input) {
+  const remote = validRemote(input.remote);
+  const branch = validBranch(input.branch);
+  const folder = validFolder(input.folder);
+  if (!/^[0-9a-f]{12}$/.test(input.previewId)) throw new StudyError(tt("estudos.previaInvalida"));
+  const src = previewDir(input.previewId);
+  if (!fs.existsSync(src)) throw new StudyError(tt("estudos.previaExpirada"));
+  const t = path.join(src, folder);
+  if (fs.existsSync(t) && countFiles(t, () => true) > 0) {
+    const mf = path.join(t, "manifest.json");
+    let ok = false;
+    try {
+      ok = JSON.parse(fs.readFileSync(mf, "utf8")).formato === BUNDLE_FORMAT;
+    } catch {
+    }
+    if (!ok) throw new StudyError(tt("estudos.pastaOcupada", { pasta: folder }));
+  }
+  const dest = checkoutDir();
+  if (fs.existsSync(dest)) {
+    if (await hasUnpushed(dest)) throw new StudyError(tt("estudos.pendenteAntesTrocar"));
+    fs.renameSync(dest, `${dest}-antigo-${Date.now()}`);
+  }
+  fs.renameSync(src, dest);
+  await ensureIdentity(dest);
+  await tx((db2) => {
+    const set = (k, v) => {
+      exec(db2, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [k, v]);
+    };
+    set(KEY.remote, remote);
+    set(KEY.branch, branch);
+    set(KEY.folder, folder);
+    set(KEY.state, JSON.stringify({ ours: {}, last: null }));
+  });
+  return { remote, branch, folder };
+}
+async function unlink() {
+  const dest = checkoutDir();
+  if (fs.existsSync(dest) && await hasUnpushed(dest)) throw new StudyError(tt("estudos.pendenteAntesDesvincular"));
+  await tx((db2) => {
+    for (const k of Object.values(KEY)) exec(db2, "DELETE FROM settings WHERE key = ?", [k]);
+  });
+}
+async function ensureIdentity(dir) {
+  const email = (await git$1(["config", "user.email"], dir)).stdout.trim();
+  if (!email) {
+    await gitOk$1(["config", "user.email", "rickos@localhost"], dir);
+    await gitOk$1(["config", "user.name", "rickOS"], dir);
+  }
+}
+async function headCommit(dir) {
+  const r = await git$1(["rev-parse", "--verify", "-q", "HEAD"], dir);
+  return r.code === 0 ? r.stdout.trim() : null;
+}
+async function remoteRef(dir, branch) {
+  const r = await git$1(["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], dir);
+  return r.code === 0 ? r.stdout.trim() : null;
+}
+async function hasUnpushed(dir) {
+  const head = await headCommit(dir);
+  if (!head) return false;
+  const branch = (await git$1(["rev-parse", "--abbrev-ref", "HEAD"], dir)).stdout.trim();
+  const rr = await remoteRef(dir, branch);
+  const n = rr ? await gitOk$1(["rev-list", "--count", `${rr}..HEAD`], dir) : await gitOk$1(["rev-list", "--count", "HEAD"], dir);
+  return Number(n) > 0;
+}
+async function getStatus() {
+  const config2 = await getConfig();
+  const dir = checkoutDir();
+  const linked = !!config2 && fs.existsSync(path.join(dir, ".git"));
+  const state = await loadState();
+  return { config: config2, linked, pending: linked ? await hasUnpushed(dir) : false, last: state.last };
+}
+let running = null;
+function sync() {
+  if (!running) {
+    running = doSync().finally(() => {
+      running = null;
+    });
+  }
+  return running;
+}
+async function doSync() {
+  const at = nowIso();
+  const base2 = { committed: false, keptExternal: [], conflicts: [], commit: null, at };
+  const config2 = await getConfig();
+  const dir = checkoutDir();
+  if (!config2 || !fs.existsSync(path.join(dir, ".git"))) return finish({ ...base2, status: "error", message: "git.naoVinculado" });
+  const { branch, folder } = config2;
+  const state = await loadState();
+  broadcast("estudos:sync", { phase: "running" });
+  try {
+    await ensureIdentity(dir);
+    const fetched = await git$1(["fetch", "--quiet", "origin"], dir, 12e4);
+    const rr = await remoteRef(dir, branch);
+    let head = await headCommit(dir);
+    if (rr) {
+      const behind = head ? Number(await gitOk$1(["rev-list", "--count", `HEAD..${rr}`], dir)) : 1;
+      if (behind > 0) {
+        const ahead2 = head ? Number(await gitOk$1(["rev-list", "--count", `${rr}..HEAD`], dir)) : 0;
+        if (!head) await gitOk$1(["checkout", "--quiet", "-B", branch, rr], dir);
+        else if (ahead2 === 0) await gitOk$1(["merge", "--quiet", "--ff-only", rr], dir);
+        else {
+          const test = await git$1(["merge-tree", "--write-tree", "HEAD", rr], dir);
+          if (test.code !== 0) {
+            return finish({ ...base2, status: "divergent", message: "git.historicoDivergente", detail: rr.slice(0, 8) }, state);
+          }
+          await gitOk$1(["merge", "--quiet", "--no-edit", rr], dir);
+        }
+        head = await headCommit(dir);
+      }
+    }
+    const { files } = await exportAll();
+    const root = path.join(dir, folder);
+    const desired = new Map(files.map((f) => [f.path, f.content]));
+    const ours = { ...state.ours };
+    const toWrite = [];
+    const kept = [];
+    const conflicts = [];
+    for (const [p, content] of desired) {
+      const abs = path.join(root, p);
+      const cur = fs.existsSync(abs) ? fs.readFileSync(abs) : null;
+      const want = sha1(content);
+      if (cur && sha1(cur) === want) {
+        ours[p] = want;
+        continue;
+      }
+      const prev = state.ours[p];
+      const editedOutside = cur != null && (prev ? sha1(cur) !== prev : true);
+      if (!editedOutside) {
+        toWrite.push({ path: p, content });
+        ours[p] = want;
+      } else if (prev && want === prev) {
+        kept.push(p);
+      } else {
+        conflicts.push({ path: p, content });
+      }
+    }
+    const removed = [];
+    for (const p of Object.keys(state.ours)) {
+      if (desired.has(p)) continue;
+      const abs = path.join(root, p);
+      if (!fs.existsSync(abs)) {
+        delete ours[p];
+        continue;
+      }
+      if (sha1(fs.readFileSync(abs)) === state.ours[p]) {
+        fs.unlinkSync(abs);
+        removed.push(p);
+        delete ours[p];
+      } else kept.push(p);
+    }
+    writeFiles(root, toWrite);
+    let divergenceDir = null;
+    if (conflicts.length) {
+      divergenceDir = path.join(dataDir(), "estudos", "divergencias", at.replace(/[:.]/g, "-"));
+      writeFiles(divergenceDir, conflicts);
+    }
+    const paths = [...toWrite.map((f) => f.path), ...removed].map((p) => `${folder}/${p}`);
+    for (let i = 0; i < paths.length; i += 200) await gitOk$1(["add", "-A", "--", ...paths.slice(i, i + 200)], dir);
+    const staged = (await git$1(["diff", "--cached", "--quiet", "--", folder], dir)).code !== 0;
+    let committed = false;
+    if (staged) {
+      await gitOk$1(["commit", "--quiet", "--no-verify", "-m", COMMIT_MESSAGE, "--", folder], dir);
+      committed = true;
+    }
+    const newState = { ours, last: state.last };
+    head = await headCommit(dir);
+    const rr2 = await remoteRef(dir, branch);
+    const ahead = head ? Number(await gitOk$1(["rev-list", "--count", rr2 ? `${rr2}..HEAD` : "HEAD"], dir)) : 0;
+    const extra = { ...base2, committed, commit: head, keptExternal: kept.sort(), conflicts: conflicts.map((c) => c.path).sort(), divergenceDir };
+    if (ahead === 0) {
+      const status2 = conflicts.length ? "divergent" : "synced";
+      return finish({ ...extra, status: status2, message: conflicts.length ? "git.divergenciaArquivos" : "git.tudoSincronizado" }, newState);
+    }
+    const push = await git$1(["push", "--quiet", "origin", `HEAD:refs/heads/${branch}`], dir, 18e4);
+    if (push.code !== 0) {
+      const why = (push.stderr || fetched.stderr).trim().split("\n").slice(-2).join(" ");
+      return finish({ ...extra, status: "pending", message: "git.envioPendente", detail: why }, newState);
+    }
+    const ls = await git$1(["ls-remote", "origin", `refs/heads/${branch}`], dir);
+    const remoteHead = ls.stdout.trim().split(/\s+/)[0];
+    if (remoteHead !== head) return finish({ ...extra, status: "pending", message: "git.envioNaoConfirmado" }, newState);
+    await git$1(["fetch", "--quiet", "origin"], dir);
+    return finish({ ...extra, status: conflicts.length ? "divergent" : "pushed", message: conflicts.length ? "git.enviadoComDivergencia" : "git.enviado" }, newState);
+  } catch (e) {
+    return finish({ ...base2, status: "error", message: "git.erro", detail: e instanceof Error ? e.message : String(e) }, state);
+  }
+}
+async function finish(r, state) {
+  if (state) await saveState({ ours: state.ours, last: r });
+  broadcast("estudos:sync", { phase: "done", result: r });
+  return r;
+}
+async function restoreFromRepo() {
+  const config2 = await getConfig();
+  if (!config2) throw new StudyError(tt("estudos.repoNaoVinculado"));
+  const root = path.join(checkoutDir(), config2.folder);
+  if (!fs.existsSync(path.join(root, "manifest.json"))) throw new StudyError(tt("estudos.semCopiaParaRestaurar"));
+  const report = await restoreFromFolder(root);
+  const state = await loadState();
+  const ours = { ...state.ours };
+  const { files } = await exportAll();
+  for (const f of files) {
+    const abs = path.join(root, f.path);
+    if (fs.existsSync(abs) && sha1(fs.readFileSync(abs)) === sha1(f.content)) ours[f.path] = sha1(f.content);
+  }
+  await saveState({ ours, last: state.last });
+  return report;
+}
+async function repoTree() {
+  const config2 = await getConfig();
+  if (!config2) return [];
+  const dir = checkoutDir();
+  const out = [];
+  const walk = (d, rel2, depth2) => {
+    if (depth2 > 4) return;
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (!e.isDirectory() || e.name === ".git") continue;
+      const r = rel2 ? `${rel2}/${e.name}` : e.name;
+      if (r === config2.folder) continue;
+      out.push(r);
+      walk(path.join(d, e.name), r, depth2 + 1);
+    }
+  };
+  if (fs.existsSync(dir)) walk(dir, "", 0);
+  return [".", ...out.sort()];
+}
+async function refreshCheckout() {
+  const config2 = await getConfig();
+  const dir = checkoutDir();
+  if (!config2 || !fs.existsSync(path.join(dir, ".git"))) return;
+  await git$1(["fetch", "--quiet", "origin"], dir, 12e4);
+  const rr = await remoteRef(dir, config2.branch);
+  if (!rr) return;
+  const head = await headCommit(dir);
+  if (!head) await git$1(["checkout", "--quiet", "-B", config2.branch, rr], dir);
+  else if (!await hasUnpushed(dir)) await git$1(["merge", "--quiet", "--ff-only", rr], dir);
+}
+const TEXT_RE = /\.(md|markdown|txt)$/i;
+const IMG_LINK = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+function safeRoot(subpath) {
+  const repo2 = checkoutDir();
+  if (!fs.existsSync(path.join(repo2, ".git"))) throw new StudyError(tt("estudos.repoNaoVinculado"));
+  const root = path.resolve(repo2, subpath === "." ? "" : subpath);
+  if (root !== repo2 && !root.startsWith(repo2 + path.sep)) throw new StudyError(tt("estudos.pastaForaRepo"));
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new StudyError(tt("estudos.pastaNaoEncontrada"));
+  return { repo: repo2, root, managed: "" };
+}
+const rel = (repo2, p) => path.relative(repo2, p).split(path.sep).join("/");
+const hashOf = (s2) => crypto.createHash("sha256").update(s2).digest("hex");
+const titleOf = (file, content) => {
+  const h1 = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  return h1 || path.basename(file).replace(/\.(md|markdown|txt)$/i, "").replace(/[-_]+/g, " ").trim();
+};
+const readText$1 = (p) => fs.readFileSync(p, "utf8").replace(/^﻿/, "").replace(/\r\n/g, "\n");
+function resolveImage(fileAbs, link2) {
+  if (/^[a-z]+:/i.test(link2) || link2.startsWith("#")) return null;
+  return path.resolve(path.dirname(fileAbs), decodeURIComponent(link2.split("#")[0]));
+}
+async function previewAdopt(subpath, topicId) {
+  const config2 = await getConfig();
+  const { repo: repo2, root } = safeRoot(subpath);
+  const managedAbs = config2 ? path.join(repo2, config2.folder) : null;
+  const texts = [];
+  const others = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (e.name === ".git" || e.name.startsWith(".")) continue;
+      const p = path.join(d, e.name);
+      if (managedAbs && (p === managedAbs || p.startsWith(managedAbs + path.sep))) continue;
+      if (e.isDirectory()) walk(p);
+      else (TEXT_RE.test(e.name) ? texts : others).push(p);
+    }
+  };
+  walk(root);
+  texts.sort();
+  const referenced = /* @__PURE__ */ new Set();
+  const recognized = [];
+  const missingLinks = [];
+  const existingTitles = topicId ? new Set(await read((db2) => all(db2, "SELECT title FROM study_nodes WHERE topicId = ?", [topicId]).map((r) => r.title.toLowerCase()))) : /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Map();
+  const collisions = [];
+  for (const f of texts) {
+    const content = readText$1(f);
+    const images = [];
+    const missing = [];
+    for (const m of content.matchAll(IMG_LINK)) {
+      const abs = resolveImage(f, m[2]);
+      if (!abs) continue;
+      if (fs.existsSync(abs) && mimeFromName(abs)) {
+        images.push(rel(repo2, abs));
+        referenced.add(abs);
+      } else {
+        missing.push(m[2]);
+        missingLinks.push({ path: rel(repo2, f), link: m[2] });
+      }
+    }
+    const p = rel(repo2, f);
+    const hash2 = hashOf(content);
+    const origin = await read((db2) => one(db2, "SELECT hash FROM study_origins WHERE originKey = ?", [`repo:${p}`]));
+    const sectionRel = path.relative(root, path.dirname(f)).split(path.sep).join("/");
+    const title = titleOf(f, content);
+    const key = `${sectionRel}::${title.toLowerCase()}`;
+    if (seen2.has(key)) collisions.push({ path: p, reason: "mesmo-titulo" });
+    else seen2.set(key, p);
+    if (!origin && existingTitles.has(title.toLowerCase())) collisions.push({ path: p, reason: "ja-existe-no-topico" });
+    recognized.push({
+      path: p,
+      title,
+      section: sectionRel || null,
+      chars: content.length,
+      hash: hash2,
+      status: !origin ? "new" : origin.hash === hash2 ? "unchanged" : "changed",
+      images,
+      missing
+    });
+  }
+  const ignored = others.filter((o) => !referenced.has(o)).map((o) => rel(repo2, o)).sort();
+  return { subpath, recognized, ignored, collisions, missingLinks };
+}
+async function applyAdopt(input) {
+  const preview = await previewAdopt(input.subpath, input.topicId);
+  const { repo: repo2 } = safeRoot(input.subpath);
+  const attachmentFor = /* @__PURE__ */ new Map();
+  let images = 0;
+  for (const f of preview.recognized) {
+    if ((input.decisions[f.path] ?? "skip") === "skip") continue;
+    for (const img of f.images) {
+      if (attachmentFor.has(img)) continue;
+      const abs = path.join(repo2, img);
+      const a = await storeAttachment(fs.readFileSync(abs), path.basename(abs), mimeFromName(abs) ?? "");
+      attachmentFor.set(img, a.fileName);
+      images++;
+    }
+  }
+  return tx((db2) => {
+    let topicId = input.topicId;
+    if (topicId == null) {
+      const name = (input.newTopicName ?? "").trim() || path.basename(input.subpath === "." ? repo2 : input.subpath);
+      topicId = exec(db2, "INSERT INTO study_topics (name, status, priority, color, createdAt, uid) VALUES (?, 'studying', 0, '#6366f1', ?, lower(hex(randomblob(8))))", [name, nowIso()]);
+    } else if (!one(db2, "SELECT 1 FROM study_topics WHERE id = ?", [topicId])) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+    const tid = topicId;
+    const sectionNode = /* @__PURE__ */ new Map();
+    const nodeFor = (title, parentId) => {
+      const ex2 = one(db2, "SELECT id FROM study_nodes WHERE topicId = ? AND IFNULL(parentId, -1) = IFNULL(?, -1) AND title = ?", [tid, parentId, title]);
+      if (ex2) return ex2.id;
+      const order = one(db2, "SELECT COALESCE(MAX(orderIndex), -1) + 1 AS n FROM study_nodes WHERE topicId = ? AND IFNULL(parentId, -1) = IFNULL(?, -1)", [tid, parentId])?.n ?? 0;
+      return exec(db2, "INSERT INTO study_nodes (topicId, parentId, title, status, orderIndex, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [tid, parentId, title, "todo", order, nowIso()]);
+    };
+    const sectionId = (section) => {
+      if (!section) return null;
+      if (sectionNode.has(section)) return sectionNode.get(section);
+      let parent = null;
+      for (const part of section.split("/")) parent = nodeFor(part.replace(/[-_]+/g, " "), parent);
+      sectionNode.set(section, parent);
+      return parent;
+    };
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    for (const f of preview.recognized) {
+      const decision = input.decisions[f.path] ?? "skip";
+      if (decision === "skip" || f.status === "unchanged" && decision !== "update") {
+        skipped++;
+        continue;
+      }
+      let content = readText$1(path.join(repo2, f.path));
+      content = content.replace(IMG_LINK, (m, alt, link2) => {
+        const abs = resolveImage(path.join(repo2, f.path), link2);
+        const key = abs ? rel(repo2, abs) : null;
+        const file = key ? attachmentFor.get(key) : null;
+        return file ? `![${alt}](anexos/${file})` : m;
+      });
+      const originKey = `repo:${f.path}`;
+      const origin = one(db2, "SELECT * FROM study_origins WHERE originKey = ?", [originKey]);
+      if (origin && decision === "update") {
+        if (input.mode === "note" && origin.nodeId != null) {
+          const n = one(db2, "SELECT id FROM study_notes WHERE nodeId = ?", [origin.nodeId]);
+          if (n) exec(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [content, nowIso(), n.id]);
+          else exec(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [origin.topicId, origin.nodeId, content, nowIso()]);
+        } else {
+          exec(db2, "UPDATE study_sources SET content = ?, originHash = ?, updatedAt = ? WHERE originPath = ? AND topicId = ?", [content, f.hash, nowIso(), f.path, origin.topicId]);
+        }
+        exec(db2, "UPDATE study_origins SET hash = ?, importedAt = ? WHERE id = ?", [f.hash, nowIso(), origin.id]);
+        updated++;
+        continue;
+      }
+      if (origin) {
+        skipped++;
+        continue;
+      }
+      const parent = sectionId(f.section);
+      let nodeId;
+      if (input.mode === "note") {
+        nodeId = nodeFor(f.title, parent);
+        const n = one(db2, "SELECT id, content FROM study_notes WHERE nodeId = ?", [nodeId]);
+        if (n && n.content.trim()) {
+          exec(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [`${n.content.trimEnd()}
+
+---
+
+${content}`, nowIso(), n.id]);
+        } else if (n) exec(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [content, nowIso(), n.id]);
+        else exec(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [tid, nodeId, content, nowIso()]);
+      } else {
+        nodeId = parent;
+        exec(db2, "INSERT INTO study_sources (topicId, nodeId, kind, title, content, originPath, originHash, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+          tid,
+          nodeId,
+          "file",
+          f.title,
+          content,
+          f.path,
+          f.hash,
+          nowIso(),
+          nowIso()
+        ]);
+      }
+      exec(db2, "INSERT INTO study_origins (originKey, hash, topicId, nodeId, importedAt) VALUES (?, ?, ?, ?, ?)", [originKey, f.hash, tid, nodeId, nowIso()]);
+      created++;
+    }
+    return { topicId: tid, created, updated, skipped, images };
+  });
+}
+const ORCAMENTO = { notas: 9e3, fontes: 4e3, notaNo: 6e3, turnos: 9e3 };
+const assinatura = (...partes) => crypto.createHash("sha1").update(partes.join("")).digest("hex").slice(0, 16);
+const corta = (s2, n) => s2.length > n ? `${s2.slice(0, n)}
+[…cortado: ${s2.length - n} caracteres]` : s2;
+function idiomaDe(t) {
+  return { idioma: t.explanationLanguage || "pt-BR", idiomaAlvo: t.kind === "language" ? t.targetLanguage || "—" : "—" };
+}
+function cabecalhoTopico(t) {
+  return [
+    `Tópico: ${t.name}`,
+    `Tipo: ${t.kind === "language" ? `idioma (idioma-alvo: ${t.targetLanguage ?? "não informado"})` : "tema (engenharia etc.)"}`,
+    `Objetivo declarado: ${t.goal || "(não informado)"}`,
+    `Idioma das explicações: ${t.explanationLanguage || "pt-BR"}`
+  ].join("\n");
+}
+function mapaComIds(nodes) {
+  const by = new Map(nodes.map((n) => [n.id, n]));
+  const depth2 = (n) => {
+    let d = 0;
+    let c = n;
+    while (c?.parentId != null && by.has(c.parentId) && d < 20) {
+      c = by.get(c.parentId);
+      d++;
+    }
+    return d;
+  };
+  const ordered = treeOrder(nodes);
+  if (!ordered.length) return "(mapa vazio)";
+  return ordered.map((n) => `${"  ".repeat(depth2(n))}- [id ${n.id}] ${n.title}${n.status === "done" ? " (concluído)" : ""}${n.origin === "plan" ? " (roteiro)" : ""}`).join("\n");
+}
+function contextoMasterclass(db2, t) {
+  const nodes = all(db2, "SELECT * FROM study_nodes WHERE topicId = ?", [t.id]);
+  const notes = all(db2, "SELECT nodeId, content FROM study_notes WHERE topicId = ? AND TRIM(content) <> ''", [t.id]);
+  const titleOf2 = new Map(nodes.map((n) => [n.id, n.title]));
+  let budget = ORCAMENTO.notas;
+  const notasTxt = [];
+  for (const n of notes) {
+    if (budget <= 0) break;
+    const piece = corta(n.content.trim(), Math.min(2500, budget));
+    budget -= piece.length;
+    notasTxt.push(`### ${n.nodeId == null ? "Nota geral do tópico" : titleOf2.get(n.nodeId) ?? "item"}
+${piece}`);
+  }
+  const sources = all(db2, "SELECT title, content, url, locator FROM study_sources WHERE topicId = ? ORDER BY updatedAt DESC", [t.id]);
+  let fb = ORCAMENTO.fontes;
+  const fontesTxt = [];
+  for (const s2 of sources) {
+    if (fb <= 0) break;
+    const piece = corta(s2.content.trim(), Math.min(1200, fb));
+    fb -= piece.length;
+    fontesTxt.push(`### ${s2.title}${s2.url ? ` <${s2.url}>` : ""}${s2.locator ? ` (${s2.locator})` : ""}
+${piece}`);
+  }
+  const plano = one(db2, "SELECT content FROM study_plans WHERE topicId = ? AND status = 'approved' ORDER BY approvedAt DESC LIMIT 1", [t.id]);
+  return [
+    cabecalhoTopico(t),
+    `## Mapa atual (com IDs)
+${mapaComIds(nodes)}`,
+    plano ? `## Roteiro aprovado anterior (resumo)
+${resumoPlano(plano.content)}` : "",
+    notasTxt.length ? `## Minhas notas (recortes)
+${notasTxt.join("\n\n")}` : "## Minhas notas\n(nenhuma)",
+    fontesTxt.length ? `## Materiais externos (recortes)
+${fontesTxt.join("\n\n")}` : ""
+  ].filter(Boolean).join("\n\n");
+}
+function resumoPlano(json2) {
+  try {
+    const p = JSON.parse(json2);
+    return (p.partes ?? []).map((pt) => `- ${pt.titulo}: ${(pt.modulos ?? []).map((m) => m.titulo).join("; ")}`).join("\n");
+  } catch {
+    return "";
+  }
+}
+function contextoAula(db2, t, lesson, turnos) {
+  const node = lesson.nodeId != null ? one(db2, "SELECT * FROM study_nodes WHERE id = ?", [lesson.nodeId]) : null;
+  const nota = lesson.nodeId != null ? one(db2, "SELECT content FROM study_notes WHERE nodeId = ?", [lesson.nodeId])?.content ?? "" : "";
+  const tentativas = lesson.nodeId != null ? all(
+    db2,
+    `SELECT q.prompt, a.answer, a.outcome FROM study_attempts a JOIN study_questions q ON q.id = a.questionId
+         WHERE q.nodeId = ? ORDER BY a.createdAt DESC LIMIT 5`,
+    [lesson.nodeId]
+  ) : [];
+  let budget = ORCAMENTO.turnos;
+  const recentes = [];
+  for (const tr of [...turnos].reverse()) {
+    const piece = `${tr.role === "me" ? "EU" : "TUTOR"}: ${corta(tr.content.trim(), 1800)}`;
+    if (budget - piece.length < 0 && recentes.length) break;
+    budget -= piece.length;
+    recentes.unshift(piece);
+  }
+  return [
+    cabecalhoTopico(t),
+    `## Módulo
+${lesson.title}${node?.description ? `
+${node.description}` : ""}`,
+    lesson.openQuestion ? `## Pergunta aberta
+${lesson.openQuestion}` : "",
+    lesson.returnPoint ? `## Ponto de retorno
+${lesson.returnPoint}` : "",
+    recentes.length ? `## Turnos anteriores (${recentes.length} de ${turnos.length})
+${recentes.join("\n\n")}` : "## Turnos anteriores\n(início da aula)",
+    tentativas.length ? `## Minhas tentativas recentes neste item
+${tentativas.map((a) => `- ${a.prompt} → ${a.answer ?? "(sem resposta)"} [${a.outcome}]`).join("\n")}` : "",
+    nota.trim() ? `## Minha nota deste item (recorte)
+${corta(nota.trim(), ORCAMENTO.notaNo)}` : ""
+  ].filter(Boolean).join("\n\n");
+}
+function contextoNo(db2, t, nodeId, opts = {}) {
+  const nodes = all(db2, "SELECT * FROM study_nodes WHERE topicId = ?", [t.id]);
+  const node = nodeId != null ? nodes.find((n) => n.id === nodeId) ?? null : null;
+  const nota = (nodeId == null ? one(db2, "SELECT content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [t.id]) : one(db2, "SELECT content FROM study_notes WHERE nodeId = ?", [nodeId]))?.content ?? "";
+  const fontes = all(
+    db2,
+    "SELECT title, content, locator FROM study_sources WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY updatedAt DESC",
+    [t.id, nodeId]
+  );
+  const lesson = one(db2, "SELECT id FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1", [t.id, nodeId]);
+  const turnos = lesson ? all(db2, "SELECT role, content FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [lesson.id]) : [];
+  const tentativas = all(
+    db2,
+    `SELECT q.prompt, a.answer, a.outcome FROM study_attempts a JOIN study_questions q ON q.id = a.questionId
+     WHERE q.topicId = ? AND (? IS NULL OR q.nodeId = ?) ORDER BY a.createdAt DESC LIMIT 8`,
+    [t.id, nodeId, nodeId]
+  );
+  const cartoes = all(db2, "SELECT front FROM study_flashcards WHERE topicId = ? AND (? IS NULL OR nodeId = ?) AND status <> 'suggested' LIMIT 80", [t.id, nodeId, nodeId]);
+  const recusas = all(db2, "SELECT kind, payload FROM study_suggestions WHERE topicId = ? AND status = 'rejected' ORDER BY id DESC LIMIT 30", [t.id]);
+  const recusasTxt = recusas.map((r) => {
+    try {
+      const p = JSON.parse(r.payload);
+      return r.kind === "subtopic" ? `- subtópico recusado: ${p.titulo}` : `- edição recusada sobre "${String(p.trecho ?? "").slice(0, 80)}"`;
+    } catch {
+      return "";
+    }
+  }).filter(Boolean);
+  let budget = ORCAMENTO.turnos;
+  const aula = [];
+  for (const tr of [...turnos].reverse()) {
+    const piece = `${tr.role === "me" ? "EU" : "TUTOR"}: ${corta(tr.content.trim(), 1500)}`;
+    if (budget - piece.length < 0 && aula.length) break;
+    budget -= piece.length;
+    aula.unshift(piece);
+  }
+  const fontesTxt = fontes.slice(0, 4).map((f) => `### ${f.title}${f.locator ? ` (${f.locator})` : ""}
+${corta(f.content.trim(), 1500)}`);
+  const temNotaAutoral = !!nota.trim();
+  const contexto = [
+    cabecalhoTopico(t),
+    `## Mapa completo (com IDs)
+${mapaComIds(nodes)}`,
+    `## Item selecionado
+${node ? `[id ${node.id}] ${node.title}${node.description ? `
+${node.description}` : ""}` : "Tópico inteiro (visão geral)"}`,
+    temNotaAutoral ? `## Minha nota (autoral)
+${corta(nota.trim(), ORCAMENTO.notaNo)}` : "## Minha nota (autoral)\n(vazia — deixe a revisão editorial vazia)",
+    fontesTxt.length ? `## Material externo deste item
+${fontesTxt.join("\n\n")}` : "",
+    aula.length ? `## Aula gerada (turnos recentes)
+${aula.join("\n\n")}` : "",
+    tentativas.length ? `## Minhas tentativas recentes
+${tentativas.map((a) => `- ${a.prompt} → ${a.answer ?? "(sem resposta)"} [${a.outcome}]`).join("\n")}` : "",
+    cartoes.length ? `## Cartões que já existem (não duplicar)
+${cartoes.map((c) => `- ${c.front}`).join("\n")}` : "",
+    opts.vocabulario?.length ? `## Cobertura de vocabulário escolhida (cubra todos, sem duplicar)
+${opts.vocabulario.map((v) => `- ${v}`).join("\n")}` : "",
+    recusasTxt.length ? `## Recusas anteriores (não reapresente)
+${recusasTxt.join("\n")}` : ""
+  ].filter(Boolean).join("\n\n");
+  const noteSignature = assinatura(nota);
+  return { contexto, noteSignature, inputSignature: assinatura(contexto), temNotaAutoral };
+}
+const kills$1 = /* @__PURE__ */ new Map();
+function codexCwd() {
+  const d = path.join(dataDir(), "estudos", "codex-vazio");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+function emit(run2, extra = {}) {
+  broadcast("estudos:ia", { runId: run2.id, status: run2.status, operation: run2.operation, topicId: run2.topicId, nodeId: run2.nodeId, section: run2.section, ...extra });
+}
+function parseJson(raw) {
+  let s2 = (raw ?? "").trim();
+  const fence = s2.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s2 = fence[1].trim();
+  const a = s2.indexOf("{");
+  const b2 = s2.lastIndexOf("}");
+  if (a >= 0 && b2 > a) s2 = s2.slice(a, b2 + 1);
+  return JSON.parse(s2);
+}
+async function startRun(spec) {
+  const exec0 = await resolverExecucao(spec.chamada);
+  const created = await tx((db2) => {
+    const running2 = one(db2, "SELECT * FROM study_ai_runs WHERE requestKey = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [spec.requestKey]);
+    if (running2) return { run: running2, fresh: false };
+    const id2 = exec(
+      db2,
+      `INSERT INTO study_ai_runs (topicId, nodeId, operation, section, requestKey, status, model, effort, promptVersion, inputSignature, contextChars, startedAt)
+       VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)`,
+      [spec.topicId, spec.nodeId, spec.operation, spec.section ?? null, spec.requestKey, exec0.modelo || null, exec0.effort || null, VERSAO_PEDAGOGIA, spec.signature, spec.params.contexto.length, nowIso()]
+    );
+    return { run: one(db2, "SELECT * FROM study_ai_runs WHERE id = ?", [id2]), fresh: true };
+  });
+  if (!created.fresh) return created.run;
+  const run2 = created.run;
+  emit(run2);
+  void execute(spec, run2);
+  return run2;
+}
+async function execute(spec, run2) {
+  const t0 = Date.now();
+  let tokens2 = null;
+  let status2 = "ok";
+  let error = null;
+  try {
+    const out = await executarChamada(spec.chamada, spec.params, {
+      ferramentas: "nenhuma",
+      cwd: codexCwd(),
+      timeoutMs: spec.timeoutMs,
+      schemaSaida: spec.schema,
+      usage: { source: `estudos.${spec.operation}` },
+      onTokens: (u) => tokens2 = { input: u.input, output: u.output + u.reasoning },
+      registerChild: (kill) => kills$1.set(run2.id, kill)
+    });
+    let parsed;
+    try {
+      parsed = parseJson(out);
+    } catch {
+      throw Object.assign(new Error(tt("estudos.respostaInvalida")), { invalid: true });
+    }
+    await tx((db2) => {
+      const cur = one(db2, "SELECT * FROM study_ai_runs WHERE id = ?", [run2.id]);
+      if (cur.status !== "running") return;
+      const newer = one(db2, "SELECT 1 FROM study_ai_runs WHERE requestKey = ? AND status = 'ok' AND id > ? LIMIT 1", [spec.requestKey, run2.id]);
+      spec.apply(db2, parsed, cur, !newer);
+      exec(db2, "UPDATE study_ai_runs SET status = 'ok', finishedAt = ?, durationMs = ?, inputTokens = ?, outputTokens = ? WHERE id = ?", [
+        nowIso(),
+        Date.now() - t0,
+        tokens2?.input ?? null,
+        tokens2?.output ?? null,
+        run2.id
+      ]);
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    status2 = e.invalid ? "invalid" : /não respondeu em|timeout/i.test(msg) ? "timeout" : "error";
+    error = msg;
+    await tx((db2) => {
+      const cur = one(db2, "SELECT status FROM study_ai_runs WHERE id = ?", [run2.id]);
+      if (cur?.status === "running") {
+        exec(db2, "UPDATE study_ai_runs SET status = ?, finishedAt = ?, durationMs = ?, error = ? WHERE id = ?", [status2, nowIso(), Date.now() - t0, msg.slice(0, 2e3), run2.id]);
+      }
+    });
+  } finally {
+    kills$1.delete(run2.id);
+  }
+  const final = await read((db2) => one(db2, "SELECT * FROM study_ai_runs WHERE id = ?", [run2.id]));
+  emit(final, error ? { error } : {});
+}
+async function cancelRun(runId) {
+  await tx((db2) => exec(db2, "UPDATE study_ai_runs SET status = 'canceled', finishedAt = ? WHERE id = ? AND status = 'running'", [nowIso(), runId]));
+  kills$1.get(runId)?.();
+  const r = await read((db2) => one(db2, "SELECT * FROM study_ai_runs WHERE id = ?", [runId]));
+  if (r) emit(r);
+}
+async function listRuns(f = {}) {
+  return read(
+    (db2) => all(
+      db2,
+      `SELECT * FROM study_ai_runs WHERE (? IS NULL OR topicId = ?) AND (? IS NULL OR IFNULL(nodeId, -1) = IFNULL(?, -1)) ORDER BY id DESC LIMIT ?`,
+      [f.topicId ?? null, f.topicId ?? null, f.nodeId === void 0 ? null : 1, f.nodeId ?? null, Math.min(200, f.limit ?? 30)]
+    )
+  );
+}
+async function recoverStaleRuns() {
+  await tx((db2) => exec(db2, "UPDATE study_ai_runs SET status = 'error', error = 'servidor reiniciado', finishedAt = ? WHERE status = 'running'", [nowIso()]));
+}
+function topicOrThrow$1(db2, topicId) {
+  const t = one(db2, "SELECT * FROM study_topics WHERE id = ?", [topicId]);
+  if (!t) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+  return t;
+}
+async function startMasterclass(topicId, pedido) {
+  const text = (pedido ?? "").trim();
+  if (!text) throw new StudyError(tt("estudos.pedidoVazio"));
+  const { t, contexto } = await read((db2) => {
+    const t2 = topicOrThrow$1(db2, topicId);
+    return { t: t2, contexto: contextoMasterclass(db2, t2) };
+  });
+  const params = { ...idiomaDe(t), contexto, pedido: text };
+  return startRun({
+    operation: "masterclass",
+    chamada: "estudos.masterclass",
+    topicId,
+    nodeId: null,
+    requestKey: `masterclass:${topicId}:${assinatura(text, contexto)}`,
+    params,
+    signature: assinatura(text, contexto),
+    schema: SCHEMA_MASTERCLASS,
+    timeoutMs: 15 * 6e4,
+    apply: (db2, parsed, run2, isLatest) => {
+      const p = parsed;
+      if (!p || !Array.isArray(p.partes) || !Array.isArray(p.perguntas)) throw Object.assign(new Error(tt("estudos.respostaInvalida")), { invalid: true });
+      const newerPlan = one(db2, "SELECT 1 FROM study_plans p JOIN study_ai_runs r ON r.id = p.runId WHERE p.topicId = ? AND r.id > ? LIMIT 1", [topicId, run2.id]);
+      if (isLatest && !newerPlan) exec(db2, "UPDATE study_plans SET status = 'superseded' WHERE topicId = ? AND status = 'proposed'", [topicId]);
+      exec(db2, "INSERT INTO study_plans (topicId, request, status, content, runId, createdAt) VALUES (?, ?, ?, ?, ?, ?)", [
+        topicId,
+        text,
+        isLatest && !newerPlan ? "proposed" : "superseded",
+        JSON.stringify(parsed),
+        run2.id,
+        nowIso()
+      ]);
+    }
+  });
+}
+async function previewMasterclassContext(topicId) {
+  return read((db2) => {
+    const contexto = contextoMasterclass(db2, topicOrThrow$1(db2, topicId));
+    return { chars: contexto.length, contexto };
+  });
+}
+async function listPlans(topicId) {
+  return read((db2) => all(db2, "SELECT * FROM study_plans WHERE topicId = ? ORDER BY id DESC", [topicId]));
+}
+async function editPlan(planId, content) {
+  return tx((db2) => {
+    const p = one(db2, "SELECT * FROM study_plans WHERE id = ?", [planId]);
+    if (!p) throw new StudyError(tt("estudos.planoNaoEncontrado"));
+    if (p.status !== "proposed") throw new StudyError(tt("estudos.planoNaoEditavel"));
+    validPlanContent(content);
+    exec(db2, "UPDATE study_plans SET content = ?, edited = 1 WHERE id = ?", [JSON.stringify(content), planId]);
+    return one(db2, "SELECT * FROM study_plans WHERE id = ?", [planId]);
+  });
+}
+async function discardPlan(planId) {
+  await tx((db2) => exec(db2, "UPDATE study_plans SET status = 'discarded' WHERE id = ? AND status = 'proposed'", [planId]));
+}
+function validPlanContent(c) {
+  const p = c;
+  if (!p || !Array.isArray(p.partes) || p.partes.some((x) => !x || typeof x.titulo !== "string" || !Array.isArray(x.modulos))) {
+    throw new StudyError(tt("estudos.planoInvalido"));
+  }
+}
+function descricaoModulo(m) {
+  const l = [];
+  if (m.opcional) l.push("_(aprofundamento opcional)_");
+  if (m.perguntaCentral) l.push(`**Pergunta central:** ${m.perguntaCentral}`);
+  if (m.conceitos?.length) l.push(`**Conceitos:** ${m.conceitos.join("; ")}`);
+  if (m.relacoes) l.push(`**Relações:** ${m.relacoes}`);
+  if (m.exemplo) l.push(`**Exemplo:** ${m.exemplo}`);
+  if (m.atividade) l.push(`**Atividade:** ${m.atividade}`);
+  if (m.perguntaDiagnostica) l.push(`**Pergunta diagnóstica:** ${m.perguntaDiagnostica}`);
+  if (m.criterioAvanco) l.push(`**Para avançar:** ${m.criterioAvanco}`);
+  if (m.prerequisitos?.length) l.push(`**Pré-requisitos:** ${m.prerequisitos.join("; ")}`);
+  return l.join("\n");
+}
+async function approvePlan(planId, edited) {
+  return tx((db2) => {
+    const p = one(db2, "SELECT * FROM study_plans WHERE id = ?", [planId]);
+    if (!p) throw new StudyError(tt("estudos.planoNaoEncontrado"));
+    if (p.status !== "proposed") throw new StudyError(tt("estudos.planoNaoEditavel"));
+    const content = edited ?? JSON.parse(p.content);
+    validPlanContent(content);
+    const now = nowIso();
+    exec(db2, "UPDATE study_plans SET status = 'superseded' WHERE topicId = ? AND status = 'approved'", [p.topicId]);
+    exec(db2, "UPDATE study_plans SET status = 'approved', approvedAt = ?, content = ?, edited = ? WHERE id = ?", [now, JSON.stringify(content), edited ? 1 : p.edited, planId]);
+    const nextRoot = () => one(db2, "SELECT COALESCE(MAX(orderIndex), -1) + 1 AS n FROM study_nodes WHERE topicId = ? AND parentId IS NULL", [p.topicId]).n;
+    const insertNode = (parentId, title, description, order, minutes) => exec(db2, "INSERT INTO study_nodes (topicId, parentId, title, description, status, orderIndex, estimatedHours, createdAt, origin, planId) VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, 'plan', ?)", [
+      p.topicId,
+      parentId,
+      title.trim().slice(0, 300),
+      description,
+      order,
+      minutes && minutes > 0 ? Math.round(minutes / 60 * 100) / 100 : null,
+      now,
+      planId
+    ]);
+    const nodeIds = [];
+    let firstModule = null;
+    for (const parte of content.partes) {
+      if (parte.excluir) continue;
+      const mods = parte.modulos.filter((m) => !m.excluir && m.titulo?.trim());
+      if (!mods.length) continue;
+      const pid = insertNode(null, parte.titulo, parte.porque || null, nextRoot(), null);
+      nodeIds.push(pid);
+      mods.forEach((m, i) => {
+        const id2 = insertNode(pid, m.titulo, descricaoModulo(m) || null, i, typeof m.minutos === "number" ? m.minutos : null);
+        nodeIds.push(id2);
+        if (!firstModule) firstModule = { id: id2, title: m.titulo };
+      });
+    }
+    const ws = (content.workshops ?? []).filter((w) => !w.excluir && w.titulo?.trim());
+    if (ws.length) {
+      const wid = insertNode(null, "Workshops", null, nextRoot(), null);
+      nodeIds.push(wid);
+      ws.forEach((w, i) => nodeIds.push(insertNode(wid, w.titulo, [w.entrega && `**Entrega:** ${w.entrega}`, w.experimento && `**Experimento:** ${w.experimento}`].filter(Boolean).join("\n") || null, i, null)));
+    }
+    let lessonId = null;
+    const ab = content.aberturaPrimeiraAula;
+    const fm = firstModule;
+    if (fm && ab && (ab.situacao || ab.primeiroPasso || ab.pergunta)) {
+      lessonId = exec(db2, "INSERT INTO study_lessons (topicId, nodeId, planId, title, openQuestion, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+        p.topicId,
+        fm.id,
+        planId,
+        fm.title,
+        ab.pergunta || null,
+        now,
+        now
+      ]);
+      const abertura = [ab.titulo && `### ${ab.titulo}`, ab.situacao, ab.primeiroPasso && `**Primeiro passo hoje:** ${ab.primeiroPasso}`, ab.pergunta && `**Pergunta:** ${ab.pergunta}`].filter(Boolean).join("\n\n");
+      exec(db2, "INSERT INTO study_lesson_turns (lessonId, role, content, payload, createdAt) VALUES (?, 'tutor', ?, ?, ?)", [
+        lessonId,
+        abertura,
+        JSON.stringify({ tipo: "explicacao", doPlano: true, perguntaAberta: ab.pergunta ?? null }),
+        now
+      ]);
+    }
+    return { nodeIds, lessonId };
+  });
+}
+async function listLessons(topicId) {
+  return read((db2) => all(db2, "SELECT * FROM study_lessons WHERE topicId = ? ORDER BY updatedAt DESC, id DESC", [topicId]));
+}
+async function openLesson(topicId, nodeId) {
+  const id2 = await tx((db2) => {
+    const t = topicOrThrow$1(db2, topicId);
+    const ex2 = one(db2, "SELECT * FROM study_lessons WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) ORDER BY id DESC LIMIT 1", [topicId, nodeId]);
+    if (ex2) return ex2.id;
+    const title = nodeId != null ? one(db2, "SELECT title FROM study_nodes WHERE id = ?", [nodeId])?.title ?? t.name : t.name;
+    return exec(db2, "INSERT INTO study_lessons (topicId, nodeId, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)", [topicId, nodeId, title, nowIso(), nowIso()]);
+  });
+  return getLesson(id2);
+}
+async function getLesson(lessonId) {
+  return read((db2) => {
+    const lesson = one(db2, "SELECT * FROM study_lessons WHERE id = ?", [lessonId]);
+    if (!lesson) throw new StudyError(tt("estudos.aulaNaoEncontrada"));
+    return {
+      lesson,
+      turns: all(db2, "SELECT * FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [lessonId]),
+      running: one(db2, "SELECT * FROM study_ai_runs WHERE requestKey = ? AND status = 'running' ORDER BY id DESC LIMIT 1", [`aula:${lessonId}`])
+    };
+  });
+}
+async function sendTurn(lessonId, text, clientKey) {
+  const msg = (text ?? "").trim();
+  if (!msg) throw new StudyError(tt("estudos.mensagemVazia"));
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(clientKey ?? "")) throw new StudyError(tt("estudos.idInvalido"));
+  const prep = await tx((db2) => {
+    const running2 = one(db2, "SELECT * FROM study_ai_runs WHERE requestKey = ? AND status = 'running' LIMIT 1", [`aula:${lessonId}`]);
+    const dup = one(db2, "SELECT * FROM study_lesson_turns WHERE clientKey = ?", [clientKey]);
+    if (dup) return { dup: true, running: running2 };
+    if (running2) throw new StudyError(tt("estudos.aguardeTutor"));
+    const lesson = one(db2, "SELECT * FROM study_lessons WHERE id = ?", [lessonId]);
+    if (!lesson) throw new StudyError(tt("estudos.aulaNaoEncontrada"));
+    exec(db2, "INSERT INTO study_lesson_turns (lessonId, role, content, clientKey, createdAt) VALUES (?, 'me', ?, ?, ?)", [lessonId, msg, clientKey, nowIso()]);
+    exec(db2, "UPDATE study_lessons SET updatedAt = ? WHERE id = ?", [nowIso(), lessonId]);
+    return { dup: false, running: null };
+  });
+  if (prep.dup) {
+    if (prep.running) return prep.running;
+    const last = await read((db2) => one(db2, "SELECT * FROM study_ai_runs WHERE requestKey = ? ORDER BY id DESC LIMIT 1", [`aula:${lessonId}`]));
+    if (last) return last;
+  }
+  return runLessonTurn(lessonId);
+}
+async function runLessonTurn(lessonId) {
+  const { t, lesson, turns, contexto } = await read((db2) => {
+    const lesson2 = one(db2, "SELECT * FROM study_lessons WHERE id = ?", [lessonId]);
+    if (!lesson2) throw new StudyError(tt("estudos.aulaNaoEncontrada"));
+    const t2 = topicOrThrow$1(db2, lesson2.topicId);
+    const turns2 = all(db2, "SELECT * FROM study_lesson_turns WHERE lessonId = ? ORDER BY id", [lessonId]);
+    const lastMe2 = [...turns2].reverse().find((x) => x.role === "me");
+    if (!lastMe2 || turns2[turns2.length - 1].role !== "me") throw new StudyError(tt("estudos.nadaParaResponder"));
+    const contexto2 = contextoAula(db2, t2, lesson2, turns2.slice(0, -1));
+    return { t: t2, lesson: lesson2, turns: turns2, contexto: contexto2 };
+  });
+  const lastMe = turns[turns.length - 1];
+  const params = { ...idiomaDe(t), contexto, pedido: lastMe.content };
+  return startRun({
+    operation: "aula",
+    chamada: "estudos.aula",
+    topicId: lesson.topicId,
+    nodeId: lesson.nodeId,
+    requestKey: `aula:${lessonId}`,
+    params,
+    signature: assinatura(contexto, lastMe.content),
+    schema: SCHEMA_AULA,
+    timeoutMs: 6 * 6e4,
+    apply: (db2, parsed, run2) => {
+      const p = parsed;
+      if (!p || typeof p.resposta !== "string" || !p.resposta.trim()) throw Object.assign(new Error(tt("estudos.respostaInvalida")), { invalid: true });
+      const last = one(db2, "SELECT * FROM study_lesson_turns WHERE lessonId = ? ORDER BY id DESC LIMIT 1", [lessonId]);
+      if (!last || last.id !== lastMe.id) return;
+      exec(db2, "INSERT INTO study_lesson_turns (lessonId, role, content, payload, runId, createdAt) VALUES (?, 'tutor', ?, ?, ?, ?)", [lessonId, p.resposta, JSON.stringify(parsed), run2.id, nowIso()]);
+      exec(db2, "UPDATE study_lessons SET openQuestion = ?, returnPoint = ?, resumePhrase = COALESCE(?, resumePhrase), updatedAt = ? WHERE id = ?", [
+        p.perguntaAberta ?? null,
+        p.pontoDeRetorno ?? null,
+        p.fraseDeRetomada ?? null,
+        nowIso(),
+        lessonId
+      ]);
+    }
+  });
+}
+async function appendToNote(topicId, nodeId, text) {
+  const add = (text ?? "").trim();
+  if (!add) return;
+  await tx((db2) => {
+    topicOrThrow$1(db2, topicId);
+    const n = nodeId == null ? one(db2, "SELECT id, content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [topicId]) : one(db2, "SELECT id, content FROM study_notes WHERE nodeId = ?", [nodeId]);
+    if (n) exec(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [n.content.trim() ? `${n.content.trimEnd()}
+
+${add}
+` : `${add}
+`, nowIso(), n.id]);
+    else exec(db2, "INSERT INTO study_notes (topicId, nodeId, content, updatedAt) VALUES (?, ?, ?, ?)", [topicId, nodeId, `${add}
+`, nowIso()]);
+  });
+}
+const nodeKey = (nodeId) => nodeId ?? 0;
+function topicOrThrow(db2, topicId) {
+  const t = one(db2, "SELECT * FROM study_topics WHERE id = ?", [topicId]);
+  if (!t) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+  return t;
+}
+function invalid() {
+  return Object.assign(new Error(tt("estudos.respostaInvalida")), { invalid: true });
+}
+function secaoValida(s2, v) {
+  if (!v || typeof v !== "object") return false;
+  const o = v;
+  if (s2 === "explicacao" || s2 === "resumo") return typeof o.conteudo === "string";
+  return Array.isArray(o.itens);
+}
+const fp = (...parts) => assinatura(...parts.map((p) => normalizeAnswer(p ?? "")));
+function gravarSecao(g, secao, valor2) {
+  if (!secaoValida(secao, valor2)) return false;
+  const cur = one(g.db, "SELECT id, runId FROM study_materials WHERE topicId = ? AND nodeKey = ? AND section = ?", [g.topicId, nodeKey(g.nodeId), secao]);
+  if (cur && cur.runId > g.run.id) return false;
+  const vals = [JSON.stringify(valor2), g.run.id, g.run.model, g.run.effort, VERSAO_PEDAGOGIA, g.run.inputSignature, g.noteSignature, nowIso()];
+  if (cur) exec(g.db, "UPDATE study_materials SET content = ?, runId = ?, model = ?, effort = ?, promptVersion = ?, inputSignature = ?, noteSignature = ?, createdAt = ? WHERE id = ?", [...vals, cur.id]);
+  else
+    exec(g.db, "INSERT INTO study_materials (topicId, nodeKey, nodeId, section, content, runId, model, effort, promptVersion, inputSignature, noteSignature, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+      g.topicId,
+      nodeKey(g.nodeId),
+      g.nodeId,
+      secao,
+      ...vals
+    ]);
+  if (secao === "revisaoEditorial") sugerir(g, "editorial", valor2.itens, g.noteSignature);
+  if (secao === "subtopicos") sugerir(g, "subtopic", valor2.itens, g.mapSignature);
+  if (secao === "cartoes") cartoesSugeridos(g, valor2.itens);
+  return true;
+}
+function sugerir(g, kind, itens, base2) {
+  if (g.isLatest) {
+    exec(g.db, "UPDATE study_suggestions SET status = 'superseded', decidedAt = ? WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) AND kind = ? AND status = 'pending' AND IFNULL(runId, 0) < ?", [
+      nowIso(),
+      g.topicId,
+      g.nodeId,
+      kind,
+      g.run.id
+    ]);
+  }
+  const nota = (g.nodeId == null ? one(g.db, "SELECT content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [g.topicId]) : one(g.db, "SELECT content FROM study_notes WHERE nodeId = ?", [g.nodeId]))?.content ?? "";
+  for (const it of itens ?? []) {
+    const f = kind === "editorial" ? fp(kind, String(it.trecho ?? ""), String(it.sugestao ?? "")) : fp(kind, String(it.titulo ?? ""));
+    const same = all(g.db, "SELECT status, baseSignature FROM study_suggestions WHERE topicId = ? AND fingerprint = ?", [g.topicId, f]);
+    if (same.some((s2) => s2.status === "accepted" || s2.status === "comment")) continue;
+    if (same.some((s2) => s2.status === "pending")) continue;
+    if (same.some((s2) => s2.status === "rejected" && recusaVale(kind, s2.baseSignature, base2, it, nota))) continue;
+    if (kind === "subtopic" && one(g.db, "SELECT 1 FROM study_nodes WHERE topicId = ? AND lower(title) = lower(?)", [g.topicId, String(it.titulo ?? "")])) continue;
+    exec(g.db, "INSERT INTO study_suggestions (topicId, nodeId, kind, fingerprint, payload, status, runId, baseSignature, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+      g.topicId,
+      g.nodeId,
+      kind,
+      f,
+      JSON.stringify(it),
+      g.isLatest ? "pending" : "superseded",
+      g.run.id,
+      base2,
+      nowIso()
+    ]);
+  }
+}
+function recusaVale(kind, baseRecusa, baseAtual, it, nota) {
+  if (baseRecusa === baseAtual) return true;
+  if (kind === "editorial") return !!String(it.trecho ?? "") && nota.includes(String(it.trecho));
+  try {
+    const a = JSON.parse(baseRecusa ?? "null");
+    const b2 = JSON.parse(baseAtual);
+    if (!a || a.goal !== b2.goal) return false;
+    const now = new Set(b2.titles);
+    return a.titles.every((x) => now.has(x));
+  } catch {
+    return false;
+  }
+}
+function cartoesSugeridos(g, itens) {
+  if (!g.isLatest) return;
+  const existentes = new Set(all(g.db, "SELECT front FROM study_flashcards WHERE topicId = ?", [g.topicId]).map((c) => normalizeAnswer(c.front)));
+  for (const c of itens ?? []) {
+    if (!c?.front?.trim() || !c?.back?.trim() || existentes.has(normalizeAnswer(c.front))) continue;
+    existentes.add(normalizeAnswer(c.front));
+    insertCard(g.db, { topicId: g.topicId, nodeId: g.nodeId, front: c.front, back: c.back, example: c.exemplo ?? null, reading: c.leitura ?? null, status: "suggested" });
+  }
+}
+function mapSignature(db2, topicId) {
+  const goal = one(db2, "SELECT goal FROM study_topics WHERE id = ?", [topicId])?.goal ?? "";
+  const titles = all(db2, "SELECT title FROM study_nodes WHERE topicId = ?", [topicId]).map((n) => normalizeAnswer(n.title));
+  return JSON.stringify({ goal: assinatura(goal), titles: [...new Set(titles)].sort() });
+}
+async function preparar(topicId, nodeId, vocabulario) {
+  return read((db2) => {
+    const t = topicOrThrow(db2, topicId);
+    if (nodeId != null && !one(db2, "SELECT 1 FROM study_nodes WHERE id = ? AND topicId = ?", [nodeId, topicId])) throw new StudyError(tt("estudos.topicoNaoEncontrado"));
+    return { t, ctx: contextoNo(db2, t, nodeId, { vocabulario }), mapSig: mapSignature(db2, topicId) };
+  });
+}
+async function prepareNode(topicId, nodeId, opts = {}) {
+  const { t, ctx, mapSig } = await preparar(topicId, nodeId, opts.vocabulario);
+  return startRun({
+    operation: "pacote",
+    chamada: "estudos.pacoteNo",
+    topicId,
+    nodeId,
+    requestKey: `pacote:${topicId}:${nodeKey(nodeId)}`,
+    params: { ...idiomaDe(t), contexto: ctx.contexto, pedido: "Preparar o material deste item (todas as seções)." },
+    signature: ctx.inputSignature,
+    schema: SCHEMA_PACOTE,
+    timeoutMs: 10 * 6e4,
+    apply: (db2, parsed, run2, isLatest) => {
+      const p = parsed;
+      if (!p || typeof p !== "object") throw invalid();
+      const g = { db: db2, run: run2, topicId, nodeId, noteSignature: ctx.noteSignature, mapSignature: mapSig, isLatest };
+      let gravadas = 0;
+      for (const s2 of SECOES) if (gravarSecao(g, s2, p[s2])) gravadas++;
+      if (!gravadas) throw invalid();
+    }
+  });
+}
+async function regenerateSection(topicId, nodeId, secao) {
+  if (!SECOES.includes(secao)) throw new StudyError(tt("estudos.secaoInvalida"));
+  const { t, ctx, mapSig } = await preparar(topicId, nodeId);
+  return startRun({
+    operation: "secao",
+    chamada: "estudos.secaoNo",
+    topicId,
+    nodeId,
+    section: secao,
+    requestKey: `secao:${topicId}:${nodeKey(nodeId)}:${secao}`,
+    params: { ...idiomaDe(t), contexto: ctx.contexto, pedido: `Gerar de novo só a seção ${secao}.`, secao },
+    signature: ctx.inputSignature,
+    schema: SCHEMA_SECAO(secao),
+    timeoutMs: 6 * 6e4,
+    apply: (db2, parsed, run2, isLatest) => {
+      const g = { db: db2, run: run2, topicId, nodeId, noteSignature: ctx.noteSignature, mapSignature: mapSig, isLatest };
+      if (!gravarSecao(g, secao, parsed?.[secao])) throw invalid();
+    }
+  });
+}
+async function reviewNote(topicId, nodeId) {
+  const { t, ctx, mapSig } = await preparar(topicId, nodeId);
+  if (!ctx.temNotaAutoral) throw new StudyError(tt("estudos.notaVaziaParaRevisar"));
+  return startRun({
+    operation: "revisao",
+    chamada: "estudos.revisaoEditorial",
+    topicId,
+    nodeId,
+    section: "revisaoEditorial",
+    requestKey: `revisao:${topicId}:${nodeKey(nodeId)}`,
+    params: { ...idiomaDe(t), contexto: ctx.contexto, pedido: "Revise minha anotação mantendo minha voz." },
+    signature: ctx.inputSignature,
+    schema: SCHEMA_EDITORIAL,
+    timeoutMs: 5 * 6e4,
+    apply: (db2, parsed, run2, isLatest) => {
+      const g = { db: db2, run: run2, topicId, nodeId, noteSignature: ctx.noteSignature, mapSignature: mapSig, isLatest };
+      if (!gravarSecao(g, "revisaoEditorial", parsed?.revisaoEditorial)) throw invalid();
+    }
+  });
+}
+async function suggestSubtopics(topicId, nodeId) {
+  const { t, ctx, mapSig } = await preparar(topicId, nodeId);
+  return startRun({
+    operation: "subtopicos",
+    chamada: "estudos.subtopicos",
+    topicId,
+    nodeId,
+    section: "subtopicos",
+    requestKey: `subtopicos:${topicId}:${nodeKey(nodeId)}`,
+    params: { ...idiomaDe(t), contexto: ctx.contexto, pedido: "Há subtópicos que faltam? Zero itens é válido." },
+    signature: ctx.inputSignature,
+    schema: SCHEMA_SUBTOPICOS,
+    timeoutMs: 5 * 6e4,
+    apply: (db2, parsed, run2, isLatest) => {
+      const g = { db: db2, run: run2, topicId, nodeId, noteSignature: ctx.noteSignature, mapSignature: mapSig, isLatest };
+      if (!gravarSecao(g, "subtopicos", parsed?.subtopicos)) throw invalid();
+    }
+  });
+}
+async function getMaterial(topicId, nodeId) {
+  return read((db2) => {
+    const nota = (nodeId == null ? one(db2, "SELECT content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [topicId]) : one(db2, "SELECT content FROM study_notes WHERE nodeId = ?", [nodeId]))?.content ?? "";
+    const sig = assinatura(nota);
+    const rows = all(db2, "SELECT * FROM study_materials WHERE topicId = ? AND nodeKey = ?", [topicId, nodeKey(nodeId)]);
+    return {
+      sections: rows.map((r) => ({ ...r, stale: r.noteSignature !== sig })),
+      suggestions: all(
+        db2,
+        "SELECT * FROM study_suggestions WHERE topicId = ? AND IFNULL(nodeId, -1) = IFNULL(?, -1) AND status IN ('pending', 'comment') ORDER BY id",
+        [topicId, nodeId]
+      ),
+      noteSignature: sig
+    };
+  });
+}
+function sugestao(db2, id2) {
+  const s2 = one(db2, "SELECT * FROM study_suggestions WHERE id = ?", [id2]);
+  if (!s2) throw new StudyError(tt("estudos.sugestaoNaoEncontrada"));
+  return s2;
+}
+async function acceptEditorial(id2, opts = {}) {
+  return tx((db2) => {
+    const s2 = sugestao(db2, id2);
+    if (s2.kind !== "editorial") throw new StudyError(tt("estudos.sugestaoNaoEncontrada"));
+    if (s2.status !== "pending" && s2.status !== "comment") return { ok: false, reason: "decided" };
+    const p = JSON.parse(s2.payload);
+    const note = s2.nodeId == null ? one(db2, "SELECT id, content FROM study_notes WHERE topicId = ? AND nodeId IS NULL", [s2.topicId]) : one(db2, "SELECT id, content FROM study_notes WHERE nodeId = ?", [s2.nodeId]);
+    if (!note) return { ok: false, reason: "stale" };
+    const anchor = (opts.anchor ?? p.trecho) || "";
+    const at = note.content.indexOf(anchor);
+    if (!anchor || at < 0) return { ok: false, reason: "stale" };
+    if (note.content.indexOf(anchor, at + 1) >= 0) return { ok: false, reason: "ambiguous" };
+    const replace = opts.replace ?? p.substituicao != null;
+    const texto = opts.text ?? (replace ? p.substituicao ?? "" : p.sugestao);
+    const novo = replace ? note.content.slice(0, at) + texto + note.content.slice(at + anchor.length) : note.content.slice(0, at + anchor.length) + (texto.startsWith(" ") || texto.startsWith("\n") ? "" : " ") + texto + note.content.slice(at + anchor.length);
+    exec(db2, "UPDATE study_notes SET content = ?, updatedAt = ? WHERE id = ?", [novo, nowIso(), note.id]);
+    exec(db2, "UPDATE study_suggestions SET status = 'accepted', decidedAt = ? WHERE id = ?", [nowIso(), id2]);
+    return { ok: true, content: novo };
+  });
+}
+async function decideSuggestion(id2, status2) {
+  await tx((db2) => {
+    sugestao(db2, id2);
+    exec(db2, "UPDATE study_suggestions SET status = ?, decidedAt = ? WHERE id = ?", [status2, nowIso(), id2]);
+  });
+}
+async function acceptSubtopic(id2, opts = {}) {
+  return tx((db2) => {
+    const s2 = sugestao(db2, id2);
+    if (s2.kind !== "subtopic" || s2.status !== "pending") throw new StudyError(tt("estudos.sugestaoNaoEncontrada"));
+    const p = JSON.parse(s2.payload);
+    const parentId = opts.parentId !== void 0 ? opts.parentId : p.parentId;
+    if (parentId != null && !one(db2, "SELECT 1 FROM study_nodes WHERE id = ? AND topicId = ?", [parentId, s2.topicId])) throw new StudyError(tt("estudos.paiInvalido"));
+    const title = (opts.title ?? p.titulo ?? "").trim();
+    if (!title) throw new StudyError(tt("estudos.topicoSemTitulo"));
+    const siblings = all(db2, "SELECT id FROM study_nodes WHERE topicId = ? AND IFNULL(parentId, -1) = IFNULL(?, -1) ORDER BY orderIndex, id", [s2.topicId, parentId]);
+    const pos = Math.max(0, Math.min(siblings.length, opts.position ?? p.posicao ?? siblings.length));
+    const desc = [p.tipo === "pre-requisito" ? "_(pré-requisito)_" : "_(aprofundamento opcional)_", p.motivo, p.conexaoObjetivo && `**Conexão com o objetivo:** ${p.conexaoObjetivo}`, p.prerequisito && `**Pré-requisito:** ${p.prerequisito}`].filter(Boolean).join("\n");
+    const newId = exec(db2, "INSERT INTO study_nodes (topicId, parentId, title, description, status, orderIndex, createdAt, origin) VALUES (?, ?, ?, ?, 'todo', ?, ?, 'manual')", [s2.topicId, parentId, title, desc, pos, nowIso()]);
+    const ordered = [...siblings.map((x) => x.id)];
+    ordered.splice(pos, 0, newId);
+    ordered.forEach((nid, i) => exec(db2, "UPDATE study_nodes SET orderIndex = ? WHERE id = ?", [i, nid]));
+    exec(db2, "UPDATE study_suggestions SET status = 'accepted', decidedAt = ? WHERE id = ?", [nowIso(), id2]);
+    return newId;
+  });
+}
+async function saveItemAsQuestion(topicId, nodeId, kind, prompt, reference, hint) {
+  return tx((db2) => {
+    topicOrThrow(db2, topicId);
+    const dup = one(db2, "SELECT id FROM study_questions WHERE topicId = ? AND prompt = ?", [topicId, prompt.trim()]);
+    if (dup) return dup.id;
+    return insertQuestion(db2, { topicId, nodeId, kind, prompt, reference, hint, origin: "tutor" });
+  });
+}
+const changed$1 = (kind, topicId) => broadcast("estudos:updated", { kind, topicId: topicId ?? null });
+const id = (v) => {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n <= 0) throw new StudyError(tt("estudos.idInvalido"));
+  return n;
+};
+const optId = (v) => v == null || v === "" ? null : id(v);
+function registerEstudosRpc(handle) {
+  handle("estudos:library", () => getLibrary());
+  handle("estudos:topic", (_e, topicId) => getTopic(id(topicId)));
+  handle("estudos:createTopic", async (_e, input) => {
+    const t = await createTopic(input);
+    changed$1("topics", t.id);
+    return t;
+  });
+  handle("estudos:createFuture", async (_e, name) => {
+    const t = await createFutureTopic(String(name ?? ""));
+    changed$1("topics", t.id);
+    return t;
+  });
+  handle("estudos:updateTopic", async (_e, topicId, patch) => {
+    const t = await updateTopic(id(topicId), patch ?? {});
+    changed$1("topics", t.id);
+    return t;
+  });
+  handle("estudos:setTopicStatus", async (_e, topicId, status2) => {
+    const t = await setTopicStatus(id(topicId), status2);
+    changed$1("topics", t.id);
+    return t;
+  });
+  handle("estudos:continue", () => getContinue());
+  handle("estudos:prefs", () => getPrefs());
+  handle("estudos:setPinned", async (_e, p) => {
+    await setPinned(p ? { ...p, topicId: id(p.topicId), nodeId: optId(p.nodeId), refId: optId(p.refId) } : null);
+    changed$1("prefs");
+  });
+  handle("estudos:setNewPerDay", async (_e, n) => {
+    await setNewPerDay(Number(n));
+    changed$1("prefs");
+  });
+  handle("estudos:timeOptions", (_e, minutes, filters) => {
+    const m = Number(minutes);
+    if (!Number.isFinite(m) || m <= 0 || m > 600) throw new StudyError(tt("estudos.tempoInvalido"));
+    return getTimeOptions(m, filters ?? {});
+  });
+  handle("estudos:categories", () => listCategories());
+  handle("estudos:createCategory", async (_e, name) => {
+    const c = await createCategory(String(name ?? ""));
+    changed$1("categories");
+    return c;
+  });
+  handle("estudos:renameCategory", async (_e, catId, name) => {
+    await renameCategory(id(catId), String(name ?? ""));
+    changed$1("categories");
+  });
+  handle("estudos:deleteCategory", async (_e, catId) => {
+    await deleteCategory(id(catId));
+    changed$1("categories");
+  });
+  handle("estudos:cards", (_e, f) => listCards(f ?? {}));
+  handle("estudos:createCard", async (_e, input) => {
+    const c = await createCard({ ...input, topicId: id(input?.topicId), nodeId: optId(input?.nodeId) });
+    changed$1("cards", c.topicId);
+    return c;
+  });
+  handle("estudos:updateCard", async (_e, cardId, input) => {
+    const c = await updateCard(id(cardId), { ...input, nodeId: optId(input?.nodeId) });
+    changed$1("cards", c.topicId);
+    return c;
+  });
+  handle("estudos:setCardStatus", async (_e, cardId, status2) => {
+    await setCardStatus(id(cardId), status2);
+    changed$1("cards");
+  });
+  handle("estudos:setStateSuspended", async (_e, stateId, suspended) => {
+    await setStateSuspended(id(stateId), !!suspended);
+    changed$1("cards");
+  });
+  handle("estudos:deleteCard", async (_e, cardId) => {
+    await deleteCard(id(cardId));
+    changed$1("cards");
+  });
+  handle("estudos:queue", (_e, f) => getReviewQueue(f ?? {}));
+  handle("estudos:review", async (_e, stateId, rating) => {
+    if (!RATINGS.includes(rating)) throw new StudyError(tt("estudos.avaliacaoInvalida"));
+    const s2 = await reviewState(id(stateId), rating);
+    changed$1("review");
+    return s2;
+  });
+  handle("estudos:sources", (_e, topicId, nodeId) => listSources(id(topicId), nodeId === void 0 ? void 0 : optId(nodeId)));
+  handle("estudos:createSource", async (_e, s2) => {
+    const r = await createSource({ ...s2, topicId: id(s2?.topicId), nodeId: optId(s2?.nodeId) });
+    changed$1("sources", r.topicId);
+    return r;
+  });
+  handle("estudos:updateSource", async (_e, sourceId, patch) => {
+    const r = await updateSource(id(sourceId), patch ?? {});
+    changed$1("sources", r.topicId);
+    return r;
+  });
+  handle("estudos:deleteSource", async (_e, sourceId) => {
+    await deleteSource(id(sourceId));
+    changed$1("sources");
+  });
+  handle("estudos:previewImport", (_e, topicId, files) => previewImport(id(topicId), Array.isArray(files) ? files : []));
+  handle("estudos:applyImport", async (_e, topicId, nodeId, files) => {
+    const r = await applyImport(id(topicId), optId(nodeId), Array.isArray(files) ? files : []);
+    changed$1("sources", id(topicId));
+    return r;
+  });
+  handle("estudos:saveCheckpoint", async (_e, c) => {
+    const r = await saveCheckpoint({ ...c, topicId: id(c?.topicId), nodeId: optId(c?.nodeId), refId: optId(c?.refId) });
+    return r;
+  });
+  handle(
+    "estudos:checkpoint",
+    (_e, topicId, nodeId, target, refId) => getCheckpoint(id(topicId), optId(nodeId), target, optId(refId))
+  );
+  handle("estudos:questions", (_e, f) => listQuestions(f ?? {}));
+  handle("estudos:createQuestion", async (_e, q2) => {
+    const r = await createQuestion({ ...q2, topicId: id(q2?.topicId), nodeId: optId(q2?.nodeId) });
+    changed$1("questions", r.topicId);
+    return r;
+  });
+  handle("estudos:updateQuestion", async (_e, qid, patch) => {
+    await updateQuestion(id(qid), patch ?? {});
+    changed$1("questions");
+  });
+  handle("estudos:deleteQuestion", async (_e, qid) => {
+    await deleteQuestion(id(qid));
+    changed$1("questions");
+  });
+  handle("estudos:recordAttempt", async (_e, qid, a) => {
+    const r = await recordAttempt(id(qid), a);
+    changed$1("questions", r.topicId);
+    return r;
+  });
+  handle("estudos:attempts", (_e, qid) => listAttempts(id(qid)));
+  handle("estudos:uploadAttachment", async (_e, name, mime, base64) => {
+    if (typeof base64 !== "string" || !base64) throw new StudyError(tt("estudos.arquivoVazio"));
+    const a = await storeAttachment(Buffer.from(base64, "base64"), name ? String(name).slice(0, 200) : null, String(mime ?? ""));
+    return { fileName: a.fileName, ref: `anexos/${a.fileName}`, mime: a.mime, size: a.size };
+  });
+  handle("estudos:attachments", () => listAttachments());
+  handle("estudos:exportAll", async () => {
+    const { files } = await exportAll();
+    return files.map((f) => ({ path: f.path, base64: Buffer.isBuffer(f.content) ? f.content.toString("base64") : Buffer.from(f.content, "utf8").toString("base64") }));
+  });
+  handle("estudos:gitStatus", () => getStatus());
+  handle("estudos:gitPreview", (_e, cfg) => previewLink(cfg ?? {}));
+  handle("estudos:gitLink", async (_e, cfg) => {
+    const r = await link(cfg);
+    changed$1("git");
+    return r;
+  });
+  handle("estudos:gitUnlink", async () => {
+    await unlink();
+    changed$1("git");
+  });
+  handle("estudos:sync", () => sync());
+  handle("estudos:gitTree", async () => {
+    await refreshCheckout();
+    return repoTree();
+  });
+  handle("estudos:restoreFromRepo", async () => {
+    const r = await restoreFromRepo();
+    changed$1("topics");
+    return r;
+  });
+  handle("estudos:adoptPreview", (_e, subpath, topicId) => previewAdopt(String(subpath ?? "."), optId(topicId)));
+  handle("estudos:adoptApply", async (_e, input) => {
+    const r = await applyAdopt({ ...input, topicId: optId(input?.topicId), mode: input?.mode === "source" ? "source" : "note", decisions: input?.decisions ?? {} });
+    changed$1("topics", r.topicId);
+    return r;
+  });
+  void recoverStaleRuns();
+  handle("estudos:iaPerfis", async () => {
+    const out = {};
+    for (const [k, p] of Object.entries(PERFIS_ESTUDOS)) {
+      out[k] = {
+        modelo: (await getSetting(p.modelo.setting) ?? "").trim() || p.modelo.padrao,
+        effort: (await getSetting(p.effort.setting) ?? "").trim() || p.effort.padrao,
+        padraoModelo: p.modelo.padrao,
+        padraoEffort: p.effort.padrao
+      };
+    }
+    return { perfis: out, efforts: EFFORTS_DO_MOTOR.codex };
+  });
+  handle("estudos:setIaPerfil", async (_e, perfil, modelo, effort) => {
+    const p = PERFIS_ESTUDOS[perfil];
+    if (!p) throw new StudyError(tt("estudos.perfilInvalido"));
+    if (modelo && !modeloValido(modelo)) throw new StudyError(tt("estudos.modeloInvalido"));
+    if (effort && !EFFORTS_DO_MOTOR.codex.includes(effort)) throw new StudyError(tt("estudos.effortInvalido"));
+    await setSetting$1(p.modelo.setting, (modelo ?? "").trim());
+    await setSetting$1(p.effort.setting, (effort ?? "").trim());
+    changed$1("iaPerfis");
+  });
+  handle("estudos:iaDiagnostico", async () => {
+    const modelos = [];
+    for (const p of Object.values(PERFIS_ESTUDOS)) modelos.push((await getSetting(p.modelo.setting) ?? "").trim() || p.modelo.padrao);
+    return diagnosticoCodex([...new Set(modelos)]);
+  });
+  handle("estudos:iaRuns", (_e, f) => listRuns(f ?? {}));
+  handle("estudos:iaCancel", (_e, runId) => cancelRun(id(runId)));
+  handle("estudos:masterclass", (_e, topicId, pedido) => startMasterclass(id(topicId), String(pedido ?? "")));
+  handle("estudos:plans", (_e, topicId) => listPlans(id(topicId)));
+  handle("estudos:masterclassContext", (_e, topicId) => previewMasterclassContext(id(topicId)));
+  handle("estudos:editPlan", async (_e, planId, content) => {
+    const p = await editPlan(id(planId), content);
+    changed$1("plans", p.topicId);
+    return p;
+  });
+  handle("estudos:discardPlan", async (_e, planId) => {
+    await discardPlan(id(planId));
+    changed$1("plans");
+  });
+  handle("estudos:approvePlan", async (_e, planId, content) => {
+    const r = await approvePlan(id(planId), content);
+    changed$1("plans");
+    return r;
+  });
+  handle("estudos:lessons", (_e, topicId) => listLessons(id(topicId)));
+  handle("estudos:openLesson", (_e, topicId, nodeId) => openLesson(id(topicId), optId(nodeId)));
+  handle("estudos:lesson", (_e, lessonId) => getLesson(id(lessonId)));
+  handle("estudos:sendTurn", (_e, lessonId, text, clientKey) => sendTurn(id(lessonId), String(text ?? ""), String(clientKey ?? "")));
+  handle("estudos:retryTurn", (_e, lessonId) => runLessonTurn(id(lessonId)));
+  handle("estudos:appendToNote", async (_e, topicId, nodeId, text) => {
+    await appendToNote(id(topicId), optId(nodeId), String(text ?? ""));
+    changed$1("notes", id(topicId));
+  });
+  handle("estudos:material", (_e, topicId, nodeId) => getMaterial(id(topicId), optId(nodeId)));
+  handle(
+    "estudos:prepareNode",
+    (_e, topicId, nodeId, opts) => prepareNode(id(topicId), optId(nodeId), { vocabulario: Array.isArray(opts?.vocabulario) ? opts.vocabulario.map(String).slice(0, 300) : void 0 })
+  );
+  handle("estudos:regenerateSection", (_e, topicId, nodeId, secao) => {
+    if (!SECOES.includes(secao)) throw new StudyError(tt("estudos.secaoInvalida"));
+    return regenerateSection(id(topicId), optId(nodeId), secao);
+  });
+  handle("estudos:reviewNote", (_e, topicId, nodeId) => reviewNote(id(topicId), optId(nodeId)));
+  handle("estudos:suggestSubtopics", (_e, topicId, nodeId) => suggestSubtopics(id(topicId), optId(nodeId)));
+  handle("estudos:acceptEditorial", async (_e, sid, opts) => {
+    const r = await acceptEditorial(id(sid), opts ?? {});
+    if (r.ok) changed$1("notes");
+    return r;
+  });
+  handle("estudos:decideSuggestion", async (_e, sid, status2) => {
+    if (!["rejected", "comment", "pending"].includes(status2)) throw new StudyError(tt("estudos.statusInvalido"));
+    await decideSuggestion(id(sid), status2);
+    changed$1("suggestions");
+  });
+  handle("estudos:acceptSubtopic", async (_e, sid, opts) => {
+    const nodeId = await acceptSubtopic(id(sid), { ...opts, parentId: opts?.parentId === void 0 ? void 0 : optId(opts.parentId) });
+    changed$1("nodes");
+    return nodeId;
+  });
+  handle("estudos:saveItemAsQuestion", async (_e, topicId, nodeId, kind, prompt, reference, hint) => {
+    if (!["recall", "exercise", "socratic"].includes(kind)) throw new StudyError(tt("estudos.statusInvalido"));
+    const qid = await saveItemAsQuestion(id(topicId), optId(nodeId), kind, String(prompt ?? ""), reference ?? null, hint ?? null);
+    changed$1("questions", id(topicId));
+    return qid;
+  });
 }
 const HEAD_BYTES = 96 * 1024;
 const TAIL_BYTES = 64 * 1024;
@@ -86037,8 +89610,8 @@ function scanRoot(root, base2) {
     if (info) out.push(info);
   }
   const cmdDir = path.join(root, "commands");
-  const walk = (dir, depth) => {
-    if (depth > 3) return;
+  const walk = (dir, depth2) => {
+    if (depth2 > 3) return;
     let entries = [];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -86048,7 +89621,7 @@ function scanRoot(root, base2) {
     for (const e of entries) {
       if (e.name.startsWith(".") || e.name.startsWith("_")) continue;
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p, depth + 1);
+      if (e.isDirectory()) walk(p, depth2 + 1);
       else if (e.isFile() && e.name.endsWith(".md")) {
         const info = readInfo(p, "command", e.name.slice(0, -3), base2);
         if (info) out.push(info);
@@ -86082,21 +89655,21 @@ function listClaudeSkills(projects, fresh = false) {
   cache$1 = { at: Date.now(), items };
   return items;
 }
-function skillFile(id, projects) {
-  return listClaudeSkills(projects, true).find((s2) => s2.id === id) ?? null;
+function skillFile(id2, projects) {
+  return listClaudeSkills(projects, true).find((s2) => s2.id === id2) ?? null;
 }
-function readSkill(id, projects) {
-  const info = skillFile(id, projects);
+function readSkill(id2, projects) {
+  const info = skillFile(id2, projects);
   if (!info) throw new Error(tt("aiconv.skillNaoEncontrada"));
   return { info, content: fs.readFileSync(info.path, "utf8") };
 }
-function saveSkill(id, content, projects) {
-  const info = skillFile(id, projects);
+function saveSkill(id2, content, projects) {
+  const info = skillFile(id2, projects);
   if (!info) throw new Error(tt("aiconv.skillNaoEncontrada"));
   if (typeof content !== "string" || content.length > MAX_FILE) throw new Error(tt("aiconv.conteudoInvalido"));
   fs.writeFileSync(info.path, content, "utf8");
   cache$1 = null;
-  return skillFile(id, projects) ?? info;
+  return skillFile(id2, projects) ?? info;
 }
 const BUILTIN = {
   compact: "Resume a conversa para liberar contexto",
@@ -86284,22 +89857,22 @@ function readCodexRateLimits() {
     let buf = "";
     let err = "";
     let done = false;
-    const finish = (fn) => {
+    const finish2 = (fn) => {
       if (done) return;
       done = true;
       clearTimeout(timer2);
       child.kill("SIGTERM");
       fn();
     };
-    const timer2 = setTimeout(() => finish(() => reject2(new Error(tt("aiconv.oCodexDemorouDemaisPara")))), TIMEOUT_MS);
+    const timer2 = setTimeout(() => finish2(() => reject2(new Error(tt("aiconv.oCodexDemorouDemaisPara")))), TIMEOUT_MS);
     const send = (msg) => {
       child.stdin.write(JSON.stringify(msg) + "\n");
     };
-    child.on("error", (e) => finish(() => e.code === "ENOENT" ? resolve(null) : reject2(e)));
+    child.on("error", (e) => finish2(() => e.code === "ENOENT" ? resolve(null) : reject2(e)));
     child.stdin.on("error", () => void 0);
     child.stderr.on("data", (b2) => err += b2.toString());
     child.on("close", (code) => {
-      finish(() => code === 127 ? resolve(null) : reject2(new Error(err.trim().split("\n").pop() || tt("aiconv.codexSaiuComCodigo", { code }))));
+      finish2(() => code === 127 ? resolve(null) : reject2(new Error(err.trim().split("\n").pop() || tt("aiconv.codexSaiuComCodigo", { code }))));
     });
     child.stdout.on("data", (b2) => {
       buf += b2.toString();
@@ -86318,7 +89891,7 @@ function readCodexRateLimits() {
           send({ method: "initialized" });
           send({ method: "account/rateLimits/read", id: 2 });
         } else if (msg.id === 2) {
-          finish(() => msg.error ? reject2(new Error(msg.error.message || tt("aiconv.erroDoCodex"))) : resolve(msg.result));
+          finish2(() => msg.error ? reject2(new Error(msg.error.message || tt("aiconv.erroDoCodex"))) : resolve(msg.result));
         }
       }
     });
@@ -86400,20 +89973,20 @@ async function recoverConversations() {
 }
 function registerAiConvRpc(handle, deps2) {
   initRunner(deps2);
-  const emitConv = async (id) => {
-    const c = await getConversation(id);
-    if (c) broadcast("conv:update", { conversationId: id, conversation: withLive(c) });
+  const emitConv = async (id2) => {
+    const c = await getConversation(id2);
+    if (c) broadcast("conv:update", { conversationId: id2, conversation: withLive(c) });
   };
   handle("conv:list", async (_e, query) => {
     const page = await listConversations(query ?? {});
     return { ...page, items: page.items.map(withLive) };
   });
-  handle("conv:get", async (_e, id, opts) => {
-    const c = await getConversation(id);
+  handle("conv:get", async (_e, id2, opts) => {
+    const c = await getConversation(id2);
     if (!c) return null;
-    const page = await listTurnsPage(id, { limit: opts?.limit ?? CONV_TURNS_PAGE_SIZE, sinceId: opts?.sinceId ?? null });
+    const page = await listTurnsPage(id2, { limit: opts?.limit ?? CONV_TURNS_PAGE_SIZE, sinceId: opts?.sinceId ?? null });
     const turns = page.turns;
-    const lt = liveTurn(id);
+    const lt = liveTurn(id2);
     if (lt) {
       const i = turns.findIndex((t) => t.id === lt.id);
       if (i >= 0) turns[i] = lt;
@@ -86423,7 +89996,7 @@ function registerAiConvRpc(handle, deps2) {
   });
   handle(
     "conv:olderTurns",
-    async (_e, id, beforeId, limit) => listTurnsPage(id, { limit: limit ?? CONV_TURNS_PAGE_SIZE, beforeId })
+    async (_e, id2, beforeId, limit) => listTurnsPage(id2, { limit: limit ?? CONV_TURNS_PAGE_SIZE, beforeId })
   );
   handle("conv:create", async (_e, params = {}) => {
     const p = sanitizePatch(params);
@@ -86440,40 +90013,40 @@ function registerAiConvRpc(handle, deps2) {
     await emitConv(c.id);
     return withLive(c);
   });
-  handle("conv:update", async (_e, id, patch) => {
-    const before = await getConversation(id);
+  handle("conv:update", async (_e, id2, patch) => {
+    const before = await getConversation(id2);
     if (!before) return null;
     const p = sanitizePatch(patch ?? {});
     if (before.cwd) {
       delete p.projectId;
       delete p.useWorktree;
     }
-    const c = await updateConversation(id, p);
-    await emitConv(id);
+    const c = await updateConversation(id2, p);
+    await emitConv(id2);
     return c ? withLive(c) : null;
   });
-  handle("conv:delete", async (_e, id, removeWorktree$1) => {
-    const c = await getConversation(id);
-    await cancel(id);
+  handle("conv:delete", async (_e, id2, removeWorktree$1) => {
+    const c = await getConversation(id2);
+    await cancel(id2);
     if (removeWorktree$1 && c?.useWorktree && c.repoPath && c.cwd) {
-      for (let i = 0; i < 20 && isRunning(id); i++) await new Promise((r) => setTimeout(r, 250));
+      for (let i = 0; i < 20 && isRunning(id2); i++) await new Promise((r) => setTimeout(r, 250));
       await removeWorktree(c.repoPath, c.cwd, c.worktreeBranch);
     }
-    await deleteConversation(id);
-    broadcast("conv:update", { conversationId: id, removed: true });
+    await deleteConversation(id2);
+    broadcast("conv:update", { conversationId: id2, removed: true });
     return true;
   });
-  handle("conv:send", async (_e, id, text, images) => {
+  handle("conv:send", async (_e, id2, text, images) => {
     const imgs = sanitizeImages(images);
     if (typeof text !== "string" || !text.trim() && !imgs.length) return false;
-    await sendMessage$1(id, text, imgs);
+    await sendMessage$1(id2, text, imgs);
     return true;
   });
-  handle("conv:fork", async (_e, id) => {
-    const c = await getConversation(id);
+  handle("conv:fork", async (_e, id2) => {
+    const c = await getConversation(id2);
     if (!c?.sessionId) throw new Error(tt("aiconv.aConversaAindaNaoTem"));
-    if (isRunning(id)) throw new Error(tt("aiconv.espereAExecucaoTerminarPara"));
-    const turns = await listTurns(id);
+    if (isRunning(id2)) throw new Error(tt("aiconv.espereAExecucaoTerminarPara"));
+    const turns = await listTurns(id2);
     const f = await createConversation({
       title: `↳ ${c.title}`.slice(0, 200),
       projectId: c.projectId,
@@ -86498,42 +90071,42 @@ function registerAiConvRpc(handle, deps2) {
     await emitConv(f.id);
     return withLive(await getConversation(f.id));
   });
-  const convDir = async (id, repoRel) => {
-    const c = await getConversation(id);
+  const convDir = async (id2, repoRel) => {
+    const c = await getConversation(id2);
     if (!c) throw new Error(tt("aiconv.conversaNaoEncontrada"));
     const root = c.cwd || await deps2.resolveProjectCwd(c.projectId);
     if (!root) throw new Error(tt("aiconv.estaConversaNaoTemPasta"));
     if (!repoRel) return { dir: root, baseRef: c.baseRef };
-    const rel = String(repoRel);
-    return { dir: resolveRepoDir(root, rel), baseRef: workspaceBaseRef(root, rel) };
+    const rel2 = String(repoRel);
+    return { dir: resolveRepoDir(root, rel2), baseRef: workspaceBaseRef(root, rel2) };
   };
-  handle("conv:changes", async (_e, id) => {
-    const c = await getConversation(id);
+  handle("conv:changes", async (_e, id2) => {
+    const c = await getConversation(id2);
     const dir = c?.cwd || (c ? await deps2.resolveProjectCwd(c.projectId) : void 0);
     if (!c || !dir) return { isRepo: false, branch: null, baseRef: null, files: [], unpushed: 0, hasRemote: false };
     return getChanges(dir, c.baseRef);
   });
-  handle("conv:fileDiff", async (_e, id, filePath, repoRel) => {
-    const { dir } = await convDir(id, repoRel);
+  handle("conv:fileDiff", async (_e, id2, filePath, repoRel) => {
+    const { dir } = await convDir(id2, repoRel);
     return fileDiff(dir, String(filePath));
   });
-  handle("conv:commit", async (_e, id, message, paths, repoRel) => {
-    const { dir } = await convDir(id, repoRel);
+  handle("conv:commit", async (_e, id2, message, paths, repoRel) => {
+    const { dir } = await convDir(id2, repoRel);
     return commit(dir, String(message ?? ""), Array.isArray(paths) ? paths.map(String) : null);
   });
-  handle("conv:discard", async (_e, id, filePath, repoRel) => {
-    if (isRunning(id)) throw new Error(tt("aiconv.espereAExecucaoTerminar"));
-    const { dir } = await convDir(id, repoRel);
+  handle("conv:discard", async (_e, id2, filePath, repoRel) => {
+    if (isRunning(id2)) throw new Error(tt("aiconv.espereAExecucaoTerminar"));
+    const { dir } = await convDir(id2, repoRel);
     await discard(dir, String(filePath));
     return true;
   });
-  handle("conv:pr", async (_e, id, repoRel) => {
-    const { dir, baseRef } = await convDir(id, repoRel);
+  handle("conv:pr", async (_e, id2, repoRel) => {
+    const { dir, baseRef } = await convDir(id2, repoRel);
     return openPullRequest(dir, baseRef);
   });
-  handle("conv:suggestCommit", async (_e, id, repoRel) => {
-    const c = await getConversation(id);
-    const { dir } = await convDir(id, repoRel);
+  handle("conv:suggestCommit", async (_e, id2, repoRel) => {
+    const c = await getConversation(id2);
+    const { dir } = await convDir(id2, repoRel);
     const ctx = await commitContext(dir);
     if (!ctx.trim()) throw new Error(tt("aiconv.nadaParaDescrever"));
     const out = await executarChamada("promptRunner.mensagemCommit", { contexto: ctx }, {
@@ -86543,33 +90116,33 @@ function registerAiConvRpc(handle, deps2) {
     });
     return out.replace(/^```\w*\n?|```$/g, "").trim();
   });
-  handle("conv:removeWorktree", async (_e, id) => {
-    const c = await getConversation(id);
+  handle("conv:removeWorktree", async (_e, id2) => {
+    const c = await getConversation(id2);
     if (!c?.useWorktree || !c.repoPath || !c.cwd) throw new Error(tt("aiconv.estaConversaNaoTemWorktree"));
-    if (isRunning(id)) throw new Error(tt("aiconv.espereAExecucaoTerminar"));
+    if (isRunning(id2)) throw new Error(tt("aiconv.espereAExecucaoTerminar"));
     await removeWorktree(c.repoPath, c.cwd, c.worktreeBranch);
-    await updateConversation(id, { archived: true });
-    await emitConv(id);
+    await updateConversation(id2, { archived: true });
+    await emitConv(id2);
     return true;
   });
-  handle("conv:cancel", (_e, id) => cancel(id));
-  handle("conv:slashCommands", async (_e, id, projectId) => {
+  handle("conv:cancel", (_e, id2) => cancel(id2));
+  handle("conv:slashCommands", async (_e, id2, projectId) => {
     const projects = await deps2.projectPaths();
-    const c = id ? await getConversation(id) : null;
+    const c = id2 ? await getConversation(id2) : null;
     return slashCommands(c ? knownSlashNames(c) : null, projects, {
       projectId: c ? c.projectId : projectId ?? null,
       configDir: c?.configDir ?? null
     });
   });
   handle("claudeSkills:list", async (_e, fresh) => listClaudeSkills(await deps2.projectPaths(), !!fresh));
-  handle("claudeSkills:read", async (_e, id) => readSkill(String(id), await deps2.projectPaths()));
-  handle("claudeSkills:save", async (_e, id, content) => saveSkill(String(id), content, await deps2.projectPaths()));
-  handle("conv:markSeen", async (_e, id) => {
-    if (await markSeen(id)) await emitConv(id);
+  handle("claudeSkills:read", async (_e, id2) => readSkill(String(id2), await deps2.projectPaths()));
+  handle("claudeSkills:save", async (_e, id2, content) => saveSkill(String(id2), content, await deps2.projectPaths()));
+  handle("conv:markSeen", async (_e, id2) => {
+    if (await markSeen(id2)) await emitConv(id2);
     return true;
   });
-  handle("conv:respond", (_e, id, requestId, response) => respond(id, requestId, response));
-  handle("conv:removeQueued", (_e, id, index) => removeQueued(id, Number(index) || 0));
+  handle("conv:respond", (_e, id2, requestId, response) => respond(id2, requestId, response));
+  handle("conv:removeQueued", (_e, id2, index) => removeQueued(id2, Number(index) || 0));
   handle("conv:usageLimits", (_e, refresh) => getUsageLimits(!!refresh));
   handle("conv:terminalSessions", async () => {
     const [sessions, inUse, projects] = await Promise.all([Promise.resolve(listTerminalSessions(60)), sessionIdsInUse(), deps2.projectPaths()]);
@@ -86603,22 +90176,22 @@ function registerAiConvRpc(handle, deps2) {
     await emitConv(c.id);
     return withLive(await getConversation(c.id));
   });
-  handle("conv:resync", async (_e, id) => {
-    const c = await getConversation(id);
+  handle("conv:resync", async (_e, id2) => {
+    const c = await getConversation(id2);
     if (!c?.sessionId) throw new Error(tt("aiconv.estaConversaAindaNaoTem"));
-    if (isRunning(id)) throw new Error(tt("aiconv.aConversaEstaExecutando"));
+    if (isRunning(id2)) throw new Error(tt("aiconv.aConversaEstaExecutando"));
     const found = findTranscript(c.sessionId, c.configDir);
     if (!found) throw new Error(tt("aiconv.transcriptDaSessaoNaoEncontrado"));
     const parsed = parseTranscript(found.file);
-    const current2 = await listTurns(id);
+    const current2 = await listTurns(id2);
     if (parsed.turns.length <= current2.length) return { updated: false };
-    await replaceTurns(id, parsed.turns);
-    await setConversationRuntime(id, { contextTokens: parsed.contextTokens });
-    await emitConv(id);
+    await replaceTurns(id2, parsed.turns);
+    await setConversationRuntime(id2, { contextTokens: parsed.contextTokens });
+    await emitConv(id2);
     return { updated: true };
   });
-  handle("conv:terminalCommand", async (_e, id) => {
-    const c = await getConversation(id);
+  handle("conv:terminalCommand", async (_e, id2) => {
+    const c = await getConversation(id2);
     if (!c?.sessionId) return null;
     const command = await deps2.resolveCommand(c);
     const home = os.homedir();
@@ -86828,10 +90401,10 @@ async function getProjectsRoot() {
 async function ignoreProjectSuggestion(dir) {
   const list2 = await getIgnored();
   if (!list2.includes(dir)) list2.push(dir);
-  await setSetting(IGNORED_KEY, JSON.stringify(list2));
+  await setSetting$1(IGNORED_KEY, JSON.stringify(list2));
 }
 async function restoreProjectSuggestions() {
-  await setSetting(IGNORED_KEY, "[]");
+  await setSetting$1(IGNORED_KEY, "[]");
 }
 async function suggestProjects() {
   const rootSetting = await getProjectsRoot();
@@ -86844,18 +90417,18 @@ async function suggestProjects() {
   const registeredRepos = new Set(
     [...projects.map((p) => p.githubRepoUrl), ...repoRows.map((r) => r.githubRepoUrl)].map((u) => repoKey(u)).filter((k) => !!k)
   );
-  const isRegistered = (dir, repo) => {
+  const isRegistered = (dir, repo2) => {
     const real = realpath(dir);
     if (registeredPaths.some((r) => r === real || real.startsWith(r + path.sep))) return true;
-    const k = repoKey(repo);
+    const k = repoKey(repo2);
     return !!k && registeredRepos.has(k);
   };
   const ignored = new Set(await getIgnored());
   let ignoredCount = 0;
   const items = [];
   const consider = (dir, entries, group) => {
-    const repo = originUrl(dir);
-    if (isRegistered(dir, repo)) return;
+    const repo2 = originUrl(dir);
+    if (isRegistered(dir, repo2)) return;
     if (ignored.has(dir)) {
       ignoredCount++;
       return;
@@ -86866,7 +90439,7 @@ async function suggestProjects() {
       path: dir,
       displayPath: tildify(dir),
       description,
-      githubRepoUrl: repo,
+      githubRepoUrl: repo2,
       tags,
       lastActivity: lastActivity(dir, entries),
       group
@@ -87041,14 +90614,14 @@ function parseWorktrees(porcelain) {
   push();
   return list2.map((w) => ({ ...w, prunable: w.prunable || !w.isMain && !fs.existsSync(w.path) }));
 }
-async function resolveBase(repo) {
-  const sym = await gitOk(repo, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
+async function resolveBase(repo2) {
+  const sym = await gitOk(repo2, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
   if (sym?.trim()) return { base: sym.trim(), baseBranch: sym.trim().replace(/^origin\//, "") };
   for (const b2 of ["main", "master", "develop"]) {
-    if (await gitOk(repo, ["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${b2}`])) return { base: `origin/${b2}`, baseBranch: b2 };
-    if (await gitOk(repo, ["rev-parse", "--verify", "--quiet", `refs/heads/${b2}`])) return { base: b2, baseBranch: b2 };
+    if (await gitOk(repo2, ["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${b2}`])) return { base: `origin/${b2}`, baseBranch: b2 };
+    if (await gitOk(repo2, ["rev-parse", "--verify", "--quiet", `refs/heads/${b2}`])) return { base: b2, baseBranch: b2 };
   }
-  const head = (await gitOk(repo, ["symbolic-ref", "--quiet", "--short", "HEAD"]))?.trim() || "HEAD";
+  const head = (await gitOk(repo2, ["symbolic-ref", "--quiet", "--short", "HEAD"]))?.trim() || "HEAD";
   return { base: head, baseBranch: head };
 }
 async function countStatus(dir) {
@@ -87070,12 +90643,12 @@ async function ghAvailable() {
   return ghChecked;
 }
 const prCache = /* @__PURE__ */ new Map();
-async function pullRequestsFor(repo, force) {
-  const hit = prCache.get(repo);
+async function pullRequestsFor(repo2, force) {
+  const hit = prCache.get(repo2);
   if (!force && hit && Date.now() - hit.at < 5 * 60 * 1e3) return hit.prs;
   const prs = /* @__PURE__ */ new Map();
   try {
-    const out = await run("gh", ["pr", "list", "--state", "all", "--limit", "200", "--json", "number,state,headRefName,url,title,updatedAt"], repo, 2e4);
+    const out = await run("gh", ["pr", "list", "--state", "all", "--limit", "200", "--json", "number,state,headRefName,url,title,updatedAt"], repo2, 2e4);
     const rows = JSON.parse(out);
     const rank = { OPEN: 3, MERGED: 2, CLOSED: 1 };
     for (const r of rows) {
@@ -87084,7 +90657,7 @@ async function pullRequestsFor(repo, force) {
     }
   } catch {
   }
-  prCache.set(repo, { at: Date.now(), prs });
+  prCache.set(repo2, { at: Date.now(), prs });
   return prs;
 }
 const AGENT_PATH = /\/\.claude\/worktrees\/|\/\.worktrees\/|\/worktrees\//;
@@ -87104,7 +90677,7 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
   const remoteUrl = (await gitOk(c.path, ["remote", "get-url", "origin"]))?.trim() || null;
   const remotes = (await gitOk(c.path, ["remote"]))?.trim() || "";
   const gh = withPrs && !!repoSlug(remoteUrl) && await ghAvailable();
-  const repo = {
+  const repo2 = {
     path: c.path,
     name,
     projectId: c.projectId,
@@ -87117,7 +90690,7 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
   };
   try {
     const { base: base2, baseBranch } = await resolveBase(c.path);
-    repo.base = base2;
+    repo2.base = base2;
     const [wtOut, refsOut, mergedOut, prs] = await Promise.all([
       git(c.path, ["worktree", "list", "--porcelain"]),
       git(c.path, [
@@ -87205,10 +90778,10 @@ async function scanRepo(c, staleDays, withPrs, forcePrs) {
       };
       branches.push({ ...info, status: classify(info, staleDays) });
     }
-    return { repo, branches };
+    return { repo: repo2, branches };
   } catch (e) {
-    repo.error = e instanceof Error ? e.message : String(e);
-    return { repo, branches: [] };
+    repo2.error = e instanceof Error ? e.message : String(e);
+    return { repo: repo2, branches: [] };
   }
 }
 let lastScan = null;
@@ -87561,9 +91134,9 @@ async function projectsOverview() {
 async function checkProjectRadar(force = false) {
   const today2 = todayStr();
   if (!force && await getSetting("projects_radar_last") === today2) return 0;
-  await setSetting("projects_radar_last", today2);
+  await setSetting$1("projects_radar_last", today2);
   const [projects, overview2] = await Promise.all([getProjects(), projectsOverview()]);
-  const name = (id) => projects.find((p) => p.id === id)?.name ?? `#${id}`;
+  const name = (id2) => projects.find((p) => p.id === id2)?.name ?? `#${id2}`;
   const important = overview2.flatMap(
     (o) => o.alerts.filter((a) => a.severity !== "baixa").map((a) => `• ${name(o.projectId)}: ${a.text}`)
   );
@@ -87657,17 +91230,17 @@ async function generateCycleChangelog(cycleId, useAi) {
 async function setProjectSchedule(projectId, days2, start, minutes, syncCalendar) {
   const p = await getProject(projectId);
   if (!p) throw new Error(tt("services.projetoNaoEncontrado"));
-  const clean = [...new Set(days2)].filter((d) => d >= 0 && d <= 6).sort();
-  await patchProject(projectId, { workDays: clean.length ? JSON.stringify(clean) : null, workStart: start, workMinutes: minutes });
+  const clean2 = [...new Set(days2)].filter((d) => d >= 0 && d <= 6).sort();
+  await patchProject(projectId, { workDays: clean2.length ? JSON.stringify(clean2) : null, workStart: start, workMinutes: minutes });
   let eventLink = null;
   if (syncCalendar) {
-    if (clean.length && start && minutes) {
+    if (clean2.length && start && minutes) {
       const ev = await upsertRecurringBlock({
         summary: `🗂 ${p.name}`,
         description: `Bloco do projeto ${p.name} (rickOS).${p.nextAction ? `
 Próxima ação: ${p.nextAction}` : ""}${p.finishLine ? `
 Pronto quando: ${p.finishLine}` : ""}`,
-        days: clean,
+        days: clean2,
         start,
         minutes,
         eventId: p.calendarEventId,
@@ -87676,7 +91249,7 @@ Pronto quando: ${p.finishLine}` : ""}`,
       await patchProject(projectId, { calendarEventId: ev.eventId, calendarAccount: ev.account });
       eventLink = ev.link;
       const names = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-      await addProjectEvent(projectId, "decisao", `Dias do projeto: ${clean.map((d) => names[d]).join(", ")} às ${start} (${minutes} min) — bloco no Google Calendar`);
+      await addProjectEvent(projectId, "decisao", `Dias do projeto: ${clean2.map((d) => names[d]).join(", ")} às ${start} (${minutes} min) — bloco no Google Calendar`);
     } else if (p.calendarEventId) {
       await deleteRecurringBlock(p.calendarEventId, p.calendarAccount);
       await patchProject(projectId, { calendarEventId: null, calendarAccount: null });
@@ -87694,12 +91267,12 @@ function hookScriptPath() {
   return path.join(dataDir(), "hooks", HOOK_FILE);
 }
 function serverUrl$1() {
-  const cfg = getConfig();
+  const cfg = getConfig$1();
   const host = cfg.host === "0.0.0.0" || cfg.host === "::" ? "127.0.0.1" : cfg.host;
   return `http://${host}:${cfg.port}`;
 }
 function hookScript() {
-  const cfg = getConfig();
+  const cfg = getConfig$1();
   return `#!/usr/bin/env node
 // Gerado pelo rickOS — hook SessionEnd do Claude Code: avisa o rickOS que a sessão terminou
 // para ele preencher o "onde parei" do projeto. Nunca bloqueia o Claude (sai sempre com 0).
@@ -87765,7 +91338,7 @@ async function installClaudeHook() {
   fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
   if (fs.existsSync(SETTINGS_FILE)) fs.copyFileSync(SETTINGS_FILE, `${SETTINGS_FILE}.rickos-backup`);
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + "\n");
-  await setSetting(AUTO_WHERE_KEY, "1");
+  await setSetting$1(AUTO_WHERE_KEY, "1");
   return claudeHookStatus();
 }
 async function uninstallClaudeHook() {
@@ -87840,7 +91413,7 @@ async function handleClaudeSession(payload) {
   if (key && seen.has(key) && Date.now() - seen.get(key) < 10 * 60 * 1e3) return { accepted: false, project: project.name, reason: "repetido" };
   if (key) seen.set(key, Date.now());
   void summarize(project.id, payload).catch(async (e) => {
-    await setSetting(HOOK_LAST_KEY, JSON.stringify({ at: (/* @__PURE__ */ new Date()).toISOString(), project: project.name, status: `erro: ${e instanceof Error ? e.message : String(e)}` }));
+    await setSetting$1(HOOK_LAST_KEY, JSON.stringify({ at: (/* @__PURE__ */ new Date()).toISOString(), project: project.name, status: `erro: ${e instanceof Error ? e.message : String(e)}` }));
   });
   return { accepted: true, project: project.name };
 }
@@ -87848,7 +91421,7 @@ async function summarize(projectId, payload) {
   const project = await getProject(projectId);
   if (!project) return;
   const tr = readTranscript(payload.transcriptPath ?? "");
-  const markLast = (status22) => setSetting(HOOK_LAST_KEY, JSON.stringify({ at: (/* @__PURE__ */ new Date()).toISOString(), project: project.name, status: status22 }));
+  const markLast = (status22) => setSetting$1(HOOK_LAST_KEY, JSON.stringify({ at: (/* @__PURE__ */ new Date()).toISOString(), project: project.name, status: status22 }));
   if (!tr.prompts.length || tr.prompts[0].includes("[rickos:")) return void await markLast("ignorada (sessão vazia ou interna)");
   const since = tr.startedAt ?? new Date(Date.now() - 3 * 3600 * 1e3).toISOString();
   const commits = (await gitQuiet(payload.cwd, ["log", `--since=${since}`, "--format=%h %s", "-20"]) ?? "").trim();
@@ -87908,7 +91481,7 @@ async function delegateNextAction(projectId, action, instructions) {
   const task = (action ?? p.nextAction ?? "").trim();
   if (!task) throw new Error(tt("services.definaAProximaAcaoAntes"));
   if (!p.localPath) throw new Error(tt("services.definaOCaminhoLocalDo"));
-  const repo = path.resolve(expandHome(p.localPath));
+  const repo2 = path.resolve(expandHome(p.localPath));
   const targets = await repoTargets(p);
   const workspace = isWorkspace(targets);
   let top;
@@ -87918,13 +91491,13 @@ async function delegateNextAction(projectId, action, instructions) {
   if (workspace) {
     const repos = localTargets(targets).map((t) => ({ name: t.name, rel: t.rel, dir: t.dir }));
     if (!repos.length) throw new Error(tt("services.nenhumRepositorioDoProjetoFoi"));
-    const ws = await createWorkspaceWorktree(repo, repos, task);
+    const ws = await createWorkspaceWorktree(repo2, repos, task);
     top = ws.repoPath;
     base2 = "HEAD";
     branch = ws.branch;
     wtDir = ws.cwd;
   } else {
-    const t = (await gitQuiet(repo, ["rev-parse", "--show-toplevel"]))?.trim();
+    const t = (await gitQuiet(repo2, ["rev-parse", "--show-toplevel"]))?.trim();
     if (!t) throw new Error(tt("services.oCaminhoLocalNaoE"));
     top = t;
     base2 = (await gitQuiet(top, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() || "HEAD";
@@ -87995,16 +91568,16 @@ async function draftDelegationPrompt(projectId, action, instructions) {
   });
   return out.replace(/^```(?:markdown|md)?\n([\s\S]*?)\n```\s*$/, "$1").trim();
 }
-async function cancelDelegation(id) {
-  const d = await getDelegation(id);
+async function cancelDelegation(id2) {
+  const d = await getDelegation(id2);
   if (!d) return;
-  await updateDelegation(id, { status: "cancelada", finishedAt: (/* @__PURE__ */ new Date()).toISOString() });
-  kills.get(id)?.();
-  kills.delete(id);
+  await updateDelegation(id2, { status: "cancelada", finishedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  kills.get(id2)?.();
+  kills.delete(id2);
   changed(d.projectId);
 }
-async function reviewDelegation(id) {
-  const d = await getDelegation(id);
+async function reviewDelegation(id2) {
+  const d = await getDelegation(id2);
   if (!d) throw new Error(tt("services.delegacaoNaoEncontrada"));
   const ws = readWorkspaceManifest(d.worktreePath);
   if (ws) {
@@ -88045,27 +91618,27 @@ ${stat2}`);
     worktreeExists: exists
   };
 }
-async function discardDelegation(id) {
-  const d = await getDelegation(id);
+async function discardDelegation(id2) {
+  const d = await getDelegation(id2);
   if (!d) return;
   if (d.status === "rodando") throw new Error(tt("services.canceleAExecucaoAntesDe"));
   if (readWorkspaceManifest(d.worktreePath)) await removeWorkspaceWorktree(d.worktreePath);
   else if (fs.existsSync(d.worktreePath)) await gitQuiet(d.repoPath, ["worktree", "remove", "--force", d.worktreePath]);
   await gitQuiet(d.repoPath, ["worktree", "prune"]);
   await gitQuiet(d.repoPath, ["branch", "-D", d.branch]);
-  await updateDelegation(id, { status: "descartada" });
+  await updateDelegation(id2, { status: "descartada" });
   await addProjectEvent(d.projectId, "delegacao", `🗑 Delegação descartada: ${d.action}`);
   changed(d.projectId);
 }
-async function acceptDelegation(id) {
-  const d = await getDelegation(id);
+async function acceptDelegation(id2) {
+  const d = await getDelegation(id2);
   if (!d) return;
-  await updateDelegation(id, { status: "aceita" });
+  await updateDelegation(id2, { status: "aceita" });
   await addProjectEvent(d.projectId, "delegacao", `✅ Delegação aceita: ${d.action}`);
   changed(d.projectId);
 }
-async function prDelegation(id) {
-  const d = await getDelegation(id);
+async function prDelegation(id2) {
+  const d = await getDelegation(id2);
   if (!d) throw new Error(tt("services.delegacaoNaoEncontrada"));
   await scanGit({});
   const ws = readWorkspaceManifest(d.worktreePath);
@@ -88079,12 +91652,12 @@ async function prDelegation(id) {
       await addProjectEvent(d.projectId, "delegacao", `🔀 PR aberto (${r2.name}): ${pr.url}`);
     }
     if (!urls.length) throw new Error(tt("services.nenhumRepositorioTemCommitsNesta"));
-    await updateDelegation(id, { prUrl: urls[0] });
+    await updateDelegation(id2, { prUrl: urls[0] });
     changed(d.projectId);
     return { url: urls[0] };
   }
   const r = await createPullRequest(d.repoPath, d.branch);
-  await updateDelegation(id, { prUrl: r.url });
+  await updateDelegation(id2, { prUrl: r.url });
   await addProjectEvent(d.projectId, "delegacao", `🔀 PR aberto: ${r.url}`);
   changed(d.projectId);
   return r;
@@ -88104,13 +91677,13 @@ const GOOGLE_SYNC_HOUR = 7;
 async function runGoogleSync() {
   try {
     const n = await syncGoogleCalendar();
-    await setSetting("google_last_sync", (/* @__PURE__ */ new Date()).toISOString());
-    await setSetting("google_last_sync_error", "");
+    await setSetting$1("google_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+    await setSetting$1("google_last_sync_error", "");
     broadcast("calendar:updated", { source: "google", count: n });
     return n;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await setSetting("google_last_sync_error", `${(/* @__PURE__ */ new Date()).toISOString()}|${msg}`);
+    await setSetting$1("google_last_sync_error", `${(/* @__PURE__ */ new Date()).toISOString()}|${msg}`);
     throw e;
   }
 }
@@ -88121,7 +91694,7 @@ async function maybeDailyGoogleSync() {
   try {
     if (await getSetting("google_autosync_day") === today2) return;
     if (!await googleConnected()) return;
-    await setSetting("google_autosync_day", today2);
+    await setSetting$1("google_autosync_day", today2);
     await runGoogleSync();
   } catch (e) {
     await notify({
@@ -88141,16 +91714,16 @@ async function maybeMonthlyInvestmentSync() {
     const lastMonth = await getSetting("pluggy_investments_autosync_month");
     if (lastMonth === month) return;
     if (lastMonth == null || lastMonth === "") {
-      await setSetting("pluggy_investments_autosync_month", month);
+      await setSetting$1("pluggy_investments_autosync_month", month);
       return;
     }
     if (now.toLocaleDateString("sv-SE") < firstBusinessDay(now.getFullYear(), now.getMonth() + 1)) return;
     const lastErr = await getSetting("pluggy_investments_autosync_error_at");
     if (lastErr && Date.now() - Date.parse(lastErr) < 6 * 3600 * 1e3) return;
     const r = await syncPluggyInvestments();
-    await setSetting("pluggy_investments_autosync_month", month);
-    await setSetting("pluggy_investments_last_sync", (/* @__PURE__ */ new Date()).toISOString());
-    await setSetting("pluggy_investments_autosync_error_at", "");
+    await setSetting$1("pluggy_investments_autosync_month", month);
+    await setSetting$1("pluggy_investments_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+    await setSetting$1("pluggy_investments_autosync_error_at", "");
     const extra = r.vanished.length ? ` · ${r.vanished.length} não aparecem mais no banco (abra Investimentos para decidir)` : "";
     await notify({
       title: tt("rpc.investimentosAtualizados"),
@@ -88159,7 +91732,7 @@ async function maybeMonthlyInvestmentSync() {
       page: "investments"
     });
   } catch (e) {
-    await setSetting("pluggy_investments_autosync_error_at", (/* @__PURE__ */ new Date()).toISOString());
+    await setSetting$1("pluggy_investments_autosync_error_at", (/* @__PURE__ */ new Date()).toISOString());
     await notify({
       title: tt("rpc.falhaAoAtualizarInvestimentos"),
       body: e instanceof Error ? e.message : String(e),
@@ -88181,7 +91754,7 @@ async function maybeMonthlyReservedReminder() {
       if (!cur || r.month > cur.month) latest.set(r.accountId, r);
     }
     const pending2 = [...latest.values()].filter((r) => r.month !== month && r.amount !== 0).length;
-    await setSetting("finance_reserved_reminder_month", month);
+    await setSetting$1("finance_reserved_reminder_month", month);
     if (!pending2) return;
     await notify({
       title: tt("rpc.revisarSaldoSeparado"),
@@ -88227,9 +91800,9 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "tags:update",
-  (_, id, name, color, isProductive) => updateTag(id, name, color, isProductive)
+  (_, id2, name, color, isProductive) => updateTag(id2, name, color, isProductive)
 );
-ipcMain.handle("tags:delete", (_, id) => deleteTag(id));
+ipcMain.handle("tags:delete", (_, id2) => deleteTag(id2));
 ipcMain.handle("tasks:getAll", () => getAllTasks());
 ipcMain.handle(
   "tasks:getForRange",
@@ -88242,15 +91815,15 @@ ipcMain.handle("tasks:start", async (_, title, tagId, secondaryTagId, startTime,
   return createTask(title, tagId, secondaryTagId, now, null, studyNodeId ?? null, projectId ?? null);
 });
 ipcMain.handle("tasks:setProject", (_, taskId, projectId) => setTaskProject(taskId, projectId));
-ipcMain.handle("tasks:stop", async (_, id, endTime) => {
+ipcMain.handle("tasks:stop", async (_, id2, endTime) => {
   const now = endTime || (/* @__PURE__ */ new Date()).toISOString();
-  await stopTask(id, now);
+  await stopTask(id2, now);
 });
 ipcMain.handle(
   "tasks:update",
-  (_, id, title, tagId, secondaryTagId, startTime, endTime) => updateTask(id, title, tagId, secondaryTagId, startTime, endTime)
+  (_, id2, title, tagId, secondaryTagId, startTime, endTime) => updateTask(id2, title, tagId, secondaryTagId, startTime, endTime)
 );
-ipcMain.handle("tasks:delete", (_, id) => deleteTask(id));
+ipcMain.handle("tasks:delete", (_, id2) => deleteTask(id2));
 ipcMain.handle(
   "tasks:add",
   (_, title, tagId, secondaryTagId, startTime, endTime, studyNodeId) => createTask(title, tagId, secondaryTagId, startTime, endTime, studyNodeId ?? null)
@@ -88277,53 +91850,53 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "todos:update",
-  (_, id, title, notes, status2, priority, dueDate, projectId, recurrence, type) => updateTodo(id, title, notes, status2, priority, dueDate, projectId, recurrence, type)
+  (_, id2, title, notes, status2, priority, dueDate, projectId, recurrence, type) => updateTodo(id2, title, notes, status2, priority, dueDate, projectId, recurrence, type)
 );
-ipcMain.handle("todos:delete", (_, id) => deleteTodo(id));
+ipcMain.handle("todos:delete", (_, id2) => deleteTodo(id2));
 ipcMain.handle("goals:getForMonth", (_, month) => getGoals(month));
 ipcMain.handle("goals:create", (_, month, title, kind, refId, target, unit) => createGoal(month, title, kind, refId, target, unit));
-ipcMain.handle("goals:update", (_, id, title, target, current2, unit, done) => updateGoal(id, title, target, current2, unit, done));
-ipcMain.handle("goals:delete", (_, id) => deleteGoal(id));
+ipcMain.handle("goals:update", (_, id2, title, target, current2, unit, done) => updateGoal(id2, title, target, current2, unit, done));
+ipcMain.handle("goals:delete", (_, id2) => deleteGoal(id2));
 ipcMain.handle("stays:favorites", () => getStayFavorites());
 ipcMain.handle("stays:addFavorite", (_, f) => addStayFavorite(f));
-ipcMain.handle("stays:removeFavorite", (_, id) => removeStayFavorite(id));
+ipcMain.handle("stays:removeFavorite", (_, id2) => removeStayFavorite(id2));
 ipcMain.handle("stays:watches", () => getStayWatches());
 ipcMain.handle("stays:addWatch", (_, w) => addStayWatch(w));
-ipcMain.handle("stays:updateWatchPrice", (_, id, current2, best, at) => updateStayWatchPrice(id, current2, best, at));
-ipcMain.handle("stays:removeWatch", (_, id) => removeStayWatch(id));
+ipcMain.handle("stays:updateWatchPrice", (_, id2, current2, best, at) => updateStayWatchPrice(id2, current2, best, at));
+ipcMain.handle("stays:removeWatch", (_, id2) => removeStayWatch(id2));
 ipcMain.handle("stays:priceHistory", (_, watchId) => getStayPriceHistory(watchId));
 ipcMain.handle("stays:addPricePoint", (_, p) => addStayPricePoint(p));
 ipcMain.handle("stays:searchHistory", () => getStaySearchHistory());
 ipcMain.handle("stays:addSearchHistory", (_, filters) => addStaySearchHistory(filters));
 ipcMain.handle("contacts:getAll", () => getContacts());
 ipcMain.handle("contacts:create", (_, name, location, country, state, birthday, interests, context, nextFollowUp) => createContact(name, location, country, state, birthday, interests, context, nextFollowUp));
-ipcMain.handle("contacts:update", (_, id, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp) => updateContact(id, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp));
-ipcMain.handle("contacts:log", (_, id) => logContact(id));
-ipcMain.handle("contacts:delete", (_, id) => deleteContact(id));
+ipcMain.handle("contacts:update", (_, id2, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp) => updateContact(id2, name, location, country, state, birthday, interests, context, lastContactAt, nextFollowUp));
+ipcMain.handle("contacts:log", (_, id2) => logContact(id2));
+ipcMain.handle("contacts:delete", (_, id2) => deleteContact(id2));
 ipcMain.handle("rules:getAll", () => getRules());
 ipcMain.handle("rules:create", (_, type, params) => createRule(type, params));
-ipcMain.handle("rules:update", (_, id, enabled, params) => updateRule(id, enabled, params));
-ipcMain.handle("rules:delete", (_, id) => deleteRule(id));
+ipcMain.handle("rules:update", (_, id2, enabled, params) => updateRule(id2, enabled, params));
+ipcMain.handle("rules:delete", (_, id2) => deleteRule(id2));
 ipcMain.handle("jobs:getAll", () => getScheduledJobs());
 ipcMain.handle("jobs:create", (_, name, prompt, hour) => createScheduledJob(name, prompt, hour));
-ipcMain.handle("jobs:update", (_, id, name, prompt, hour, enabled) => updateScheduledJob(id, name, prompt, hour, enabled));
-ipcMain.handle("jobs:delete", (_, id) => deleteScheduledJob(id));
+ipcMain.handle("jobs:update", (_, id2, name, prompt, hour, enabled) => updateScheduledJob(id2, name, prompt, hour, enabled));
+ipcMain.handle("jobs:delete", (_, id2) => deleteScheduledJob(id2));
 function notifyNative(title, body, page) {
   void notify({ title, body, source: "automacao", page: page ?? null });
 }
 ipcMain.handle("notifications:list", (_, limit) => getNotifications(limit ?? 100));
 ipcMain.handle("notifications:unreadCount", () => getUnreadNotificationCount());
 ipcMain.handle("notifications:create", (_, n) => notify(n));
-ipcMain.handle("notifications:markRead", async (_, id, read2) => {
-  await markNotificationRead(id, read2 !== false);
+ipcMain.handle("notifications:markRead", async (_, id2, read2) => {
+  await markNotificationRead(id2, read2 !== false);
   notificationsChanged();
 });
 ipcMain.handle("notifications:markAllRead", async (_, scope) => {
   await markAllNotificationsRead(scope);
   notificationsChanged();
 });
-ipcMain.handle("notifications:delete", async (_, id) => {
-  await deleteNotification(id);
+ipcMain.handle("notifications:delete", async (_, id2) => {
+  await deleteNotification(id2);
   notificationsChanged();
 });
 ipcMain.handle("notifications:clear", async (_, onlyRead, scope) => {
@@ -88485,10 +92058,10 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "projects:update",
-  (_, id, name, description, githubRepoUrl, color, archived, claudeCommand, localPath, stage, businessModel, pricing, audience) => updateProject(id, name, description, githubRepoUrl, color, archived, claudeCommand, localPath ?? null, stage ?? "ideia", businessModel ?? null, pricing ?? null, audience ?? null)
+  (_, id2, name, description, githubRepoUrl, color, archived, claudeCommand, localPath, stage, businessModel, pricing, audience) => updateProject(id2, name, description, githubRepoUrl, color, archived, claudeCommand, localPath ?? null, stage ?? "ideia", businessModel ?? null, pricing ?? null, audience ?? null)
 );
-ipcMain.handle("projects:setStage", (_, id, stage) => setProjectStage(id, stage));
-ipcMain.handle("projects:delete", (_, id) => deleteProject(id));
+ipcMain.handle("projects:setStage", (_, id2, stage) => setProjectStage(id2, stage));
+ipcMain.handle("projects:delete", (_, id2) => deleteProject(id2));
 ipcMain.handle("projects:suggestions", () => suggestProjects());
 ipcMain.handle("projects:ignoreSuggestion", (_, dir) => ignoreProjectSuggestion(dir));
 ipcMain.handle("projects:restoreSuggestions", () => restoreProjectSuggestions());
@@ -88509,27 +92082,27 @@ ipcMain.handle("projects:absorb", async (_, targetId, sourceId) => {
 });
 ipcMain.handle("milestones:getAll", () => getProjectMilestones());
 ipcMain.handle("milestones:create", (_, projectId, title, targetDate) => createProjectMilestone(projectId, title, targetDate));
-ipcMain.handle("milestones:toggle", (_, id, done) => toggleProjectMilestone(id, done));
-ipcMain.handle("milestones:delete", (_, id) => deleteProjectMilestone(id));
+ipcMain.handle("milestones:toggle", (_, id2, done) => toggleProjectMilestone(id2, done));
+ipcMain.handle("milestones:delete", (_, id2) => deleteProjectMilestone(id2));
 ipcMain.handle(
   "milestones:update",
-  (_, id, title, targetDate, cycleId, description) => updateProjectMilestone(id, title, targetDate, cycleId, description)
+  (_, id2, title, targetDate, cycleId, description) => updateProjectMilestone(id2, title, targetDate, cycleId, description)
 );
-const projectsChanged = (id) => broadcast("projects:updated", { id: id ?? null });
-ipcMain.handle("projects:get", (_, id) => getProject(id));
-ipcMain.handle("projects:patch", async (_, id, fields) => {
-  const p = await patchProject(id, fields, { linkTodo: true });
-  projectsChanged(id);
+const projectsChanged = (id2) => broadcast("projects:updated", { id: id2 ?? null });
+ipcMain.handle("projects:get", (_, id2) => getProject(id2));
+ipcMain.handle("projects:patch", async (_, id2, fields) => {
+  const p = await patchProject(id2, fields, { linkTodo: true });
+  projectsChanged(id2);
   return p;
 });
-ipcMain.handle("projects:setStatus", async (_, id, status2, payload) => {
-  const p = await setProjectStatus(id, status2, payload ?? {});
-  projectsChanged(id);
+ipcMain.handle("projects:setStatus", async (_, id2, status2, payload) => {
+  const p = await setProjectStatus(id2, status2, payload ?? {});
+  projectsChanged(id2);
   return p;
 });
-ipcMain.handle("projects:completeNextAction", async (_, id, next, size, todoId) => {
-  const p = await completeNextAction(id, next, size ?? null, todoId ?? null);
-  projectsChanged(id);
+ipcMain.handle("projects:completeNextAction", async (_, id2, next, size, todoId) => {
+  const p = await completeNextAction(id2, next, size ?? null, todoId ?? null);
+  projectsChanged(id2);
   return p;
 });
 ipcMain.handle("projects:overview", () => projectsOverview());
@@ -88556,15 +92129,15 @@ ipcMain.handle("projects:roadmapNumber", (_, projectId) => numberRoadmapFile(pro
 ipcMain.handle("projects:radarCheck", () => checkProjectRadar(true));
 ipcMain.handle("cycles:getAll", (_, projectId) => getProjectCycles(projectId ?? null));
 ipcMain.handle("cycles:create", (_, projectId, name, goal, startDate, dueDate) => createProjectCycle(projectId, name, goal, startDate, dueDate));
-ipcMain.handle("cycles:update", (_, id, name, goal, dueDate) => updateProjectCycle(id, name, goal, dueDate));
-ipcMain.handle("cycles:extend", (_, id, newDueDate, reason) => extendProjectCycle(id, newDueDate, reason));
-ipcMain.handle("cycles:close", async (_, id, status2, retrospective) => {
-  await closeProjectCycle(id, status2, retrospective);
-  const c = await getProjectCycle(id);
-  if (status2 === "concluido" && c && !c.changelog) await generateCycleChangelog(id, false).catch(() => void 0);
+ipcMain.handle("cycles:update", (_, id2, name, goal, dueDate) => updateProjectCycle(id2, name, goal, dueDate));
+ipcMain.handle("cycles:extend", (_, id2, newDueDate, reason) => extendProjectCycle(id2, newDueDate, reason));
+ipcMain.handle("cycles:close", async (_, id2, status2, retrospective) => {
+  await closeProjectCycle(id2, status2, retrospective);
+  const c = await getProjectCycle(id2);
+  if (status2 === "concluido" && c && !c.changelog) await generateCycleChangelog(id2, false).catch(() => void 0);
 });
-ipcMain.handle("cycles:changelog", (_, id, useAi) => generateCycleChangelog(id, !!useAi));
-ipcMain.handle("cycles:commits", (_, id) => cycleCommits(id));
+ipcMain.handle("cycles:changelog", (_, id2, useAi) => generateCycleChangelog(id2, !!useAi));
+ipcMain.handle("cycles:commits", (_, id2) => cycleCommits(id2));
 ipcMain.handle("projects:setSchedule", async (_, projectId, days2, start, minutes, syncCalendar) => {
   const r = await setProjectSchedule(projectId, days2, start, minutes, !!syncCalendar);
   projectsChanged(projectId);
@@ -88575,8 +92148,8 @@ ipcMain.handle("projects:hookStatus", () => claudeHookStatus());
 ipcMain.handle("projects:hookInstall", () => installClaudeHook());
 ipcMain.handle("projects:hookUninstall", () => uninstallClaudeHook());
 ipcMain.handle("projects:hookConfig", async (_, enabled, model) => {
-  await setSetting(AUTO_WHERE_KEY, enabled ? "1" : "0");
-  if (model != null) await setSetting(HOOK_MODEL_KEY, model.trim());
+  await setSetting$1(AUTO_WHERE_KEY, enabled ? "1" : "0");
+  if (model != null) await setSetting$1(HOOK_MODEL_KEY, model.trim());
   return claudeHookStatus();
 });
 ipcMain.handle("delegations:getAll", (_, projectId) => getDelegations(projectId ?? null));
@@ -88585,15 +92158,15 @@ ipcMain.handle(
   "delegations:draftPrompt",
   (_, projectId, action, instructions) => draftDelegationPrompt(projectId, action, instructions)
 );
-ipcMain.handle("delegations:cancel", (_, id) => cancelDelegation(id));
-ipcMain.handle("delegations:review", (_, id) => reviewDelegation(id));
-ipcMain.handle("delegations:discard", (_, id) => discardDelegation(id));
-ipcMain.handle("delegations:accept", (_, id) => acceptDelegation(id));
-ipcMain.handle("delegations:pr", (_, id) => prDelegation(id));
-ipcMain.handle("cycles:delete", (_, id) => deleteProjectCycle(id));
+ipcMain.handle("delegations:cancel", (_, id2) => cancelDelegation(id2));
+ipcMain.handle("delegations:review", (_, id2) => reviewDelegation(id2));
+ipcMain.handle("delegations:discard", (_, id2) => discardDelegation(id2));
+ipcMain.handle("delegations:accept", (_, id2) => acceptDelegation(id2));
+ipcMain.handle("delegations:pr", (_, id2) => prDelegation(id2));
+ipcMain.handle("cycles:delete", (_, id2) => deleteProjectCycle(id2));
 ipcMain.handle("projectNotes:getAll", (_, projectId) => getProjectNotes(projectId));
 ipcMain.handle("projectNotes:save", (_, note) => saveProjectNote(note));
-ipcMain.handle("projectNotes:delete", (_, id) => deleteProjectNote(id));
+ipcMain.handle("projectNotes:delete", (_, id2) => deleteProjectNote(id2));
 ipcMain.handle("habits:getAll", () => getHabits());
 ipcMain.handle(
   "habits:create",
@@ -88601,9 +92174,9 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "habits:update",
-  (_, id, name, frequency, target, active) => updateHabit(id, name, frequency, target, active)
+  (_, id2, name, frequency, target, active) => updateHabit(id2, name, frequency, target, active)
 );
-ipcMain.handle("habits:delete", (_, id) => deleteHabit(id));
+ipcMain.handle("habits:delete", (_, id2) => deleteHabit(id2));
 ipcMain.handle("habits:getEntries", (_, date) => getHabitEntries(date));
 ipcMain.handle(
   "habits:getEntriesRange",
@@ -88617,7 +92190,7 @@ ipcMain.handle("habits:completionsForDate", (_, date) => getHabitCompletionsForD
 ipcMain.handle("settings:get", async (_, key) => SERVER_ONLY_KEYS.has(key) ? null : decodeSecret(await getSetting(key)));
 ipcMain.handle("settings:set", (_, key, value) => {
   if (key === "language") setServerLocale(value);
-  return setSetting(key, encodeSecret(key, value));
+  return setSetting$1(key, encodeSecret(key, value));
 });
 ipcMain.handle("settings:legacySecrets", () => legacySecrets());
 ipcMain.handle("settings:getAll", async () => {
@@ -88631,7 +92204,7 @@ ipcMain.handle("settings:getAll", async () => {
 ipcMain.handle("news:state", () => getNewsState());
 ipcMain.handle("news:setCategories", (_, list2) => setNewsCategories(Array.isArray(list2) ? list2 : []));
 ipcMain.handle("news:setGeminiKey", async (_, value) => {
-  await setSetting(GEMINI_KEY_SETTING, encodeSecret(GEMINI_KEY_SETTING, String(value ?? "").trim()));
+  await setSetting$1(GEMINI_KEY_SETTING, encodeSecret(GEMINI_KEY_SETTING, String(value ?? "").trim()));
   broadcast("news:updated", { kind: "config" });
   return getNewsConfig();
 });
@@ -88644,10 +92217,10 @@ ipcMain.handle("github:getIssues", () => getGithubIssues());
 ipcMain.handle("github:sync", () => syncGithubIssues(true));
 ipcMain.handle(
   "github:createLocal",
-  (_, repo, title, body) => createLocalIssue(repo, title, body)
+  (_, repo2, title, body) => createLocalIssue(repo2, title, body)
 );
-ipcMain.handle("github:deleteIssue", (_, id) => deleteGithubIssue(id));
-ipcMain.handle("github:createOnGithub", (_, id) => createIssueViaClaude(id));
+ipcMain.handle("github:deleteIssue", (_, id2) => deleteGithubIssue(id2));
+ipcMain.handle("github:createOnGithub", (_, id2) => createIssueViaClaude(id2));
 ipcMain.handle("git:scan", (_, opts) => scanGit(opts ?? {}));
 ipcMain.handle("git:summary", () => cachedScan(10 * 60 * 1e3));
 ipcMain.handle("git:details", (_, repoPath, branch, worktreePath) => branchDetails(repoPath, branch, worktreePath));
@@ -88668,8 +92241,8 @@ ipcMain.handle(
   "calendar:create",
   (_, title, startTime, endTime, location) => createCalendarEvent(title, startTime, endTime, location)
 );
-ipcMain.handle("calendar:delete", (_, id) => deleteCalendarEvent(id));
-ipcMain.handle("google:beginConnect", () => beginGoogleConnect(getConfig().publicUrl));
+ipcMain.handle("calendar:delete", (_, id2) => deleteCalendarEvent(id2));
+ipcMain.handle("google:beginConnect", () => beginGoogleConnect(getConfig$1().publicUrl));
 ipcMain.handle("google:awaitConnect", () => awaitGoogleConnect());
 ipcMain.handle("google:status", () => googleConnected());
 ipcMain.handle("google:accounts", () => listGoogleAccounts());
@@ -88678,13 +92251,13 @@ ipcMain.handle("google:disconnectAccount", (_, email) => disconnectGoogleAccount
 ipcMain.handle("google:sync", () => runGoogleSync());
 ipcMain.handle("accounts:getAll", () => getAccounts$1());
 ipcMain.handle("accounts:create", (_, name, currency2, balance) => createAccount(name, currency2, balance));
-ipcMain.handle("accounts:update", (_, id, name, currency2, balance) => updateAccount(id, name, currency2, balance));
-ipcMain.handle("accounts:delete", (_, id) => deleteAccount(id));
+ipcMain.handle("accounts:update", (_, id2, name, currency2, balance) => updateAccount(id2, name, currency2, balance));
+ipcMain.handle("accounts:delete", (_, id2) => deleteAccount(id2));
 ipcMain.handle("categories:getAll", () => getCategories());
-ipcMain.handle("categories:create", (_, name, type, color) => createCategory$1(name, type, color));
-ipcMain.handle("categories:update", (_, id, name, color) => updateCategory$1(id, name, color));
-ipcMain.handle("categories:setFixedIncome", (_, id, fixed) => setCategoryFixedIncome(id, fixed));
-ipcMain.handle("categories:delete", (_, id) => deleteCategory(id));
+ipcMain.handle("categories:create", (_, name, type, color) => createCategory$2(name, type, color));
+ipcMain.handle("categories:update", (_, id2, name, color) => updateCategory$1(id2, name, color));
+ipcMain.handle("categories:setFixedIncome", (_, id2, fixed) => setCategoryFixedIncome(id2, fixed));
+ipcMain.handle("categories:delete", (_, id2) => deleteCategory$1(id2));
 ipcMain.handle("transactions:getAll", (_, month) => getTransactions(month));
 async function afterTxChange(r) {
   await reconcileRefunds().catch((e) => console.error("[estornos]", e));
@@ -88697,18 +92270,18 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "transactions:update",
-  async (_, id, accountId, categoryId, amount, currency2, type, description, date) => afterTxChange(await updateTransaction(id, accountId, categoryId, amount, currency2, type, description, date))
+  async (_, id2, accountId, categoryId, amount, currency2, type, description, date) => afterTxChange(await updateTransaction(id2, accountId, categoryId, amount, currency2, type, description, date))
 );
-ipcMain.handle("transactions:delete", async (_, id) => afterTxChange(await deleteTransaction(id)));
+ipcMain.handle("transactions:delete", async (_, id2) => afterTxChange(await deleteTransaction(id2)));
 ipcMain.handle("transactions:recurringOverrides", () => getRecurringOverrides());
 ipcMain.handle("transactions:recurringSuggestions", () => recurringSuggestions());
 ipcMain.handle("transactions:setRecurring", async (_, key, recurring) => {
   await setRecurringOverride(key, recurring);
   return recomputeRecurring();
 });
-ipcMain.handle("transactions:setIgnored", async (_, id, reason) => afterTxChange(await setTransactionIgnored(id, reason)));
-ipcMain.handle("transactions:setPaymentMethod", (_, id, method) => setTransactionPaymentMethod(id, method));
-ipcMain.handle("transactions:setKind", async (_, id, kind) => afterTxChange(await setTransactionKind(id, kind)));
+ipcMain.handle("transactions:setIgnored", async (_, id2, reason) => afterTxChange(await setTransactionIgnored(id2, reason)));
+ipcMain.handle("transactions:setPaymentMethod", (_, id2, method) => setTransactionPaymentMethod(id2, method));
+ipcMain.handle("transactions:setKind", async (_, id2, kind) => afterTxChange(await setTransactionKind(id2, kind)));
 ipcMain.handle("transactions:bulk", async (_, rows) => afterTxChange(await bulkInsertTransactions(await categorizeNew(rows))));
 ipcMain.handle("finance:resetImportedData", async () => {
   const backup = backupDbFile("timetracker.backup-pre-reset-financas");
@@ -88721,10 +92294,10 @@ ipcMain.handle("financeRules:getAll", () => getFinanceRules());
 ipcMain.handle("financeRules:create", (_, categoryId, keywords) => createFinanceRule(categoryId, keywords));
 ipcMain.handle(
   "financeRules:update",
-  (_, id, categoryId, keywords, active) => updateFinanceRule(id, categoryId, keywords, active)
+  (_, id2, categoryId, keywords, active) => updateFinanceRule(id2, categoryId, keywords, active)
 );
-ipcMain.handle("financeRules:delete", (_, id) => deleteFinanceRule(id));
-ipcMain.handle("financeRules:move", (_, id, dir) => moveFinanceRule(id, dir));
+ipcMain.handle("financeRules:delete", (_, id2) => deleteFinanceRule(id2));
+ipcMain.handle("financeRules:move", (_, id2, dir) => moveFinanceRule(id2, dir));
 ipcMain.handle("financeRules:preview", (_, month) => previewFinanceRules(month));
 ipcMain.handle("financeRules:apply", (_, changes) => setTransactionsCategory(changes));
 ipcMain.handle("budgets:getForMonth", (_, month) => getBudgets(month));
@@ -88735,20 +92308,20 @@ ipcMain.handle(
   "investments:create",
   (_, name, type, amount, currency2, month, groupKey) => createInvestment(name, type, amount, currency2, month, groupKey)
 );
-ipcMain.handle("investments:setGroup", (_, id, groupKey) => setInvestmentGroup(id, groupKey));
+ipcMain.handle("investments:setGroup", (_, id2, groupKey) => setInvestmentGroup(id2, groupKey));
 ipcMain.handle("investmentGroups:getAll", () => getInvestmentGroups());
 ipcMain.handle("investmentGroups:create", (_, label, icon) => createInvestmentGroup(label, icon));
 ipcMain.handle("investmentGroups:update", (_, key, label, icon) => updateInvestmentGroup(key, label, icon));
 ipcMain.handle("investmentGroups:delete", (_, key) => deleteInvestmentGroup(key));
 ipcMain.handle("investmentGroups:move", (_, key, dir) => moveInvestmentGroup(key, dir));
 ipcMain.handle("investments:setValue", (_, investmentId, month, amount) => setInvestmentValue(investmentId, month, amount));
-ipcMain.handle("investments:delete", (_, id) => deleteInvestment(id));
-ipcMain.handle("investments:close", (_, id, month) => closeInvestment(id, month));
+ipcMain.handle("investments:delete", (_, id2) => deleteInvestment(id2));
+ipcMain.handle("investments:close", (_, id2, month) => closeInvestment(id2, month));
 ipcMain.handle("investments:movements", () => getInvestmentMovements());
-ipcMain.handle("investments:rename", (_, id, name) => renameInvestment(id, name));
+ipcMain.handle("investments:rename", (_, id2, name) => renameInvestment(id2, name));
 ipcMain.handle("pluggy:sync", async (_, month) => {
   const r = await syncPluggy(month);
-  await setSetting("pluggy_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+  await setSetting$1("pluggy_last_sync", (/* @__PURE__ */ new Date()).toISOString());
   return afterTxChange(r);
 });
 ipcMain.handle("pluggy:status", () => pluggyConfigured());
@@ -88758,7 +92331,7 @@ ipcMain.handle("accounts:setReserved", (_, accountId, month, amount) => setAccou
 ipcMain.handle("pluggy:reclassifyInvestments", async () => afterTxChange(await reclassifyInvestmentFlags()));
 ipcMain.handle("pluggy:syncInvestments", async () => {
   const r = await syncPluggyInvestments();
-  await setSetting("pluggy_investments_last_sync", (/* @__PURE__ */ new Date()).toISOString());
+  await setSetting$1("pluggy_investments_last_sync", (/* @__PURE__ */ new Date()).toISOString());
   return r;
 });
 ipcMain.handle("pluggy:connectToken", () => createConnectToken());
@@ -88769,12 +92342,13 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "trips:update",
-  (_, id, origin, destination, startDate, endDate, budget, currency2, status2) => updateTrip(id, origin, destination, startDate, endDate, budget, currency2, status2)
+  (_, id2, origin, destination, startDate, endDate, budget, currency2, status2) => updateTrip(id2, origin, destination, startDate, endDate, budget, currency2, status2)
 );
-ipcMain.handle("trips:delete", (_, id) => deleteTrip(id));
+ipcMain.handle("trips:delete", (_, id2) => deleteTrip(id2));
 registerFlightRpc((channel, fn) => ipcMain.handle(channel, fn));
 registerChatRpc((channel, fn) => ipcMain.handle(channel, fn));
 registerMemoryRpc((channel, fn) => ipcMain.handle(channel, fn));
+registerEstudosRpc((channel, fn) => ipcMain.handle(channel, fn));
 ipcMain.handle("tripDocs:get", (_, tripId) => getTripDocuments(tripId));
 ipcMain.handle(
   "tripDocs:set",
@@ -88787,10 +92361,10 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "skills:update",
-  (_, id, name, description, category, tags, content) => updateSkill(id, name, description, category, tags, content)
+  (_, id2, name, description, category, tags, content) => updateSkill(id2, name, description, category, tags, content)
 );
-ipcMain.handle("skills:delete", (_, id) => deleteSkill(id));
-ipcMain.handle("skills:toggleFavorite", (_, id) => toggleSkillFavorite(id));
+ipcMain.handle("skills:delete", (_, id2) => deleteSkill(id2));
+ipcMain.handle("skills:toggleFavorite", (_, id2) => toggleSkillFavorite(id2));
 ipcMain.handle("agents:getAll", () => getAgents());
 ipcMain.handle(
   "agents:create",
@@ -88798,42 +92372,42 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "agents:update",
-  (_, id, name, description, role, systemPrompt, defaultSkillIds, tags) => updateAgent(id, name, description, role, systemPrompt, defaultSkillIds, tags)
+  (_, id2, name, description, role, systemPrompt, defaultSkillIds, tags) => updateAgent(id2, name, description, role, systemPrompt, defaultSkillIds, tags)
 );
-ipcMain.handle("agents:delete", (_, id) => deleteAgent(id));
-ipcMain.handle("agents:toggleFavorite", (_, id) => toggleAgentFavorite(id));
+ipcMain.handle("agents:delete", (_, id2) => deleteAgent(id2));
+ipcMain.handle("agents:toggleFavorite", (_, id2) => toggleAgentFavorite(id2));
 ipcMain.handle("executions:getAll", () => getExecutions());
 ipcMain.handle(
   "executions:create",
   (_, agentId, skillIds, userPrompt, finalPrompt, response) => createExecution(agentId, skillIds, userPrompt, finalPrompt, response)
 );
-ipcMain.handle("executions:delete", (_, id) => deleteExecution(id));
+ipcMain.handle("executions:delete", (_, id2) => deleteExecution(id2));
 ipcMain.handle("links:getAll", () => getLinks());
 ipcMain.handle("links:create", (_, title, url2, tags) => createLink(title, url2, tags));
-ipcMain.handle("links:update", (_, id, title, url2, tags) => updateLink(id, title, url2, tags));
-ipcMain.handle("links:setChecked", (_, id, checked) => setLinkChecked(id, checked));
-ipcMain.handle("links:markOpened", (_, id) => setLinkOpened(id));
-ipcMain.handle("links:delete", (_, id) => deleteLink(id));
+ipcMain.handle("links:update", (_, id2, title, url2, tags) => updateLink(id2, title, url2, tags));
+ipcMain.handle("links:setChecked", (_, id2, checked) => setLinkChecked(id2, checked));
+ipcMain.handle("links:markOpened", (_, id2) => setLinkOpened(id2));
+ipcMain.handle("links:delete", (_, id2) => deleteLink(id2));
 ipcMain.handle("study:topics", () => getStudyTopics());
 ipcMain.handle("study:createTopic", (_, name, category, status2, targetDate, priority, color) => createStudyTopic(name, category, status2, targetDate, priority, color));
-ipcMain.handle("study:updateTopic", (_, id, name, category, status2, targetDate, priority, color) => updateStudyTopic(id, name, category, status2, targetDate, priority, color));
-ipcMain.handle("study:deleteTopic", (_, id) => deleteStudyTopic(id));
+ipcMain.handle("study:updateTopic", (_, id2, name, category, status2, targetDate, priority, color) => updateStudyTopic(id2, name, category, status2, targetDate, priority, color));
+ipcMain.handle("study:deleteTopic", (_, id2) => deleteStudyTopic(id2));
 ipcMain.handle("study:nodes", (_, topicId) => getStudyNodes(topicId));
 ipcMain.handle("study:allNodes", () => getAllStudyNodes());
 ipcMain.handle("study:allNotes", () => getAllStudyNotes());
 ipcMain.handle("study:createNode", (_, topicId, parentId, title, description, estimatedHours) => createStudyNode(topicId, parentId, title, description, estimatedHours));
-ipcMain.handle("study:updateNode", (_, id, title, description, status2, estimatedHours) => updateStudyNode(id, title, description, status2, estimatedHours));
-ipcMain.handle("study:deleteNode", (_, id) => deleteStudyNode(id));
-ipcMain.handle("study:moveNode", (_, id, dir) => moveStudyNode(id, dir));
-ipcMain.handle("study:reorderNode", (_, id, newParentId, newIndex) => reorderStudyNode(id, newParentId, newIndex));
+ipcMain.handle("study:updateNode", (_, id2, title, description, status2, estimatedHours) => updateStudyNode(id2, title, description, status2, estimatedHours));
+ipcMain.handle("study:deleteNode", (_, id2) => deleteStudyNode(id2));
+ipcMain.handle("study:moveNode", (_, id2, dir) => moveStudyNode(id2, dir));
+ipcMain.handle("study:reorderNode", (_, id2, newParentId, newIndex) => reorderStudyNode(id2, newParentId, newIndex));
 ipcMain.handle("study:getNote", (_, topicId, nodeId) => getStudyNote(topicId, nodeId));
 ipcMain.handle("study:saveNote", (_, topicId, nodeId, content) => saveStudyNote(topicId, nodeId, content));
 ipcMain.handle("study:flashcards", (_, topicId) => getStudyFlashcards(topicId));
-ipcMain.handle("study:due", (_, nowISO) => getDueFlashcards(nowISO));
+ipcMain.handle("study:due", (_, nowISO) => getDueFlashcards());
 ipcMain.handle("study:createFlashcard", (_, topicId, nodeId, front, back) => createStudyFlashcard(topicId, nodeId, front, back));
-ipcMain.handle("study:updateFlashcard", (_, id, front, back) => updateStudyFlashcard(id, front, back));
-ipcMain.handle("study:deleteFlashcard", (_, id) => deleteStudyFlashcard(id));
-ipcMain.handle("study:reviewFlashcard", (_, id, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating) => reviewStudyFlashcard(id, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating));
+ipcMain.handle("study:updateFlashcard", (_, id2, front, back) => updateStudyFlashcard(id2, front, back));
+ipcMain.handle("study:deleteFlashcard", (_, id2) => deleteStudyFlashcard(id2));
+ipcMain.handle("study:reviewFlashcard", (_, id2, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating) => reviewStudyFlashcard(id2, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt, rating));
 ipcMain.handle("study:reviewCountsByDay", (_, startISO, endISO) => getStudyReviewCountsByDay(startISO, endISO));
 ipcMain.handle("study:quizAttempts", (_, topicId) => getStudyQuizAttempts(topicId));
 ipcMain.handle("study:saveQuizAttempt", (_, topicId, score, total, durationMs) => createStudyQuizAttempt(topicId, score, total, durationMs));
@@ -88894,23 +92468,23 @@ ${node.description ? node.description + "\n\n" : ""}${note}`;
   }
   return { folder: studySlug(bundle.topic.name), files };
 });
-ipcMain.handle("skills:exportFile", async (_, id) => {
-  const skill = (await getSkills()).find((s2) => s2.id === id);
+ipcMain.handle("skills:exportFile", async (_, id2) => {
+  const skill = (await getSkills()).find((s2) => s2.id === id2);
   if (!skill) return null;
   return { name: `${skill.name}.skill.json`, mime: "application/json", content: JSON.stringify(skill, null, 2) };
 });
-ipcMain.handle("skills:importData", async (_, obj) => {
-  if (!obj || !obj.name) return null;
-  return importSkill(obj);
+ipcMain.handle("skills:importData", async (_, obj2) => {
+  if (!obj2 || !obj2.name) return null;
+  return importSkill(obj2);
 });
-ipcMain.handle("agents:exportFile", async (_, id) => {
-  const agent = (await getAgents()).find((a) => a.id === id);
+ipcMain.handle("agents:exportFile", async (_, id2) => {
+  const agent = (await getAgents()).find((a) => a.id === id2);
   if (!agent) return null;
   return { name: `${agent.name}.agent.json`, mime: "application/json", content: JSON.stringify(agent, null, 2) };
 });
-ipcMain.handle("agents:importData", async (_, obj) => {
-  if (!obj || !obj.name) return null;
-  return importAgent(obj);
+ipcMain.handle("agents:importData", async (_, obj2) => {
+  if (!obj2 || !obj2.name) return null;
+  return importAgent(obj2);
 });
 async function resolveClaudeCommand(projectId) {
   if (projectId != null) {
@@ -88966,20 +92540,20 @@ ipcMain.handle("ai:executar", async (_, chamada, params, opts) => {
   });
 });
 ipcMain.handle("iaChamadas:listar", () => getAiChamadas());
-ipcMain.handle("iaChamadas:salvarPrompt", async (_, id, template, sistema) => {
-  const d = definicao(idValido(id));
+ipcMain.handle("iaChamadas:salvarPrompt", async (_, id2, template, sistema) => {
+  const d = definicao(idValido(id2));
   const limpo = (v, padrao) => v == null || !v.trim() || v === padrao ? null : v;
   await setAiChamadaPrompt(d.id, limpo(template, d.template), limpo(sistema, d.sistema));
   return getAiChamada(d.id);
 });
-ipcMain.handle("iaChamadas:salvarMotor", async (_, id, motor) => {
-  const d = definicao(idValido(id));
+ipcMain.handle("iaChamadas:salvarMotor", async (_, id2, motor) => {
+  const d = definicao(idValido(id2));
   if (motor != null && !motoresPermitidos(d).includes(motor)) throw new Error(`"${d.id}" não roda em ${motor}.`);
   await setAiChamadaMotor(d.id, motor == null || motor === d.motor ? null : motor);
   return getAiChamada(d.id);
 });
-ipcMain.handle("iaChamadas:salvarModelo", async (_, id, modelo, effort) => {
-  const cid = idValido(id);
+ipcMain.handle("iaChamadas:salvarModelo", async (_, id2, modelo, effort) => {
+  const cid = idValido(id2);
   const d = definicao(cid);
   const { motor } = await resolverExecucao(cid);
   const m = modelo?.trim() || null;
@@ -88989,11 +92563,11 @@ ipcMain.handle("iaChamadas:salvarModelo", async (_, id, modelo, effort) => {
   return getAiChamada(d.id);
 });
 ipcMain.handle("iaChamadas:padroesMotores", () => ({ codex: padroesCodex() }));
-ipcMain.handle("iaChamadas:reverterPrompt", async (_, id) => {
-  await setAiChamadaPrompt(idValido(id), null, null);
+ipcMain.handle("iaChamadas:reverterPrompt", async (_, id2) => {
+  await setAiChamadaPrompt(idValido(id2), null, null);
   return true;
 });
-ipcMain.handle("iaChamadas:montar", async (_, id, params) => (await montarChamada(idValido(id), params)).prompt);
+ipcMain.handle("iaChamadas:montar", async (_, id2, params) => (await montarChamada(idValido(id2), params)).prompt);
 ipcMain.handle("ai:usage", (_, from, to) => getAiUsage(from, to));
 const aiRuns = /* @__PURE__ */ new Map();
 ipcMain.handle("ai:start", async (_, params) => {
@@ -89077,7 +92651,7 @@ registerAiConvRpc((channel, fn) => ipcMain.handle(channel, fn), {
     const m = await montarChamada("promptRunner.conversa", {
       contextoProjeto: await buildProjectContext(c.projectId),
       agente,
-      skills: c.skillIds.map((id) => all2.find((x) => x.id === id)).filter((x) => !!x),
+      skills: c.skillIds.map((id2) => all2.find((x) => x.id === id2)).filter((x) => !!x),
       mensagem: ""
     });
     return m.sistema ?? "";
@@ -89149,7 +92723,7 @@ function tokenMatches(given, expected) {
 }
 async function startServer(overrides = {}) {
   setConfig(overrides);
-  const cfg = getConfig();
+  const cfg = getConfig$1();
   if (!isLocalHost(cfg.host) && !cfg.token) {
     throw new Error(tt("rpc.rickosTokenEObrigatorioQuando", { host: cfg.host }));
   }
@@ -89227,6 +92801,15 @@ data: ${JSON.stringify({ channel, payload })}
     } catch (e) {
       return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : tt("rpc.anexoIndisponivel") });
     }
+  });
+  app.get("/api/estudos/anexo/:file", { preHandler: requireAuth }, async (req, reply) => {
+    const a = await attachmentFile(String(req.params.file || ""));
+    if (!a) return reply.code(404).send({ ok: false, error: tt("rpc.anexoIndisponivel") });
+    reply.header("Content-Type", a.mime);
+    reply.header("Cache-Control", "private, max-age=31536000, immutable");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("Content-Security-Policy", "default-src 'none'");
+    return reply.send(fs.createReadStream(a.file));
   });
   app.get("/api/export/db", { preHandler: requireAuth }, async (_req, reply) => {
     await getDb();
