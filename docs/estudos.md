@@ -42,6 +42,16 @@ Tabelas novas: `study_card_categories`, `study_card_states` (agenda por direçã
   inválido preservam o que era válido; Codex em sandbox read-only num diretório vazio, sem acesso a
   arquivos, notas ou Git. O **contexto** (mostrado antes de gerar) vai ao provedor.
 * Memória Pessoal: **não integrada** (decisão do usuário). Nada de memória nos prompts de Estudos.
+* **Briefing acompanha a aula**: o pedido do roteiro (`study_plans.request`, curto ou colado) e o que o
+  plano registrou dele (situação, já sei, restrições, preferências, decisões em aberto, suposições,
+  entrega final) entram no contexto de **toda** aula do roteiro. O plano certo vem da aula → nó →
+  ancestral (`planoDaAula` em `contexto.ts`), então vários roteiros no mesmo tópico não se misturam.
+  Sem IA extra: nada é resumido por modelo.
+* **Abertura que ensina**: `aberturaPrimeiraAula.aula` (Markdown) vem na mesma geração do roteiro e
+  vira o 1º turno ao aprovar (`textoAbertura`). Planos antigos, sem `aula`, continuam legíveis.
+* **Turnos no contexto** (`turnosParaContexto`): abertura e último turno do tutor com cota própria e
+  corte que preserva começo **e fim**; os demais do mais recente ao mais antigo; o que não cabe vira
+  uma linha cada (minha fala / pergunta aberta salva). Orçamentos em `ORCAMENTO`.
 
 ## Configurar o Codex
 
@@ -90,6 +100,10 @@ aprovar → a primeira aula abre com a abertura do roteiro (sem nova chamada) �
 ＋ Adicionar à minha nota → abrir no celular: **Continuar** leva ao mesmo ponto.
 Depois um pedido curto ("quero conseguir remarcar um encontro em mandarim") para ver a trilha mudar
 de método e de escala.
+
+**Continuidade com o Codex real**: `npm run estudos:evals -- continuidade` roda o briefing do Trama e o
+de mandarim: masterclass → aprovar → abertura → uma dúvida → um follow-up que cita o fim da resposta
+anterior, com rubricas e o tamanho do contexto de cada turno (`evals/ultimo-relatorio-continuidade.md`).
 
 ## Pedir ao Codex uma segunda revisão editorial dos prompts
 

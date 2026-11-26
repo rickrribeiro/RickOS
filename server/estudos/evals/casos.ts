@@ -42,3 +42,37 @@ export const CASO_SUBTOPICO = {
   nota: '改到星期六可以吗？ = pode ser no sábado?\n星期六 eu ainda confundo com 星期天.',
   esperado: { parentId: 2, termo: 'semana' }
 }
+
+/**
+ * Continuidade (masterclass → aprovar → aula): briefing detalhado, dúvida real e follow-up que cita
+ * o fim da resposta anterior. O follow-up é montado na hora a partir da última frase do tutor.
+ */
+export const CASO_TRAMA = {
+  id: 'continuidade-trama',
+  topico: { name: 'Backend multiplayer', goal: 'decidir a arquitetura do Trama' },
+  pedido: 'Quero estudar backend multiplayer para decidir a arquitetura do Trama. Conheço backend SaaS e Postgres. Meu jogo é mobile em Unity, com oito posições. Quero entender os critérios antes de escolher a arquitetura.',
+  tipo: 'engenharia' as const,
+  termos: ['trama', 'unity', 'mobile', 'jogador', 'posic', 'partida', 'postgres', 'saas', 'arquitetura'],
+  escala: { min: 5, max: 20 },
+  duvida: 'Se dois jogadores pegam a mesma gema, por que eu não resolveria isso com uma transação no Postgres?',
+  /** grupos "qualquer um destes termos" que a resposta à dúvida deve tocar */
+  deve: {
+    'aproveita minha experiência (SaaS/Postgres)': ['saas', 'postgres', 'api', 'requisic', 'banco'],
+    'explica onde a transação ajuda': ['transac', 'atomic', 'atômic', 'lock', 'serializ', 'unico', 'único', 'constraint'],
+    'relaciona ao que cada jogador vê': ['tela', ' ve ', ' vê', 'ver ', 'cliente', 'predic', 'predição', 'snapshot', 'latenc', 'latência']
+  }
+}
+
+export const CASO_MANDARIM_AULA = {
+  id: 'continuidade-mandarim',
+  topico: { name: 'Mandarim', goal: 'conseguir remarcar um encontro em mandarim', kind: 'language' as const, targetLanguage: 'zh' },
+  pedido: 'quero conseguir remarcar um encontro em mandarim',
+  tipo: 'idioma' as const,
+  termos: ['remarc', 'encontro', '见面', '改', '星期', '明天', 'sabado', 'amanha'],
+  escala: { min: 2, max: 8 },
+  duvida: '不好意思，明天不行。星期六下午可以吗？',
+  deve: {
+    'continua a conversa no idioma-alvo': ['。', '？', '吗', '好', '可以'],
+    'reage ao que eu disse (sábado/amanhã)': ['星期六', '明天', 'sábado', 'sabado', 'amanhã', 'amanha']
+  }
+}

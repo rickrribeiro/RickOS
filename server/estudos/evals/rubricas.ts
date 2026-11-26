@@ -105,3 +105,53 @@ export function rubricaSubtopicos(itens: Subtopico[], esperado: { parentId: numb
     { criterio: `(informativo) citou "${esperado.termo}"`, ok: true, detalhe: alvo ? 'sim' : `não — sugeriu: ${itens.map((x) => x.titulo).join('; ') || 'nada'}` }
   ]
 }
+
+export interface Abertura {
+  titulo?: string
+  situacao?: string
+  aula?: string
+  primeiroPasso?: string
+  pergunta?: string
+}
+
+const CJK = /[㐀-鿿]/
+
+/**
+ * Abertura que ensina: explicação antes da pergunta. Engenharia: mecanismo + exemplo com começo,
+ * meio e fim + pergunta no fim. Idioma: diálogo no idioma-alvo e a minha vez no fim.
+ */
+export function rubricaAbertura(ab: Abertura | undefined, tipo: 'engenharia' | 'idioma'): Checagem[] {
+  const aula = ab?.aula ?? ''
+  const fim = aula.slice(-500)
+  if (tipo === 'engenharia') {
+    const passos = (aula.match(/^\s*(\d+[.)]|[-*] |\|)/gm) ?? []).length + (norm(aula).match(/\b(primeiro|depois|em seguida|entao|por fim|no fim|t ?= ?\d)/g) ?? []).length
+    return [
+      { criterio: 'abertura ensina antes de perguntar (≥ 900 caracteres)', ok: aula.length >= 900, detalhe: `${aula.length} caracteres` },
+      { criterio: 'exemplo com começo, meio e fim (≥ 3 passos)', ok: passos >= 3, detalhe: `${passos} marcadores de sequência` },
+      { criterio: 'termina numa pergunta', ok: fim.includes('?') || !!ab?.pergunta, detalhe: (ab?.pergunta ?? '').slice(0, 140) }
+    ]
+  }
+  const falas = aula.split('\n').filter((l) => CJK.test(l)).length
+  return [
+    { criterio: 'abertura com diálogo no idioma-alvo (≥ 2 falas)', ok: falas >= 2, detalhe: `${falas} linhas no idioma-alvo` },
+    { criterio: 'explica o suficiente sem virar aula longa (250–3500 caracteres)', ok: aula.length >= 250 && aula.length <= 3500, detalhe: `${aula.length} caracteres` },
+    { criterio: 'me dá a vez no fim', ok: fim.includes('?') || fim.includes('？') || /sua vez|responda|agora voce|agora você/i.test(fim), detalhe: fim.slice(-140).replace(/\n/g, ' ') }
+  ]
+}
+
+/** Turno da aula: toca cada grupo de termos e retoma a pergunta (termina perguntando). */
+export function rubricaTurno(resposta: string, deve: Record<string, string[]>, extra: { citado?: string } = {}): Checagem[] {
+  const r = ` ${norm(resposta)} `
+  const out: Checagem[] = Object.entries(deve).map(([criterio, termos]) => {
+    const achou = termos.filter((x) => r.includes(norm(x)))
+    return { criterio, ok: achou.length > 0, detalhe: achou.join(', ') || 'nenhum termo' }
+  })
+  const fim = resposta.slice(-600)
+  out.push({ criterio: 'retoma a aula com uma pergunta no fim', ok: fim.includes('?') || fim.includes('？'), detalhe: fim.slice(-160).replace(/\n/g, ' ') })
+  if (extra.citado) {
+    const palavras = norm(extra.citado).split(/[^a-z0-9㐀-鿿]+/).filter((w) => w.length >= 6)
+    const usadas = palavras.filter((w) => r.includes(w))
+    out.push({ criterio: 'responde ao detalhe citado do fim da resposta anterior', ok: usadas.length >= Math.min(2, palavras.length), detalhe: usadas.join(', ') || `nenhuma de: ${palavras.join(', ')}` })
+  }
+  return out
+}

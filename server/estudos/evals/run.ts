@@ -51,7 +51,57 @@ async function main(): Promise<void> {
     const run = await esperar((await tutor.startMasterclass(t.id, caso.pedido)).id)
     const plano = (await tutor.listPlans(t.id))[0]
     const m = plano ? JSON.parse(plano.content) : null
-    linhas.push(linha(caso.id, run, m ? r.rubricaMasterclass(m, caso.termos, caso.escala) : [], m))
+    const tipo = 'kind' in caso.topico && caso.topico.kind === 'language' ? 'idioma' : 'engenharia'
+    linhas.push(linha(caso.id, run, m ? [...r.rubricaMasterclass(m, caso.termos, caso.escala), ...r.rubricaAbertura(m.aberturaPrimeiraAula, tipo)] : [], m))
+  }
+
+  // continuidade: masterclass → aprovar → abertura → dúvida → follow-up que cita o fim da resposta
+  const { read, one } = await import('../sql')
+  const semMd = (x: string): string => x.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ')
+  const ctx = await import('../contexto')
+  for (const caso of [casos.CASO_TRAMA, casos.CASO_MANDARIM_AULA]) {
+    if (!quer(caso.id)) continue
+    const t = await repo.createTopic(caso.topico)
+    console.log(`→ ${caso.id}: masterclass…`)
+    const mrun = await esperar((await tutor.startMasterclass(t.id, caso.pedido)).id)
+    const plano = (await tutor.listPlans(t.id)).find((p) => p.status === 'proposed')
+    if (!plano) {
+      linhas.push(linha(caso.id, mrun, [], null))
+      continue
+    }
+    const m = JSON.parse(plano.content)
+    const { lessonId } = await tutor.approvePlan(plano.id)
+    const aberta = await tutor.getLesson(lessonId!)
+    linhas.push(linha(`${caso.id} · abertura`, mrun, [...r.rubricaMasterclass(m, caso.termos, caso.escala), ...r.rubricaAbertura(m.aberturaPrimeiraAula, caso.tipo)], {
+      mapa: m.partes.map((p: { titulo: string; modulos: { titulo: string }[] }) => `${p.titulo}: ${p.modulos.map((x) => x.titulo).join(' | ')}`),
+      jaSei: m.jaSei,
+      restricoes: m.restricoes,
+      decisoesEmAberto: m.decisoesEmAberto,
+      primeiroTurno: aberta.turns[0]?.content ?? null
+    }))
+    const enviar = async (texto: string, chave: string): Promise<{ run: import('../tutor').RunRow; resposta: string; contextoChars: number; contexto: string }> => {
+      // o contexto que vai ao provedor neste turno = turnos já salvos (antes do meu)
+      const antes = await tutor.getLesson(lessonId!)
+      const ctxReal = await read((db) => ctx.contextoAula(db, one<import('../repo').TopicRow>(db, 'SELECT * FROM study_topics WHERE id = ?', [t.id])!, antes.lesson, antes.turns))
+      const run = await esperar((await tutor.sendTurn(lessonId!, texto, chave)).id)
+      const depois = await tutor.getLesson(lessonId!)
+      const ult = depois.turns.at(-1)!
+      return { run, resposta: ult.role === 'tutor' ? ult.content : '', contextoChars: ctxReal.length, contexto: ctxReal }
+    }
+    console.log(`→ ${caso.id}: dúvida…`)
+    const t1 = await enviar(caso.duvida, `eval-${caso.id}-1`.slice(0, 60))
+    linhas.push(linha(`${caso.id} · turno 1 (dúvida)`, t1.run, r.rubricaTurno(t1.resposta, caso.deve), { eu: caso.duvida, contextoChars: t1.contextoChars, tutor: t1.resposta }))
+    // follow-up: cita a última frase afirmativa da resposta anterior
+    const frases = t1.resposta.replace(/\n+/g, ' ').split(/(?<=[.!。])\s+/).map((x) => x.trim()).filter((x) => x.length >= 30 && !/[?？]$/.test(x))
+    const citado = (frases.at(-1) ?? t1.resposta.slice(-160)).replace(/[*_`#>]/g, '').slice(0, 180)
+    const followup = caso.tipo === 'idioma' ? `Sobre o que você disse no final ("${citado}"): e se meu amigo responder que sábado também não dá?` : `Sobre o que você disse no final ("${citado}"): como isso fica no celular de cada um dos oito jogadores?`
+    console.log(`→ ${caso.id}: follow-up…`)
+    const t2 = await enviar(followup, `eval-${caso.id}-2`.slice(0, 60))
+    linhas.push(linha(`${caso.id} · turno 2 (follow-up)`, t2.run, [
+      ...r.rubricaTurno(t2.resposta, {}, { citado }),
+      { criterio: 'o trecho citado chegou ao provedor (contexto do turno 2)', ok: semMd(t2.contexto).includes(semMd(citado).slice(-60)), detalhe: `${t2.contextoChars} caracteres de contexto` },
+      { criterio: 'o briefing chegou ao provedor', ok: t2.contexto.includes(caso.pedido), detalhe: 'pedido original no contexto' }
+    ], { eu: followup, contextoChars: t2.contextoChars, tutor: t2.resposta }))
   }
 
   if (quer(casos.CASO_EDITORIAL.id)) {
