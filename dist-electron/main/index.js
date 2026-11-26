@@ -6374,7 +6374,7 @@ Material:
   preparar: (p) => ({ topico: p.topico, material: p.material }),
   exemplo: { topico: ex("tópico"), material: ex("anotações do tópico") }
 });
-const VERSAO_PEDAGOGIA = "estudos-pedagogia-2026-11-27.1";
+const VERSAO_PEDAGOGIA = "estudos-pedagogia-2026-11-27.2";
 const A_MASTERCLASS = `Você é meu mentor neste assunto. A entrada pode ser tão curta quanto “quero estudar X para conseguir Y”. Transforme isso em uma formação que me dê condições de fazer Y com autonomia. Comece identificando a situação na qual vou usar o que aprender, o que já sei, quais fundamentos ainda preciso construir e qual demonstração final revelará que aprendi. Aproveite meus materiais e contexto autorizado. Se faltar algo que mude profundamente a trilha, faça até duas perguntas curtas. Caso contrário, declare a suposição, entregue a proposta e deixe que eu a edite.
 
 Desenhe primeiro o mapa completo, em partes e módulos progressivos. Escolha a quantidade pela dificuldade do objetivo. Uma formação de engenharia pode justificar 12 módulos e workshops; um objetivo delimitado merece uma trilha menor. O mapa precisa revelar o conteúdo de verdade: dê a cada módulo uma pergunta central específica, os conceitos e relações que devo compreender, um exemplo ligado à minha situação, uma atividade, uma pergunta diagnóstica e um critério observável para avançar. Mostre por que a ordem faz sentido e quais aprofundamentos são opcionais. Teste a cobertura caminhando de trás para frente a partir da entrega final. Se um passo indispensável ficou implícito, inclua-o.
@@ -6391,7 +6391,7 @@ const B_AULA = `Retome a pergunta aberta, o módulo, minhas tentativas e a últi
 Conduza um turno de cada vez. Se eu fizer uma pergunta lateral, responda-a de verdade, ligue a resposta ao que está sendo ensinado, marque o ponto de retorno e termine retomando a pergunta da aula. Se eu me referir a um detalhe da sua resposta anterior, use o texto dela, que vem completo no contexto. Se eu disser que não entendi, mude a representação ou construa um exemplo menor. Quando eu responder, identifique o que entendi, o ponto específico a corrigir e uma próxima tentativa. Se eu pedir diretamente a explicação ou solução, forneça-a. Separe minha resposta, sua explicação e o que ainda é hipótese. Antes de encerrar, ofereça uma frase de retomada. Decisões, notas e cartões só são incorporados por ação minha.`;
 const C_PACOTE = `Leia o objetivo, o módulo, a nota ou aula selecionada e as tentativas relevantes. Cada seção tem uma finalidade própria. Na explicação, use um exemplo que esclareça o mecanismo. No resumo, preserve o fio da ideia. Nos exercícios, dê um problema solucionável, uma pista opcional e critérios ou solução em campos separados. Nas perguntas socráticas, desenhe uma progressão do exemplo concreto ao princípio. Na revisão ativa, peça que eu recupere de memória algo importante; guarde a referência para depois da tentativa. Nos cartões, priorize conceitos que preciso distinguir e erros que já cometi. Se eu escolher cobertura de vocabulário, cubra o conjunto selecionado e evite duplicatas. Para a revisão da nota e os subtópicos, aplique as regras D e E. Não repita a mesma pergunta em cinco formatos. Se houver apenas nota externa, trabalhe com ela; se houver apenas aula gerada, prepare prática sobre a aula e deixe a revisão autoral vazia.`;
 const D_REVISAO = `Leia como um colega que quer entender exatamente o que eu quis dizer. Preserve meu português, minhas abreviações, analogias, exemplos, informalidade e ordem de raciocínio. Procure apenas intervenções com ganho real: conceito importante que ficou implícito, ambiguidade que muda o sentido, relação causal ausente, afirmação que precisa de ressalva ou exemplo que torna uma explicação utilizável. Cite o menor trecho exato que ancora a proposta. Explique o motivo em uma frase e proponha o menor acréscimo ou ajuste possível. Uma dúvida sobre a minha intenção deve virar uma pergunta. Diferencie simplificação aceitável de erro factual. Se a anotação já cumpre seu papel, devolva zero propostas. Toda sugestão editorial fica fora da nota até eu aprová-la.`;
-const E_SUBTOPICOS = `Compare o objetivo, o mapa completo e as notas selecionadas. Para cada lacuna real, diga qual capacidade fica comprometida, onde o novo subtópico entra e por que vale um nó próprio. Use o ID do pai existente e a posição sugerida. Se cabe em uma linha da nota, prefira uma sugestão editorial. Respeite sinônimos, nós concluídos e recusas anteriores. Diferencie pré-requisito essencial de aprofundamento opcional. Retorne zero itens quando houver cobertura suficiente.`;
+const E_SUBTOPICOS = `Compare o objetivo, o mapa completo e as notas selecionadas. Para cada lacuna real, diga qual capacidade fica comprometida, onde o novo subtópico entra e por que vale um nó próprio. Use o ID do pai existente e a posição sugerida. Se cabe em uma linha da nota, prefira uma sugestão editorial. Respeite sinônimos, nós concluídos e recusas anteriores. Diferencie pré-requisito essencial de aprofundamento opcional. Se eu der uma direção (um foco, um tipo de exemplo, um recorte), procure as lacunas por esse ângulo e ligue cada sugestão a ele; ainda assim aponte um pré-requisito essencial que falte, dizendo que ele vem de fora da direção. Retorne zero itens quando houver cobertura suficiente.`;
 const INSTRUCOES_COMUNS = `Você é o tutor do módulo Estudos de um app pessoal. Regras gerais:
 - Trabalhe SÓ com o contexto que o app enviou abaixo; não invente links, resultados de testes nem conhecimentos meus.
 - Não edite arquivos, notas, cartões nem repositórios: você só devolve conteúdo estruturado; quem decide incorporar sou eu.
@@ -6665,13 +6665,13 @@ ${E_SUBTOPICOS}
 ## Contexto enviado pelo app (objetivo, mapa com IDs, notas selecionadas, recusas anteriores)
 {{contexto}}
 
-## Pedido
+## Pedido (com a minha direção, se eu dei uma)
 {{pedido}}
 
 ## Contrato de saída
 JSON: subtopicos { itens: [{parentId, posicao, titulo, motivo, conexaoObjetivo, tipo, prerequisito}], vazio }. parentId é um ID que existe no mapa (ou null para raiz). Zero itens é uma resposta válida; nota longa não significa roteiro incompleto.`,
   preparar: prepararTutor,
-  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("mapa com IDs"), pedido: ex("sugerir") }
+  exemplo: { idioma: "pt-BR", idiomaAlvo: "—", contexto: ex("mapa com IDs"), pedido: ex("sugerir; direção: foco em exemplos de games") }
 });
 const githubCriarIssue = definirChamada({
   id: "github.criarIssue",
@@ -89418,7 +89418,8 @@ async function reviewNote(topicId, nodeId) {
     }
   });
 }
-async function suggestSubtopics(topicId, nodeId) {
+async function suggestSubtopics(topicId, nodeId, direcao) {
+  const dir = (direcao ?? "").trim().slice(0, 1e3);
   const { t, ctx, mapSig } = await preparar(topicId, nodeId);
   return startRun({
     operation: "subtopicos",
@@ -89426,9 +89427,15 @@ async function suggestSubtopics(topicId, nodeId) {
     topicId,
     nodeId,
     section: "subtopicos",
-    requestKey: `subtopicos:${topicId}:${nodeKey(nodeId)}`,
-    params: { ...idiomaDe(t), contexto: ctx.contexto, pedido: "Há subtópicos que faltam? Zero itens é válido." },
-    signature: ctx.inputSignature,
+    requestKey: `subtopicos:${topicId}:${nodeKey(nodeId)}${dir ? `:${assinatura(dir)}` : ""}`,
+    params: {
+      ...idiomaDe(t),
+      contexto: ctx.contexto,
+      pedido: dir ? `Há subtópicos que faltam nesta direção? Zero itens é válido.
+
+Minha direção: ${dir}` : "Há subtópicos que faltam? Zero itens é válido."
+    },
+    signature: dir ? assinatura(ctx.inputSignature, dir) : ctx.inputSignature,
     schema: SCHEMA_SUBTOPICOS,
     timeoutMs: 5 * 6e4,
     apply: (db2, parsed, run2, isLatest) => {
@@ -90063,7 +90070,7 @@ function registerEstudosRpc(handle) {
     return regenerateSection(id(topicId), optId(nodeId), secao);
   });
   handle("estudos:reviewNote", (_e, topicId, nodeId) => reviewNote(id(topicId), optId(nodeId)));
-  handle("estudos:suggestSubtopics", (_e, topicId, nodeId) => suggestSubtopics(id(topicId), optId(nodeId)));
+  handle("estudos:suggestSubtopics", (_e, topicId, nodeId, direcao) => suggestSubtopics(id(topicId), optId(nodeId), typeof direcao === "string" ? direcao : null));
   handle("estudos:acceptEditorial", async (_e, sid, opts) => {
     const r = await acceptEditorial(id(sid), opts ?? {});
     if (r.ok) changed$1("notes");
