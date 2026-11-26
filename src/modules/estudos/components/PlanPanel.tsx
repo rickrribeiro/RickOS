@@ -16,11 +16,22 @@ interface Modulo {
   minutos?: number | null
   excluir?: boolean
 }
+interface Abertura {
+  titulo: string
+  situacao: string
+  /** Desde estudos-pedagogia-2026-11-27; planos antigos não têm. */
+  aula?: string
+  primeiroPasso: string
+  pergunta: string
+}
 interface Plano {
   perguntas: string[]
   suposicoes: string[]
   situacao: string
   jaSei: string
+  restricoes?: string[]
+  preferenciasEnsino?: string[]
+  decisoesEmAberto?: string[]
   fundamentos: string[]
   demonstracaoFinal: string
   partes: { titulo: string; porque?: string; modulos: Modulo[]; excluir?: boolean }[]
@@ -28,8 +39,23 @@ interface Plano {
   aprofundamentosOpcionais: string[]
   workshops: { titulo: string; entrega?: string; experimento?: string; excluir?: boolean }[]
   coberturaReversa: string
-  aberturaPrimeiraAula: { titulo: string; situacao: string; primeiroPasso: string; pergunta: string }
+  aberturaPrimeiraAula?: Abertura
   aConferir: string[]
+}
+
+/** A abertura como vai aparecer na aula (mesma composição do servidor em textoAbertura). */
+function aberturaMd(ab: Abertura): string {
+  const aula = ab.aula?.trim() ?? ''
+  const pergunta = ab.pergunta?.trim() ?? ''
+  const perguntaJaNaAula = !!pergunta && aula.replace(/\s+/g, ' ').includes(pergunta.replace(/\s+/g, ' ').slice(0, 60))
+  return [
+    aula ? '' : ab.situacao,
+    aula,
+    ab.primeiroPasso && `**${t('est.primeiroPassoHojeCurto')}** ${ab.primeiroPasso}`,
+    pergunta && !perguntaJaNaAula && `**${t('est.perguntaRotulo')}** ${pergunta}`
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 /**
@@ -46,6 +72,8 @@ export function PlanPanel({ topic, onClose, onApproved }: { topic: TopicRow; onC
   const [ctx, setCtx] = useState<{ chars: number; contexto: string } | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // celular: uma coluna por vez (no desktop as duas ficam lado a lado)
+  const [view, setView] = useState<'mapa' | 'aula'>('aula')
 
   const proposta = plans.find((p) => p.status === 'proposed') ?? null
 
@@ -112,29 +140,50 @@ export function PlanPanel({ topic, onClose, onApproved }: { topic: TopicRow; onC
   }
 
   const running = run?.status === 'running'
+  const pedidoForm = (
+    <>
+      <div className="editor-field">
+        <label>{t('est.pedidoRotulo')}</label>
+        <textarea
+          rows={Math.min(14, Math.max(3, pedido.split('\n').length + 1))}
+          value={pedido}
+          onChange={(e) => setPedido(e.target.value)}
+          placeholder={t('est.pedidoPlaceholder')}
+        />
+        <span className="study-hint">{t('est.pedidoDica')}</span>
+      </div>
+      {ctx && (
+        <details className="privacy-note">
+          <summary>{t('est.privacidadeResumo', { count: ctx.chars })}</summary>
+          <p className="study-hint">{t('est.privacidadeExplica')}</p>
+          <pre>{ctx.contexto}</pre>
+        </details>
+      )}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button className="btn btn-primary btn-sm" disabled={running || !pedido.trim()} onClick={() => gerar()}>
+          {running ? t('est.gerandoRoteiro') : proposta ? t('est.repensarRoteiro') : t('est.gerarRoteiro')}
+        </button>
+        {running && run && <button className="btn btn-secondary btn-sm" onClick={() => window.api.estudos.iaCancel(run.id)}>{t('est.cancelar')}</button>}
+      </div>
+    </>
+  )
   const failed = run && ['error', 'invalid', 'timeout'].includes(run.status) && (!proposta || (proposta.runId ?? 0) < run.id)
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal study-modal plan-modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal study-modal plan-modal ${draft && proposta ? 'has-draft' : ''}`} onClick={(e) => e.stopPropagation()}>
         <h2>{t('est.roteiroTitulo')}</h2>
-        <div className="editor-field">
-          <label>{t('est.pedidoRotulo')}</label>
-          <textarea rows={3} value={pedido} onChange={(e) => setPedido(e.target.value)} placeholder={t('est.pedidoPlaceholder')} />
-        </div>
-        {ctx && (
-          <details className="privacy-note">
-            <summary>{t('est.privacidadeResumo', { count: ctx.chars })}</summary>
-            <p className="study-hint">{t('est.privacidadeExplica')}</p>
-            <pre>{ctx.contexto}</pre>
+        {draft && proposta ? (
+          // com proposta na tela, o pedido recolhe: o espaço fica para o mapa e a aula
+          <details className="plan-request" open={running}>
+            <summary>
+              <strong>{t('est.seuPedido')}</strong> <span className="study-hint">{proposta.request.replace(/\s+/g, ' ').slice(0, 140)}{proposta.request.length > 140 ? '…' : ''}</span>
+            </summary>
+            {pedidoForm}
           </details>
+        ) : (
+          pedidoForm
         )}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" disabled={running || !pedido.trim()} onClick={() => gerar()}>
-            {running ? t('est.gerandoRoteiro') : proposta ? t('est.repensarRoteiro') : t('est.gerarRoteiro')}
-          </button>
-          {running && run && <button className="btn btn-secondary btn-sm" onClick={() => window.api.estudos.iaCancel(run.id)}>{t('est.cancelar')}</button>}
-        </div>
         {running && <p className="study-hint">{t('est.podeNavegar')}</p>}
         {failed && run && (
           <div className="study-error">
@@ -147,8 +196,8 @@ export function PlanPanel({ topic, onClose, onApproved }: { topic: TopicRow; onC
         {draft && proposta && (
           <div className="plan-view">
             {draft.perguntas?.length > 0 && (
-              <div className="source-form">
-                <strong>{t('est.perguntasDoTutor')}</strong>
+              <details className="source-form plan-questions">
+                <summary><strong>{t('est.perguntasDoTutor')}</strong> <span className="project-chip">{draft.perguntas.length}</span></summary>
                 {draft.perguntas.map((q, i) => (
                   <div key={i} className="editor-field">
                     <label>{q}</label>
@@ -162,63 +211,88 @@ export function PlanPanel({ topic, onClose, onApproved }: { topic: TopicRow; onC
                 >
                   {t('est.responderERegerar')}
                 </button>
-              </div>
+              </details>
             )}
-            {draft.suposicoes?.length > 0 && <p className="study-hint"><strong>{t('est.suposicoes')}</strong> {draft.suposicoes.join(' · ')}</p>}
-            <p><strong>{t('est.situacao')}</strong> {draft.situacao}</p>
-            <p><strong>{t('est.entregaFinal')}</strong> {draft.demonstracaoFinal}</p>
-            {draft.ordemJustificativa && <p className="study-hint">{draft.ordemJustificativa}</p>}
-            {draft.partes.map((parte, pi) => (
-              <div key={pi} className={`plan-part ${parte.excluir ? 'excluded' : ''}`}>
-                <div className="plan-row">
-                  <input className="plan-title" value={parte.titulo} onChange={(e) => edit((d) => (d.partes[pi].titulo = e.target.value))} />
-                  <label className="study-check"><input type="checkbox" checked={!parte.excluir} onChange={(e) => edit((d) => (d.partes[pi].excluir = !e.target.checked))} />{t('est.incluir')}</label>
+            <div className="plan-switch" role="tablist">
+              <button role="tab" aria-selected={view === 'aula'} className={`study-tab ${view === 'aula' ? 'active' : ''}`} onClick={() => setView('aula')}>{t('est.primeiraAula')}</button>
+              <button role="tab" aria-selected={view === 'mapa'} className={`study-tab ${view === 'mapa' ? 'active' : ''}`} onClick={() => setView('mapa')}>
+                {t('est.mapaN', { count: draft.partes.reduce((n, p) => n + (p.excluir ? 0 : p.modulos.filter((m) => !m.excluir).length), 0) })}
+              </button>
+            </div>
+            <div className="plan-preview">
+              <section className={`plan-map ${view === 'mapa' ? 'pane-on' : 'pane-off'}`}>
+                <div className="plan-brief">
+                  <div><strong>{t('est.situacao')}</strong> {draft.situacao}</div>
+                  {draft.jaSei && <div><strong>{t('est.jaSei')}</strong> {draft.jaSei}</div>}
+                  {draft.restricoes?.length ? <div><strong>{t('est.restricoes')}</strong> {draft.restricoes.join(' · ')}</div> : null}
+                  {draft.preferenciasEnsino?.length ? <div><strong>{t('est.preferencias')}</strong> {draft.preferenciasEnsino.join(' · ')}</div> : null}
+                  {draft.decisoesEmAberto?.length ? <div><strong>{t('est.decisoesEmAberto')}</strong> {draft.decisoesEmAberto.join(' · ')}</div> : null}
+                  {draft.suposicoes?.length > 0 && <div className="study-hint"><strong>{t('est.suposicoes')}</strong> {draft.suposicoes.join(' · ')}</div>}
+                  <div><strong>{t('est.entregaFinal')}</strong> {draft.demonstracaoFinal}</div>
                 </div>
-                {parte.porque && <div className="study-hint">{parte.porque}</div>}
-                {parte.modulos.map((m, mi) => (
-                  <div key={mi} className={`plan-module ${m.excluir ? 'excluded' : ''}`}>
+                {draft.ordemJustificativa && <p className="study-hint">{draft.ordemJustificativa}</p>}
+                {draft.partes.map((parte, pi) => (
+                  <div key={pi} className={`plan-part ${parte.excluir ? 'excluded' : ''}`}>
                     <div className="plan-row">
-                      <input value={m.titulo} onChange={(e) => edit((d) => (d.partes[pi].modulos[mi].titulo = e.target.value))} />
-                      {m.opcional && <span className="project-chip">{t('est.opcional')}</span>}
-                      {m.minutos ? <span className="project-chip">{t('est.min', { count: m.minutos })}</span> : null}
-                      <label className="study-check"><input type="checkbox" checked={!m.excluir} onChange={(e) => edit((d) => (d.partes[pi].modulos[mi].excluir = !e.target.checked))} />{t('est.incluir')}</label>
+                      <input className="plan-title" value={parte.titulo} onChange={(e) => edit((d) => (d.partes[pi].titulo = e.target.value))} aria-label={t('est.tituloParte')} />
+                      <label className="study-check"><input type="checkbox" checked={!parte.excluir} onChange={(e) => edit((d) => (d.partes[pi].excluir = !e.target.checked))} />{t('est.incluir')}</label>
                     </div>
-                    <div className="plan-details">
-                      {m.perguntaCentral && <div><strong>{t('est.perguntaCentral')}</strong> {m.perguntaCentral}</div>}
-                      {m.conceitos?.length ? <div><strong>{t('est.conceitos')}</strong> {m.conceitos.join(' · ')}</div> : null}
-                      {m.exemplo && <div><strong>{t('est.exemplo')}:</strong> {m.exemplo}</div>}
-                      {m.atividade && <div><strong>{t('est.atividade')}</strong> {m.atividade}</div>}
-                      {m.criterioAvanco && <div><strong>{t('est.paraAvancar')}</strong> {m.criterioAvanco}</div>}
-                    </div>
+                    {parte.porque && <div className="study-hint">{parte.porque}</div>}
+                    {parte.modulos.map((m, mi) => (
+                      <details key={mi} className={`plan-module ${m.excluir ? 'excluded' : ''}`}>
+                        <summary>
+                          <span className="plan-module-title">{m.titulo}</span>
+                          {m.opcional && <span className="project-chip">{t('est.opcional')}</span>}
+                          {m.minutos ? <span className="project-chip">{t('est.min', { count: m.minutos })}</span> : null}
+                          <label className="study-check" onClick={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={!m.excluir} onChange={(e) => edit((d) => (d.partes[pi].modulos[mi].excluir = !e.target.checked))} />
+                            {t('est.incluir')}
+                          </label>
+                        </summary>
+                        <div className="plan-details">
+                          <input value={m.titulo} onChange={(e) => edit((d) => (d.partes[pi].modulos[mi].titulo = e.target.value))} aria-label={t('est.tituloModulo')} />
+                          {m.perguntaCentral && <div><strong>{t('est.perguntaCentral')}</strong> {m.perguntaCentral}</div>}
+                          {m.conceitos?.length ? <div><strong>{t('est.conceitos')}</strong> {m.conceitos.join(' · ')}</div> : null}
+                          {m.exemplo && <div><strong>{t('est.exemplo')}:</strong> {m.exemplo}</div>}
+                          {m.atividade && <div><strong>{t('est.atividade')}</strong> {m.atividade}</div>}
+                          {m.criterioAvanco && <div><strong>{t('est.paraAvancar')}</strong> {m.criterioAvanco}</div>}
+                        </div>
+                      </details>
+                    ))}
                   </div>
                 ))}
-              </div>
-            ))}
-            {draft.workshops?.length > 0 && (
-              <div className="plan-part">
-                <strong>{t('est.workshops')}</strong>
-                {draft.workshops.map((w, wi) => (
-                  <div key={wi} className={`plan-module ${w.excluir ? 'excluded' : ''}`}>
-                    <div className="plan-row">
-                      <input value={w.titulo} onChange={(e) => edit((d) => (d.workshops[wi].titulo = e.target.value))} />
-                      <label className="study-check"><input type="checkbox" checked={!w.excluir} onChange={(e) => edit((d) => (d.workshops[wi].excluir = !e.target.checked))} />{t('est.incluir')}</label>
-                    </div>
-                    <div className="plan-details">{w.entrega} {w.experimento && `· ${w.experimento}`}</div>
+                {draft.workshops?.length > 0 && (
+                  <div className="plan-part">
+                    <strong>{t('est.workshops')}</strong>
+                    {draft.workshops.map((w, wi) => (
+                      <div key={wi} className={`plan-module ${w.excluir ? 'excluded' : ''}`}>
+                        <div className="plan-row">
+                          <input value={w.titulo} onChange={(e) => edit((d) => (d.workshops[wi].titulo = e.target.value))} />
+                          <label className="study-check"><input type="checkbox" checked={!w.excluir} onChange={(e) => edit((d) => (d.workshops[wi].excluir = !e.target.checked))} />{t('est.incluir')}</label>
+                        </div>
+                        <div className="plan-details">{w.entrega} {w.experimento && `· ${w.experimento}`}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            {draft.aberturaPrimeiraAula && (
-              <div className="plan-part plan-opening">
-                <strong>{t('est.primeiroPassoHoje')}</strong>
-                <div className="md-preview-pane">{renderMarkdown(`${draft.aberturaPrimeiraAula.situacao}\n\n**${draft.aberturaPrimeiraAula.primeiroPasso}**`)}</div>
-              </div>
-            )}
-            {draft.aConferir?.length > 0 && <p className="study-hint"><strong>{t('est.aConferir')}</strong> {draft.aConferir.join(' · ')}</p>}
-            <div className="modal-actions">
+                )}
+                {draft.aConferir?.length > 0 && <p className="study-hint"><strong>{t('est.aConferir')}</strong> {draft.aConferir.join(' · ')}</p>}
+              </section>
+              <section className={`plan-lesson ${view === 'aula' ? 'pane-on' : 'pane-off'}`}>
+                {draft.aberturaPrimeiraAula ? (
+                  <>
+                    <div className="study-hint">{t('est.primeiraAulaDica')}</div>
+                    <h3>{draft.aberturaPrimeiraAula.titulo}</h3>
+                    <div className="md-preview-pane plan-lesson-body">{renderMarkdown(aberturaMd(draft.aberturaPrimeiraAula))}</div>
+                  </>
+                ) : (
+                  <div className="study-hint">{t('est.semAbertura')}</div>
+                )}
+              </section>
+            </div>
+            <div className="modal-actions plan-actions">
               <button className="btn btn-secondary btn-sm" onClick={() => window.api.estudos.discardPlan(proposta.id).then(() => { setDraft(null); load() })}>{t('est.descartarRoteiro')}</button>
               {dirty && <button className="btn btn-secondary btn-sm" onClick={salvar}>{t('est.salvarEdicoes')}</button>}
-              <button className="btn btn-primary btn-sm" disabled={busy} onClick={aprovar}>{t('est.aprovarRoteiro')}</button>
+              <button className="btn btn-primary btn-sm" disabled={busy} onClick={aprovar} title={t('est.aprovarDica')}>{t('est.aprovarEComecar')}</button>
             </div>
           </div>
         )}

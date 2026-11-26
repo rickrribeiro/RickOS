@@ -3491,13 +3491,46 @@ button.todo-divider:hover {
 .plan-module { border-left: 2px solid var(--border); padding-left: 8px; }
 .plan-details { font-size: 12px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .plan-opening { border-color: var(--accent); }
+.plan-modal.has-draft { max-width: 1180px; width: min(1180px, 96vw); height: 92vh; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
+.plan-modal.has-draft > h2 { margin-bottom: 6px; }
+.plan-modal.has-draft .plan-view { flex: 1; min-height: 0; margin-top: 6px; }
+.plan-modal.has-draft .plan-preview { flex: 1; min-height: 0; align-items: stretch; }
+.plan-modal.has-draft .plan-map, .plan-modal.has-draft .plan-lesson { max-height: none; height: 100%; overflow-y: auto; }
+.plan-request > summary, .plan-questions > summary { cursor: pointer; font-size: 13px; }
+.plan-request { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; max-height: 40vh; overflow-y: auto; }
+.plan-request[open] { display: flex; flex-direction: column; gap: 6px; }
+.plan-switch { display: none; gap: 4px; border-bottom: 1px solid var(--border); }
+.plan-preview { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr); gap: 14px; align-items: start; }
+.plan-map, .plan-lesson { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.plan-map { padding-right: 4px; }
+.plan-lesson { border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--bg-primary); }
+.plan-lesson h3 { margin: 0; font-size: 16px; }
+.plan-lesson-body { font-size: 14px; line-height: 1.6; }
+.plan-brief { display: flex; flex-direction: column; gap: 3px; font-size: 12px; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); }
+details.plan-module > summary { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; cursor: pointer; list-style: none; padding: 2px 0; }
+details.plan-module > summary::-webkit-details-marker { display: none; }
+details.plan-module > summary::before { content: '▸'; color: var(--text-muted); font-size: 10px; }
+details.plan-module[open] > summary::before { content: '▾'; }
+.plan-module-title { flex: 1; min-width: 140px; font-weight: 500; }
+.plan-details input { width: 100%; }
+.plan-actions { position: sticky; bottom: 0; background: var(--bg-secondary); padding-top: 8px; border-top: 1px solid var(--border); }
+@media (max-width: 900px) {
+  .plan-switch { display: flex; }
+  .plan-preview { grid-template-columns: 1fr; }
+  .plan-preview .pane-off { display: none; }
+  .plan-modal.has-draft { width: calc(100vw - 32px); height: auto; max-height: 92vh; display: block; overflow-y: auto; }
+  .plan-modal.has-draft .plan-map, .plan-modal.has-draft .plan-lesson { height: auto; overflow: visible; }
+  .plan-switch { position: sticky; top: -24px; z-index: 1; background: var(--bg-secondary); }
+}
+.lesson-brief { font-size: 12px; }
+.lesson-brief pre { white-space: pre-wrap; font-size: 12px; max-height: 220px; overflow: auto; background: var(--bg-tertiary); padding: 6px; border-radius: var(--radius-sm); }
 .privacy-note summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); }
 .privacy-note pre { white-space: pre-wrap; max-height: 200px; overflow: auto; font-size: 11px; background: var(--bg-tertiary); padding: 6px; border-radius: var(--radius-sm); }
 .ia-diag ul { margin: 6px 0 0 16px; font-size: 12px; }
 .ia-row { align-items: flex-end; }
 .lesson-panel { display: flex; flex-direction: column; gap: 8px; }
 .lesson-head { display: flex; flex-direction: column; gap: 2px; }
-.lesson-turns { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.lesson-turns { position: relative; display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
 .lesson-turn { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; overflow-wrap: anywhere; }
 .lesson-turn.me { background: var(--bg-tertiary); margin-left: 24px; }
 .lesson-turn.pending { font-size: 12px; color: var(--text-secondary); }

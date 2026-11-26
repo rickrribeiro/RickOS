@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { LessonRow, RunRow, TurnRow } from '../../../../shared/estudos'
+import type { LessonRow, LessonView, RunRow, TurnRow } from '../../../../shared/estudos'
 import { useStudyStore } from '../store/studyStore'
 import { renderMarkdown } from '../markdown'
 import { IaDiagnostico } from './IaSettings'
@@ -21,6 +21,7 @@ const newKey = (): string => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.ran
 export function LessonPanel(): React.ReactElement {
   const { activeTopicId, selectedNodeId, refreshActive } = useStudyStore()
   const [lesson, setLesson] = useState<LessonRow | null>(null)
+  const [briefing, setBriefing] = useState<LessonView['briefing']>(null)
   const [turns, setTurns] = useState<TurnRow[]>([])
   const [running, setRunning] = useState<RunRow | null>(null)
   const [lastError, setLastError] = useState<{ status: string; error: string } | null>(null)
@@ -28,12 +29,12 @@ export function LessonPanel(): React.ReactElement {
   const [error, setError] = useState('')
   const [added, setAdded] = useState<Set<number>>(new Set())
   const keyRef = useRef(newKey())
-  const bottom = useRef<HTMLDivElement | null>(null)
 
   async function load(open = false): Promise<void> {
     if (activeTopicId == null) return
     const r = open || !lesson ? await window.api.estudos.openLesson(activeTopicId, selectedNodeId) : await window.api.estudos.lesson(lesson.id)
     setLesson(r.lesson)
+    setBriefing(r.briefing)
     setTurns(r.turns)
     setRunning(r.running)
     if (!r.running) {
@@ -57,8 +58,19 @@ export function LessonPanel(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTopicId, selectedNodeId, lesson?.id])
 
+  // turno novo do tutor: rola até o COMEÇO dele (respostas longas se leem de cima); enviando: rola ao fim
+  const turnsBox = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'nearest' })
+    const box = turnsBox.current
+    if (!box) return
+    if (running) {
+      box.scrollTop = box.scrollHeight
+      return
+    }
+    const ultimos = box.querySelectorAll<HTMLElement>('.lesson-turn.tutor')
+    const alvo = ultimos[ultimos.length - 1]
+    if (alvo) box.scrollTop = alvo.offsetTop - 4 // .lesson-turns é position: relative
+    else box.scrollTop = box.scrollHeight
   }, [turns.length, running])
 
   async function send(msg?: string): Promise<void> {
@@ -91,8 +103,14 @@ export function LessonPanel(): React.ReactElement {
       <div className="lesson-head">
         <strong>{lesson.title}</strong>
         {lesson.resumePhrase && <span className="study-hint">↩ {lesson.resumePhrase}</span>}
+        {briefing && (
+          <details className="lesson-brief">
+            <summary className="study-hint">{t('est.briefingDaAula')}</summary>
+            <pre>{briefing.request}</pre>
+          </details>
+        )}
       </div>
-      <div className="lesson-turns">
+      <div className="lesson-turns" ref={turnsBox}>
         {!turns.length && (
           <div className="empty-hint">
             {t('est.aulaVazia')}
@@ -138,7 +156,6 @@ export function LessonPanel(): React.ReactElement {
             <IaDiagnostico />
           </div>
         )}
-        <div ref={bottom} />
       </div>
       {lesson.openQuestion && <div className="lesson-open">❓ {lesson.openQuestion}</div>}
       <div className="lesson-input">
