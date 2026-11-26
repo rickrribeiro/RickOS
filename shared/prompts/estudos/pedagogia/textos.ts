@@ -8,7 +8,7 @@
  *
  * Regra do repositório: prompts em pt-BR. O idioma da EXPLICAÇÃO vem do tópico ({{idioma}} no adaptador).
  */
-export const VERSAO_PEDAGOGIA = 'estudos-pedagogia-2026-11-27.1'
+export const VERSAO_PEDAGOGIA = 'estudos-pedagogia-2026-11-27.2'
 
 /** A. Construir a masterclass. */
 export const A_MASTERCLASS = `Você é meu mentor neste assunto. A entrada pode ser tão curta quanto “quero estudar X para conseguir Y”. Transforme isso em uma formação que me dê condições de fazer Y com autonomia. Comece identificando a situação na qual vou usar o que aprender, o que já sei, quais fundamentos ainda preciso construir e qual demonstração final revelará que aprendi. Aproveite meus materiais e contexto autorizado. Se faltar algo que mude profundamente a trilha, faça até duas perguntas curtas. Caso contrário, declare a suposição, entregue a proposta e deixe que eu a edite.
@@ -35,7 +35,7 @@ export const C_PACOTE = `Leia o objetivo, o módulo, a nota ou aula selecionada 
 export const D_REVISAO = `Leia como um colega que quer entender exatamente o que eu quis dizer. Preserve meu português, minhas abreviações, analogias, exemplos, informalidade e ordem de raciocínio. Procure apenas intervenções com ganho real: conceito importante que ficou implícito, ambiguidade que muda o sentido, relação causal ausente, afirmação que precisa de ressalva ou exemplo que torna uma explicação utilizável. Cite o menor trecho exato que ancora a proposta. Explique o motivo em uma frase e proponha o menor acréscimo ou ajuste possível. Uma dúvida sobre a minha intenção deve virar uma pergunta. Diferencie simplificação aceitável de erro factual. Se a anotação já cumpre seu papel, devolva zero propostas. Toda sugestão editorial fica fora da nota até eu aprová-la.`
 
 /** E. Sugerir novos subtópicos. */
-export const E_SUBTOPICOS = `Compare o objetivo, o mapa completo e as notas selecionadas. Para cada lacuna real, diga qual capacidade fica comprometida, onde o novo subtópico entra e por que vale um nó próprio. Use o ID do pai existente e a posição sugerida. Se cabe em uma linha da nota, prefira uma sugestão editorial. Respeite sinônimos, nós concluídos e recusas anteriores. Diferencie pré-requisito essencial de aprofundamento opcional. Retorne zero itens quando houver cobertura suficiente.`
+export const E_SUBTOPICOS = `Compare o objetivo, o mapa completo e as notas selecionadas. Para cada lacuna real, diga qual capacidade fica comprometida, onde o novo subtópico entra e por que vale um nó próprio. Use o ID do pai existente e a posição sugerida. Se cabe em uma linha da nota, prefira uma sugestão editorial. Respeite sinônimos, nós concluídos e recusas anteriores. Diferencie pré-requisito essencial de aprofundamento opcional. Se eu der uma direção (um foco, um tipo de exemplo, um recorte), procure as lacunas por esse ângulo e ligue cada sugestão a ele; ainda assim aponte um pré-requisito essencial que falte, dizendo que ele vem de fora da direção. Retorne zero itens quando houver cobertura suficiente.`
 
 /**
  * Camada de instruções compartilhadas (vale para TODAS as chamadas pedagógicas). O pacote C e a

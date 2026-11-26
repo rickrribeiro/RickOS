@@ -9,6 +9,7 @@ import { SourcePanel } from '../components/SourcePanel'
 import { LessonPanel } from '../components/LessonPanel'
 import { PlanPanel } from '../components/PlanPanel'
 import { ModeloExportModal } from '../components/ModeloRoadmap'
+import { SugerirSubtopicosModal } from '../components/SugerirSubtopicos'
 import { QuizModal } from '../components/QuizModal'
 import { MaterialPanel, NoteReview } from '../components/MaterialPanel'
 import { TopicEditor } from '../components/TopicEditor'
@@ -49,7 +50,7 @@ export function TopicWorkspacePage(): React.ReactElement {
   const [editing, setEditing] = useState(false)
   const [planOpen, setPlanOpen] = useState(false)
   const [readerTab, setReaderTab] = useState<'fontes' | 'aula' | 'material'>('fontes')
-  const [subBusy, setSubBusy] = useState(false)
+  const [subOpen, setSubOpen] = useState(false)
   const [modeloOpen, setModeloOpen] = useState(false)
   const [pinned, setPinned] = useState<PinnedAction | null>(null)
   const topic = topics.find((x) => x.id === activeTopicId) ?? null
@@ -154,25 +155,7 @@ export function TopicWorkspacePage(): React.ReactElement {
           <button className="btn btn-primary btn-sm" onClick={() => setPlanOpen(true)} title={tr('est.roteiroDica')}>{tr('est.roteiroBotao')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>{tr('estudos.editar')}</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setQuizOpen(true)} title={tr('estudos.gerarUmQuizAPartir')}>{tr('estudos.quiz2')}</button>
-          <button
-            className="btn btn-secondary btn-sm"
-            disabled={subBusy}
-            title={tr('est.sugerirSubtopicosDica')}
-            onClick={async () => {
-              setSubBusy(true)
-              try {
-                await window.api.estudos.suggestSubtopics(topic.id, selectedNodeId)
-                setTab('caderno')
-                setReader('on')
-                setReaderTab('material')
-                setPane('leitura')
-              } catch (e) {
-                alert(e instanceof Error ? e.message : String(e))
-              } finally {
-                setSubBusy(false)
-              }
-            }}
-          >
+          <button className="btn btn-secondary btn-sm" title={tr('est.sugerirSubtopicosDica')} onClick={() => setSubOpen(true)}>
             {tr('est.sugerirSubtopicos')}
           </button>
           <details className="study-more">
@@ -235,6 +218,22 @@ export function TopicWorkspacePage(): React.ReactElement {
       {tab === 'perguntas' && <QuestionsPanel key={selectedNodeId ?? 'topic'} />}
 
       {quizOpen && <QuizModal topic={topic} onClose={() => setQuizOpen(false)} />}
+      {subOpen && (
+        <SugerirSubtopicosModal
+          topicId={topic.id}
+          nodeId={selectedNodeId}
+          nodeTitle={selectedNodeId != null ? nodes.find((n) => n.id === selectedNodeId)?.title ?? null : null}
+          onClose={() => setSubOpen(false)}
+          onStarted={() => {
+            // as sugestões aparecem em Leitura → Material (fora do mapa até eu aprovar)
+            setSubOpen(false)
+            setTab('caderno')
+            setReader('on')
+            setReaderTab('material')
+            setPane('leitura')
+          }}
+        />
+      )}
       {modeloOpen && <ModeloExportModal topicId={topic.id} onClose={() => setModeloOpen(false)} />}
       {planOpen && (
         <PlanPanel

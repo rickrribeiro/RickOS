@@ -296,7 +296,7 @@ export function registerEstudosRpc(handle: Handle): void {
     return material.regenerateSection(id(topicId), optId(nodeId), secao)
   })
   handle('estudos:reviewNote', (_e, topicId: number, nodeId: number | null) => material.reviewNote(id(topicId), optId(nodeId)))
-  handle('estudos:suggestSubtopics', (_e, topicId: number, nodeId: number | null) => material.suggestSubtopics(id(topicId), optId(nodeId)))
+  handle('estudos:suggestSubtopics', (_e, topicId: number, nodeId: number | null, direcao?: string | null) => material.suggestSubtopics(id(topicId), optId(nodeId), typeof direcao === 'string' ? direcao : null))
   handle('estudos:acceptEditorial', async (_e, sid: number, opts?: { text?: string | null; anchor?: string | null; replace?: boolean }) => {
     const r = await material.acceptEditorial(id(sid), opts ?? {})
     if (r.ok) changed('notes')

@@ -224,7 +224,9 @@ export async function reviewNote(topicId: number, nodeId: number | null): Promis
 }
 
 /** "Sugerir subtópicos" pontual (perfil editorial). Lista vazia é resultado válido. */
-export async function suggestSubtopics(topicId: number, nodeId: number | null): Promise<RunRow> {
+/** Direção opcional (ex.: "foco em exemplos de games"): vai no pedido e muda a chave de dedupe. */
+export async function suggestSubtopics(topicId: number, nodeId: number | null, direcao?: string | null): Promise<RunRow> {
+  const dir = (direcao ?? '').trim().slice(0, 1000)
   const { t, ctx, mapSig } = await preparar(topicId, nodeId)
   return startRun({
     operation: 'subtopicos',
@@ -232,9 +234,15 @@ export async function suggestSubtopics(topicId: number, nodeId: number | null): 
     topicId,
     nodeId,
     section: 'subtopicos',
-    requestKey: `subtopicos:${topicId}:${nodeKey(nodeId)}`,
-    params: { ...idiomaDe(t), contexto: ctx.contexto, pedido: 'Há subtópicos que faltam? Zero itens é válido.' },
-    signature: ctx.inputSignature,
+    requestKey: `subtopicos:${topicId}:${nodeKey(nodeId)}${dir ? `:${assinatura(dir)}` : ''}`,
+    params: {
+      ...idiomaDe(t),
+      contexto: ctx.contexto,
+      pedido: dir
+        ? `Há subtópicos que faltam nesta direção? Zero itens é válido.\n\nMinha direção: ${dir}`
+        : 'Há subtópicos que faltam? Zero itens é válido.'
+    },
+    signature: dir ? assinatura(ctx.inputSignature, dir) : ctx.inputSignature,
     schema: SCHEMA_SUBTOPICOS,
     timeoutMs: 5 * 60_000,
     apply: (db, parsed, run, isLatest) => {

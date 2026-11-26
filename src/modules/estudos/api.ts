@@ -132,7 +132,7 @@ export interface EstudosApi {
   prepareNode(topicId: number, nodeId: number | null, opts?: { vocabulario?: string[] }): Promise<RunRow>
   regenerateSection(topicId: number, nodeId: number | null, secao: string): Promise<RunRow>
   reviewNote(topicId: number, nodeId: number | null): Promise<RunRow>
-  suggestSubtopics(topicId: number, nodeId: number | null): Promise<RunRow>
+  suggestSubtopics(topicId: number, nodeId: number | null, direcao?: string | null): Promise<RunRow>
   acceptEditorial(id: number, opts?: { text?: string | null; anchor?: string | null; replace?: boolean }): Promise<{ ok: true; content: string } | { ok: false; reason: 'stale' | 'ambiguous' | 'decided' }>
   decideSuggestion(id: number, status: 'rejected' | 'comment' | 'pending'): Promise<void>
   acceptSubtopic(id: number, opts?: { parentId?: number | null; title?: string | null; position?: number | null }): Promise<number>

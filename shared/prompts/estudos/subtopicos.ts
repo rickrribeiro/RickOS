@@ -23,11 +23,11 @@ ${E_SUBTOPICOS}
 ## Contexto enviado pelo app (objetivo, mapa com IDs, notas selecionadas, recusas anteriores)
 {{contexto}}
 
-## Pedido
+## Pedido (com a minha direção, se eu dei uma)
 {{pedido}}
 
 ## Contrato de saída
 JSON: subtopicos { itens: [{parentId, posicao, titulo, motivo, conexaoObjetivo, tipo, prerequisito}], vazio }. parentId é um ID que existe no mapa (ou null para raiz). Zero itens é uma resposta válida; nota longa não significa roteiro incompleto.`,
   preparar: prepararTutor,
-  exemplo: { idioma: 'pt-BR', idiomaAlvo: '—', contexto: ex('mapa com IDs'), pedido: ex('sugerir') }
+  exemplo: { idioma: 'pt-BR', idiomaAlvo: '—', contexto: ex('mapa com IDs'), pedido: ex('sugerir; direção: foco em exemplos de games') }
 })
