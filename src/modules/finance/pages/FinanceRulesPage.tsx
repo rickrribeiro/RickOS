@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Category, FinanceRule, RulePreviewItem } from '../../../types'
+import { Category, FinanceRule, FinanceRuleSuggestion, RulePreviewItem } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney, monthLabel } from '../util'
@@ -104,6 +104,57 @@ function RuleRow({
   )
 }
 
+/** Regra sugerida pela IA: palavras e categoria editáveis antes de aprovar. */
+function SuggestionRow({
+  suggestion: s,
+  categories,
+  onApprove,
+  onReject
+}: {
+  suggestion: FinanceRuleSuggestion
+  categories: Category[]
+  onApprove: (categoryId: number, keywords: string) => void
+  onReject: () => void
+}): React.ReactElement {
+  const [keywords, setKeywords] = useState(s.keywords)
+  const [categoryId, setCategoryId] = useState<number | ''>(s.categoryId)
+  const cat = categories.find((c) => c.id === categoryId)
+  const valid = categoryId !== '' && parseKeywords(keywords).length > 0
+
+  return (
+    <div className="list-row" style={{ flexWrap: 'wrap', gap: 6, borderStyle: 'dashed', borderColor: 'var(--accent)' }}>
+      <span className="project-chip" style={{ color: 'var(--accent)' }}>{t('finance.sugerida')}</span>
+      <input
+        value={keywords}
+        onChange={(e) => setKeywords(e.target.value)}
+        placeholder={t('finance.palavrasSeparadasPorVirgula')}
+        style={{ flex: 1, minWidth: 160 }}
+        title={t('finance.seADescricaoContiverQualquer')}
+      />
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>→</span>
+      <span className="priority-dot" style={{ background: cat?.color ?? 'var(--border)' }} />
+      <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} />
+      <button
+        className="btn btn-primary btn-sm"
+        disabled={!valid}
+        title={t('finance.aprovarSugestaoTitle')}
+        onClick={() => categoryId !== '' && onApprove(categoryId, keywords)}
+      >
+        ✓ {t('finance.aprovarSugestao')}
+      </button>
+      <button className="btn btn-secondary btn-sm" title={t('finance.recusarSugestaoTitle')} onClick={onReject}>
+        ✕ {t('finance.recusarSugestao')}
+      </button>
+      <div style={{ flexBasis: '100%', fontSize: 11, color: 'var(--text-muted)' }}>
+        {t('finance.sugestaoPega', { count: s.matches })}
+        {s.uncategorized > 0 && t('finance.sugestaoSemCategoria', { count: s.uncategorized })}
+        {s.examples.length > 0 && ` · ${t('finance.sugestaoExemplos', { p0: s.examples.join(' · ') })}`}
+        {s.reason && <span style={{ display: 'block', color: 'var(--text-secondary)' }}>{s.reason}</span>}
+      </div>
+    </div>
+  )
+}
+
 export function FinanceRulesPage(): React.ReactElement {
   const { categories, month, refresh, categoryName } = useFinanceStore()
   const [rules, setRules] = useState<FinanceRule[]>([])
@@ -112,14 +163,55 @@ export function FinanceRulesPage(): React.ReactElement {
   const [preview, setPreview] = useState<{ scope: string; items: RulePreviewItem[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<FinanceRuleSuggestion[]>([])
+  const [analyzing, setAnalyzing] = useState(false)
+  const [aiMsg, setAiMsg] = useState<{ text: string; error?: boolean } | null>(null)
 
   async function load(): Promise<void> {
-    setRules(await window.api.financeRules.getAll())
+    const [r, s] = await Promise.all([window.api.financeRules.getAll(), window.api.financeRules.suggestions().catch(() => [])])
+    setRules(r)
+    setSuggestions(s)
+  }
+
+  /** `null` = só acompanhar a análise que já está rodando no servidor (a página foi reaberta). */
+  async function analyze(allMonths: boolean | null, current: FinanceRuleSuggestion[] = suggestions): Promise<void> {
+    setAnalyzing(true)
+    setAiMsg(null)
+    // sugestão mesclada mantém o id e ganha palavras: compara id + palavras
+    const sig = (s: FinanceRuleSuggestion): string => `${s.id}|${s.keywords}`
+    const before = new Set(current.map(sig))
+    try {
+      const list = await window.api.financeRules.suggest(allMonths === false ? month : undefined)
+      setSuggestions(list)
+      setAiMsg({ text: list.some((s) => !before.has(sig(s))) ? t('finance.sugestoesPendentes', { count: list.length }) : t('finance.nenhumaSugestaoNova') })
+    } catch (e) {
+      setAiMsg({ text: e instanceof Error ? e.message : String(e), error: true })
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  async function approve(id: number, categoryId: number, keywords: string): Promise<void> {
+    await window.api.financeRules.approveSuggestion(id, categoryId, keywords)
+    setAiMsg({ text: t('finance.regraCriadaAplique') })
+    await load()
+  }
+
+  async function reject(id: number): Promise<void> {
+    await window.api.financeRules.rejectSuggestion(id)
+    setSuggestions((list) => list.filter((s) => s.id !== id))
   }
 
   useEffect(() => {
     refresh()
     load()
+    // análise começada antes de sair da página: volta a mostrar "Analisando…" e espera a mesma
+    window.api.financeRules
+      .analyzing()
+      .then(async (running) => {
+        if (running) await analyze(null, await window.api.financeRules.suggestions())
+      })
+      .catch(() => undefined)
   }, [])
 
   async function handleAdd(): Promise<void> {
@@ -183,7 +275,33 @@ export function FinanceRulesPage(): React.ReactElement {
         </p>
       </div>
 
+      <div className="chart-section" style={{ marginBottom: 12 }}>
+        <div className="chart-title">{t('finance.sugestoesDaIa')}</div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 8px' }}>{t('finance.sugestoesDaIaHint')}</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="btn btn-secondary btn-sm" disabled={analyzing} onClick={() => analyze(false)}>
+            {t('finance.analisarMes', { p0: monthLabel(month) })}
+          </button>
+          <button className="btn btn-secondary btn-sm" disabled={analyzing} onClick={() => analyze(true)}>
+            {t('finance.analisarTodas')}
+          </button>
+          {analyzing && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('finance.analisando')}</span>}
+        </div>
+        {aiMsg && !analyzing && (
+          <div style={{ marginTop: 8, fontSize: 12, color: aiMsg.error ? 'var(--danger)' : 'var(--text-secondary)' }}>{aiMsg.text}</div>
+        )}
+      </div>
+
       <div className="list-stack">
+        {suggestions.map((s) => (
+          <SuggestionRow
+            key={s.id}
+            suggestion={s}
+            categories={categories}
+            onApprove={(categoryId, keywords) => approve(s.id, categoryId, keywords)}
+            onReject={() => reject(s.id)}
+          />
+        ))}
         {rules.length === 0 && <div className="empty-hint">{t('finance.nenhumaRegraAinda')}</div>}
         {rules.map((r, i) => (
           <RuleRow key={r.id} rule={r} index={i} total={rules.length} categories={categories} onChanged={load} />

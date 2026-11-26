@@ -12,6 +12,7 @@ const SOURCE_LABELS: Record<string, string> = {
   github: tr('settings.githubIssues'),
   braindump: tr('settings.brainDump'),
   crm: tr('settings.crm'),
+  financas: tr('settings.financasIa'),
   viagens: tr('settings.viagens'),
   revisao: tr('settings.revisaoSemanal'),
   agendador: tr('settings.agendador'),

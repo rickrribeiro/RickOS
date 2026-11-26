@@ -411,7 +411,12 @@ export function createApi() {
       delete: (id: number) => invoke('financeRules:delete', id),
       move: (id: number, dir: -1 | 1) => invoke('financeRules:move', id, dir),
       preview: (month?: string) => invoke('financeRules:preview', month),
-      apply: (changes: { id: number; categoryId: number }[]) => invoke('financeRules:apply', changes)
+      apply: (changes: { id: number; categoryId: number }[]) => invoke('financeRules:apply', changes),
+      suggestions: () => invoke('financeRules:suggestions'),
+      analyzing: () => invoke('financeRules:analyzing'),
+      suggest: (month?: string) => invoke('financeRules:suggest', month),
+      approveSuggestion: (id: number, categoryId: number, keywords: string) => invoke('financeRules:approveSuggestion', id, categoryId, keywords),
+      rejectSuggestion: (id: number) => invoke('financeRules:rejectSuggestion', id)
     },
     categories: {
       getAll: () => invoke('categories:getAll'),

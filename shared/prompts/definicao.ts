@@ -22,6 +22,7 @@ export type ModuloIa =
   | 'passagens'
   | 'viagens'
   | 'crm'
+  | 'financas'
   | 'noticias'
 
 /** Valor configurável: lido de `setting` (Configurações) e, se vazio, `padrao`. `padrao: ''` = padrão do CLI/conta. */

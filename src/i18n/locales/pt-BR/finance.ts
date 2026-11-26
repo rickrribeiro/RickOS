@@ -358,5 +358,21 @@ export const finance = {
   'finance.recorrentesGastosSub': '{count} gasto recorrente|{count} gastos recorrentes',
   'finance.recorrentesPctGastos': ' · {p0}% dos gastos',
   'finance.recorrentesReceitas': 'Receitas recorrentes: {p0}',
-  'finance.recorrentesSugestoes': '{count} possível recorrente para confirmar|{count} possíveis recorrentes para confirmar'
+  'finance.recorrentesSugestoes': '{count} possível recorrente para confirmar|{count} possíveis recorrentes para confirmar',
+  'finance.sugestoesDaIa': '✨ Sugestões da IA',
+  'finance.sugestoesDaIaHint': 'A IA lê as descrições das transações e sugere regras palavra-chave → categoria. Nada vira regra sem você aprovar, e as recusadas não voltam.',
+  'finance.analisarMes': 'Analisar {p0}',
+  'finance.analisarTodas': 'Analisar todas',
+  'finance.analisando': 'Analisando… (pode levar um ou dois minutos)',
+  'finance.sugestoesPendentes': '{count} sugestão para revisar|{count} sugestões para revisar',
+  'finance.nenhumaSugestaoNova': 'A IA não encontrou regras novas para sugerir.',
+  'finance.sugerida': '✨ sugerida',
+  'finance.sugestaoPega': 'pega {count} transação|pega {count} transações',
+  'finance.sugestaoSemCategoria': ' ({count} sem categoria)',
+  'finance.sugestaoExemplos': 'ex.: {p0}',
+  'finance.aprovarSugestao': 'Aprovar',
+  'finance.recusarSugestao': 'Recusar',
+  'finance.aprovarSugestaoTitle': 'Criar esta regra (dá para editar as palavras e a categoria antes)',
+  'finance.recusarSugestaoTitle': 'Recusar: a IA não sugere de novo',
+  'finance.regraCriadaAplique': 'Regra criada. Use "Aplicar nas transações existentes" para categorizar as que já estão aí.'
 }

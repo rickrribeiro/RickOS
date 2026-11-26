@@ -43,6 +43,8 @@ Fora daqui (de propósito): os **prompts do usuário** (agentes, skills e jobs a
 | `organizar.ts` | Despejo mental → tarefas, projetos, próximos passos e agenda (JSON) | `src/modules/braindump/pages/BrainDumpPage.tsx` |
 | **crm/** | | |
 | `retomarContato.ts` | 2-3 opções de mensagem para retomar contato | `src/modules/crm/pages/CrmPage.tsx` |
+| **financas/** | | |
+| `sugerirRegras.ts` | Regras palavra-chave → categoria a partir das transações (JSON; o servidor revalida e o usuário aprova uma a uma) | `server/services/financeRuleSuggestions.ts` |
 | **estudos/** | | |
 | `flashcards.ts` | Gerar flashcards de uma anotação | `src/modules/estudos/components/FlashcardPanel.tsx` |
 | `quiz.ts` | Quiz de múltipla escolha | `src/modules/estudos/components/QuizModal.tsx` |

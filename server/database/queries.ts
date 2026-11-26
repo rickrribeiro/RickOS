@@ -1310,6 +1310,61 @@ export async function moveFinanceRule(id: number, dir: -1 | 1): Promise<void> {
   ;[rules[i], rules[j]] = [rules[j], rules[i]]
   rules.forEach((r, pos) => run(db, 'UPDATE finance_rules SET position = ? WHERE id = ?', [pos, r.id]))
 }
+// ── Sugestões de regras (IA) ──
+export interface DbRuleSuggestionRow {
+  id: number
+  categoryId: number
+  keywords: string
+  reason: string | null
+  matches: number
+  uncategorized: number
+  examples: string
+  status: string
+  createdAt: string
+}
+export async function getRuleSuggestions(status?: 'pending' | 'rejected'): Promise<DbRuleSuggestionRow[]> {
+  const db = await getDb()
+  return status
+    ? getAll<DbRuleSuggestionRow>(db, 'SELECT * FROM finance_rule_suggestions WHERE status = ? ORDER BY uncategorized DESC, matches DESC, id', [status])
+    : getAll<DbRuleSuggestionRow>(db, 'SELECT * FROM finance_rule_suggestions ORDER BY id')
+}
+export async function insertRuleSuggestion(r: Omit<DbRuleSuggestionRow, 'id' | 'status' | 'createdAt'>): Promise<number> {
+  const db = await getDb()
+  run(db, 'INSERT INTO finance_rule_suggestions (categoryId, keywords, reason, matches, uncategorized, examples, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
+    r.categoryId,
+    r.keywords,
+    r.reason,
+    r.matches,
+    r.uncategorized,
+    r.examples,
+    'pending',
+    new Date().toISOString()
+  ])
+  return getOne<{ id: number }>(db, 'SELECT MAX(id) AS id FROM finance_rule_suggestions')?.id ?? 0
+}
+export async function updateRuleSuggestion(id: number, r: Pick<DbRuleSuggestionRow, 'keywords' | 'reason' | 'matches' | 'uncategorized' | 'examples'>): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE finance_rule_suggestions SET keywords = ?, reason = ?, matches = ?, uncategorized = ?, examples = ? WHERE id = ?', [
+    r.keywords,
+    r.reason,
+    r.matches,
+    r.uncategorized,
+    r.examples,
+    id
+  ])
+}
+export async function getRuleSuggestion(id: number): Promise<DbRuleSuggestionRow | null> {
+  const db = await getDb()
+  return getOne<DbRuleSuggestionRow>(db, 'SELECT * FROM finance_rule_suggestions WHERE id = ?', [id]) ?? null
+}
+export async function setRuleSuggestionStatus(id: number, status: 'rejected'): Promise<void> {
+  const db = await getDb()
+  run(db, 'UPDATE finance_rule_suggestions SET status = ? WHERE id = ?', [status, id])
+}
+export async function deleteRuleSuggestion(id: number): Promise<void> {
+  const db = await getDb()
+  run(db, 'DELETE FROM finance_rule_suggestions WHERE id = ?', [id])
+}
 /** Aplica categorias vindas das Regras; como em `categorizeNew`, a regra desfaz a marcação automática de transferência. */
 export async function setTransactionsCategory(changes: { id: number; categoryId: number }[]): Promise<void> {
   const db = await getDb()

@@ -233,6 +233,19 @@ export const SCHEMA = `
     createdAt TEXT NOT NULL
   );
 
+  -- regras sugeridas pela IA: 'pending' até o usuário decidir; 'rejected' fica para não sugerir de novo
+  CREATE TABLE IF NOT EXISTS finance_rule_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoryId INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    keywords TEXT NOT NULL,
+    reason TEXT,
+    matches INTEGER NOT NULL DEFAULT 0,
+    uncategorized INTEGER NOT NULL DEFAULT 0,
+    examples TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pending',
+    createdAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     categoryId INTEGER REFERENCES categories(id) ON DELETE CASCADE,

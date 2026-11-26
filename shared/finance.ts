@@ -55,6 +55,18 @@ export interface FinanceRule {
   position: number // menor = mais prioritária
 }
 
+/** Regra sugerida pela IA (Regras → Sugestões da IA): fica pendente até o usuário aprovar ou recusar. */
+export interface FinanceRuleSuggestion {
+  id: number
+  categoryId: number
+  keywords: string // separadas por vírgula, como em FinanceRule
+  reason: string | null // por que a IA sugeriu (texto da IA, em pt)
+  matches: number // transações do período analisado que a regra pegaria
+  uncategorized: number // dessas, quantas estão sem categoria ou em "Outros"
+  examples: string[] // até 3 descrições de exemplo
+  createdAt: string
+}
+
 /** minúsculas, sem acentos e com espaços colapsados — para comparar descrições. */
 export function normalizeText(s: string): string {
   return s

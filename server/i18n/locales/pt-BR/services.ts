@@ -1,4 +1,8 @@
 export const services = {
+  'services.financas.semTransacoes': 'Nenhuma transação para analisar neste período.',
+  'services.financas.iaSemJson': 'A IA não devolveu uma resposta válida. Tente de novo.',
+  'services.financas.sugestaoNaoEncontrada': 'Sugestão não encontrada.',
+  'services.financas.regraInvalida': 'Escolha uma categoria e ao menos uma palavra-chave.',
   'services.abraAlgumasNoticiasEmLer': 'Abra algumas notícias em "Ler mais" (ou cadastre categorias próprias) antes de sugerir memórias.',
   'services.googleNewsRespondeu': 'Google News respondeu {status}',
   'services.projetoNaoEncontrado': 'Projeto não encontrado',

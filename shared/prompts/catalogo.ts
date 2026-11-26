@@ -11,6 +11,7 @@ import { assistenteLivre } from './assistente/livre'
 import { automacoesAgendado } from './automacoes/agendado'
 import { braindumpOrganizar } from './braindump/organizar'
 import { crmRetomarContato } from './crm/retomarContato'
+import { financasSugerirRegras } from './financas/sugerirRegras'
 import { estudosFlashcards } from './estudos/flashcards'
 import { estudosQuiz } from './estudos/quiz'
 import { estudosMasterclass } from './estudos/masterclass'
@@ -104,6 +105,7 @@ export const DEFINICOES = {
   'passagens.skyscanner': passagensSkyscanner,
   'viagens.hospedagem': viagensHospedagem,
   'crm.retomarContato': crmRetomarContato,
+  'financas.sugerirRegras': financasSugerirRegras,
   'noticias.resumo': noticiasResumo
 } as const
 

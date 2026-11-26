@@ -358,5 +358,21 @@ export const finance = {
   'finance.recorrentesGastosSub': '{count} recurring expense|{count} recurring expenses',
   'finance.recorrentesPctGastos': ' · {p0}% of expenses',
   'finance.recorrentesReceitas': 'Recurring income: {p0}',
-  'finance.recorrentesSugestoes': '{count} possible recurring to confirm|{count} possible recurring to confirm'
+  'finance.recorrentesSugestoes': '{count} possible recurring to confirm|{count} possible recurring to confirm',
+  'finance.sugestoesDaIa': '✨ AI suggestions',
+  'finance.sugestoesDaIaHint': 'The AI reads your transaction descriptions and suggests keyword → category rules. Nothing becomes a rule until you approve it, and rejected ones do not come back.',
+  'finance.analisarMes': 'Analyze {p0}',
+  'finance.analisarTodas': 'Analyze all',
+  'finance.analisando': 'Analyzing… (may take a minute or two)',
+  'finance.sugestoesPendentes': '{count} suggestion to review|{count} suggestions to review',
+  'finance.nenhumaSugestaoNova': 'The AI found no new rules to suggest.',
+  'finance.sugerida': '✨ suggested',
+  'finance.sugestaoPega': 'matches {count} transaction|matches {count} transactions',
+  'finance.sugestaoSemCategoria': ' ({count} uncategorized)',
+  'finance.sugestaoExemplos': 'e.g.: {p0}',
+  'finance.aprovarSugestao': 'Approve',
+  'finance.recusarSugestao': 'Reject',
+  'finance.aprovarSugestaoTitle': 'Create this rule (you can edit the keywords and category first)',
+  'finance.recusarSugestaoTitle': 'Reject: the AI will not suggest it again',
+  'finance.regraCriadaAplique': 'Rule created. Use "Apply to existing transactions" to categorize the ones already there.'
 }

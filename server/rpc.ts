@@ -226,6 +226,7 @@ import { syncGithubIssues, createIssueViaClaude } from './services/github'
 import { beginGoogleConnect, awaitGoogleConnect, googleConnected, listGoogleAccounts, disconnectGoogle, disconnectGoogleAccount, syncGoogleCalendar, uploadFileToDrive } from './services/google'
 import { syncPluggy, syncPluggyInvestments, pluggyConfigured, createConnectToken, reclassifyInvestmentFlags } from './services/pluggy'
 import { categorizeNew, previewFinanceRules } from './services/financeRules'
+import { approveRuleSuggestion, isAnalyzingRules, listRuleSuggestions, rejectRuleSuggestion, suggestFinanceRules } from './services/financeRuleSuggestions'
 import { recomputeRecurring, recurringSuggestions } from './services/recurring'
 import { reconcileRefunds } from './services/refunds'
 import { countsInTotals, firstBusinessDay, type TransactionKind } from '../shared/finance'
@@ -1086,6 +1087,11 @@ ipcMain.handle('financeRules:delete', (_, id: number) => deleteFinanceRule(id))
 ipcMain.handle('financeRules:move', (_, id: number, dir: -1 | 1) => moveFinanceRule(id, dir))
 ipcMain.handle('financeRules:preview', (_, month?: string) => previewFinanceRules(month))
 ipcMain.handle('financeRules:apply', (_, changes: { id: number; categoryId: number }[]) => setTransactionsCategory(changes))
+ipcMain.handle('financeRules:suggestions', () => listRuleSuggestions())
+ipcMain.handle('financeRules:analyzing', () => isAnalyzingRules())
+ipcMain.handle('financeRules:suggest', (_, month?: string) => suggestFinanceRules(month))
+ipcMain.handle('financeRules:approveSuggestion', (_, id: number, categoryId: number, keywords: string) => approveRuleSuggestion(id, categoryId, keywords))
+ipcMain.handle('financeRules:rejectSuggestion', (_, id: number) => rejectRuleSuggestion(id))
 
 ipcMain.handle('budgets:getForMonth', (_, month: string) => getBudgets(month))
 ipcMain.handle('budgets:set', (_, categoryId: number, month: string, amount: number) => setBudget(categoryId, month, amount))

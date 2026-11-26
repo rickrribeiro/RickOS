@@ -358,5 +358,21 @@ export const finance = {
   'finance.recorrentesGastosSub': '{count} gasto recurrente|{count} gastos recurrentes',
   'finance.recorrentesPctGastos': ' · {p0}% de los gastos',
   'finance.recorrentesReceitas': 'Ingresos recurrentes: {p0}',
-  'finance.recorrentesSugestoes': '{count} posible recurrente por confirmar|{count} posibles recurrentes por confirmar'
+  'finance.recorrentesSugestoes': '{count} posible recurrente por confirmar|{count} posibles recurrentes por confirmar',
+  'finance.sugestoesDaIa': '✨ Sugerencias de la IA',
+  'finance.sugestoesDaIaHint': 'La IA lee las descripciones de las transacciones y sugiere reglas palabra clave → categoría. Nada se vuelve regla sin tu aprobación, y las rechazadas no vuelven.',
+  'finance.analisarMes': 'Analizar {p0}',
+  'finance.analisarTodas': 'Analizar todas',
+  'finance.analisando': 'Analizando… (puede tardar uno o dos minutos)',
+  'finance.sugestoesPendentes': '{count} sugerencia por revisar|{count} sugerencias por revisar',
+  'finance.nenhumaSugestaoNova': 'La IA no encontró reglas nuevas para sugerir.',
+  'finance.sugerida': '✨ sugerida',
+  'finance.sugestaoPega': 'aplica a {count} transacción|aplica a {count} transacciones',
+  'finance.sugestaoSemCategoria': ' ({count} sin categoría)',
+  'finance.sugestaoExemplos': 'ej.: {p0}',
+  'finance.aprovarSugestao': 'Aprobar',
+  'finance.recusarSugestao': 'Rechazar',
+  'finance.aprovarSugestaoTitle': 'Crear esta regla (puedes editar las palabras y la categoría antes)',
+  'finance.recusarSugestaoTitle': 'Rechazar: la IA no la sugerirá de nuevo',
+  'finance.regraCriadaAplique': 'Regla creada. Usa "Aplicar a las transacciones existentes" para categorizar las que ya están.'
 }

@@ -1,4 +1,8 @@
 export const services = {
+  'services.financas.semTransacoes': 'No transactions to analyze in this period.',
+  'services.financas.iaSemJson': 'The AI did not return a valid answer. Try again.',
+  'services.financas.sugestaoNaoEncontrada': 'Suggestion not found.',
+  'services.financas.regraInvalida': 'Pick a category and at least one keyword.',
   'services.alert.noNextAction': 'In focus with no next action',
   'services.alert.blocked': 'Blocked: {blocker}',
   'services.alert.pauseDue': 'Pause ended on {date} — resume or decide',

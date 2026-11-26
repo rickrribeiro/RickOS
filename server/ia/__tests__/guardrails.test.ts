@@ -77,6 +77,7 @@ const MANIFESTO: Record<string, IdChamadaIa[]> = {
   'server/flights/assisted.ts': ['passagens.skyscanner'],
   'src/modules/travel-stays/pages/StayFinderPage.tsx': ['viagens.hospedagem'],
   'src/modules/crm/pages/CrmPage.tsx': ['crm.retomarContato'],
+  'server/services/financeRuleSuggestions.ts': ['financas.sugerirRegras'],
   'server/services/news.ts': ['noticias.resumo']
 }
 

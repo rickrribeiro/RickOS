@@ -2,8 +2,8 @@ import type { FlightMonApi } from '../modules/flights/api'
 import type { ChatsApi } from '../modules/chats/api'
 import type { AiSuggestResult, ChatsStatus } from '../../shared/chats'
 import type { IdChamadaIa, MotorIa, ParamsDe } from '../../shared/prompts/catalogo'
-import type { FinanceRule, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
-export type { FinanceRule, InvestmentGroupDef } from '../../shared/finance'
+import type { FinanceRule, FinanceRuleSuggestion, TransactionKind, InvestmentGroupDef } from '../../shared/finance'
+export type { FinanceRule, FinanceRuleSuggestion, InvestmentGroupDef } from '../../shared/finance'
 import type { AiConversation, AiConversationPatch, AiConvUpdate, AiImageInput, AiPromptResponse, AiTurn, ClaudeSkillInfo, ClaudeUsageSnapshot, ConvChanges, ConvFileDiff, ConvListPage, ConvListQuery, ConvTurnsPage, SlashCommandInfo, TerminalSession } from '../../shared/aiConversations'
 import type { StayFavorite, StayWatch, StayPricePoint, StaySearchHistory } from '../modules/travel-stays/types'
 
@@ -1136,6 +1136,14 @@ declare global {
         move: (id: number, dir: -1 | 1) => Promise<void>
         preview: (month?: string) => Promise<RulePreviewItem[]>
         apply: (changes: { id: number; categoryId: number }[]) => Promise<void>
+        /** Sugestões da IA pendentes de aprovação. */
+        suggestions: () => Promise<FinanceRuleSuggestion[]>
+        /** true enquanto uma análise está rodando no servidor. */
+        analyzing: () => Promise<boolean>
+        /** Roda a IA em `month` (ou todos os meses) e devolve as pendentes. */
+        suggest: (month?: string) => Promise<FinanceRuleSuggestion[]>
+        approveSuggestion: (id: number, categoryId: number, keywords: string) => Promise<void>
+        rejectSuggestion: (id: number) => Promise<void>
       }
       categories: {
         getAll: () => Promise<Category[]>
