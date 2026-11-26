@@ -3,7 +3,7 @@ import { Category, FinanceRule, RulePreviewItem } from '../../../types'
 import { useFinanceStore } from '../store/financeStore'
 import { MonthNav } from '../components/MonthNav'
 import { formatMoney, monthLabel } from '../util'
-import { matchFinanceRule, parseKeywords } from '../../../../shared/finance'
+import { parseKeywords } from '../../../../shared/finance'
 import { t } from '../../../i18n'
 
 /** Select de categoria agrupado por tipo. */
@@ -109,8 +109,6 @@ export function FinanceRulesPage(): React.ReactElement {
   const [rules, setRules] = useState<FinanceRule[]>([])
   const [categoryId, setCategoryId] = useState<number | ''>('')
   const [keywords, setKeywords] = useState('')
-  const [testDesc, setTestDesc] = useState('')
-  const [testType, setTestType] = useState<'expense' | 'income'>('expense')
   const [preview, setPreview] = useState<{ scope: string; items: RulePreviewItem[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -156,8 +154,6 @@ export function FinanceRulesPage(): React.ReactElement {
     }
   }
 
-  const tested = testDesc.trim() ? matchFinanceRule(rules, categories, testDesc, testType) : null
-
   return (
     <div className="module-page">
       <div className="module-header">
@@ -192,22 +188,6 @@ export function FinanceRulesPage(): React.ReactElement {
         {rules.map((r, i) => (
           <RuleRow key={r.id} rule={r} index={i} total={rules.length} categories={categories} onChanged={load} />
         ))}
-      </div>
-
-      <div className="chart-section" style={{ marginTop: 16 }}>
-        <div className="chart-title">{t('finance.testar')}</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
-          <select value={testType} onChange={(e) => setTestType(e.target.value as 'expense' | 'income')}>
-            <option value="expense">{t('finance.despesa')}</option>
-            <option value="income">{t('finance.receita')}</option>
-          </select>
-          <input placeholder={t('finance.descricaoDeExemploExUber')} value={testDesc} onChange={(e) => setTestDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-          {testDesc.trim() && (
-            <span style={{ fontSize: 13, color: tested ? 'var(--success)' : 'var(--text-muted)' }}>
-              {tested ? t('finance.regra', { p0: categoryName(tested.categoryId), keywords: tested.keywords }) : t('finance.nenhumaRegraBate')}
-            </span>
-          )}
-        </div>
       </div>
 
       <div className="chart-section" style={{ marginTop: 16 }}>
