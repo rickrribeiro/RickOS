@@ -95,7 +95,9 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   setActiveTopic: async (id) => {
     set({ activeTopicId: id, selectedNodeId: null, note: null, nodes: [], flashcards: [], topicMeta: null, focus: null })
     saveSel(id, null)
-    if (id != null) await get().refreshActive()
+    if (id == null) return
+    // tópico criado/alterado por outra tela (Home, outro cliente) ainda não está na lista do store
+    await Promise.all([get().topics.some((t) => t.id === id) ? null : get().refreshTopics(), get().refreshActive()])
   },
 
   selectNode: async (id) => {

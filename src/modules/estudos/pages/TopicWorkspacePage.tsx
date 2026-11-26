@@ -53,7 +53,7 @@ export function TopicWorkspacePage(): React.ReactElement {
   const topic = topics.find((x) => x.id === activeTopicId) ?? null
 
   useEffect(() => {
-    if (!topics.length) refreshTopics()
+    if (activeTopicId != null && !topics.some((x) => x.id === activeTopicId)) refreshTopics()
     if (activeTopicId != null) refreshActive()
     window.api.estudos.prefs().then((p) => setPinned(p.pinned))
     // eslint-disable-next-line react-hooks/exhaustive-deps
